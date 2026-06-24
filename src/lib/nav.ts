@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard,
+  Home,
   FolderOpen,
   Newspaper,
   Send,
@@ -25,7 +25,7 @@ export interface NavItem {
 }
 
 export const navItems: NavItem[] = [
-  { label: "Tablero", to: "/", icon: LayoutDashboard, group: "Núcleo" },
+  { label: "Inicio", to: "/", icon: Home, group: "Núcleo" },
   { label: "Expedientes", to: "/expedientes", icon: FolderOpen, group: "Núcleo" },
   { label: "Hitos & Agenda", to: "/hitos", icon: Clock, group: "Núcleo" },
 
