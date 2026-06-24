@@ -1,19 +1,6 @@
 import {
-  Home,
-  FolderOpen,
-  Newspaper,
-  Send,
-  Shield,
-  GitBranch,
-  Clock,
-  Bot,
-  FileText,
-  FileSignature,
-  FileCheck2,
-  Building2,
-  Network,
-  Scale,
-  Gavel,
+  Home, FolderOpen, Newspaper, Send, Shield, GitBranch, Clock, Bot,
+  FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, Swords,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +18,7 @@ export const navItems: NavItem[] = [
   { label: "Hitos & Agenda", to: "/hitos", icon: Clock, group: "Núcleo" },
 
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
+  { label: "Control de demandas", to: "/control-demandas", icon: Swords, group: "Procesal" },
   { label: "Boletines Judiciales", to: "/boletines", icon: Newspaper, group: "Procesal" },
   { label: "Exhortos", to: "/exhortos", icon: Send, group: "Procesal" },
   { label: "Amparos", to: "/amparos", icon: Shield, group: "Procesal" },
