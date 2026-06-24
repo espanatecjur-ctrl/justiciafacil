@@ -13,6 +13,7 @@ import {
   Building2,
   Network,
   Scale,
+  Gavel,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +30,7 @@ export const navItems: NavItem[] = [
   { label: "Expedientes", to: "/expedientes", icon: FolderOpen, group: "Núcleo" },
   { label: "Hitos & Agenda", to: "/hitos", icon: Clock, group: "Núcleo" },
 
+  { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "Boletines Judiciales", to: "/boletines", icon: Newspaper, group: "Procesal" },
   { label: "Exhortos", to: "/exhortos", icon: Send, group: "Procesal" },
   { label: "Amparos", to: "/amparos", icon: Shield, group: "Procesal" },
