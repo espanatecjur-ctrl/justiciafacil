@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { sbSelect, type CasoJuridico } from "@/lib/supabase";
+import { RobotBoletines } from "@/components/robot-boletines";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Search, Scale, AlertTriangle, Gavel } from "lucide-react";
@@ -47,6 +48,7 @@ function UcmPage() {
 
   const alta = casos.filter((c) => (c.prioridad || "").toUpperCase() === "ALTA").length;
   const conExpediente = casos.filter((c) => (c.expediente || "").match(/\d+\/\d+/)).length;
+  const expedientes = casos.map((c) => c.expediente);
 
   return (
     <div className="space-y-6">
@@ -56,7 +58,9 @@ function UcmPage() {
         description={cargando ? "Cargando juicios…" : `${filtrados.length} de ${casos.length} juicios de la unidad.`}
       />
 
-      {/* Resumen */}
+      {/* Barra del robot (indicador central de avance) */}
+      <RobotBoletines expedientes={expedientes} />
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="legal-card p-4 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><Gavel className="h-5 w-5" /></div>
@@ -72,7 +76,6 @@ function UcmPage() {
         </Card>
       </div>
 
-      {/* Filtros */}
       <Card className="legal-card p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
           <div className="relative">
@@ -99,7 +102,6 @@ function UcmPage() {
         <Card className="legal-card p-4 border-red-200 bg-red-50 text-sm text-red-700">No se pudieron cargar los juicios: {error}</Card>
       )}
 
-      {/* Lista de juicios (sin agrupar) */}
       <Card className="legal-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
