@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { navItems } from "@/lib/nav";
-import { Scale, Search, Bell, UserCircle2 } from "lucide-react";
+import { Search, Bell, UserCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
@@ -17,17 +17,22 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <div className="flex items-center gap-2 px-5 py-5 border-b border-sidebar-border">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-[color:var(--teal)] text-[color:var(--teal-foreground)] shadow-sm">
-            <Scale className="h-5 w-5" />
-          </div>
+        <Link
+          to="/"
+          className="flex items-center gap-2.5 px-5 py-4 border-b border-sidebar-border transition-colors hover:bg-sidebar-accent/40"
+        >
+          <img
+            src="/justiciafacil-logo.png"
+            alt="JusticiaFácil"
+            className="h-11 w-auto rounded-md shadow-sm"
+          />
           <div className="leading-tight">
-            <p className="font-display text-base font-bold tracking-tight">SIGA-DIIPA</p>
+            <p className="font-display text-base font-bold tracking-tight">JusticiaFácil</p>
             <p className="text-[10px] uppercase tracking-widest text-sidebar-foreground/60">
-              Sistema Jurídico
+              DIIPA Desarrollos
             </p>
           </div>
-        </div>
+        </Link>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
           {Object.entries(grouped).map(([group, items]) => (
@@ -71,7 +76,7 @@ export function AppShell() {
           <div className="flex items-center gap-2 rounded-md bg-sidebar-accent/40 px-2 py-2 text-xs">
             <UserCircle2 className="h-7 w-7 text-[color:var(--teal)]" />
             <div className="leading-tight">
-              <p className="font-medium">Despacho SIGA</p>
+              <p className="font-medium">Despacho JusticiaFácil</p>
               <p className="text-sidebar-foreground/60">Lic. en sesión</p>
             </div>
           </div>
