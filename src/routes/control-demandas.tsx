@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { sbSelect, type CasoJuridico } from "@/lib/supabase";
+import { RobotBoletines } from "@/components/robot-boletines";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Search, Swords, ShieldAlert, ShieldCheck } from "lucide-react";
@@ -11,7 +12,6 @@ export const Route = createFileRoute("/control-demandas")({
   component: ControlDemandasPage,
 });
 
-// Riesgo de pérdida calculado por reglas, leyendo estatus y notas del caso.
 function riesgoDe(c: CasoJuridico): "alto" | "medio" | "bajo" {
   const t = `${c.estatus_general || ""} ${c.nota_adicional || ""} ${c.etapa_actual || ""}`.toLowerCase();
   if (/prescri|caduc|en contra|negativo|improceden/.test(t)) return "alto";
@@ -54,6 +54,7 @@ function ControlDemandasPage() {
 
   const alto = conRiesgo.filter((x) => x.r === "alto").length;
   const bajo = conRiesgo.filter((x) => x.r === "bajo").length;
+  const expedientes = casos.map((c) => c.expediente);
 
   return (
     <div className="space-y-6">
@@ -62,6 +63,9 @@ function ControlDemandasPage() {
         title="Control de demandas"
         description={cargando ? "Cargando demandas…" : `${filtrados.length} de ${casos.length} demandas · DIIPA como actor (cesionario).`}
       />
+
+      {/* Barra del robot */}
+      <RobotBoletines expedientes={expedientes} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="legal-card p-4 flex items-center gap-3">
