@@ -1,12 +1,29 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { navItems } from "@/lib/nav";
-import { Search, Bell, UserCircle2 } from "lucide-react";
+import { Search, Bell, UserCircle2, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getAuth } from "@/lib/auth";
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    getAuth()
+      .then(async (auth) => {
+        const { data } = await auth.auth.getSession();
+        setEmail(data.session?.user?.email ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const salir = async () => {
+    const auth = await getAuth();
+    await auth.auth.signOut();
+    window.location.href = "/";
+  };
 
   const grouped = useMemo(() => {
     const g: Record<string, typeof navItems> = {};
@@ -74,12 +91,18 @@ export function AppShell() {
 
         <div className="border-t border-sidebar-border p-3">
           <div className="flex items-center gap-2 rounded-md bg-sidebar-accent/40 px-2 py-2 text-xs">
-            <UserCircle2 className="h-7 w-7 text-[color:var(--teal)]" />
-            <div className="leading-tight">
-              <p className="font-medium">Despacho JusticiaFácil</p>
-              <p className="text-sidebar-foreground/60">Lic. en sesión</p>
+            <UserCircle2 className="h-7 w-7 shrink-0 text-[color:var(--teal)]" />
+            <div className="leading-tight min-w-0">
+              <p className="font-medium truncate">{email ?? "Despacho JusticiaFácil"}</p>
+              <p className="text-sidebar-foreground/60">{email ? "En sesión" : "Lic. en sesión"}</p>
             </div>
           </div>
+          <button
+            onClick={salir}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-sidebar-border px-2 py-2 text-xs text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Cerrar sesión
+          </button>
         </div>
       </aside>
 
