@@ -1,124 +1,80 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  Outlet,
-  Link,
-  createRootRouteWithContext,
-  useRouter,
-  HeadContent,
-  Scripts,
-} from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { getAuth, correoPermitido } from "@/lib/auth";
 
-import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AppShell } from "../components/app-shell";
-import { LoginGate } from "../components/login-gate";
+const NAVY = "#0B1E3A";
 
-function NotFoundComponent() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Página no encontrada</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          La página que buscas no existe o fue movida.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Ir al inicio
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
+export function LoginGate({ children }: { children: ReactNode }) {
+  const [cargando, setCargando] = useState(true);
+  const [email, setEmail] = useState<string | null>(null);
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
-  const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
+    let unsub = () => {};
+    getAuth()
+      .then(async (auth) => {
+        const { data } = await auth.auth.getSession();
+        setEmail(data.session?.user?.email ?? null);
+        setCargando(false);
+        const { data: sub } = auth.auth.onAuthStateChange((_e: any, session: any) => {
+          setEmail(session?.user?.email ?? null);
+        });
+        unsub = () => sub.subscription.unsubscribe();
+      })
+      .catch(() => setCargando(false));
+    return () => unsub();
+  }, []);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          Esta página no cargó
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Algo salió mal. Intenta recargar o vuelve al inicio.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Reintentar
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Ir al inicio
-          </a>
+  const entrar = async () => {
+    const auth = await getAuth();
+    await auth.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+  };
+
+  const salir = async () => {
+    const auth = await getAuth();
+    await auth.auth.signOut();
+    setEmail(null);
+  };
+
+  if (cargando) {
+    return <div className="grid min-h-screen place-items-center text-muted-foreground">Cargando…</div>;
+  }
+
+  if (email && !correoPermitido(email)) {
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-center">
+        <div>
+          <p className="text-lg font-semibold">Acceso restringido</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tu correo <b>{email}</b> no pertenece a <b>@diipadesarrollos.com</b>.
+          </p>
+          <button onClick={salir} className="mt-4 rounded-md border px-4 py-2 text-sm">Cambiar de cuenta</button>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "JusticiaFácil — DIIPA Desarrollos" },
-      { name: "description", content: "Plataforma jurídica de DIIPA: expedientes, juicios, boletines, dictámenes y trámites." },
-      { property: "og:title", content: "JusticiaFácil — DIIPA Desarrollos" },
-      { property: "og:description", content: "Gestión integral de juicios y estados procesales." },
-      { property: "og:type", content: "website" },
-    ],
-    links: [
-      { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" },
-    ],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
-  notFoundComponent: NotFoundComponent,
-  errorComponent: ErrorComponent,
-});
+  if (!email) {
+    return (
+      <div className="grid min-h-screen place-items-center p-6" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #103A3A 60%, #0C5C46 100%)` }}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-xl">
+          <img src="/justiciafacil-logo.png" alt="JusticiaFácil" className="mx-auto h-24 w-auto" />
+          <h1 className="mt-4 font-display text-2xl font-bold" style={{ color: NAVY }}>JusticiaFácil</h1>
+          <p className="text-sm text-muted-foreground">DIIPA Desarrollos · Área Jurídica</p>
+          <button
+            onClick={entrar}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium shadow-sm hover:bg-gray-50"
+            style={{ borderColor: "#dadce0" }}
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" className="h-5 w-5" />
+            Entrar con Google
+          </button>
+          <p className="mt-3 text-[11px] text-muted-foreground">Solo cuentas @diipadesarrollos.com</p>
+        </div>
+      </div>
+    );
+  }
 
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="es">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
-
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-  return (
-    <QueryClientProvider client={queryClient}>
-      <LoginGate>
-        <AppShell />
-      </LoginGate>
-    </QueryClientProvider>
-  );
+  return <>{children}</>;
 }
