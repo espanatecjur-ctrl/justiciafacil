@@ -1,40 +1,46 @@
-import { useEffect, useState } from "react";
-import { auth, correoPermitido } from "@/lib/auth";
+import { useEffect, useState, type ReactNode } from "react";
+import { getAuth, correoPermitido } from "@/lib/auth";
 
 const NAVY = "#0B1E3A";
-const GOLD = "#C2A24C";
 
-export function LoginGate({ children }: { children: React.ReactNode }) {
+export function LoginGate({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    auth.auth.getSession().then(({ data }) => {
-      setEmail(data.session?.user?.email ?? null);
-      setCargando(false);
-    });
-    const { data: sub } = auth.auth.onAuthStateChange((_e, session) => {
-      setEmail(session?.user?.email ?? null);
-    });
-    return () => sub.subscription.unsubscribe();
+    let unsub = () => {};
+    getAuth()
+      .then(async (auth) => {
+        const { data } = await auth.auth.getSession();
+        setEmail(data.session?.user?.email ?? null);
+        setCargando(false);
+        const { data: sub } = auth.auth.onAuthStateChange((_e: any, session: any) => {
+          setEmail(session?.user?.email ?? null);
+        });
+        unsub = () => sub.subscription.unsubscribe();
+      })
+      .catch(() => setCargando(false));
+    return () => unsub();
   }, []);
 
   const entrar = async () => {
-    setError(null);
+    const auth = await getAuth();
     await auth.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
   };
 
-  const salir = async () => { await auth.auth.signOut(); setEmail(null); };
+  const salir = async () => {
+    const auth = await getAuth();
+    await auth.auth.signOut();
+    setEmail(null);
+  };
 
   if (cargando) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Cargando…</div>;
   }
 
-  // Entró pero con correo no permitido
   if (email && !correoPermitido(email)) {
     return (
       <div className="grid min-h-screen place-items-center p-6 text-center">
@@ -49,7 +55,6 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // No ha entrado → pantalla de bienvenida
   if (!email) {
     return (
       <div className="grid min-h-screen place-items-center p-6" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #103A3A 60%, #0C5C46 100%)` }}>
@@ -66,12 +71,10 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
             Entrar con Google
           </button>
           <p className="mt-3 text-[11px] text-muted-foreground">Solo cuentas @diipadesarrollos.com</p>
-          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </div>
       </div>
     );
   }
 
-  // Entró con correo permitido → muestra la app
   return <>{children}</>;
 }
