@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Search, ShieldAlert, Scale, Handshake } from "lucide-react";
 
 export const Route = createFileRoute("/udp")({
-  head: () => ({ meta: [{ title: "UDP · Defensa y Protección — JusticiaFácil" }] }),
+  head: () => ({ meta: [{ title: "UDP · Defensa Patrimonial — JusticiaFácil" }] }),
   component: UdpPage,
 });
 
@@ -79,8 +79,8 @@ function UdpPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Unidad de Defensa y Protección"
-        title="UDP · Defensa y Protección"
+        eyebrow="Unidad de Defensa Patrimonial"
+        title="UDP · Defensa Patrimonial"
         description="Denuncias penales, quejas PROFECO y convenios — defensa de la empresa y de clientes que contratan el servicio."
       />
 
