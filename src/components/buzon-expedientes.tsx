@@ -31,6 +31,10 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   const [fTipo, setFTipo] = useState("todos");
   const [soloNoLeidos, setSoloNoLeidos] = useState(false);
   const [orden, setOrden] = useState<"urgencia" | "reciente">("urgencia");
+  const [ultimaCorrida, setUltimaCorrida] = useState<{ corrida_at: string; total_expedientes: number | null; fuente: string | null } | null>(null);
+  useEffect(() => {
+    sbSelect<any>("robot_log", "select=corrida_at,total_expedientes,fuente&order=corrida_at.desc&limit=1").then((d) => setUltimaCorrida(d?.[0] ?? null)).catch(() => {});
+  }, []);
 
   const cargar = () => sbSelect<AcuerdoJudicial>("acuerdo_judicial", "select=*&order=fecha_acuerdo.desc&limit=1000").then(setAcuerdos).catch(() => setAcuerdos([]));
   useEffect(() => { cargar(); }, []);
@@ -88,6 +92,13 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
   return (
     <div className="space-y-3">
+      {ultimaCorrida && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          🤖 Última revisión del robot: <b className="text-foreground">{new Date(ultimaCorrida.corrida_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</b>
+          {ultimaCorrida.fuente === "PRUEBA" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">modo prueba</span>}
+          {ultimaCorrida.total_expedientes != null && <span>· {ultimaCorrida.total_expedientes} expedientes revisados</span>}
+        </div>
+      )}
       {/* Mini dashboard de salud (clicable) */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {([["todos", "Todos", "bg-muted text-foreground", filas.length], ["verde", `🟢 ${conteo.v} al día`, "bg-emerald-100 text-emerald-800", conteo.v], ["amarillo", `🟡 ${conteo.am} por revisar`, "bg-amber-100 text-amber-800", conteo.am], ["rojo", `🔴 ${conteo.r} sin avance`, "bg-red-100 text-red-700", conteo.r], ["sin", `⚪ ${conteo.s} sin movimientos`, "bg-muted text-muted-foreground", conteo.s]] as const).map(([k, label, cls]) => (
