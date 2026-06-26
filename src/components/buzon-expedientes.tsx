@@ -27,6 +27,10 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [agregar, setAgregar] = useState(false);
+  const [fColor, setFColor] = useState<"todos" | "verde" | "amarillo" | "rojo" | "sin">("todos");
+  const [fTipo, setFTipo] = useState("todos");
+  const [soloNoLeidos, setSoloNoLeidos] = useState(false);
+  const [orden, setOrden] = useState<"urgencia" | "reciente">("urgencia");
 
   const cargar = () => sbSelect<AcuerdoJudicial>("acuerdo_judicial", "select=*&order=fecha_acuerdo.desc&limit=1000").then(setAcuerdos).catch(() => setAcuerdos([]));
   useEffect(() => { cargar(); }, []);
@@ -55,29 +59,55 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
       const dias = diasDesde(ultima);
       return { c, exp, acs, ultima, dias, hoy: acs.some((a) => esHoy(a.fecha_acuerdo)), noLeidos: acs.filter((a) => a.leido === false).length };
     });
+    const colorDe = (d: number | null) => d === null ? "sin" : d < 7 ? "verde" : d <= 20 ? "amarillo" : "rojo";
     const t = q.trim().toLowerCase();
-    const f = t ? arr.filter((x) => `${x.exp} ${x.c.cliente_nombre || ""} ${x.c.juzgado || ""} ${x.c.materia || ""}`.toLowerCase().includes(t)) : arr;
-    // orden por urgencia: más días sin moverse arriba; sin movimientos al final
-    return f.sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
-  }, [casos, porExp, q]);
+    let f = arr.filter((x) => {
+      if (t && !`${x.exp} ${x.c.cliente_nombre || ""} ${x.c.juzgado || ""} ${x.c.materia || ""}`.toLowerCase().includes(t)) return false;
+      if (fColor !== "todos" && colorDe(x.dias) !== fColor) return false;
+      if (soloNoLeidos && x.noLeidos === 0) return false;
+      if (fTipo !== "todos" && !x.acs.some((a) => a.tipo_acuerdo === fTipo)) return false;
+      return true;
+    });
+    if (orden === "urgencia") f = f.sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
+    else f = f.sort((a, b) => (b.ultima ? new Date(b.ultima).getTime() : 0) - (a.ultima ? new Date(a.ultima).getTime() : 0));
+    return f;
+  }, [casos, porExp, q, fColor, fTipo, soloNoLeidos, orden]);
 
   const conteo = useMemo(() => {
-    let v = 0, am = 0, r = 0, s = 0;
-    for (const f of filas) { if (f.dias === null) s++; else if (f.dias < 7) v++; else if (f.dias <= 20) am++; else r++; }
-    return { v, am, r, s, hoy: filas.filter((f) => f.hoy).length };
-  }, [filas]);
+    let v = 0, am = 0, r = 0, s = 0, hoy = 0;
+    for (const c of casos) {
+      const acs = porExp[(c.expediente || "").trim()] || [];
+      const d = diasDesde(acs[0]?.fecha_acuerdo ?? null);
+      if (d === null) s++; else if (d < 7) v++; else if (d <= 20) am++; else r++;
+      if (acs.some((a) => esHoy(a.fecha_acuerdo))) hoy++;
+    }
+    return { v, am, r, s, hoy };
+  }, [casos, porExp]);
 
   const selExp = filas.find((f) => f.c.id === sel);
 
   return (
     <div className="space-y-3">
-      {/* Mini dashboard de salud */}
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-800">🟢 {conteo.v} al día</span>
-        <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-800">🟡 {conteo.am} por revisar</span>
-        <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">🔴 {conteo.r} sin avance</span>
-        <span className="rounded-full bg-muted px-3 py-1 font-medium text-muted-foreground">⚪ {conteo.s} sin movimientos</span>
-        {conteo.hoy > 0 && <span className="rounded-full bg-blue-100 px-3 py-1 font-medium text-blue-700"><Bell className="mr-1 inline h-3 w-3" />{conteo.hoy} con movimiento hoy</span>}
+      {/* Mini dashboard de salud (clicable) */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {([["todos", "Todos", "bg-muted text-foreground", filas.length], ["verde", `🟢 ${conteo.v} al día`, "bg-emerald-100 text-emerald-800", conteo.v], ["amarillo", `🟡 ${conteo.am} por revisar`, "bg-amber-100 text-amber-800", conteo.am], ["rojo", `🔴 ${conteo.r} sin avance`, "bg-red-100 text-red-700", conteo.r], ["sin", `⚪ ${conteo.s} sin movimientos`, "bg-muted text-muted-foreground", conteo.s]] as const).map(([k, label, cls]) => (
+          <button key={k} onClick={() => setFColor(k as any)} className={`rounded-full px-3 py-1 font-medium transition-all ${cls} ${fColor === k ? "ring-2 ring-[color:var(--teal)] ring-offset-1" : "opacity-80 hover:opacity-100"}`}>{label}</button>
+        ))}
+        {conteo.hoy > 0 && <span className="rounded-full bg-blue-100 px-3 py-1 font-medium text-blue-700"><Bell className="mr-1 inline h-3 w-3" />{conteo.hoy} hoy</span>}
+      </div>
+
+      {/* Barra de filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs">
+          <option value="todos">Todos los tipos</option>
+          {TIPOS_ACUERDO.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button onClick={() => setSoloNoLeidos((v) => !v)} className={`rounded-md border px-3 py-1.5 text-xs ${soloNoLeidos ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Solo con no leídos</button>
+        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+          Orden:
+          <button onClick={() => setOrden("urgencia")} className={`rounded-md border px-2.5 py-1.5 ${orden === "urgencia" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Por urgencia</button>
+          <button onClick={() => setOrden("reciente")} className={`rounded-md border px-2.5 py-1.5 ${orden === "reciente" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Reciente</button>
+        </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
