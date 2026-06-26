@@ -1,6 +1,6 @@
 import {
   Home, FolderOpen, Newspaper, Send, Shield, GitBranch, Clock, Bot,
-  FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, Swords, ShieldHalf,
+  FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, Swords, ShieldHalf, Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -9,7 +9,7 @@ export interface NavItem {
   to: string;
   icon: LucideIcon;
   badge?: string;
-  group: "Núcleo" | "Procesal" | "Inteligencia" | "Documentos" | "Trámites" | "Operación";
+  group: "Núcleo" | "Procesal" | "Inteligencia" | "Documentos" | "Trámites" | "Operación" | "Sistema";
 }
 
 export const navItems: NavItem[] = [
@@ -35,4 +35,6 @@ export const navItems: NavItem[] = [
   { label: "URRJ", to: "/urrj", icon: Scale, group: "Trámites" },
 
   { label: "Conectores Juzgados", to: "/conectores", icon: Network, group: "Operación" },
+
+  { label: "Configuración", to: "/configuracion", icon: Settings, group: "Sistema" },
 ];
