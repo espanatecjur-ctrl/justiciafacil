@@ -10,7 +10,7 @@ interface Fila {
   id: string; folio: string | null; posicion: string | null; tipo_juicio: string | null;
   expediente: string | null; juzgado: string | null; estado: string | null;
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
-  datos: any; resultados: any;
+  datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number;
 }
 
 const POS_COLOR: Record<string, string> = {
@@ -161,6 +161,8 @@ function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
       dictamen: f.dictamen_sugerido || "", riesgos: riesgos.map((r) => ({ nombre: r.k, r: r.v })),
       intereses: fin ? { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura } : { ordinarios: 0, moratorios: 0, iva: 0, total: vaae?.vaae || 0, usura: false },
       admin: null, anotaciones: d.anotacionesHumanas || d.anotaciones || "", firmaElabora: firmas.elabora || null, firmaValida: firmas.valida || null, decision: f.dictamen_final || "",
+      noValido: f.vigente === false,
+      cambios: (() => { try { return f.cambios ? JSON.parse(f.cambios) : null; } catch { return null; } })(),
     });
   };
 
