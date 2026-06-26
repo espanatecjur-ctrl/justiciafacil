@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { RobotBoletines } from "@/components/robot-boletines";
+import { BuzonExpedientes } from "@/components/buzon-expedientes";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Search } from "lucide-react";
@@ -85,53 +86,7 @@ function ExpedientesPage() {
         <Card className="legal-card p-4 border-red-200 bg-red-50 text-sm text-red-700">No se pudieron cargar los casos: {error}</Card>
       )}
 
-      <Card className="legal-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-2.5">Expediente</th>
-                <th className="text-left px-4 py-2.5">Materia / Vía</th>
-                <th className="text-left px-4 py-2.5">Juzgado</th>
-                <th className="text-left px-4 py-2.5">Etapa</th>
-                <th className="text-left px-4 py-2.5">Prioridad</th>
-                <th className="text-left px-4 py-2.5">Unidad</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtrados.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <p className="font-semibold text-[color:var(--teal)]">{c.expediente || "— sin expediente —"}</p>
-                    <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{c.materia || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{c.via_procesal || ""}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="max-w-[280px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{c.distrito_judicial || ""}{c.entidad ? ` · ${c.entidad}` : ""}</p>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.etapa_actual || "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.unidad || "—"}</td>
-                </tr>
-              ))}
-              {!cargando && filtrados.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                  {casos.length === 0 ? "Aún no hay casos cargados (o falta permitir la lectura)." : "Sin resultados con esos filtros."}
-                </td></tr>
-              )}
-              {cargando && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <BuzonExpedientes casos={filtrados} />
     </div>
   );
 }
