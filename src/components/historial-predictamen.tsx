@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download } from "lucide-react";
+import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2 } from "lucide-react";
 import type { Semaforo } from "@/lib/urrj-motores";
 import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
 
@@ -10,7 +10,7 @@ interface Fila {
   id: string; folio: string | null; posicion: string | null; tipo_juicio: string | null;
   expediente: string | null; juzgado: string | null; estado: string | null;
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
-  datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number;
+  datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number; terminado?: boolean;
 }
 
 const POS_COLOR: Record<string, string> = {
@@ -103,7 +103,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
             ) : filtradas.map((f) => (
               <tr key={f.id} className="border-b border-border/60 hover:bg-muted/40">
                 <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => setFicha(f)}>{f.folio || "—"}</td>
-                <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${POS_COLOR[f.posicion || ""] || "bg-muted"}`}>{f.posicion || "—"}</span></td>
+                <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${POS_COLOR[f.posicion || ""] || "bg-muted"}`}>{f.posicion || "—"}</span>{f.terminado && <span className="ml-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">TERMINADO</span>}</td>
                 <td className="max-w-[220px] truncate px-3 py-2">{dir(f)}</td>
                 <td className="px-3 py-2">{f.expediente || "—"}</td>
                 <td className="px-3 py-2">{f.estado || "—"}</td>
@@ -116,7 +116,16 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
                     <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-9 z-20 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
                       <Item icon={FolderOpen} onClick={() => { setMenu(null); setFicha(f); }}>Abrir ficha</Item>
                       <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>
-                      <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>
+                      {!f.terminado && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
+                      {!f.terminado && <Item icon={CheckCircle2} onClick={async () => {
+                        setMenu(null);
+                        if (!confirm("¿Dar por TERMINADO este pre-dictamen? Es definitivo: ya no se podrá re-pre-dictaminar.")) return;
+                        try {
+                          const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ terminado: true }) });
+                          if (!res.ok) throw new Error();
+                          setFilas((prev) => prev.map((x) => x.id === f.id ? { ...x, terminado: true } : x));
+                        } catch { alert("No se pudo marcar como terminado."); }
+                      }}>Dar por terminado</Item>}
                       <div className="my-1 border-t border-border" />
                       <Item icon={Trash2} danger onClick={async () => {
                         setMenu(null);
@@ -179,6 +188,7 @@ function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
         <p className="font-mono text-sm text-white/80">{f.folio}</p>
         <h2 className="mt-1 text-xl font-bold">{d.ubicacion || f.expediente || "Pre-dictamen"}</h2>
         <p className="text-sm text-white/70">{f.posicion} · {f.tipo_juicio} · {f.estado}</p>
+        {f.terminado && <span className="mt-2 inline-block rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white">✓ TERMINADO</span>}
       </div>
 
       <div className={`rounded-lg border p-4 ${dicColorBox}`}>
