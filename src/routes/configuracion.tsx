@@ -4,10 +4,11 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { ROLES, MODULOS, TODOS_MODULOS, rolVeTodo, type ModuloClave } from "@/lib/roles";
-import { ShieldCheck, Save, Check, Lock } from "lucide-react";
+import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
-  head: () => ({ meta: [{ title: "Configuración · Roles y Permisos — JusticiaFácil" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({ tab: typeof s.tab === "string" ? s.tab : undefined }),
+  head: () => ({ meta: [{ title: "Configuración — JusticiaFácil" }] }),
   component: ConfiguracionPage,
 });
 
@@ -20,35 +21,80 @@ const headers = {
   "Content-Type": "application/json",
 };
 
-// Módulos efectivos de un rol: lo guardado en Supabase, o el default del catálogo.
+const TABS = [
+  { key: "roles", label: "Roles y Permisos", icon: ShieldCheck },
+  { key: "colaboradores", label: "Colaboradores", icon: Users },
+  { key: "conectores", label: "Conectores de Juzgados", icon: Network },
+  { key: "folios", label: "Folios", icon: Bookmark },
+  { key: "papelera", label: "Papelera", icon: Trash2 },
+];
+
+function ConfiguracionPage() {
+  const { tab } = Route.useSearch();
+  const [activa, setActiva] = useState<string>(tab && TABS.some((t) => t.key === tab) ? tab : "roles");
+
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Sistema" title="Configuración" description="Roles, colaboradores, conectores, folios y papelera." />
+
+      {/* Pestañas */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiva(t.key)}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+              activa === t.key ? "bg-[#0B1E3A] text-white" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activa === "roles" && <RolesPermisos />}
+      {activa !== "roles" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
+    </div>
+  );
+}
+
+function Proximamente({ nombre }: { nombre: string }) {
+  return (
+    <Card className="legal-card p-10 text-center">
+      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#C2A24C]/15 text-[#8A6E22]">
+        <Hammer className="h-6 w-6" />
+      </div>
+      <p className="font-display text-lg font-semibold">{nombre}</p>
+      <p className="mt-1 text-sm text-muted-foreground">Esta sección la construiremos en el siguiente paso. La estructura ya está lista.</p>
+    </Card>
+  );
+}
+
+// ============================ Roles y Permisos ============================
 function defaultsDeRol(codigo: string): ModuloClave[] {
   const r = ROLES.find((x) => x.codigo === codigo);
   if (!r) return [];
   return r.modulos === "todos" ? [...TODOS_MODULOS] : [...r.modulos];
 }
 
-function ConfiguracionPage() {
+function RolesPermisos() {
   const [modulos, setModulos] = useState<Record<string, ModuloClave[]>>({});
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Carga inicial: lee app_permisos (id=1). Si no hay nada, usa los defaults.
   useEffect(() => {
     const editables = ROLES.filter((r) => !rolVeTodo(r.modulos));
     fetch(`${SUPABASE_URL}/rest/v1/app_permisos?select=config&id=eq.1`, { headers })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Supabase ${r.status}`))))
       .then((rows: { config?: { modulos?: Record<string, ModuloClave[]> } }[]) => {
-        const guardadoCfg = rows?.[0]?.config?.modulos ?? {};
+        const cfg = rows?.[0]?.config?.modulos ?? {};
         const inicial: Record<string, ModuloClave[]> = {};
-        for (const r of editables) {
-          inicial[r.codigo] = guardadoCfg[r.codigo] ?? defaultsDeRol(r.codigo);
-        }
+        for (const r of editables) inicial[r.codigo] = cfg[r.codigo] ?? defaultsDeRol(r.codigo);
         setModulos(inicial);
       })
-      .catch((e) => {
-        // Si la tabla no existe aún, igual mostramos los defaults (sin romper).
+      .catch(() => {
         const inicial: Record<string, ModuloClave[]> = {};
         for (const r of editables) inicial[r.codigo] = defaultsDeRol(r.codigo);
         setModulos(inicial);
@@ -60,10 +106,9 @@ function ConfiguracionPage() {
   const toggle = (rol: string, mod: ModuloClave) => {
     setGuardado(false);
     setModulos((prev) => {
-      const actual = new Set(prev[rol] ?? []);
-      if (actual.has(mod)) actual.delete(mod);
-      else actual.add(mod);
-      return { ...prev, [rol]: TODOS_MODULOS.filter((m) => actual.has(m)) };
+      const s = new Set(prev[rol] ?? []);
+      s.has(mod) ? s.delete(mod) : s.add(mod);
+      return { ...prev, [rol]: TODOS_MODULOS.filter((m) => s.has(m)) };
     });
   };
 
@@ -78,9 +123,7 @@ function ConfiguracionPage() {
       });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       const data = await res.json();
-      if (!data || data.length === 0) {
-        throw new Error("No existe la fila (id=1). Corre el SQL de app_permisos.");
-      }
+      if (!data || data.length === 0) throw new Error("No existe la fila id=1. Corre el SQL de app_permisos.");
       setGuardado(true);
     } catch (e: any) {
       setError("No se pudo guardar: " + e.message);
@@ -96,36 +139,19 @@ function ConfiguracionPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Configuración"
-        title="Roles y Permisos"
-        description="Define qué módulos ve cada rol. Los cambios se guardan en la base de JusticiaFácil."
-      />
-
-      {/* Aviso de guardado / barra de acción */}
-      <div
-        className="flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-white"
-        style={{ background: `linear-gradient(120deg, ${NAVY} 0%, #103A3A 60%, #0C5C46 100%)` }}
-      >
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-white" style={{ background: `linear-gradient(120deg, ${NAVY} 0%, #103A3A 60%, #0C5C46 100%)` }}>
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5" style={{ color: GOLD }} />
           <p className="text-sm">Activa o desactiva los módulos por rol y guarda los cambios.</p>
         </div>
-        <button
-          onClick={guardar}
-          disabled={guardando}
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[#0B1E3A] disabled:opacity-60"
-          style={{ background: GOLD }}
-        >
+        <button onClick={guardar} disabled={guardando} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[#0B1E3A] disabled:opacity-60" style={{ background: GOLD }}>
           {guardado ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
           {guardando ? "Guardando…" : guardado ? "Guardado" : "Guardar cambios"}
         </button>
       </div>
 
-      {error && (
-        <Card className="legal-card p-4 border-amber-200 bg-amber-50 text-sm text-amber-800">{error}</Card>
-      )}
+      {error && <Card className="legal-card p-4 border-amber-200 bg-amber-50 text-sm text-amber-800">{error}</Card>}
 
       {cargando ? (
         <Card className="legal-card p-8 text-center text-muted-foreground">Cargando roles…</Card>
@@ -151,23 +177,14 @@ function ConfiguracionPage() {
                       </span>
                     )}
                   </div>
-
                   {veTodo ? (
-                    <p className="text-sm text-muted-foreground">Este rol tiene acceso completo a todos los módulos (no editable).</p>
+                    <p className="text-sm text-muted-foreground">Acceso completo a todos los módulos (no editable).</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {MODULOS.map((m) => {
                         const on = activos.has(m.clave);
                         return (
-                          <button
-                            key={m.clave}
-                            onClick={() => toggle(r.codigo, m.clave)}
-                            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                              on
-                                ? "border-[#0C5C46] bg-[#0C5C46]/10 text-[#0C5C46]"
-                                : "border-input bg-background text-muted-foreground hover:bg-muted"
-                            }`}
-                          >
+                          <button key={m.clave} onClick={() => toggle(r.codigo, m.clave)} className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${on ? "border-[#0C5C46] bg-[#0C5C46]/10 text-[#0C5C46]" : "border-input bg-background text-muted-foreground hover:bg-muted"}`}>
                             {on ? "● " : "○ "}{m.label}
                           </button>
                         );
