@@ -12,6 +12,7 @@ import {
 import { getAuth } from "@/lib/auth";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
+import { RecorridoDemandado } from "@/components/recorrido-demandado";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -109,6 +110,7 @@ function URRJ() {
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
+  const [vista, setVista] = useState<"elegir" | "Actor" | "Demandado" | "Sucesorio">("elegir");
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
 
   useEffect(() => {
@@ -226,6 +228,44 @@ function URRJ() {
         </div>
       </div>
 
+      {vista === "elegir" && (
+        <div className="rounded-xl border border-border bg-card p-6">
+          <p className="text-base font-semibold">¿Cuál es la posición de DIIPA en este caso?</p>
+          <p className="mb-4 text-sm text-muted-foreground">Cada posición tiene su propio recorrido de pre-dictamen.</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <button onClick={() => { set("posicion", "Actor"); setVista("Actor"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+              <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
+              <p className="font-semibold">Actor</p>
+              <p className="text-xs text-muted-foreground">DIIPA demanda / recupera (cesión hipotecaria). 8 fases.</p>
+            </button>
+            <button onClick={() => setVista("Demandado")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+              <Scale className="mb-2 h-6 w-6" style={{ color: "#0B1E3A" }} />
+              <p className="font-semibold">Demandado</p>
+              <p className="text-xs text-muted-foreground">DIIPA compra los derechos del demandado-vendedor. 6 fases.</p>
+            </button>
+            <button onClick={() => setVista("Sucesorio")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+              <Scale className="mb-2 h-6 w-6" style={{ color: "#C2A24C" }} />
+              <p className="font-semibold">Sucesorio</p>
+              <p className="text-xs text-muted-foreground">Vía herencia / posesión (usucapión). Próximamente.</p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={() => setVista("elegir")} />}
+
+      {vista === "Sucesorio" && (
+        <div className="rounded-xl border border-dashed border-border p-6 text-center">
+          <p className="text-sm text-muted-foreground">El recorrido <b>Sucesorio</b> está en construcción. Lo armamos cuando me pases sus hitos.</p>
+          <button onClick={() => setVista("elegir")} className="mt-3 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">← Cambiar posición</button>
+        </div>
+      )}
+
+      {vista === "Actor" && (<>
+      <div className="-mt-1 flex justify-start">
+        <button onClick={() => setVista("elegir")} className="flex items-center gap-1 text-xs text-muted-foreground hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Cambiar posición (Actor)</button>
+      </div>
+
       {/* Robot de búsqueda (accesos directos por ahora) */}
       <div className="rounded-xl border border-border bg-card p-4">
         <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"><Bot className="h-4 w-4" /> Robot de búsqueda jurídica (próximamente activo)</p>
@@ -267,9 +307,8 @@ function URRJ() {
                 {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
               </select>
             </Campo>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Campo label="Tipo de juicio"><select className={inp} value={d.tipoJuicio} onChange={(e) => set("tipoJuicio", e.target.value)}>{TIPOS_JUICIO.map((t) => <option key={t}>{t}</option>)}</select></Campo>
-              <Campo label="Posición de DIIPA"><select className={inp} value={d.posicion} onChange={(e) => set("posicion", e.target.value)}>{POSICIONES.map((t) => <option key={t}>{t}</option>)}</select></Campo>
               <Campo label="Estado del juicio"><select className={inp} value={d.estado} onChange={(e) => set("estado", e.target.value)}>{ESTADOS_URRJ.map((t) => <option key={t}>{t}</option>)}</select></Campo>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -449,6 +488,7 @@ function URRJ() {
           <button onClick={() => setPaso((p) => Math.min(FASES.length - 1, p + 1))} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white" style={{ background: NAVY }}>Siguiente fase <ArrowRight className="h-4 w-4" /></button>
         )}
       </div>
+      </>)}
     </div>
   );
 }
