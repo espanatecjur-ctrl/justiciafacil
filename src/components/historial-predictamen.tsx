@@ -36,7 +36,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
   const [orden, setOrden] = useState<{ col: string; asc: boolean }>({ col: "created_at", asc: false });
-  const [menu, setMenu] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [subirDoc, setSubirDoc] = useState<Fila | null>(null);
   const [reasignar, setReasignar] = useState<Fila | null>(null);
   const [puede, setPuede] = useState<string[]>([]);
@@ -119,40 +119,44 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
                 <td className="px-3 py-2 text-[12px]">{f.dictamen_final || "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{fecha(f.created_at)}</td>
                 <td className="relative px-2 py-2 text-right">
-                  <button onClick={(e) => { e.stopPropagation(); setMenu(menu === f.id ? null : f.id); }} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
-                  {menu === f.id && (
-                    <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-9 z-20 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
-                      <Item icon={FolderOpen} onClick={() => { setMenu(null); abrirFicha(f); }}>Abrir ficha</Item>
-                      {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
-                      {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
-                      {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
-                      {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
-                        setMenu(null);
-                        if (!confirm("¿Dar por TERMINADO este pre-dictamen? Es definitivo: ya no se podrá re-pre-dictaminar.")) return;
-                        try {
-                          const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ terminado: true }) });
-                          if (!res.ok) throw new Error();
-                          setFilas((prev) => prev.map((x) => x.id === f.id ? { ...x, terminado: true } : x));
-                        } catch { alert("No se pudo marcar como terminado."); }
-                      }}>Dar por terminado</Item>}
-                      <div className="my-1 border-t border-border" />
-                      {can("papelera") && <Item icon={Trash2} danger onClick={async () => {
-                        setMenu(null);
-                        if (!confirm("¿Enviar este pre-dictamen a la papelera?")) return;
-                        try {
-                          const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ en_papelera: true, papelera_fecha: new Date().toISOString() }) });
-                          if (!res.ok) throw new Error();
-                          setFilas((prev) => prev.filter((x) => x.id !== f.id));
-                        } catch { alert("No se pudo enviar a la papelera."); }
-                      }}>Enviar a papelera</Item>}
-                    </div>
-                  )}
+                  <button onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu(menu?.id === f.id ? null : { id: f.id, x: r.right, y: r.bottom }); }} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {menu && (() => {
+        const f = filtradas.find((x) => x.id === menu.id);
+        if (!f) return null;
+        return (
+          <div onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
+            <Item icon={FolderOpen} onClick={() => { setMenu(null); abrirFicha(f); }}>Abrir ficha</Item>
+            {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
+            {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
+            {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
+            {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
+              setMenu(null);
+              if (!confirm("¿Dar por TERMINADO este pre-dictamen? Es definitivo: ya no se podrá re-pre-dictaminar.")) return;
+              try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ terminado: true }) });
+                if (!res.ok) throw new Error();
+                setFilas((prev) => prev.map((x) => x.id === f.id ? { ...x, terminado: true } : x));
+              } catch { alert("No se pudo marcar como terminado."); }
+            }}>Dar por terminado</Item>}
+            <div className="my-1 border-t border-border" />
+            {can("papelera") && <Item icon={Trash2} danger onClick={async () => {
+              setMenu(null);
+              if (!confirm("¿Enviar este pre-dictamen a la papelera?")) return;
+              try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ en_papelera: true, papelera_fecha: new Date().toISOString() }) });
+                if (!res.ok) throw new Error();
+                setFilas((prev) => prev.filter((x) => x.id !== f.id));
+              } catch { alert("No se pudo enviar a la papelera."); }
+            }}>Enviar a papelera</Item>}
+          </div>
+        );
+      })()}
       {subirDoc && <SubirDocModal predictamenId={subirDoc.id} folio={subirDoc.folio} onClose={() => setSubirDoc(null)} />}
       {reasignar && <ReasignarModal predictamenId={reasignar.id} materia={reasignar.tipo_juicio} actual={reasignar.abogado_nombre} onClose={() => setReasignar(null)} onAsignado={(nombre) => setFilas((prev) => prev.map((x) => x.id === reasignar.id ? { ...x, abogado_nombre: nombre } : x))} />}
     </div>
