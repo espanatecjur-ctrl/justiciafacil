@@ -6,6 +6,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { ROLES, MODULOS, TODOS_MODULOS, rolVeTodo, type ModuloClave } from "@/lib/roles";
 import { ColaboradoresConfig } from "@/components/colaboradores-config";
 import { AreasConfig } from "@/components/areas-config";
+import { PapeleraConfig } from "@/components/papelera-config";
 import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
@@ -58,7 +59,8 @@ function ConfiguracionPage() {
       {activa === "roles" && <RolesPermisos />}
       {activa === "colaboradores" && <ColaboradoresConfig />}
       {activa === "areas" && <AreasConfig />}
-      {activa !== "roles" && activa !== "colaboradores" && activa !== "areas" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
+      {activa === "papelera" && <PapeleraConfig />}
+      {activa !== "roles" && activa !== "colaboradores" && activa !== "areas" && activa !== "papelera" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
     </div>
   );
 }
