@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { ROLES, MODULOS, TODOS_MODULOS, rolVeTodo, type ModuloClave } from "@/lib/roles";
+import { ColaboradoresConfig } from "@/components/colaboradores-config";
 import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
@@ -53,7 +54,8 @@ function ConfiguracionPage() {
       </div>
 
       {activa === "roles" && <RolesPermisos />}
-      {activa !== "roles" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
+      {activa === "colaboradores" && <ColaboradoresConfig />}
+      {activa !== "roles" && activa !== "colaboradores" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
     </div>
   );
 }
