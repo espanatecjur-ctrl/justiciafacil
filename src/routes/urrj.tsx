@@ -123,7 +123,8 @@ function URRJ() {
     const map: Record<string, any> = { Actor: "Actor", Demandado: "Demandado", Sucesorio: "Sucesorio", Contingencia: "Contingencia", "Trámite administrativo": "Tramites" };
     const v = map[fila.posicion];
     if (!v) { alert("No se pudo identificar la posición de este pre-dictamen."); return; }
-    setPrecargar({ datos: fila.datos || {}, antecedenteId: fila.id, version: fila.version || 1 });
+    const nota = prompt("Nota de cambios (opcional): ¿qué cambió o qué vas a agregar en esta nueva versión?") || "";
+    setPrecargar({ datos: fila.datos || {}, antecedenteId: fila.id, version: fila.version || 1, cambios: nota });
     setVista(v);
   };
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
