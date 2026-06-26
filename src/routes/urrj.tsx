@@ -16,6 +16,7 @@ import { RecorridoDemandado } from "@/components/recorrido-demandado";
 import { RecorridoSucesorio } from "@/components/recorrido-sucesorio";
 import { RecorridoContingencia } from "@/components/recorrido-contingencia";
 import { RecorridoTramites } from "@/components/recorrido-tramites";
+import { HistorialPredictamen } from "@/components/historial-predictamen";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -267,6 +268,8 @@ function URRJ() {
           </div>
         </div>
       )}
+
+      {vista === "elegir" && <HistorialPredictamen />}
 
       {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={() => setVista("elegir")} />}
       {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={() => setVista("elegir")} />}
