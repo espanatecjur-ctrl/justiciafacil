@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
@@ -117,6 +118,9 @@ function URRJ() {
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
   const [vista, setVista] = useState<"elegir" | "Actor" | "Demandado" | "Sucesorio" | "Contingencia" | "Tramites">("elegir");
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
+  const [permisos, setPermisos] = useState<string[]>([]);
+  useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
+  const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   useEffect(() => { if (precargar?.datos && vista === "Actor") setD((p) => ({ ...p, ...precargar.datos })); }, [precargar, vista]);
   const volver = () => { setPrecargar(null); setVista("elegir"); };
   const reDictaminar = (fila: any) => {
@@ -247,18 +251,19 @@ function URRJ() {
         <div className="rounded-xl border border-border bg-card p-6">
           <p className="text-base font-semibold">¿Cuál es la posición de DIIPA en este caso?</p>
           <p className="mb-4 text-sm text-muted-foreground">Cada posición tiene su propio recorrido de pre-dictamen.</p>
+          {!puede("elaborar") && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">🔒 Tu rol no puede elaborar pre-dictámenes nuevos. Puedes consultar el historial de abajo.</div>}
           <div className="grid gap-3 sm:grid-cols-3">
-            <button onClick={() => { set("posicion", "Actor"); setVista("Actor"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+            <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } set("posicion", "Actor"); setVista("Actor"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
               <p className="font-semibold">Actor</p>
               <p className="text-xs text-muted-foreground">DIIPA demanda / recupera (cesión hipotecaria). 8 fases.</p>
             </button>
-            <button onClick={() => setVista("Demandado")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+            <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } setVista("Demandado"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#0B1E3A" }} />
               <p className="font-semibold">Demandado</p>
               <p className="text-xs text-muted-foreground">DIIPA compra los derechos del demandado-vendedor. 6 fases.</p>
             </button>
-            <button onClick={() => setVista("Sucesorio")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+            <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } setVista("Sucesorio"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#C2A24C" }} />
               <p className="font-semibold">Sucesorio</p>
               <p className="text-xs text-muted-foreground">Vía herencia / posesión. Veredicto cruzado. 6 fases.</p>
@@ -266,12 +271,12 @@ function URRJ() {
           </div>
           <p className="mb-2 mt-5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Otros saneamientos</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <button onClick={() => setVista("Contingencia")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+            <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } setVista("Contingencia"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
               <p className="font-semibold">Contingencia inmobiliaria</p>
               <p className="text-xs text-muted-foreground">Defectos registrales, posesión, copropiedad, doble inscripción, traslapes. 6 fases.</p>
             </button>
-            <button onClick={() => setVista("Tramites")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+            <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } setVista("Tramites"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#0B1E3A" }} />
               <p className="font-semibold">Trámites administrativos</p>
               <p className="text-xs text-muted-foreground">Amparo, contencioso TFJA, laboral, créditos fiscales. Cuenta el plazo. 6 fases.</p>
@@ -282,10 +287,10 @@ function URRJ() {
 
       {vista === "elegir" && <HistorialPredictamen onReDictaminar={reDictaminar} />}
 
-      {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={volver} precargar={precargar} />}
-      {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={volver} precargar={precargar} />}
-      {vista === "Contingencia" && <RecorridoContingencia casos={casos} onVolver={volver} precargar={precargar} />}
-      {vista === "Tramites" && <RecorridoTramites casos={casos} onVolver={volver} precargar={precargar} />}
+      {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={volver} precargar={precargar} puedeFirmarElabora={puede("firmar_elabora")} puedeValidar={puede("validar")} />}
+      {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={volver} precargar={precargar} puedeFirmarElabora={puede("firmar_elabora")} puedeValidar={puede("validar")} />}
+      {vista === "Contingencia" && <RecorridoContingencia casos={casos} onVolver={volver} precargar={precargar} puedeFirmarElabora={puede("firmar_elabora")} puedeValidar={puede("validar")} />}
+      {vista === "Tramites" && <RecorridoTramites casos={casos} onVolver={volver} precargar={precargar} puedeFirmarElabora={puede("firmar_elabora")} puedeValidar={puede("validar")} />}
 
       {vista === "Actor" && (<>
       <div className="-mt-1 flex justify-start">
@@ -464,8 +469,8 @@ function URRJ() {
               <textarea value={d.anotacionesHumanas} onChange={(e) => set("anotacionesHumanas", e.target.value)} rows={4} placeholder="Escribe aquí cualquier observación, contexto o recomendación que el sistema no calcula…" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" />
-              <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" />
+              <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puede("firmar_elabora")} />
+              <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puede("validar")} />
             </div>
             <p className="text-sm font-medium">Decisión humana · ¿pasa para compra / inversión en garantía?</p>
             <div className="flex flex-wrap gap-2">
