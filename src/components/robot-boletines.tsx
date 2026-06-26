@@ -14,6 +14,7 @@ export interface AcuerdoJudicial {
   texto: string | null;
   urgente: boolean | null;
   leido: boolean | null;
+  origen?: string | null;
 }
 
 /**
