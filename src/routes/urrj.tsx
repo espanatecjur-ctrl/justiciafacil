@@ -51,6 +51,7 @@ interface Datos {
   valorComercial: string; precioCesion: string; costosOperativos: string; margenObjetivo: string;
   // H7 firmas
   firmaElabora: string; firmaValida: string;
+  anotacionesHumanas: string;
 }
 
 const VACIO: Datos = {
@@ -65,6 +66,7 @@ const VACIO: Datos = {
   capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "",
   valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
   firmaElabora: "", firmaValida: "",
+  anotacionesHumanas: "",
 };
 
 const n = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v; };
@@ -363,12 +365,16 @@ function URRJ() {
           <div className="space-y-4">
             <H titulo="7 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
-              <Aviso r={rPresc} /><Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}<Aviso r={rViab} />
+              <Aviso r={rPresc} /><Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
               {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Registral", detalle: "Hipoteca no inscrita/vigente." }} />}
             </div>
             <div className={`rounded-lg border p-4 ${dictamen.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Pre-dictamen del sistema (sugerido): {dictamen.txt}</p>
               <p className="mt-1 text-xs opacity-80">El sistema solo sugiere con base en los semáforos. La decisión final es humana.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Anotaciones del abogado (observaciones a mano)</label>
+              <textarea value={d.anotacionesHumanas} onChange={(e) => set("anotacionesHumanas", e.target.value)} rows={4} placeholder="Escribe aquí cualquier observación, contexto o recomendación que el sistema no calcula…" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" />
