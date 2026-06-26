@@ -9,7 +9,7 @@ export interface NavItem {
   to: string;
   icon: LucideIcon;
   badge?: string;
-  group: "Núcleo" | "Procesal" | "Inteligencia" | "Documentos" | "Trámites" | "Operación" | "Sistema";
+  group: "Núcleo" | "Procesal" | "Inteligencia" | "Documentos" | "Trámites" | "Operación";
 }
 
 export const navItems: NavItem[] = [
@@ -35,6 +35,4 @@ export const navItems: NavItem[] = [
   { label: "URRJ", to: "/urrj", icon: Scale, group: "Trámites" },
 
   { label: "Conectores Juzgados", to: "/conectores", icon: Network, group: "Operación" },
-
-  { label: "Configuración", to: "/configuracion", icon: Settings, group: "Sistema" },
 ];
