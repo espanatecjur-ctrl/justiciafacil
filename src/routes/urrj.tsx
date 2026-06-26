@@ -10,6 +10,7 @@ import {
   Check, X, ClipboardCheck, Lock, Calculator,
 } from "lucide-react";
 import { getAuth } from "@/lib/auth";
+import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -103,6 +104,8 @@ function URRJ() {
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
+  const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
 
   useEffect(() => {
@@ -173,10 +176,10 @@ function URRJ() {
       caso_id: d.caso_id || null, expediente: d.expediente || null, juzgado: d.juzgado || null, estado: d.estado,
       tipo_juicio: d.tipoJuicio, posicion: d.posicion,
       datos: d,
-      resultados: { prescripcion: rPresc, caducidad: rCaduc, usucapion: usaUsucapion ? rUsuc : null, viabilidad: rViab, financiero: fin, cargas },
+      resultados: { prescripcion: rPresc, caducidad: rCaduc, usucapion: usaUsucapion ? rUsuc : null, viabilidad: rViab, financiero: fin, cargas, firmas: { elabora: firmaElabora, valida: firmaValida } },
       dictamen_sugerido: dictamen.txt, dictamen_final: decision,
-      firma_elabora: d.firmaElabora || null, firma_elabora_fecha: d.firmaElabora ? ahora : null,
-      firma_valida: d.firmaValida || null, firma_valida_fecha: d.firmaValida ? ahora : null,
+      firma_elabora: firmaElabora?.nombre || null, firma_elabora_fecha: firmaElabora?.fecha || null,
+      firma_valida: firmaValida?.nombre || null, firma_valida_fecha: firmaValida?.fecha || null,
     };
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, { method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(payload) });
@@ -368,8 +371,8 @@ function URRJ() {
               <p className="mt-1 text-xs opacity-80">El sistema solo sugiere con base en los semáforos. La decisión final es humana.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Campo label="Elabora · abogado URRJ (nombre)"><input className={inp} value={d.firmaElabora} onChange={(e) => set("firmaElabora", e.target.value)} placeholder="Tu nombre" /></Campo>
-              <Campo label="Valida · Director Legal (nombre)"><input className={inp} value={d.firmaValida} onChange={(e) => set("firmaValida", e.target.value)} placeholder="Nombre del DIL" /></Campo>
+              <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" />
+              <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" />
             </div>
             <p className="text-sm font-medium">Decisión humana · ¿pasa para compra / inversión en garantía?</p>
             <div className="flex flex-wrap gap-2">
