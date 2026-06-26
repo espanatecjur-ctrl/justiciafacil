@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
   TIPOS_TRAMITE, veredictoTra1, veredictoTra2, veredictoTra3, veredictoTra4, analisisContencioso, calcularVAAETra, consolidadoTra,
@@ -44,7 +45,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoTramites({ casos, onVolver }: { casos: any[]; onVolver: () => void }) {
+export function RecorridoTramites({ casos, onVolver, precargar }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
@@ -59,6 +60,7 @@ export function RecorridoTramites({ casos, onVolver }: { casos: any[]; onVolver:
     remateInminente: "", contraparteAceptaPoder: "", cesionSuspensiva: "", escrow: "", poderIrrevocable: "", dineroYaEntregado: "", anotaciones: "",
   });
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
+  useEffect(() => { if (precargar?.datos) setX((p) => ({ ...p, ...precargar.datos })); }, []);
 
   const r1 = useMemo(() => veredictoTra1({ hayActoReclamado: x.hayActoReclamado, fechaNotificacion: x.fechaNotificacion, fuenteRevisada: x.fuenteRevisada }), [x.hayActoReclamado, x.fechaNotificacion, x.fuenteRevisada]);
   const r2 = useMemo(() => veredictoTra2({
@@ -82,8 +84,7 @@ export function RecorridoTramites({ casos, onVolver }: { casos: any[]; onVolver:
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, { method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(`Supabase ${res.status}`);
+      await guardarPredictamen(payload, precargar);
       setGuardado("Pre-dictamen (Trámite) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
