@@ -13,6 +13,7 @@ import { getAuth } from "@/lib/auth";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 import { RecorridoDemandado } from "@/components/recorrido-demandado";
+import { RecorridoSucesorio } from "@/components/recorrido-sucesorio";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -254,12 +255,7 @@ function URRJ() {
 
       {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={() => setVista("elegir")} />}
 
-      {vista === "Sucesorio" && (
-        <div className="rounded-xl border border-dashed border-border p-6 text-center">
-          <p className="text-sm text-muted-foreground">El recorrido <b>Sucesorio</b> está en construcción. Lo armamos cuando me pases sus hitos.</p>
-          <button onClick={() => setVista("elegir")} className="mt-3 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">← Cambiar posición</button>
-        </div>
-      )}
+      {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={() => setVista("elegir")} />}
 
       {vista === "Actor" && (<>
       <div className="-mt-1 flex justify-start">
