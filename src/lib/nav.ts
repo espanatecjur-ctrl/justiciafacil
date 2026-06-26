@@ -26,13 +26,13 @@ export const navItems: NavItem[] = [
   { label: "Recursos", to: "/recursos", icon: GitBranch, group: "Procesal" },
 
   { label: "Robot Pre-Dictaminador", to: "/dictamen-ia", icon: Bot, badge: "IA", group: "Inteligencia" },
+  { label: "URRJ · Pre-dictamen", to: "/urrj", icon: Scale, group: "Inteligencia" },
 
   { label: "Contratos", to: "/contratos", icon: FileSignature, group: "Documentos" },
   { label: "Editor de Contratos", to: "/contratos/editor", icon: FileText, group: "Documentos" },
 
   { label: "Trámites Gob.", to: "/tramites", icon: FileCheck2, group: "Trámites" },
   { label: "UCP", to: "/ucp", icon: Building2, group: "Trámites" },
-  { label: "URRJ", to: "/urrj", icon: Scale, group: "Trámites" },
 
   { label: "Conectores Juzgados", to: "/conectores", icon: Network, group: "Operación" },
 ];
