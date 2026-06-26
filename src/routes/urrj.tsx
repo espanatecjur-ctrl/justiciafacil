@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
@@ -115,6 +116,16 @@ function URRJ() {
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
   const [vista, setVista] = useState<"elegir" | "Actor" | "Demandado" | "Sucesorio" | "Contingencia" | "Tramites">("elegir");
+  const [precargar, setPrecargar] = useState<Precarga | null>(null);
+  useEffect(() => { if (precargar?.datos && vista === "Actor") setD((p) => ({ ...p, ...precargar.datos })); }, [precargar, vista]);
+  const volver = () => { setPrecargar(null); setVista("elegir"); };
+  const reDictaminar = (fila: any) => {
+    const map: Record<string, any> = { Actor: "Actor", Demandado: "Demandado", Sucesorio: "Sucesorio", Contingencia: "Contingencia", "Trámite administrativo": "Tramites" };
+    const v = map[fila.posicion];
+    if (!v) { alert("No se pudo identificar la posición de este pre-dictamen."); return; }
+    setPrecargar({ datos: fila.datos || {}, antecedenteId: fila.id, version: fila.version || 1 });
+    setVista(v);
+  };
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
 
   useEffect(() => {
@@ -191,8 +202,7 @@ function URRJ() {
       firma_valida: firmaValida?.nombre || null, firma_valida_fecha: firmaValida?.fecha || null,
     };
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, { method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(`Supabase ${res.status}`);
+      await guardarPredictamen(payload, precargar);
       setGuardado(`Pre-dictamen guardado: ${decision}`);
     } catch (e: any) {
       setGuardado("No se pudo guardar (¿corriste el SQL de predictamen?): " + e.message);
@@ -269,12 +279,12 @@ function URRJ() {
         </div>
       )}
 
-      {vista === "elegir" && <HistorialPredictamen />}
+      {vista === "elegir" && <HistorialPredictamen onReDictaminar={reDictaminar} />}
 
-      {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={() => setVista("elegir")} />}
-      {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={() => setVista("elegir")} />}
-      {vista === "Contingencia" && <RecorridoContingencia casos={casos} onVolver={() => setVista("elegir")} />}
-      {vista === "Tramites" && <RecorridoTramites casos={casos} onVolver={() => setVista("elegir")} />}
+      {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={volver} precargar={precargar} />}
+      {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={volver} precargar={precargar} />}
+      {vista === "Contingencia" && <RecorridoContingencia casos={casos} onVolver={volver} precargar={precargar} />}
+      {vista === "Tramites" && <RecorridoTramites casos={casos} onVolver={volver} precargar={precargar} />}
 
       {vista === "Actor" && (<>
       <div className="-mt-1 flex justify-start">
