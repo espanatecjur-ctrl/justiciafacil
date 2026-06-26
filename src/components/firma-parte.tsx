@@ -15,9 +15,10 @@ interface Props {
   valor: DatosFirma | null;
   onFirmar: (f: DatosFirma) => void;
   cargoSugerido?: string;
+  bloqueado?: boolean;   // true = tu rol no puede firmar esta parte
 }
 
-export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido }: Props) {
+export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado }: Props) {
   const [nombre, setNombre] = useState(valor?.nombre || "");
   const [cargo, setCargo] = useState(valor?.cargo || cargoSugerido || "");
   const [modoDibujo, setModoDibujo] = useState(false);
@@ -79,6 +80,17 @@ export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido }: Props) {
   };
 
   const fechaBonita = valor?.fecha ? new Date(valor.fecha).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : "";
+
+  if (bloqueado) return (
+    <div className="rounded-lg border border-border p-3">
+      <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <Signature className="h-3.5 w-3.5" /> {titulo}
+      </p>
+      <div className="rounded-md border border-dashed border-border bg-muted/40 p-3 text-center text-xs text-muted-foreground">
+        🔒 Tu rol no puede firmar esta parte (solo lectura).
+      </div>
+    </div>
+  );
 
   return (
     <div className="rounded-lg border border-border p-3">
