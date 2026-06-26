@@ -27,7 +27,7 @@ function semColor(s: Semaforo) {
   return s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
 }
 
-export function HistorialPredictamen() {
+export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: Fila) => void }) {
   const [filas, setFilas] = useState<Fila[]>([]);
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
@@ -37,7 +37,7 @@ export function HistorialPredictamen() {
   const [subirDoc, setSubirDoc] = useState<Fila | null>(null);
 
   useEffect(() => {
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&order=created_at.desc&limit=500`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&vigente=eq.true&order=created_at.desc&limit=500`, { headers })
       .then((r) => (r.ok ? r.json() : [])).then(setFilas).catch(() => {}).finally(() => setCargando(false));
   }, []);
   useEffect(() => {
@@ -116,7 +116,7 @@ export function HistorialPredictamen() {
                     <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-9 z-20 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
                       <Item icon={FolderOpen} onClick={() => { setMenu(null); setFicha(f); }}>Abrir ficha</Item>
                       <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>
-                      <Item icon={RefreshCw} onClick={() => { setMenu(null); alert("Re-pre-dictaminar: lo activamos en la siguiente parte."); }}>Mandar a re-pre-dictaminar</Item>
+                      <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>
                       <div className="my-1 border-t border-border" />
                       <Item icon={Trash2} danger onClick={async () => {
                         setMenu(null);
