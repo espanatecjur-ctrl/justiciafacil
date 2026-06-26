@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2, UserCheck } from "lucide-react";
 import type { Semaforo } from "@/lib/urrj-motores";
@@ -8,7 +9,7 @@ import { ReasignarModal } from "@/components/reasignar-abogado";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-interface Fila {
+export interface Fila {
   id: string; folio: string | null; posicion: string | null; tipo_juicio: string | null;
   expediente: string | null; juzgado: string | null; estado: string | null;
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
@@ -36,12 +37,13 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   const [q, setQ] = useState("");
   const [orden, setOrden] = useState<{ col: string; asc: boolean }>({ col: "created_at", asc: false });
   const [menu, setMenu] = useState<string | null>(null);
-  const [ficha, setFicha] = useState<Fila | null>(null);
   const [subirDoc, setSubirDoc] = useState<Fila | null>(null);
   const [reasignar, setReasignar] = useState<Fila | null>(null);
   const [puede, setPuede] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPuede(p.acciones)); }, []);
   const can = (a: string) => puede.length === 0 || puede.includes(a);
+  const navigate = useNavigate();
+  const abrirFicha = (f: Fila) => navigate({ to: "/ficha", search: { id: f.id } });
 
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&vigente=eq.true&order=created_at.desc&limit=500`, { headers })
@@ -63,8 +65,6 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
 
   const dir = (f: Fila) => f.datos?.ubicacion || "—";
   const fecha = (s: string) => new Date(s).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
-
-  if (ficha) return <FichaGarantia f={ficha} onVolver={() => setFicha(null)} />;
 
   const Th = ({ col, children }: { col: string; children: React.ReactNode }) => (
     <th className="sticky top-0 z-10 cursor-pointer select-none border-b border-border bg-muted/70 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
@@ -109,7 +109,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
               <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
             ) : filtradas.map((f) => (
               <tr key={f.id} className="border-b border-border/60 hover:bg-muted/40">
-                <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => setFicha(f)}>{f.folio || "—"}</td>
+                <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => abrirFicha(f)}>{f.folio || "—"}</td>
                 <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${POS_COLOR[f.posicion || ""] || "bg-muted"}`}>{f.posicion || "—"}</span>{f.terminado && <span className="ml-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">TERMINADO</span>}</td>
                 <td className="max-w-[220px] truncate px-3 py-2">{dir(f)}</td>
                 <td className="px-3 py-2">{f.expediente || "—"}</td>
@@ -122,7 +122,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
                   <button onClick={(e) => { e.stopPropagation(); setMenu(menu === f.id ? null : f.id); }} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                   {menu === f.id && (
                     <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-9 z-20 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
-                      <Item icon={FolderOpen} onClick={() => { setMenu(null); setFicha(f); }}>Abrir ficha</Item>
+                      <Item icon={FolderOpen} onClick={() => { setMenu(null); abrirFicha(f); }}>Abrir ficha</Item>
                       {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
                       {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
                       {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
@@ -160,7 +160,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
 }
 
 // ---------------- Ficha de garantía ----------------
-function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
+export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
   const [subir, setSubir] = useState(false);
   const [refresco, setRefresco] = useState(0);
   const [versiones, setVersiones] = useState<Fila[]>([]);
