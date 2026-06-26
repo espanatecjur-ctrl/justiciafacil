@@ -32,6 +32,8 @@ export interface DatosPDF {
   firmaElabora: DatosFirma | null;
   firmaValida: DatosFirma | null;
   decision: string;
+  noValido?: boolean;
+  cambios?: { campos: { campo: string; antes: string; ahora: string }[]; nota?: string } | null;
 }
 
 const mxn = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -168,6 +170,58 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
   firmaBox(d.firmaElabora, "Elabora · abogado URRJ", M);
   firmaBox(d.firmaValida, "Valida · Director Legal", M + colW);
   y += 40;
+
+  // ---- Hoja de cambios (solo si es una versión nueva) ----
+  if (d.cambios && (d.cambios.campos.length || d.cambios.nota)) {
+    doc.addPage(); y = 18;
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 24, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+    doc.text("Hoja de cambios de esta versión", M, 15);
+    y = 34;
+    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text("Comparación automática contra la versión anterior (antecedente).", M, y); y += 8;
+
+    if (d.cambios.campos.length) {
+      doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+      doc.text("Campos que cambiaron:", M, y); y += 6;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+      for (const c of d.cambios.campos) {
+        nuevaPaginaSiHace(10);
+        doc.setFont("helvetica", "bold"); doc.text(`• ${c.campo}:`, M, y);
+        doc.setFont("helvetica", "normal");
+        const antes = (c.antes || "(vacío)").toString().slice(0, 60);
+        const ahora = (c.ahora || "(vacío)").toString().slice(0, 60);
+        doc.setTextColor(180, 60, 60); doc.text(antes, M + 50, y);
+        doc.setTextColor(120, 120, 120); doc.text("→", M + 110, y);
+        doc.setTextColor(20, 120, 70); doc.text(ahora, M + 118, y);
+        doc.setTextColor(40, 40, 40); y += 6;
+      }
+      y += 4;
+    } else {
+      doc.text("No se detectaron cambios automáticos en los campos.", M, y); y += 8;
+    }
+
+    if (d.cambios.nota) {
+      nuevaPaginaSiHace(20);
+      doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+      doc.text("Nota del abogado:", M, y); y += 6;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+      const lineas = doc.splitTextToSize(d.cambios.nota, W - 2 * M);
+      doc.text(lineas, M, y);
+    }
+  }
+
+  // ---- Marca de agua si es antecedente (no válido) ----
+  if (d.noValido) {
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setTextColor(235, 170, 170); doc.setFont("helvetica", "bold"); doc.setFontSize(34);
+      doc.text("PRE-DICTAMEN NO VÁLIDO", 105, 150, { align: "center", angle: 35 } as any);
+      doc.setFontSize(15);
+      doc.text("existe una versión nueva", 105, 165, { align: "center", angle: 35 } as any);
+    }
+  }
 
   // ---- Pie ----
   doc.setFontSize(7.5); doc.setTextColor(150, 150, 150);
