@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { ROLES, MODULOS, TODOS_MODULOS, rolVeTodo, type ModuloClave } from "@/lib/roles";
 import { ColaboradoresConfig } from "@/components/colaboradores-config";
-import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer } from "lucide-react";
+import { AreasConfig } from "@/components/areas-config";
+import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
   validateSearch: (s: Record<string, unknown>) => ({ tab: typeof s.tab === "string" ? s.tab : undefined }),
@@ -27,6 +28,7 @@ const TABS = [
   { key: "colaboradores", label: "Colaboradores", icon: Users },
   { key: "conectores", label: "Conectores de Juzgados", icon: Network },
   { key: "folios", label: "Folios", icon: Bookmark },
+  { key: "areas", label: "Áreas y Equipo", icon: Scale },
   { key: "papelera", label: "Papelera", icon: Trash2 },
 ];
 
@@ -55,7 +57,8 @@ function ConfiguracionPage() {
 
       {activa === "roles" && <RolesPermisos />}
       {activa === "colaboradores" && <ColaboradoresConfig />}
-      {activa !== "roles" && activa !== "colaboradores" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
+      {activa === "areas" && <AreasConfig />}
+      {activa !== "roles" && activa !== "colaboradores" && activa !== "areas" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
     </div>
   );
 }
