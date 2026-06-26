@@ -15,6 +15,7 @@ import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 import { RecorridoDemandado } from "@/components/recorrido-demandado";
 import { RecorridoSucesorio } from "@/components/recorrido-sucesorio";
 import { RecorridoContingencia } from "@/components/recorrido-contingencia";
+import { RecorridoTramites } from "@/components/recorrido-tramites";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -112,7 +113,7 @@ function URRJ() {
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
-  const [vista, setVista] = useState<"elegir" | "Actor" | "Demandado" | "Sucesorio" | "Contingencia">("elegir");
+  const [vista, setVista] = useState<"elegir" | "Actor" | "Demandado" | "Sucesorio" | "Contingencia" | "Tramites">("elegir");
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
 
   useEffect(() => {
@@ -252,17 +253,25 @@ function URRJ() {
             </button>
           </div>
           <p className="mb-2 mt-5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Otros saneamientos</p>
-          <button onClick={() => setVista("Contingencia")} className="w-full rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-            <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
-            <p className="font-semibold">Contingencia inmobiliaria</p>
-            <p className="text-xs text-muted-foreground">Defectos registrales, posesión, copropiedad, doble inscripción, traslapes. ¿Saneable + recuperable? 6 fases.</p>
-          </button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button onClick={() => setVista("Contingencia")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+              <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
+              <p className="font-semibold">Contingencia inmobiliaria</p>
+              <p className="text-xs text-muted-foreground">Defectos registrales, posesión, copropiedad, doble inscripción, traslapes. 6 fases.</p>
+            </button>
+            <button onClick={() => setVista("Tramites")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+              <Scale className="mb-2 h-6 w-6" style={{ color: "#0B1E3A" }} />
+              <p className="font-semibold">Trámites administrativos</p>
+              <p className="text-xs text-muted-foreground">Amparo, contencioso TFJA, laboral, créditos fiscales. Cuenta el plazo. 6 fases.</p>
+            </button>
+          </div>
         </div>
       )}
 
       {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={() => setVista("elegir")} />}
       {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={() => setVista("elegir")} />}
       {vista === "Contingencia" && <RecorridoContingencia casos={casos} onVolver={() => setVista("elegir")} />}
+      {vista === "Tramites" && <RecorridoTramites casos={casos} onVolver={() => setVista("elegir")} />}
 
       {vista === "Actor" && (<>
       <div className="-mt-1 flex justify-start">
