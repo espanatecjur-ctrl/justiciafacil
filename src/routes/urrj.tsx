@@ -7,8 +7,9 @@ import {
 } from "@/lib/urrj-motores";
 import {
   Scale, ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
-  Check, X, ClipboardCheck,
+  Check, X, ClipboardCheck, Lock, Calculator,
 } from "lucide-react";
+import { getAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -27,7 +28,7 @@ const QUE_CEDE = [
 ];
 const FASES = [
   "Datos mínimos", "Verificación registral", "Estado procesal", "Prescripción y caducidad",
-  "Posesión y ocupantes", "Cargas ocultas", "Valuación y viabilidad", "Dictamen y firmas",
+  "Posesión y ocupantes", "Cargas ocultas", "Cálculo de intereses", "Dictamen y firmas",
 ];
 
 interface Datos {
@@ -101,6 +102,22 @@ function URRJ() {
   const [casos, setCasos] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        const correo = data.session?.user?.email;
+        if (!correo) return;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+        const j = r.ok ? await r.json() : [];
+        setRolUsuario(j?.[0]?.rol ?? null);
+      } catch { /* si falla, queda sin permiso de admin */ }
+    })();
+  }, []);
   const set = (k: keyof Datos, v: string) => setD((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -138,16 +155,16 @@ function URRJ() {
   const registralRojo = d.hipotecaInscrita === "no";
   const fmt = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
-  // ---- dictamen sugerido (sin candados: solo sugiere) ----
+  // ---- dictamen sugerido SOLO por lo jurídico (la viabilidad económica es de Administración) ----
   const dictamen = useMemo(() => {
-    const sems: Semaforo[] = [rPresc.semaforo, rCaduc.semaforo, rViab.semaforo];
+    const sems: Semaforo[] = [rPresc.semaforo, rCaduc.semaforo];
     if (usaUsucapion) sems.push(rUsuc.semaforo);
     if (registralRojo) sems.push("rojo");
     if (sems.includes("rojo")) return { txt: "NEGATIVO", color: "bg-red-50 text-red-800 border-red-200" };
     if (sems.includes("naranja") || sems.includes("amarillo")) return { txt: "CONDICIONADO", color: "bg-amber-50 text-amber-800 border-amber-200" };
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
-  }, [rPresc, rCaduc, rViab, rUsuc, usaUsucapion, registralRojo]);
+  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo]);
 
   const guardar = async (decision: string) => {
     setGuardando(true);
@@ -317,7 +334,7 @@ function URRJ() {
 
         {paso === 6 && (
           <div className="space-y-4">
-            <H titulo="6 · Valuación y viabilidad económica" sub="El número final: ¿conviene la cesión?" />
+            <H titulo="6 · Cálculo de intereses" sub="Solo intereses de la deuda. La valuación y el precio los hace Administración." />
             <p className="text-xs font-medium text-muted-foreground">Cálculo de la deuda (año comercial 360 días, Art. 362 CCom)</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Campo label="Capital"><input type="number" className={inp} value={d.capital} onChange={(e) => set("capital", e.target.value)} /></Campo>
@@ -335,14 +352,7 @@ function URRJ() {
               <div>Total deuda: <b>{fmt(fin.totalDeuda)}</b>{fin.udis ? <span className="text-muted-foreground"> · {fin.udis.toLocaleString("es-MX", { maximumFractionDigits: 0 })} UDIs</span> : null}</div>
               {fin.alertaUsura && <div className="text-red-700 font-medium">⚠ Posible usura: la tasa moratoria está muy alta.</div>}
             </div>
-            <p className="text-xs font-medium text-muted-foreground">Viabilidad</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={d.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
-              <Campo label="Costos (litigio/desalojo/regularización)"><input type="number" className={inp} value={d.costosOperativos} onChange={(e) => set("costosOperativos", e.target.value)} /></Campo>
-              <Campo label="Precio de la cesión"><input type="number" className={inp} value={d.precioCesion} onChange={(e) => set("precioCesion", e.target.value)} /></Campo>
-              <Campo label="Margen objetivo"><input type="number" className={inp} value={d.margenObjetivo} onChange={(e) => set("margenObjetivo", e.target.value)} /></Campo>
-            </div>
-            <Aviso r={rViab} />
+            <p className="text-xs text-muted-foreground">La valuación, costos y precio de cesión se llenan en la sección de <b>Administración</b> (al final), solo para los roles autorizados.</p>
           </div>
         )}
 
@@ -368,6 +378,30 @@ function URRJ() {
               <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={guardando} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP (dictamen formal)</button>
             </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+
+            {/* ---- Sección de Administración (valuación y precio) ---- */}
+            <div className="mt-2 rounded-xl border border-dashed border-border p-4">
+              <div className="mb-3 flex items-center gap-2">
+                {puedeAdmin ? <Calculator className="h-4 w-4" style={{ color: "#C2A24C" }} /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+                <p className="text-sm font-semibold">Administración · valuación y precio</p>
+                <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Solo GAD · Super_Admin · DGE</span>
+              </div>
+              {!puedeAdmin ? (
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <Lock className="h-4 w-4" /> Esta sección la llena Administración. No tienes permiso para editarla.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={d.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
+                    <Campo label="Costos (litigio/desalojo/regularización)"><input type="number" className={inp} value={d.costosOperativos} onChange={(e) => set("costosOperativos", e.target.value)} /></Campo>
+                    <Campo label="Precio de la cesión"><input type="number" className={inp} value={d.precioCesion} onChange={(e) => set("precioCesion", e.target.value)} /></Campo>
+                    <Campo label="Margen objetivo"><input type="number" className={inp} value={d.margenObjetivo} onChange={(e) => set("margenObjetivo", e.target.value)} /></Campo>
+                  </div>
+                  <Aviso r={rViab} />
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
