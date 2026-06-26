@@ -48,6 +48,7 @@ export const ROLES: DefinicionRol[] = [
   { codigo: "UCM", nombre: "Unidad UCM (seguimiento a juicios)", grupo: "Jurídico", modulos: [...BASE, "ucm", "control_demandas"] },
   { codigo: "UDP", nombre: "Unidad UDP (Defensa y Protección)", grupo: "Jurídico", modulos: [...BASE, "udp"] },
   { codigo: "UFC", nombre: "Unidad UFC (formalización)", grupo: "Jurídico", modulos: [...BASE, "contratos", "tramites", "conectores"] },
+  { codigo: "GAD", nombre: "Gerencia Administrativa", grupo: "Administración", modulos: [...BASE, "urrj"] },
   { codigo: "Consulta", nombre: "Solo consulta", grupo: "Sistema", modulos: ["inicio", "expedientes"] },
 ];
 
