@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download } from "lucide-react";
 import type { Semaforo } from "@/lib/urrj-motores";
+import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
@@ -33,9 +34,10 @@ export function HistorialPredictamen() {
   const [orden, setOrden] = useState<{ col: string; asc: boolean }>({ col: "created_at", asc: false });
   const [menu, setMenu] = useState<string | null>(null);
   const [ficha, setFicha] = useState<Fila | null>(null);
+  const [subirDoc, setSubirDoc] = useState<Fila | null>(null);
 
   useEffect(() => {
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&order=created_at.desc&limit=500`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&order=created_at.desc&limit=500`, { headers })
       .then((r) => (r.ok ? r.json() : [])).then(setFilas).catch(() => {}).finally(() => setCargando(false));
   }, []);
   useEffect(() => {
@@ -113,10 +115,18 @@ export function HistorialPredictamen() {
                   {menu === f.id && (
                     <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-9 z-20 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
                       <Item icon={FolderOpen} onClick={() => { setMenu(null); setFicha(f); }}>Abrir ficha</Item>
-                      <Item icon={Upload} onClick={() => { setMenu(null); alert("Subir documento: lo activamos en la siguiente parte."); }}>Subir documento / actuación</Item>
+                      <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>
                       <Item icon={RefreshCw} onClick={() => { setMenu(null); alert("Re-pre-dictaminar: lo activamos en la siguiente parte."); }}>Mandar a re-pre-dictaminar</Item>
                       <div className="my-1 border-t border-border" />
-                      <Item icon={Trash2} danger onClick={() => { setMenu(null); alert("Papelera: la activamos en la siguiente parte."); }}>Enviar a papelera</Item>
+                      <Item icon={Trash2} danger onClick={async () => {
+                        setMenu(null);
+                        if (!confirm("¿Enviar este pre-dictamen a la papelera?")) return;
+                        try {
+                          const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ en_papelera: true, papelera_fecha: new Date().toISOString() }) });
+                          if (!res.ok) throw new Error();
+                          setFilas((prev) => prev.filter((x) => x.id !== f.id));
+                        } catch { alert("No se pudo enviar a la papelera."); }
+                      }}>Enviar a papelera</Item>
                     </div>
                   )}
                 </td>
@@ -125,12 +135,15 @@ export function HistorialPredictamen() {
           </tbody>
         </table>
       </div>
+      {subirDoc && <SubirDocModal predictamenId={subirDoc.id} folio={subirDoc.folio} onClose={() => setSubirDoc(null)} />}
     </div>
   );
 }
 
 // ---------------- Ficha de garantía ----------------
 function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
+  const [subir, setSubir] = useState(false);
+  const [refresco, setRefresco] = useState(0);
   const d = f.datos || {};
   const res = f.resultados || {};
   const fmt = (v: number) => (v || 0).toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -220,6 +233,16 @@ function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
           ); })}
         </div>
       )}
+
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-semibold">Documentos y actuaciones</p>
+          <button onClick={() => setSubir(true)} className="flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"><Upload className="h-3.5 w-3.5" /> Subir documento</button>
+        </div>
+        <ListaDocs predictamenId={f.id} refresco={refresco} />
+      </div>
+
+      {subir && <SubirDocModal predictamenId={f.id} folio={f.folio} onClose={() => setSubir(false)} onSubido={() => setRefresco((r) => r + 1)} />}
     </div>
   );
 }
