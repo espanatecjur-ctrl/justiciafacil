@@ -53,7 +53,19 @@ export function ListaDocs({ predictamenId, refresco }: { predictamenId: string; 
             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{d.nombre || d.archivo_nombre}</p>
-              <p className="text-xs text-muted-foreground">{d.tipo}{d.fecha ? ` · ${new Date(d.fecha).toLocaleDateString("es-MX")}` : ""}{d.datos?.numeroAmparo ? ` · Amparo ${d.datos.numeroAmparo}` : ""}</p>
+              <p className="text-xs text-muted-foreground">{d.tipo}{d.fecha ? ` · ${new Date(d.fecha).toLocaleDateString("es-MX")}` : ""}</p>
+              {d.tipo === "Amparo" && d.datos && (d.datos.numeroAmparo || d.datos.tribunal) && (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {d.datos.numeroAmparo ? `Amparo ${d.datos.numeroAmparo}` : ""}{d.datos.tipoAmparo ? ` (${d.datos.tipoAmparo})` : ""}{d.datos.tribunal ? ` · ${d.datos.tribunal}` : ""}{d.datos.estadoAmparo ? ` · ${d.datos.estadoAmparo}` : ""}
+                  {d.datos.actoReclamado ? <span className="block">Acto reclamado: {d.datos.actoReclamado}</span> : null}
+                </p>
+              )}
+              {d.tipo === "Apelación" && d.datos && (d.datos.apelante || d.datos.resolucionApelada) && (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {d.datos.apelante ? `Apela: ${d.datos.apelante}` : ""}{d.datos.efecto ? ` · efecto ${d.datos.efecto}` : ""}{d.datos.sala ? ` · ${d.datos.sala}` : ""}{d.datos.estadoApelacion ? ` · ${d.datos.estadoApelacion}` : ""}
+                  {d.datos.resolucionApelada ? <span className="block">Se apela: {d.datos.resolucionApelada}</span> : null}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex shrink-0 gap-1">
@@ -74,6 +86,8 @@ export function SubirDocModal({ predictamenId, folio, onClose, onSubido }: { pre
   const [file, setFile] = useState<File | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extra, setExtra] = useState<Record<string, string>>({});
+  const setE = (k: string, v: string) => setExtra((p) => ({ ...p, [k]: v }));
 
   const guardar = async () => {
     if (!nombre.trim()) { setError("Ponle un nombre al documento."); return; }
@@ -82,7 +96,7 @@ export function SubirDocModal({ predictamenId, folio, onClose, onSubido }: { pre
       let archivo_url: string | null = null, archivo_nombre: string | null = null;
       if (file) { const r = await subirArchivo(file); archivo_url = r.url; archivo_nombre = r.nombre; }
       const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen_doc`, {
-        method: "POST", headers, body: JSON.stringify({ predictamen_id: predictamenId, tipo, nombre: nombre.trim(), fecha: fecha || null, archivo_url, archivo_nombre, datos: {} }),
+        method: "POST", headers, body: JSON.stringify({ predictamen_id: predictamenId, tipo, nombre: nombre.trim(), fecha: fecha || null, archivo_url, archivo_nombre, datos: extra }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       onSubido?.(); onClose();
@@ -110,6 +124,49 @@ export function SubirDocModal({ predictamenId, folio, onClose, onSubido }: { pre
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Fecha del documento (opcional)</label>
             <input type="date" className={inp} value={fecha} onChange={(e) => setFecha(e.target.value)} />
           </div>
+
+          {tipo === "Amparo" && (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+              <p className="text-xs font-semibold text-muted-foreground">Datos del amparo</p>
+              <input className={inp} placeholder="Número de amparo (ej. 123/2026)" value={extra.numeroAmparo || ""} onChange={(e) => setE("numeroAmparo", e.target.value)} />
+              <div className="grid grid-cols-2 gap-2">
+                <input className={inp} placeholder="Tribunal / Juzgado de Distrito" value={extra.tribunal || ""} onChange={(e) => setE("tribunal", e.target.value)} />
+                <select className={inp} value={extra.tipoAmparo || ""} onChange={(e) => setE("tipoAmparo", e.target.value)}>
+                  <option value="">Tipo de amparo</option><option>Indirecto</option><option>Directo</option>
+                </select>
+              </div>
+              <input className={inp} placeholder="Autoridad responsable" value={extra.autoridad || ""} onChange={(e) => setE("autoridad", e.target.value)} />
+              <input className={inp} placeholder="Acto reclamado" value={extra.actoReclamado || ""} onChange={(e) => setE("actoReclamado", e.target.value)} />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" className={inp} value={extra.fechaPresentacion || ""} onChange={(e) => setE("fechaPresentacion", e.target.value)} />
+                <select className={inp} value={extra.estadoAmparo || ""} onChange={(e) => setE("estadoAmparo", e.target.value)}>
+                  <option value="">Estado del amparo</option><option>Admitido</option><option>Suspensión concedida</option><option>Suspensión negada</option><option>Sentencia</option><option>En revisión</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {tipo === "Apelación" && (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+              <p className="text-xs font-semibold text-muted-foreground">Datos de la apelación</p>
+              <div className="grid grid-cols-2 gap-2">
+                <select className={inp} value={extra.apelante || ""} onChange={(e) => setE("apelante", e.target.value)}>
+                  <option value="">Apelante</option><option>Actor</option><option>Demandado</option><option>Tercero</option>
+                </select>
+                <select className={inp} value={extra.efecto || ""} onChange={(e) => setE("efecto", e.target.value)}>
+                  <option value="">Efecto</option><option>Devolutivo</option><option>Suspensivo</option>
+                </select>
+              </div>
+              <input className={inp} placeholder="Resolución apelada (qué se apela)" value={extra.resolucionApelada || ""} onChange={(e) => setE("resolucionApelada", e.target.value)} />
+              <input className={inp} placeholder="Sala / Tribunal" value={extra.sala || ""} onChange={(e) => setE("sala", e.target.value)} />
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" className={inp} value={extra.fechaInterposicion || ""} onChange={(e) => setE("fechaInterposicion", e.target.value)} />
+                <select className={inp} value={extra.estadoApelacion || ""} onChange={(e) => setE("estadoApelacion", e.target.value)}>
+                  <option value="">Estado</option><option>Admitida</option><option>En alegatos</option><option>Resuelta</option>
+                </select>
+              </div>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Archivo</label>
             <label className="flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-2 text-sm hover:bg-muted">
