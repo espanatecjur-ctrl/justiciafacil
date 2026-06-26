@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2 } from "lucide-react";
+import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2, UserCheck } from "lucide-react";
 import type { Semaforo } from "@/lib/urrj-motores";
 import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
+import { ReasignarModal } from "@/components/reasignar-abogado";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
@@ -12,6 +13,7 @@ interface Fila {
   expediente: string | null; juzgado: string | null; estado: string | null;
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
   datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number; terminado?: boolean;
+  abogado_id?: string | null; abogado_nombre?: string | null;
 }
 
 const POS_COLOR: Record<string, string> = {
@@ -36,6 +38,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   const [menu, setMenu] = useState<string | null>(null);
   const [ficha, setFicha] = useState<Fila | null>(null);
   const [subirDoc, setSubirDoc] = useState<Fila | null>(null);
+  const [reasignar, setReasignar] = useState<Fila | null>(null);
   const [puede, setPuede] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPuede(p.acciones)); }, []);
   const can = (a: string) => puede.length === 0 || puede.includes(a);
@@ -94,16 +97,16 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
           <thead>
             <tr>
               <Th col="folio">Folio</Th><Th col="posicion">Posición</Th><Th col="ubicacion">Garantía / dirección</Th>
-              <Th col="expediente">Expediente</Th><Th col="estado">Estado</Th><Th col="dictamen_sugerido">Dictamen</Th>
+              <Th col="expediente">Expediente</Th><Th col="estado">Estado</Th><Th col="abogado_nombre">Abogado</Th><Th col="dictamen_sugerido">Dictamen</Th>
               <Th col="dictamen_final">Decisión</Th><Th col="created_at">Fecha</Th>
               <th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">Cargando…</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">Cargando…</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
             ) : filtradas.map((f) => (
               <tr key={f.id} className="border-b border-border/60 hover:bg-muted/40">
                 <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => setFicha(f)}>{f.folio || "—"}</td>
@@ -111,6 +114,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
                 <td className="max-w-[220px] truncate px-3 py-2">{dir(f)}</td>
                 <td className="px-3 py-2">{f.expediente || "—"}</td>
                 <td className="px-3 py-2">{f.estado || "—"}</td>
+                <td className="px-3 py-2 text-[13px]">{f.abogado_nombre || <span className="text-muted-foreground">— sin asignar —</span>}</td>
                 <td className={`px-3 py-2 text-[12px] font-medium ${dicColor(f.dictamen_sugerido)}`}>{f.dictamen_sugerido || "—"}</td>
                 <td className="px-3 py-2 text-[12px]">{f.dictamen_final || "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{fecha(f.created_at)}</td>
@@ -119,6 +123,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
                   {menu === f.id && (
                     <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-9 z-20 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
                       <Item icon={FolderOpen} onClick={() => { setMenu(null); setFicha(f); }}>Abrir ficha</Item>
+                      {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
                       {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
                       {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
                       {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
@@ -149,6 +154,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
         </table>
       </div>
       {subirDoc && <SubirDocModal predictamenId={subirDoc.id} folio={subirDoc.folio} onClose={() => setSubirDoc(null)} />}
+      {reasignar && <ReasignarModal predictamenId={reasignar.id} materia={reasignar.tipo_juicio} actual={reasignar.abogado_nombre} onClose={() => setReasignar(null)} onAsignado={(nombre) => setFilas((prev) => prev.map((x) => x.id === reasignar.id ? { ...x, abogado_nombre: nombre } : x))} />}
     </div>
   );
 }
@@ -222,7 +228,7 @@ function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
 
       <div className="rounded-xl border border-border bg-card p-4">
         <p className="mb-2 text-sm font-semibold">Datos de la garantía</p>
-        <Dato k="Folio" v={f.folio} /><Dato k="Expediente" v={f.expediente} /><Dato k="Juzgado" v={f.juzgado} />
+        <Dato k="Folio" v={f.folio} /><Dato k="Abogado responsable" v={f.abogado_nombre} /><Dato k="Expediente" v={f.expediente} /><Dato k="Juzgado" v={f.juzgado} />
         <Dato k="Estado" v={f.estado} /><Dato k="Dirección / garantía" v={d.ubicacion} /><Dato k="Deudor / de cujus" v={d.deudor || d.deCujus} />
         <Dato k="Quién cede / acreedor" v={d.quienCede || d.acreedor || d.heredero} /><Dato k="Qué se cede" v={d.queCede} /><Dato k="RFC" v={d.rfc} />
       </div>
