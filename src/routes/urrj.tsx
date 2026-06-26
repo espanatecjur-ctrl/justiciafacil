@@ -7,10 +7,11 @@ import {
 } from "@/lib/urrj-motores";
 import {
   Scale, ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
-  Check, X, ClipboardCheck, Lock, Calculator,
+  Check, X, ClipboardCheck, Lock, Calculator, Download,
 } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
+import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -190,6 +191,27 @@ function URRJ() {
     } catch (e: any) {
       setGuardado("No se pudo guardar (¿corriste el SQL de predictamen?): " + e.message);
     } finally { setGuardando(false); }
+  };
+
+  const descargarPDF = async (decision: string) => {
+    const riesgos = [
+      { nombre: "Prescripción", r: rPresc },
+      { nombre: "Caducidad", r: rCaduc },
+      ...(usaUsucapion ? [{ nombre: "Usucapión", r: rUsuc }] : []),
+    ];
+    try {
+      await descargarPredictamenPDF({
+        expediente: d.expediente, juzgado: d.juzgado, estado: d.estado, tipoJuicio: d.tipoJuicio, posicion: d.posicion,
+        ubicacion: d.ubicacion, deudor: d.deudor, quienCede: d.quienCede, queCede: d.queCede,
+        dictamen: dictamen.txt, riesgos,
+        intereses: { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura },
+        admin: puedeAdmin && (n(d.valorComercial) || n(d.precioCesion)) ? { valorComercial: n(d.valorComercial), costos: cargas + n(d.costosOperativos), precioCesion: n(d.precioCesion), viab: rViab } : null,
+        anotaciones: d.anotacionesHumanas,
+        firmaElabora, firmaValida, decision,
+      });
+    } catch (e: any) {
+      setGuardado("No se pudo generar el PDF: " + e.message);
+    }
   };
 
   return (
@@ -385,6 +407,11 @@ function URRJ() {
               <button onClick={() => guardar("Sí pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><Check className="h-4 w-4" /> Sí pasa</button>
               <button onClick={() => guardar("No pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><X className="h-4 w-4" /> No pasa</button>
               <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={guardando} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP (dictamen formal)</button>
+            </div>
+            <div className="pt-1">
+              <button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+                <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF del pre-dictamen
+              </button>
             </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
 
