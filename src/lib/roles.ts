@@ -42,9 +42,10 @@ const BASE: ModuloClave[] = ["inicio", "expedientes", "hitos", "boletines"];
 export const ROLES: DefinicionRol[] = [
   { codigo: "Super_Admin", nombre: "Super Admin (DGE + Tecnología)", grupo: "Sistema", modulos: "todos" },
   { codigo: "DGE", nombre: "Dirección General", grupo: "Dirección", modulos: "todos" },
+  { codigo: "DGC", nombre: "Dirección Comercial", grupo: "Dirección", modulos: [...BASE, "ucp", "contratos"] },
   { codigo: "DIL", nombre: "Dirección Jurídica (cubre URRJ)", grupo: "Jurídico", modulos: "todos" },
-  { codigo: "URRJ", nombre: "Revisión y Riesgo Jurídico (pre-dictamen)", grupo: "Jurídico", modulos: [...BASE, "dictamen_ia", "urrj"] },
-  { codigo: "UCP", nombre: "Unidad UCP", grupo: "Jurídico", modulos: [...BASE, "ucp", "ucm", "contratos"] },
+  { codigo: "URRJ", nombre: "Unidad de Resolución Jurídica (pre-dictamen)", grupo: "Jurídico", modulos: [...BASE, "dictamen_ia", "urrj"] },
+  { codigo: "UCP", nombre: "Unidad de Consolidación Patrimonial", grupo: "Jurídico", modulos: [...BASE, "ucp", "ucm", "contratos"] },
   { codigo: "UCM", nombre: "Unidad UCM (seguimiento a juicios)", grupo: "Jurídico", modulos: [...BASE, "ucm", "control_demandas"] },
   { codigo: "UDP", nombre: "Unidad UDP (Defensa y Protección)", grupo: "Jurídico", modulos: [...BASE, "udp"] },
   { codigo: "UFC", nombre: "Unidad UFC (formalización)", grupo: "Jurídico", modulos: [...BASE, "contratos", "tramites", "conectores"] },
