@@ -3,7 +3,6 @@ import { sbSelect, type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/s
 import type { AcuerdoJudicial } from "@/components/robot-boletines";
 import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin } from "lucide-react";
 import { ConfigBoletinModal } from "@/components/config-boletin";
-import { BuscadorBoletin } from "@/components/buscador-boletin";
 
 const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -36,7 +35,6 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   const [soloNoLeidos, setSoloNoLeidos] = useState(false);
   const [orden, setOrden] = useState<"urgencia" | "reciente">("urgencia");
   const [pagina, setPagina] = useState(0);
-  const [buscador, setBuscador] = useState(false);
   useEffect(() => { setPagina(0); }, [q, fColor, fTipo, soloNoLeidos, orden]);
   const [ultimaCorrida, setUltimaCorrida] = useState<{ corrida_at: string; total_expedientes: number | null; fuente: string | null } | null>(null);
   useEffect(() => {
@@ -105,10 +103,6 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Boletín Judicial — Mis expedientes</h2>
-        <button onClick={() => setBuscador(true)} className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Search className="h-3.5 w-3.5" /> Buscar en boletín</button>
-      </div>
       {ultimaCorrida && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           🤖 Última revisión del robot: <b className="text-foreground">{new Date(ultimaCorrida.corrida_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</b>
@@ -232,7 +226,6 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
       </div>
       {agregar && selExp && <AgregarAcuerdoModal expediente={selExp.exp} juzgado={selExp.c.juzgado} entidad={selExp.c.entidad} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargar(); }} />}
       {configBoletin && <ConfigBoletinModal caso={configBoletin} onClose={() => setConfigBoletin(null)} onGuardado={() => { const id = configBoletin.id; setConfigBoletin(null); sbSelect<CasoJuridico>("caso_juridico", `select=cve_distrito,cve_juzgado,nombre_juzgado&id=eq.${id}`).then((d) => { if (d?.[0]) setPatches((p) => ({ ...p, [id]: d[0] })); }).catch(() => {}); }} />}
-      <BuscadorBoletin open={buscador} onClose={() => setBuscador(false)} />
     </div>
   );
 }
