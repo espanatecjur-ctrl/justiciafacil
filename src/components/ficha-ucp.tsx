@@ -58,6 +58,7 @@ export interface DictamenRow {
   registral: Record<string, unknown> | null;
   contable: Record<string, unknown> | null;
   firmas: Record<string, unknown> | null;
+  rppc: Record<string, unknown> | null;
   veredicto: string;
   vigente: boolean;
 }
