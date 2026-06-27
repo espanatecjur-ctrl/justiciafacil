@@ -70,7 +70,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
     const colorDe = (d: number | null) => d === null ? "sin" : d < 7 ? "verde" : d <= 20 ? "amarillo" : "rojo";
     const t = q.trim().toLowerCase();
     let f = arr.filter((x) => {
-      if (t && !`${x.exp} ${x.c.cliente_nombre || ""} ${x.c.juzgado || ""} ${x.c.materia || ""}`.toLowerCase().includes(t)) return false;
+      if (t && !`${x.exp} ${x.c.cliente_nombre || ""} ${x.c.juzgado || ""} ${x.c.materia || ""} ${x.c.actor || ""} ${x.c.demandado || ""}`.toLowerCase().includes(t)) return false;
       if (fColor !== "todos" && colorDe(x.dias) !== fColor) return false;
       if (soloNoLeidos && x.noLeidos === 0) return false;
       if (fTipo !== "todos" && !x.acs.some((a) => a.tipo_acuerdo === fTipo)) return false;
@@ -148,6 +148,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                       {f.noLeidos > 0 && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">{f.noLeidos}</span>}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{f.c.materia || "—"} · {f.c.juzgado || "—"}</p>
+                    {(f.c.actor || f.c.demandado) && <p className="truncate text-[11px] text-muted-foreground"><span className="font-medium text-foreground">{f.c.actor || "—"}</span> vs. <span className="font-medium text-foreground">{f.c.demandado || "—"}</span></p>}
                     <p className="mt-0.5 text-[11px]" style={{ color: fr.color }}>{fr.label}</p>
                   </div>
                 </button>
@@ -168,6 +169,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-base font-bold text-[color:var(--teal)]">{selExp.exp}</p>
+                    {(selExp.c.actor || selExp.c.demandado) && <p className="mt-0.5 text-sm"><span className="font-semibold text-foreground">{selExp.c.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold text-foreground">{selExp.c.demandado || "—"}</span></p>}
                     <p className="text-sm text-muted-foreground">{selExp.c.cliente_nombre || ""}{selExp.c.cliente_nombre ? " · " : ""}{selExp.c.materia || ""} · {selExp.c.juzgado || ""}</p>
                     {selExp.c.nombre_juzgado && <p className="mt-0.5 text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
                   </div>
