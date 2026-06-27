@@ -61,10 +61,11 @@ function normArea(u?: string | null): string {
   if (s.includes("UCP")) return "UCP";
   return s.trim();
 }
-// si el dictamen ya pasó a Etapa B, el caso vive en UCM (aquí queda como antecedente)
+// estas garantías ya son de UCM (compradas y procesadas); aquí solo se completa el dictamen.
+// si el dictamen pasó a Etapa B o el campo unidad no dice otra cosa, el área es UCM.
 function areaActual(c: CasoJuridico, d?: DictamenRow): string {
   if (d?.estado === "etapa_b") return "UCM";
-  return normArea(c.unidad) || "UCP";
+  return normArea(c.unidad) || "UCM";
 }
 
 const PAGE = 25;
