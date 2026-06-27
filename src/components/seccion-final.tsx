@@ -115,6 +115,15 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
         method: "PATCH", headers, body: JSON.stringify({ estado: "etapa_b", veredicto: vFinal, updated_at: new Date().toISOString() }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
+
+      // sincroniza el área en la fuente: el caso pasa a UCM
+      const rc = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+        method: "PATCH", headers, body: JSON.stringify({ unidad: "UCM" }),
+      }).catch(() => null);
+      if (rc && !rc.ok) {
+        setError("El dictamen pasó a Etapa B, pero no pude actualizar el área del caso a UCM (revisa el permiso de update en caso_juridico).");
+      }
+
       onGuardado();
     } catch (e: any) { setError("No se pudo pasar a Etapa B: " + e.message); }
     finally { setPasando(false); }
