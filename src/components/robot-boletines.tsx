@@ -93,7 +93,7 @@ export function RobotBoletines({
                     />
                     {a.urgente && <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />}
                     <span className="font-mono text-xs text-white/80">Exp. {a.expediente}</span>
-                    <span className="truncate text-white/85">{a.tipo_acuerdo || a.texto || a.juzgado}</span>
+                    <span className="min-w-0 flex-1 truncate text-white/85">{a.tipo_acuerdo || a.texto || a.juzgado}</span>
                   </div>
                 ))}
               </div>
