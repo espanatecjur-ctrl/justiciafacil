@@ -132,7 +132,7 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
             <Campo label="Tipo de contingencia">
               <select className={inp} value={x.tipoContingencia} onChange={(e) => set("tipoContingencia", e.target.value)}>{TIPOS.map((t) => <option key={t}>{t}</option>)}</select>
             </Campo>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Inmueble (dirección)"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
               <Campo label="Estado"><input className={inp} value={x.estado} onChange={(e) => set("estado", e.target.value)} /></Campo>
               <Campo label="Titular actual según RPP"><input className={inp} value={x.titularRPP} onChange={(e) => set("titularRPP", e.target.value)} /></Campo>
@@ -145,7 +145,7 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
           <div className="space-y-4">
             <p className="text-base font-semibold">1 · Diagnóstico documental</p>
             <p className="text-xs text-muted-foreground">La clave: ¿qué dice el RPP vs la realidad física y la escritura? (tracto, plano/medidas, colindancias, predial).</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Hay antecedente registral (tracto) identificable?"><SiNo v={x.hayAntecedenteRegistral} on={(v) => set("hayAntecedenteRegistral", v)} /></Campo>
               <Campo label="¿Cómo se revisó?">
                 <select className={inp} value={x.fuenteRevisada} onChange={(e) => set("fuenteRevisada", e.target.value)}>
@@ -163,7 +163,7 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
             <Campo label="Vía de corrección sugerida">
               <select className={inp} value={x.via} onChange={(e) => set("via", e.target.value)}><option value="">—</option>{VIAS.map((v) => <option key={v}>{v}</option>)}</select>
             </Campo>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Doble inscripción a favor de un tercero?"><SiNo v={x.dobleInscripcionTercero} on={(v) => set("dobleInscripcionTercero", v)} /></Campo>
               <Campo label="¿El inmueble está a nombre de otro (no la contraparte)?"><SiNo v={x.inmuebleANombreDeOtro} on={(v) => set("inmuebleANombreDeOtro", v)} /></Campo>
               <Campo label="¿Traslape grave con predio con título firme?"><SiNo v={x.traslapeConTituloFirme} on={(v) => set("traslapeConTituloFirme", v)} /></Campo>
@@ -179,13 +179,13 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
         {paso === 3 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">3 · Costo de saneamiento · ¿es RECUPERABLE? + V_AAE</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿El costo de regularización supera el valor?"><SiNo v={x.costoSuperaValor} on={(v) => set("costoSuperaValor", v)} /></Campo>
               <Campo label="¿Los copropietarios ceden su parte?"><SiNo v={x.copropietariosCeden} on={(v) => set("copropietariosCeden", v)} /></Campo>
               <Campo label="¿Cargas menores al margen?"><SiNo v={x.cargasMenores} on={(v) => set("cargasMenores", v)} /></Campo>
             </div>
             <p className="pt-1 text-xs font-medium text-muted-foreground">V_AAE de contingencia (lo máximo a pagar por la cesión)</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Valor comercial"><input type="number" className={inp} value={x.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
               <Campo label="Honorarios de regularización"><input type="number" className={inp} value={x.honorarios} onChange={(e) => set("honorarios", e.target.value)} /></Campo>
               <Campo label="Perito / topógrafo"><input type="number" className={inp} value={x.perito} onChange={(e) => set("perito", e.target.value)} /></Campo>
@@ -206,7 +206,7 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
         {paso === 4 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">4 · Bloqueo legal (3 candados)</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿La contraparte acepta firmar Poder Irrevocable?"><SiNo v={x.contraparteAceptaPoder} on={(v) => set("contraparteAceptaPoder", v)} /></Campo>
               <Campo label="¿Cesión suspensiva (condicionada a RPP limpio)?"><SiNo v={x.cesionSuspensiva} on={(v) => set("cesionSuspensiva", v)} /></Campo>
               <Campo label="¿Escrow (libera al inscribirse la corrección)?"><SiNo v={x.escrow} on={(v) => set("escrow", v)} /></Campo>
@@ -230,7 +230,7 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
               <label className="mb-1 block text-sm font-medium">Anotaciones del abogado</label>
               <textarea value={x.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} rows={3} className={inp} placeholder="Observaciones a mano…" />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo="Elabora · abogado URRJ" valor={fElabora} onFirmar={(f) => setFElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
               <FirmaParte titulo="Valida · Director Legal" valor={fValida} onFirmar={(f) => setFValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
