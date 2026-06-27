@@ -14,8 +14,10 @@ import {
 } from "@/lib/ucp-dictamen";
 import {
   ArrowLeft, Building2, Scale, Landmark, CheckCircle2, CircleDashed, Calculator,
-  Save, Loader2, ScrollText, FileStack,
+  Save, Loader2, FileStack, CalendarClock,
 } from "lucide-react";
+import { SeccionRPPC } from "@/components/seccion-rppc";
+import { SeccionR2 } from "@/components/seccion-r2";
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -108,7 +110,7 @@ interface Props {
   caso: CasoJuridico;
   dictamen: DictamenRow;
   pred?: PredFuente;
-  tabInicial?: "requisitos" | "juridico" | "rppc";
+  tabInicial?: "requisitos" | "juridico" | "rppc" | "r2";
   onVolver: () => void;
   onGuardado: () => void;
 }
@@ -226,6 +228,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           <TabsTrigger value="requisitos"><FileStack className="mr-1 h-4 w-4" /> Requisitos</TabsTrigger>
           <TabsTrigger value="juridico"><Scale className="mr-1 h-4 w-4" /> Jurídico</TabsTrigger>
           <TabsTrigger value="rppc"><Landmark className="mr-1 h-4 w-4" /> RPPC / Registral</TabsTrigger>
+          <TabsTrigger value="r2"><CalendarClock className="mr-1 h-4 w-4" /> Seguimiento R2</TabsTrigger>
         </TabsList>
 
         {/* ---------- REQUISITOS ---------- */}
@@ -366,20 +369,14 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           </Card>
         </TabsContent>
 
-        {/* ---------- RPPC / REGISTRAL (scaffold para el siguiente paso) ---------- */}
+        {/* ---------- RPPC / REGISTRAL ---------- */}
         <TabsContent value="rppc" className="mt-4">
-          <Card className="legal-card">
-            <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
-              <ScrollText className="h-7 w-7 text-[color:var(--teal)]" />
-              <p className="font-medium text-foreground">Dictamen registral (RPPC)</p>
-              <p className="max-w-md text-xs">
-                Aquí van los datos registrales (folio real, propietario, prelación) y la gestoría RPPC
-                en sus 3 fases (solicitud → seguimiento → entrega del CLG, que vence a 90 días).
-                Se construye en el siguiente entregable.
-              </p>
-              <Badge variant="outline" className="mt-1">Siguiente paso</Badge>
-            </CardContent>
-          </Card>
+          <SeccionRPPC caso={caso} dictamen={dictamen} pred={pred} onGuardado={onGuardado} />
+        </TabsContent>
+
+        {/* ---------- SEGUIMIENTO R2 ---------- */}
+        <TabsContent value="r2" className="mt-4">
+          <SeccionR2 caso={caso} dictamen={dictamen} onGuardado={onGuardado} />
         </TabsContent>
       </Tabs>
     </div>
