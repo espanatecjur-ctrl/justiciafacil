@@ -38,7 +38,7 @@ function ExpedienteDetalle() {
           <div className="flex items-center gap-2">
             <EstadoBadge estado={e.estado} />
             <RiesgoBadge riesgo={e.riesgo} />
-            <Link to="/dictamen-ia">
+            <Link to="/urrj">
               <Button variant="outline" className="border-[color:var(--legal)]/40 text-[color:var(--legal)] hover:bg-[color:var(--legal)]/10">
                 <Bot className="h-4 w-4 mr-1.5" /> Pre-dictaminar
               </Button>
