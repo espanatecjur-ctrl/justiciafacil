@@ -77,8 +77,9 @@ export function BuscadorBoletin() {
         {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
 
         <button onClick={buscar} disabled={cargando} className="mt-3 flex items-center gap-2 rounded-md bg-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-          {cargando ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando en el boletín…</> : <><Search className="h-4 w-4" /> Buscar</>}
+          {cargando ? <><Loader2 className="h-4 w-4 animate-spin" /> Consultando el boletín del Tribunal…</> : <><Search className="h-4 w-4" /> Buscar</>}
         </button>
+        {cargando && <p className="mt-2 text-xs text-muted-foreground">El robot está abriendo el boletín y leyendo el expediente. Esto suele tardar entre 15 y 40 segundos — déjalo trabajar, no recargues la página.</p>}
       </div>
 
       {res && (
