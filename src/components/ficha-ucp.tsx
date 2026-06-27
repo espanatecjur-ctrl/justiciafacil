@@ -14,10 +14,11 @@ import {
 } from "@/lib/ucp-dictamen";
 import {
   ArrowLeft, Building2, Scale, Landmark, CheckCircle2, CircleDashed, Calculator,
-  Save, Loader2, FileStack, CalendarClock,
+  Save, Loader2, FileStack, CalendarClock, Stamp,
 } from "lucide-react";
 import { SeccionRPPC } from "@/components/seccion-rppc";
 import { SeccionR2 } from "@/components/seccion-r2";
+import { SeccionFinal } from "@/components/seccion-final";
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -55,6 +56,8 @@ export interface DictamenRow {
   requisitos: Partial<Requisitos> | null;
   juridico: { hitos?: HitosJuridico; veredicto?: string } | null;
   registral: Record<string, unknown> | null;
+  contable: Record<string, unknown> | null;
+  firmas: Record<string, unknown> | null;
   veredicto: string;
   vigente: boolean;
 }
@@ -110,7 +113,7 @@ interface Props {
   caso: CasoJuridico;
   dictamen: DictamenRow;
   pred?: PredFuente;
-  tabInicial?: "requisitos" | "juridico" | "rppc" | "r2";
+  tabInicial?: "requisitos" | "juridico" | "rppc" | "r2" | "final";
   onVolver: () => void;
   onGuardado: () => void;
 }
@@ -229,6 +232,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           <TabsTrigger value="juridico"><Scale className="mr-1 h-4 w-4" /> Jurídico</TabsTrigger>
           <TabsTrigger value="rppc"><Landmark className="mr-1 h-4 w-4" /> RPPC / Registral</TabsTrigger>
           <TabsTrigger value="r2"><CalendarClock className="mr-1 h-4 w-4" /> Seguimiento R2</TabsTrigger>
+          <TabsTrigger value="final"><Stamp className="mr-1 h-4 w-4" /> Dictamen final</TabsTrigger>
         </TabsList>
 
         {/* ---------- REQUISITOS ---------- */}
@@ -377,6 +381,11 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
         {/* ---------- SEGUIMIENTO R2 ---------- */}
         <TabsContent value="r2" className="mt-4">
           <SeccionR2 caso={caso} dictamen={dictamen} onGuardado={onGuardado} />
+        </TabsContent>
+
+        {/* ---------- DICTAMEN FINAL ---------- */}
+        <TabsContent value="final" className="mt-4">
+          <SeccionFinal caso={caso} dictamen={dictamen} pred={pred} onGuardado={onGuardado} />
         </TabsContent>
       </Tabs>
     </div>
