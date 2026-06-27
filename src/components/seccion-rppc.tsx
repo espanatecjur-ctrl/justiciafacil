@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { type Semaforo } from "@/lib/ucp-dictamen";
 import { type DictamenRow, type PredFuente } from "@/components/ficha-ucp";
+import { FormatoRPPC } from "@/components/formato-rppc";
 import {
   Landmark, Save, Loader2, Plus, CheckCircle2, AlertTriangle, Clock, FileCheck2, Trash2,
 } from "lucide-react";
@@ -353,6 +354,8 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <FormatoRPPC caso={caso} dictamen={dictamen} onGuardado={onGuardado} />
     </div>
   );
 }
