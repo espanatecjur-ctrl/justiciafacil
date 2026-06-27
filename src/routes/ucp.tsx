@@ -63,10 +63,11 @@ function normArea(u?: string | null): string {
   return s.trim();
 }
 // estas garantías ya son de UCM (compradas y procesadas); aquí solo se completa el dictamen.
-// si el dictamen pasó a Etapa B o el campo unidad no dice otra cosa, el área es UCM.
+// si vienen marcadas "UCP" o sin unidad, las tratamos como UCM (les falta llenar sus datos).
 function areaActual(c: CasoJuridico, d?: DictamenRow): string {
   if (d?.estado === "etapa_b") return "UCM";
-  return normArea(c.unidad) || "UCM";
+  const a = normArea(c.unidad);
+  return (a && a !== "UCP") ? a : "UCM";
 }
 
 const PAGE = 25;
@@ -98,7 +99,7 @@ function UCP() {
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`casos ${r.status}`)))),
       fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,dictamen_final,datos,resultados&vigente=eq.true&dictamen_final=eq.POSITIVO`, { headers })
         .then((r) => (r.ok ? r.json() : [])),
-      fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=id,caso_id,predictamen_id,estado,requisitos,juridico,registral,contable,firmas,veredicto,vigente&vigente=eq.true`, { headers })
+      fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=id,caso_id,predictamen_id,estado,requisitos,juridico,registral,contable,firmas,rppc,veredicto,vigente&vigente=eq.true`, { headers })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`dictamen ${r.status} — ¿corriste el SQL?`)))),
     ])
       .then(([c, p, d]) => { setCasos(c); setPreds(p); setDicts(d); })
