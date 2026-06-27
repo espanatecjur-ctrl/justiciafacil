@@ -37,6 +37,7 @@ const ESTADO_INFO: Record<string, { label: string; cls: string }> = {
   sin_abrir:       { label: "Sin abrir",            cls: "bg-muted text-muted-foreground border-border" },
   requisitos:      { label: "Reuniendo requisitos", cls: "bg-amber-50 text-amber-800 border-amber-200" },
   borrador:        { label: "Lista para dictaminar",cls: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  etapa_b:         { label: "Etapa B (UCM)",        cls: "bg-indigo-50 text-indigo-800 border-indigo-200" },
 };
 const VEREDICTO_CLS: Record<string, string> = {
   POSITIVO:       "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -317,7 +318,7 @@ function UCP() {
                   const d = dictPorCaso[c.id];
                   const r = reqDe(c.id);
                   const reqOK = !!d && reqCompletos(r);
-                  const estadoKey = !d ? "sin_abrir" : (reqCompletos(r) ? "borrador" : "requisitos");
+                  const estadoKey = !d ? "sin_abrir" : d.estado === "etapa_b" ? "etapa_b" : (reqCompletos(r) ? "borrador" : "requisitos");
                   const info = ESTADO_INFO[estadoKey];
                   const ver = d?.veredicto || "PENDIENTE";
                   const cargandoFila = abriendo === c.id;
