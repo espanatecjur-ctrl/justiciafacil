@@ -51,4 +51,6 @@ export interface CasoJuridico {
   cve_distrito?: string | null;
   cve_juzgado?: string | null;
   nombre_juzgado?: string | null;
+  actor?: string | null;
+  demandado?: string | null;
 }
