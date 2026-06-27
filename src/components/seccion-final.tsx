@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { HITOS_UCP } from "@/lib/ucp-dictamen";
 import { descargarDictamenFinalPDF, type FirmaConTitulo } from "@/lib/dictamen-final-pdf";
 import { type DictamenRow, type PredFuente } from "@/components/ficha-ucp";
+import { cargarPermisosUCP, puedeFirmar, puedePasarEtapaB } from "@/lib/ucp-permisos";
 import {
   Save, Loader2, FileDown, ArrowRightCircle, CheckCircle2, AlertTriangle, Calculator, Stamp,
 } from "lucide-react";
@@ -62,6 +63,9 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [pasando, setPasando] = useState(false);
+  const [rol, setRol] = useState<string | null>(null);
+
+  useEffect(() => { cargarPermisosUCP().then((p) => setRol(p.rol)).catch(() => {}); }, []);
 
   const [cont, setCont] = useState<Contable>(() => {
     const c = (dictamen.contable as any) || {};
@@ -77,7 +81,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
 
   const antecedente = (pred?.resultados as any)?.firmas || {};
   const firmasCompletas = SLOTS.every((s) => !!firmas[s.clave]?.fecha);
-  const puedeEtapaB = firmasCompletas && vFinal === "POSITIVO" && cont.validada;
+  const puedeEtapaB = firmasCompletas && vFinal === "POSITIVO" && cont.validada && puedePasarEtapaB(rol);
   const yaEtapaB = dictamen.estado === "etapa_b";
 
   // ---- guardar relación contable ----
@@ -225,6 +229,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
                 cargoSugerido={s.cargo}
                 valor={firmas[s.clave] || null}
                 onFirmar={(f) => firmar(s.clave, f)}
+                bloqueado={!puedeFirmar(s.clave, rol)}
               />
             ))}
           </div>
@@ -251,7 +256,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>
                 Para pasar a Etapa B (Regla 4): veredicto final POSITIVO ({vFinal === "POSITIVO" ? "✓" : "falta"}),
-                las 6 firmas ({firmasCompletas ? "✓" : "faltan"}) y la relación contable validada ({cont.validada ? "✓" : "falta"}).
+                las 6 firmas ({firmasCompletas ? "✓" : "faltan"}), la relación contable validada ({cont.validada ? "✓" : "falta"}) y tu rol con permiso ({puedePasarEtapaB(rol) ? "✓" : "no"}).
               </span>
             </div>
           )}
