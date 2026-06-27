@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { navItems } from "@/lib/nav";
-import { Search, Bell, Settings, Users, Network, LogOut, ChevronDown } from "lucide-react";
+import { Search, Bell, Settings, Users, Network, LogOut, ChevronDown, Home, FolderOpen, Newspaper, FileCheck2, MoreHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,12 +19,21 @@ const MOD_RUTA: Record<string, string> = {
   "/ucp": "ucp", "/urrj": "urrj", "/conectores": "conectores",
 };
 
+// Los 4 accesos fijos de la barra inferior del celular (Inicio va al centro)
+const BOTTOM: { to: string; label: string; icon: typeof Home; center?: boolean }[] = [
+  { to: "/boletines", label: "Boletines", icon: Newspaper },
+  { to: "/expedientes", label: "Expedientes", icon: FolderOpen },
+  { to: "/", label: "Inicio", icon: Home, center: true },
+  { to: "/tramites", label: "Trámites", icon: FileCheck2 },
+];
+
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [email, setEmail] = useState<string | null>(null);
   const [nombre, setNombre] = useState<string | null>(null);
   const [foto, setFoto] = useState<string | null>(null);
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [masAbierto, setMasAbierto] = useState(false);
   const [visibles, setVisibles] = useState<Set<string> | null>(null); // null = ver todo
   const [puedeConfig, setPuedeConfig] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -204,10 +213,96 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8">
           <Outlet />
         </main>
       </div>
+
+      {/* ===== Barra inferior estilo app (solo celular) ===== */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 flex min-h-16 items-stretch border-t border-border bg-background/95 backdrop-blur md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {BOTTOM.map((it) => {
+          if (!verRuta(it.to)) return null;
+          const active = it.to === "/" ? pathname === "/" : pathname === it.to || pathname.startsWith(it.to + "/");
+          if (it.center) {
+            return (
+              <Link key={it.to} to={it.to} className="relative flex flex-1 flex-col items-center justify-end pb-1.5 pt-2">
+                <span className="absolute top-0 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border-4 border-background bg-[color:var(--teal)] text-white shadow-md">
+                  <it.icon className="h-5 w-5" />
+                </span>
+                <span className="text-[10px] font-medium text-[color:var(--teal)]">{it.label}</span>
+              </Link>
+            );
+          }
+          return (
+            <Link
+              key={it.to}
+              to={it.to}
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] ${
+                active ? "text-[color:var(--teal)] font-medium" : "text-muted-foreground"
+              }`}
+            >
+              <it.icon className="h-5 w-5" />
+              {it.label}
+            </Link>
+          );
+        })}
+        <button onClick={() => setMasAbierto(true)} className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground">
+          <MoreHorizontal className="h-5 w-5" />
+          Más
+        </button>
+      </nav>
+
+      {/* ===== Hoja "Todo el menú" (solo celular) ===== */}
+      {masAbierto && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMasAbierto(false)} />
+          <div
+            className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-4"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
+            <p className="mb-3 text-sm font-semibold">Todo el menú</p>
+            <div className="grid grid-cols-3 gap-2">
+              {navItems.filter((it) => verRuta(it.to)).map((it) => {
+                const active = it.to === "/" ? pathname === "/" : pathname === it.to || pathname.startsWith(it.to + "/");
+                return (
+                  <Link
+                    key={it.to}
+                    to={it.to}
+                    onClick={() => setMasAbierto(false)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-[11px] leading-tight ${
+                      active ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-border text-foreground"
+                    }`}
+                  >
+                    <it.icon className="h-5 w-5 text-[color:var(--teal)]" />
+                    {it.label}
+                  </Link>
+                );
+              })}
+              {puedeConfig && (
+                <Link
+                  to="/configuracion"
+                  onClick={() => setMasAbierto(false)}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-border p-3 text-center text-[11px] leading-tight text-foreground"
+                >
+                  <Settings className="h-5 w-5 text-[color:var(--teal)]" />
+                  Config.
+                </Link>
+              )}
+              <button
+                onClick={salir}
+                className="flex flex-col items-center gap-1.5 rounded-xl border border-border p-3 text-center text-[11px] leading-tight text-red-600"
+              >
+                <LogOut className="h-5 w-5" />
+                Salir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
