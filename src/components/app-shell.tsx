@@ -127,7 +127,10 @@ export function AppShell() {
                         }`}
                       >
                         <it.icon className="h-4 w-4" />
-                        <span className="flex-1">{it.label}</span>
+                        <span className="flex-1 leading-tight">
+                          {it.label}
+                          {it.sub && <span className="block text-[10px] font-normal text-sidebar-foreground/55">{it.sub}</span>}
+                        </span>
                         {it.badge && (
                           <Badge className="h-4 px-1.5 text-[9px] bg-[color:var(--legal)] text-[color:var(--legal-foreground)] hover:bg-[color:var(--legal)]">
                             {it.badge}
