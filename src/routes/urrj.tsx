@@ -22,6 +22,9 @@ import { HistorialPredictamen } from "@/components/historial-predictamen";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
+  validateSearch: (s: Record<string, unknown>): { soloRegistro?: boolean } => ({
+    soloRegistro: s.soloRegistro === true || s.soloRegistro === "true",
+  }),
   component: URRJ,
 });
 
@@ -117,6 +120,7 @@ function URRJ() {
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
   const [vista, setVista] = useState<"elegir" | "Actor" | "Demandado" | "Sucesorio" | "Contingencia" | "Tramites">("elegir");
+  const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
@@ -241,13 +245,13 @@ function URRJ() {
         <div className="flex items-center gap-2">
           <Scale className="h-6 w-6" style={{ color: "#C2A24C" }} />
           <div>
-            <h1 className="text-xl font-bold">URRJ · Pre-dictamen</h1>
-            <p className="text-sm text-white/70">Unidad de Resolución Jurídica · el sistema calcula y avisa, las personas firman y deciden</p>
+            <h1 className="text-xl font-bold">{soloRegistro ? "URRJ · Registro" : "JUFA · Pre-dictaminador"}</h1>
+            <p className="text-sm text-white/70">{soloRegistro ? "Unidad de Resolución Jurídica · registro de pre-dictámenes" : "Pre-dictaminador de URRJ · el sistema calcula y avisa, las personas firman y deciden"}</p>
           </div>
         </div>
       </div>
 
-      {vista === "elegir" && (
+      {!soloRegistro && vista === "elegir" && (
         <div className="rounded-xl border border-border bg-card p-6">
           <p className="text-base font-semibold">¿Cuál es la posición de DIIPA en este caso?</p>
           <p className="mb-4 text-sm text-muted-foreground">Cada posición tiene su propio recorrido de pre-dictamen.</p>
@@ -285,7 +289,7 @@ function URRJ() {
         </div>
       )}
 
-      {vista === "elegir" && <HistorialPredictamen onReDictaminar={reDictaminar} />}
+      {soloRegistro && vista === "elegir" && <HistorialPredictamen onReDictaminar={reDictaminar} />}
 
       {vista === "Demandado" && <RecorridoDemandado casos={casos} onVolver={volver} precargar={precargar} puedeFirmarElabora={puede("firmar_elabora")} puedeValidar={puede("validar")} />}
       {vista === "Sucesorio" && <RecorridoSucesorio casos={casos} onVolver={volver} precargar={precargar} puedeFirmarElabora={puede("firmar_elabora")} puedeValidar={puede("validar")} />}
