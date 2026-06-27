@@ -78,7 +78,7 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
           <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-3 p-4">
-          <p className="text-xs text-muted-foreground">Asigna el <b>distrito</b> y <b>juzgado</b> para que el robot sepa dónde buscar este expediente en el boletín.</p>
+          <p className="text-xs text-muted-foreground">Asigna el <b>distrito</b> y <b>juzgado</b> para que JUFA sepa dónde buscar este expediente en el boletín.</p>
           {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
 
           {!otro ? (
@@ -102,7 +102,7 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
           ) : (
             <>
               <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                Estás agregando un juzgado nuevo al catálogo. Las <b>claves</b> son los números que usa el boletín (ej. distrito 06, juzgado 13). Si no las sabes, el robot las completará después.
+                Estás agregando un juzgado nuevo al catálogo. Las <b>claves</b> son los números que usa el boletín (ej. distrito 06, juzgado 13). Si no las sabes, JUFA las completará después.
               </div>
               <div className="grid grid-cols-[1fr_90px] gap-2">
                 <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del distrito</label><input className={inp} value={nd} onChange={(e) => setNd(e.target.value)} placeholder="Culiacán" /></div>
@@ -117,7 +117,7 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
           )}
 
           <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
-            El robot buscará con: <b>FolioAsunto = {folioAsunto(caso.expediente) || "—"}</b> (tu expediente sin la diagonal).
+            JUFA buscará con: <b>FolioAsunto = {folioAsunto(caso.expediente) || "—"}</b> (tu expediente sin la diagonal).
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
