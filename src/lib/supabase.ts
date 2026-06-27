@@ -48,4 +48,7 @@ export interface CasoJuridico {
   unidad: string | null;
   encargado_unidad: string | null;
   nota_adicional: string | null;
+  cve_distrito?: string | null;
+  cve_juzgado?: string | null;
+  nombre_juzgado?: string | null;
 }
