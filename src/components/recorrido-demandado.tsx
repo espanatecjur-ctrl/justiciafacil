@@ -139,7 +139,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
                 {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
               </select>
             </Campo>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Demandado-vendedor (nombre)"><input className={inp} value={x.deudor} onChange={(e) => set("deudor", e.target.value)} /></Campo>
               <Campo label="RFC del demandado"><input className={inp} value={x.rfc} onChange={(e) => set("rfc", e.target.value)} /></Campo>
               <Campo label="Dirección de la garantía"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
@@ -155,7 +155,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 1 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">1 · Extracción del expediente</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Expediente"><input className={inp} value={x.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
               <Campo label="Juzgado / jurisdicción"><input className={inp} value={x.juzgado} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
               <Campo label="Etapa del juicio"><input className={inp} value={x.etapa} onChange={(e) => set("etapa", e.target.value)} /></Campo>
@@ -176,7 +176,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 2 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">2 · Filtro de legalidad procesal</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Tipo de emplazamiento">
                 <select className={inp} value={x.emplazamiento} onChange={(e) => set("emplazamiento", e.target.value)}>
                   <option value="">—</option><option value="personal">Personal con firma</option><option value="edictos">Por edictos</option><option value="rebeldia">Rebeldía declarada</option>
@@ -194,7 +194,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 3 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">3 · Carta saldo del acreedor + V_AAE</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Estado de la Carta Saldo">
                 <select className={inp} value={x.estadoCarta} onChange={(e) => set("estadoCarta", e.target.value)}>
                   <option value="">—</option><option value="otorgada">Otorgada y firmada</option><option value="tramite">En trámite</option><option value="sin_solicitar">Sin solicitar</option><option value="negada">Negada</option>
@@ -206,7 +206,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
             </div>
             <Aviso r={r3} />
             <p className="pt-1 text-xs font-medium text-muted-foreground">Motor financiero V_AAE (lo máximo que puedes pagarle al demandado)</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Suerte principal (capital)"><input type="number" className={inp} value={x.suertePrincipal} onChange={(e) => set("suertePrincipal", e.target.value)} /></Campo>
               <Campo label="Interés moratorio"><input type="number" className={inp} value={x.interesMoratorio} onChange={(e) => set("interesMoratorio", e.target.value)} /></Campo>
               <Campo label="Gastos y costas (si 0, asume 10%)"><input type="number" className={inp} value={x.gastosCostas} onChange={(e) => set("gastosCostas", e.target.value)} /></Campo>
@@ -225,7 +225,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 4 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">4 · Bloqueo legal (3 candados)</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿El vendedor acepta firmar el Poder Irrevocable?"><SiNo v={x.vendedorAceptaPoder} on={(v) => set("vendedorAceptaPoder", v)} /></Campo>
               <Campo label="¿Promesa con cláusula suspensiva (Art. 1938)?"><SiNo v={x.promesaSuspensiva} on={(v) => set("promesaSuspensiva", v)} /></Campo>
               <Campo label="¿Escrow (cuenta de custodia)?"><SiNo v={x.escrow} on={(v) => set("escrow", v)} /></Campo>
@@ -248,7 +248,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               <label className="mb-1 block text-sm font-medium">Anotaciones del abogado</label>
               <textarea value={x.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} rows={3} className={inp} placeholder="Observaciones a mano…" />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo="Elabora · abogado URRJ" valor={fElabora} onFirmar={(f) => setFElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
               <FirmaParte titulo="Valida · Director Legal" valor={fValida} onFirmar={(f) => setFValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
