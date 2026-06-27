@@ -148,7 +148,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
                 <option value="C">Caso C · mixto</option>
               </select>
             </Campo>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="De cujus (fallecido)"><input className={inp} value={x.deCujus} onChange={(e) => set("deCujus", e.target.value)} /></Campo>
               <Campo label="Fecha de defunción"><input type="date" className={inp} value={x.fechaDefuncion} onChange={(e) => set("fechaDefuncion", e.target.value)} /></Campo>
               <Campo label="¿Hay acta de defunción?"><SiNo v={x.hayActaDefuncion} on={(v) => set("hayActaDefuncion", v)} /></Campo>
@@ -164,7 +164,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 1 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">1 · Acreditación documental</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Expediente del sucesorio"><input className={inp} value={x.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
               <Campo label="Juzgado"><input className={inp} value={x.juzgado} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
               <Campo label="Estado del juicio"><input className={inp} value={x.estado} onChange={(e) => set("estado", e.target.value)} /></Campo>
@@ -182,7 +182,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 2 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">2 · Legalidad sucesoria · ¿es LITIGABLE?</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Herederos desconocidos/no llamados a juicio?"><SiNo v={x.herederosNoLocalizados} on={(v) => set("herederosNoLocalizados", v)} /></Campo>
               <Campo label="¿Testamento impugnado / nulidad en curso?"><SiNo v={x.testamentoImpugnado} on={(v) => set("testamentoImpugnado", v)} /></Campo>
               <Campo label="¿Controversia abierta entre herederos?"><SiNo v={x.controversiaHerederos} on={(v) => set("controversiaHerederos", v)} /></Campo>
@@ -199,7 +199,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 3 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">3 · Saneamiento · ¿es RECUPERABLE? + V_AAE</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Deudas/embargos del de cujus superan el valor?"><SiNo v={x.acreedoresSuperanValor} on={(v) => set("acreedoresSuperanValor", v)} /></Campo>
               <Campo label="¿Los herederos aceptan ceder?"><SiNo v={x.herederosCeden} on={(v) => set("herederosCeden", v)} /></Campo>
               <Campo label="¿Hipoteca vigente no negociable > valor?"><SiNo v={x.hipotecaNoNegociable} on={(v) => set("hipotecaNoNegociable", v)} /></Campo>
@@ -207,7 +207,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
               <Campo label="¿Cargas manejables?"><SiNo v={x.cargasManejables} on={(v) => set("cargasManejables", v)} /></Campo>
             </div>
             <p className="pt-1 text-xs font-medium text-muted-foreground">V_AAE sucesorio (lo máximo a pagar al heredero)</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Valor comercial"><input type="number" className={inp} value={x.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
               <Campo label="Deudas del de cujus"><input type="number" className={inp} value={x.deudasDeCujus} onChange={(e) => set("deudasDeCujus", e.target.value)} /></Campo>
               <Campo label="Hipoteca / gravámenes"><input type="number" className={inp} value={x.hipotecaGravamenes} onChange={(e) => set("hipotecaGravamenes", e.target.value)} /></Campo>
@@ -228,7 +228,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 4 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">4 · Bloqueo legal (3 candados){esB ? " + candados Caso B" : ""}</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿El heredero acepta firmar Poder Irrevocable?"><SiNo v={x.vendedorAceptaPoder} on={(v) => set("vendedorAceptaPoder", v)} /></Campo>
               <Campo label="¿Cesión con cláusula suspensiva (Art. 1938)?"><SiNo v={x.cesionSuspensiva} on={(v) => set("cesionSuspensiva", v)} /></Campo>
               <Campo label="¿Escrow (cuenta de custodia)?"><SiNo v={x.escrow} on={(v) => set("escrow", v)} /></Campo>
@@ -238,7 +238,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
             {esB && (
               <>
                 <p className="pt-1 text-xs font-medium text-muted-foreground">Candados especiales del Caso B (cesión de derechos hereditarios)</p>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Campo label="¿El cedente ACEPTÓ la herencia?"><SiNo v={x.cedenteAceptoHerencia} on={(v) => set("cedenteAceptoHerencia", v)} /></Campo>
                   <Campo label="¿Se notificó el derecho del tanto a coherederos (8 días)?"><SiNo v={x.derechoTantoNotificado} on={(v) => set("derechoTantoNotificado", v)} /></Campo>
                   <Campo label="¿La cesión es en escritura pública?"><SiNo v={x.cesionEscrituraPublica} on={(v) => set("cesionEscrituraPublica", v)} /></Campo>
@@ -262,7 +262,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
               <label className="mb-1 block text-sm font-medium">Anotaciones del abogado</label>
               <textarea value={x.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} rows={3} className={inp} placeholder="Observaciones a mano…" />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo="Elabora · abogado URRJ" valor={fElabora} onFirmar={(f) => setFElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
               <FirmaParte titulo="Valida · Director Legal" valor={fValida} onFirmar={(f) => setFValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
