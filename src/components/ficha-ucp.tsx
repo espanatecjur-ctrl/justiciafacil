@@ -211,7 +211,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
             <ArrowLeft className="h-4 w-4" /> Volver al registro
           </Button>
           <h1 className="font-display text-xl font-bold">{caso.expediente || "Sin expediente"}</h1>
-          <div className="mt-1 grid gap-0.5 text-xs text-muted-foreground sm:grid-cols-2">
+          <div className="mt-1 grid grid-cols-1 gap-0.5 text-xs text-muted-foreground sm:grid-cols-2">
             <span className="flex items-center gap-1"><Building2 className="h-3 w-3 shrink-0" /> {caso.direccion_garantia || "Garantía s/dirección"}</span>
             <span>{caso.juzgado || "Juzgado s/dato"}</span>
             <span>{caso.cliente_nombre || caso.cliente_codigo || "Cliente s/dato"}</span>
@@ -227,7 +227,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="requisitos"><FileStack className="mr-1 h-4 w-4" /> Requisitos</TabsTrigger>
           <TabsTrigger value="juridico"><Scale className="mr-1 h-4 w-4" /> Jurídico</TabsTrigger>
           <TabsTrigger value="rppc"><Landmark className="mr-1 h-4 w-4" /> RPPC / Registral</TabsTrigger>
@@ -240,7 +240,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           <Card className="legal-card">
             <CardContent className="space-y-3 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-[color:var(--teal)]">Puerta de entrada · 7 requisitos</p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {REQUISITOS.map((r) => {
                   const on = req[r.clave];
                   return (
@@ -429,7 +429,7 @@ function MotorCard({ num, titulo, r, children }: {
         <p className="text-sm font-medium">{num}. {titulo}</p>
         <Badge variant="outline" className={`border ${semBg(sem)}`}>{r?.etiqueta || "—"}{r?.dato ? ` · ${r.dato}` : ""}</Badge>
       </div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">{children}</div>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">{children}</div>
       {r?.detalle && <p className="mt-2 text-xs text-muted-foreground">{r.detalle}</p>}
     </div>
   );
