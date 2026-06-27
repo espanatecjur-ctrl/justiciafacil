@@ -127,7 +127,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
               </select>
             </Campo>
             <Campo label="Tipo de trámite"><select className={inp} value={x.tipoTramite} onChange={(e) => set("tipoTramite", e.target.value)}>{TIPOS_TRAMITE.map((t) => <option key={t.clave} value={t.clave}>{t.nombre} · {t.plazo} días háb.</option>)}</select></Campo>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Autoridad u órgano"><input className={inp} value={x.autoridad} onChange={(e) => set("autoridad", e.target.value)} placeholder="Juzgado de distrito / TFJA / junta laboral" /></Campo>
               <Campo label="Inmueble / garantía afectada"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
               <Campo label="¿Cómo afecta la garantía?"><input className={inp} value={x.afectaComo} onChange={(e) => set("afectaComo", e.target.value)} placeholder="embargo / remate / cancelación / crédito fiscal" /></Campo>
@@ -139,7 +139,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
         {paso === 1 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">1 · Acreditación del expediente</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Hay acto reclamado / resolución / laudo?"><SiNo v={x.hayActoReclamado} on={(v) => set("hayActoReclamado", v)} /></Campo>
               <Campo label="Fecha de notificación (clave para el plazo)"><input type="date" className={inp} value={x.fechaNotificacion} onChange={(e) => set("fechaNotificacion", e.target.value)} /></Campo>
               <Campo label="Expediente"><input className={inp} value={x.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
@@ -152,7 +152,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
         {paso === 2 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">2 · Procedencia y oportunidad · ¿es LITIGABLE?</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Falta de interés jurídico/legítimo?"><SiNo v={x.faltaInteres} on={(v) => set("faltaInteres", v)} /></Campo>
               <Campo label="¿Cosa juzgada / acto firme?"><SiNo v={x.cosaJuzgada} on={(v) => set("cosaJuzgada", v)} /></Campo>
               <Campo label="¿Suspensión otorgada?"><SiNo v={x.suspensionOtorgada} on={(v) => set("suspensionOtorgada", v)} /></Campo>
@@ -163,7 +163,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
             <Aviso r={r2} />
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="mb-2 text-xs font-medium text-muted-foreground">Actos administrativos sobre el inmueble (contencioso)</p>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Campo label="¿Hay actos administrativos pendientes?"><SiNo v={x.hayActosAdmin} on={(v) => set("hayActosAdmin", v)} /></Campo>
                 <Campo label="¿Es crédito fiscal (predial/ISAI)?"><SiNo v={x.esCreditoFiscal} on={(v) => set("esCreditoFiscal", v)} /></Campo>
                 <Campo label="¿Es expropiación / uso de suelo?"><SiNo v={x.esExpropiacionUso} on={(v) => set("esExpropiacionUso", v)} /></Campo>
@@ -177,14 +177,14 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
         {paso === 3 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">3 · Impacto sobre la garantía · ¿es RECUPERABLE? + V_AAE</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿La afectación + defensa supera el valor?"><SiNo v={x.afectacionSuperaValor} on={(v) => set("afectacionSuperaValor", v)} /></Campo>
               <Campo label="¿Condena firme por encima del bien?"><SiNo v={x.condenaFirmeArriba} on={(v) => set("condenaFirmeArriba", v)} /></Campo>
               <Campo label="¿La contraparte cede sus derechos?"><SiNo v={x.contraparteCede} on={(v) => set("contraparteCede", v)} /></Campo>
               <Campo label="¿Defendible (afectación menor al margen)?"><SiNo v={x.defendible} on={(v) => set("defendible", v)} /></Campo>
             </div>
             <p className="pt-1 text-xs font-medium text-muted-foreground">V_AAE administrativo</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Valor comercial"><input type="number" className={inp} value={x.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
               <Campo label="Condena / laudo / crédito fiscal"><input type="number" className={inp} value={x.condenaLaudoFiscal} onChange={(e) => set("condenaLaudoFiscal", e.target.value)} /></Campo>
               <Campo label="Honorarios de defensa externa"><input type="number" className={inp} value={x.honorariosDefensa} onChange={(e) => set("honorariosDefensa", e.target.value)} /></Campo>
@@ -204,7 +204,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
         {paso === 4 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">4 · Bloqueo legal + SUSPENSIÓN</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Hay suspensión del acto reclamado?"><SiNo v={x.suspensionOtorgada} on={(v) => set("suspensionOtorgada", v)} /></Campo>
               <Campo label="¿El remate/cancelación es inminente?"><SiNo v={x.remateInminente} on={(v) => set("remateInminente", v)} /></Campo>
               <Campo label="¿La contraparte acepta firmar Poder Irrevocable?"><SiNo v={x.contraparteAceptaPoder} on={(v) => set("contraparteAceptaPoder", v)} /></Campo>
@@ -230,7 +230,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
               <label className="mb-1 block text-sm font-medium">Anotaciones del abogado</label>
               <textarea value={x.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} rows={3} className={inp} placeholder="Observaciones a mano…" />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo="Elabora · abogado URRJ" valor={fElabora} onFirmar={(f) => setFElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
               <FirmaParte titulo="Valida · Director Legal" valor={fValida} onFirmar={(f) => setFValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
