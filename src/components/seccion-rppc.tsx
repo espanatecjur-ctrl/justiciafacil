@@ -206,7 +206,7 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
             <Badge variant="outline" className={`ml-auto border ${VER_CLS[ver]}`}>Registral: {ver}</Badge>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Campo label="Folio real"><Input value={reg.folio_real} onChange={(e) => setR("folio_real", e.target.value)} /></Campo>
             <Campo label="Propietario registral"><Input value={reg.propietario} onChange={(e) => setR("propietario", e.target.value)} /></Campo>
             <Campo label="Prelación / grado"><Input value={reg.prelacion} onChange={(e) => setR("prelacion", e.target.value)} /></Campo>
