@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { sbSelect, type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import type { AcuerdoJudicial } from "@/components/robot-boletines";
-import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2 } from "lucide-react";
+import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin } from "lucide-react";
+import { ConfigBoletinModal } from "@/components/config-boletin";
 
 const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -27,6 +28,8 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [agregar, setAgregar] = useState(false);
+  const [configBoletin, setConfigBoletin] = useState<CasoJuridico | null>(null);
+  const [patches, setPatches] = useState<Record<string, Partial<CasoJuridico>>>({});
   const [fColor, setFColor] = useState<"todos" | "verde" | "amarillo" | "rojo" | "sin">("todos");
   const [fTipo, setFTipo] = useState("todos");
   const [soloNoLeidos, setSoloNoLeidos] = useState(false);
@@ -56,7 +59,8 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   }, [acuerdos]);
 
   const filas = useMemo(() => {
-    const arr = casos.map((c) => {
+    const arr = casos.map((c0) => {
+      const c = patches[c0.id] ? { ...c0, ...patches[c0.id] } : c0;
       const exp = (c.expediente || "").trim();
       const acs = porExp[exp] || [];
       const ultima = acs[0]?.fecha_acuerdo ?? null;
@@ -75,7 +79,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
     if (orden === "urgencia") f = f.sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
     else f = f.sort((a, b) => (b.ultima ? new Date(b.ultima).getTime() : 0) - (a.ultima ? new Date(a.ultima).getTime() : 0));
     return f;
-  }, [casos, porExp, q, fColor, fTipo, soloNoLeidos, orden]);
+  }, [casos, porExp, q, fColor, fTipo, soloNoLeidos, orden, patches]);
 
   const conteo = useMemo(() => {
     let v = 0, am = 0, r = 0, s = 0, hoy = 0;
@@ -165,8 +169,10 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                   <div>
                     <p className="text-base font-bold text-[color:var(--teal)]">{selExp.exp}</p>
                     <p className="text-sm text-muted-foreground">{selExp.c.cliente_nombre || ""}{selExp.c.cliente_nombre ? " · " : ""}{selExp.c.materia || ""} · {selExp.c.juzgado || ""}</p>
+                    {selExp.c.nombre_juzgado && <p className="mt-0.5 text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
                   </div>
                   <div className="flex shrink-0 gap-1.5">
+                    <button onClick={() => setConfigBoletin(selExp.c)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><MapPin className="h-3.5 w-3.5" /> {selExp.c.cve_juzgado ? "Juzgado ✓" : "Asignar juzgado"}</button>
                     <button onClick={() => setAgregar(true)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-3.5 w-3.5" /> Agregar acuerdo</button>
                     {selExp.noLeidos > 0 && <button onClick={() => marcarTodosLeidos(selExp.exp)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><CheckCheck className="h-3.5 w-3.5" /> Marcar todos leídos</button>}
                   </div>
@@ -205,6 +211,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
         </div>
       </div>
       {agregar && selExp && <AgregarAcuerdoModal expediente={selExp.exp} juzgado={selExp.c.juzgado} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargar(); }} />}
+      {configBoletin && <ConfigBoletinModal caso={configBoletin} onClose={() => setConfigBoletin(null)} onGuardado={() => { const id = configBoletin.id; setConfigBoletin(null); sbSelect<CasoJuridico>("caso_juridico", `select=cve_distrito,cve_juzgado,nombre_juzgado&id=eq.${id}`).then((d) => { if (d?.[0]) setPatches((p) => ({ ...p, [id]: d[0] })); }).catch(() => {}); }} />}
     </div>
   );
 }
