@@ -21,12 +21,11 @@ export const navItems: NavItem[] = [
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "UDP · Defensa y Protección", to: "/udp", icon: ShieldHalf, group: "Procesal" },
   { label: "Control de demandas", to: "/control-demandas", icon: Swords, group: "Procesal" },
-  { label: "Boletines Judiciales", to: "/boletines", icon: Newspaper, group: "Procesal" },
   { label: "Exhortos", to: "/exhortos", icon: Send, group: "Procesal" },
   { label: "Amparos", to: "/amparos", icon: Shield, group: "Procesal" },
   { label: "Recursos", to: "/recursos", icon: GitBranch, group: "Procesal" },
 
-  { label: "JUFA", sub: "Robot de los boletines", to: "/dictamen-ia", icon: Bot, badge: "IA", group: "Inteligencia" },
+  { label: "JUFA", sub: "Robot de los boletines", to: "/boletines", icon: Newspaper, group: "Inteligencia" },
   { label: "URRJ", sub: "Unidad de Resolución Jurídica", to: "/urrj", icon: Scale, group: "Inteligencia" },
   { label: "UCP", sub: "Unidad de Consolidación Patrimonial", to: "/ucp", icon: Building2, group: "Inteligencia" },
 
