@@ -5,7 +5,7 @@
 
 export type ModuloClave =
   | "inicio" | "expedientes" | "hitos" | "ucm" | "udp" | "control_demandas"
-  | "boletines" | "exhortos" | "amparos" | "recursos" | "dictamen_ia"
+  | "boletines" | "exhortos" | "amparos" | "recursos"
   | "contratos" | "tramites" | "ucp" | "urrj" | "conectores" | "configuracion";
 
 export const MODULOS: { clave: ModuloClave; label: string }[] = [
@@ -19,7 +19,6 @@ export const MODULOS: { clave: ModuloClave; label: string }[] = [
   { clave: "exhortos", label: "Exhortos" },
   { clave: "amparos", label: "Amparos" },
   { clave: "recursos", label: "Recursos" },
-  { clave: "dictamen_ia", label: "Robot Pre-Dictaminador" },
   { clave: "contratos", label: "Contratos" },
   { clave: "tramites", label: "Trámites Gob." },
   { clave: "ucp", label: "UCP" },
@@ -44,7 +43,7 @@ export const ROLES: DefinicionRol[] = [
   { codigo: "DGE", nombre: "Dirección General", grupo: "Dirección", modulos: "todos" },
   { codigo: "DGC", nombre: "Dirección Comercial", grupo: "Dirección", modulos: [...BASE, "ucp", "contratos"] },
   { codigo: "DIL", nombre: "Dirección Jurídica (cubre URRJ)", grupo: "Jurídico", modulos: "todos" },
-  { codigo: "URRJ", nombre: "Unidad de Resolución Jurídica (pre-dictamen)", grupo: "Jurídico", modulos: [...BASE, "dictamen_ia", "urrj"] },
+  { codigo: "URRJ", nombre: "Unidad de Resolución Jurídica (pre-dictamen)", grupo: "Jurídico", modulos: [...BASE, "urrj"] },
   { codigo: "UCP", nombre: "Unidad de Consolidación Patrimonial", grupo: "Jurídico", modulos: [...BASE, "ucp", "ucm", "contratos"] },
   { codigo: "UCM", nombre: "Unidad UCM (seguimiento a juicios)", grupo: "Jurídico", modulos: [...BASE, "ucm", "control_demandas"] },
   { codigo: "UDP", nombre: "Unidad UDP (Defensa y Protección)", grupo: "Jurídico", modulos: [...BASE, "udp"] },
