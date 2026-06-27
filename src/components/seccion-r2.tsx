@@ -149,7 +149,7 @@ export function SeccionR2({ caso, dictamen, onGuardado }: Props) {
       <Card className="legal-card">
         <CardContent className="space-y-3 p-4">
           <p className="text-sm font-semibold">Nueva revisión</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-medium text-muted-foreground">Fecha</span>
               <input type="date" className={INP} value={f.fecha} onChange={(e) => setFf("fecha", e.target.value)} />
@@ -167,7 +167,7 @@ export function SeccionR2({ caso, dictamen, onGuardado }: Props) {
             </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <span className="mb-1 block text-xs font-medium text-muted-foreground">Semáforo</span>
               <div className="flex gap-1">
