@@ -177,7 +177,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
             <Calculator className="h-4 w-4 text-[color:var(--teal)]" />
             <p className="text-sm font-semibold">Relación contable (GAD)</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Campo label="Gastos"><Input inputMode="numeric" value={cont.gastos} onChange={(e) => setC("gastos", e.target.value)} /></Campo>
             <Campo label="Cobros"><Input inputMode="numeric" value={cont.cobros} onChange={(e) => setC("cobros", e.target.value)} /></Campo>
             <Campo label="Valor actual de la garantía"><Input inputMode="numeric" value={cont.valorActual} onChange={(e) => setC("valorActual", e.target.value)} /></Campo>
@@ -197,7 +197,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
       <Card className="legal-card">
         <CardContent className="space-y-2 p-4">
           <p className="text-sm font-semibold">Antecedente · firmas del pre-dictamen URRJ</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {[{ k: "elabora", t: "Elabora" }, { k: "valida", t: "Valida" }].map(({ k, t }) => {
               const f = antecedente[k] as DatosFirma | undefined;
               return (
@@ -221,7 +221,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
             <span className="text-xs text-muted-foreground">{SLOTS.filter((s) => firmas[s.clave]?.fecha).length}/6 firmadas</span>
             {firmasCompletas && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {SLOTS.map((s) => (
               <FirmaParte
                 key={s.clave}
