@@ -107,7 +107,7 @@ function UdpPage() {
 
       {/* Filtros */}
       <Card className="legal-card p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Folio, cliente, contraparte, expediente…" className="pl-8" />
