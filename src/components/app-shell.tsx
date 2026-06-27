@@ -129,6 +129,7 @@ export function AppShell() {
                     <li key={it.to}>
                       <Link
                         to={it.to}
+                        search={it.search as any}
                         className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
                           active
                             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium border-l-2 border-[color:var(--teal)]"
@@ -191,7 +192,7 @@ export function AppShell() {
                   <div className="p-1.5">
                     {puedeConfig && (
                       <>
-                        <Link to="/configuracion" onClick={() => setMenuAbierto(false)} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-accent">
+                        <Link to="/configuracion" search={{ tab: undefined }} onClick={() => setMenuAbierto(false)} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-accent">
                           <Settings className="h-4 w-4 text-muted-foreground" /> Configuración
                         </Link>
                         <Link to="/configuracion" search={{ tab: "colaboradores" } as any} onClick={() => setMenuAbierto(false)} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-accent">
@@ -272,6 +273,7 @@ export function AppShell() {
                   <Link
                     key={it.to}
                     to={it.to}
+                    search={it.search as any}
                     onClick={() => setMasAbierto(false)}
                     className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-[11px] leading-tight ${
                       active ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-border text-foreground"
@@ -285,6 +287,7 @@ export function AppShell() {
               {puedeConfig && (
                 <Link
                   to="/configuracion"
+                  search={{ tab: undefined }}
                   onClick={() => setMasAbierto(false)}
                   className="flex flex-col items-center gap-1.5 rounded-xl border border-border p-3 text-center text-[11px] leading-tight text-foreground"
                 >
