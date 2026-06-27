@@ -46,6 +46,14 @@ function UcmPage() {
     });
   }, [casos, q, entidad, prioridad]);
 
+  // paginación: máximo 20 por página (web y cel)
+  const PAGE = 20;
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => { setPagina(0); }, [q, entidad, prioridad]);
+  const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
+  const pag = Math.min(pagina, totalPag - 1);
+  const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
+
   const alta = casos.filter((c) => (c.prioridad || "").toUpperCase() === "ALTA").length;
   const conExpediente = casos.filter((c) => (c.expediente || "").match(/\d+\/\d+/)).length;
   const expedientes = casos.map((c) => c.expediente);
@@ -77,7 +85,7 @@ function UcmPage() {
       </div>
 
       <Card className="legal-card p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Expediente, cliente, juzgado…" className="pl-8" />
@@ -102,7 +110,7 @@ function UcmPage() {
         <Card className="legal-card p-4 border-red-200 bg-red-50 text-sm text-red-700">No se pudieron cargar los juicios: {error}</Card>
       )}
 
-      <Card className="legal-card overflow-hidden">
+      <Card className="legal-card hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
@@ -116,7 +124,7 @@ function UcmPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtrados.map((c) => (
+              {paginados.map((c) => (
                 <tr key={c.id} className="hover:bg-muted/30">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-[color:var(--teal)]">{c.expediente || "— sin expediente —"}</p>
@@ -149,6 +157,39 @@ function UcmPage() {
           </table>
         </div>
       </Card>
+
+      {/* Tarjetas (celular) */}
+      <div className="space-y-2 md:hidden">
+        {cargando ? (
+          <Card className="legal-card p-6 text-center text-sm text-muted-foreground">Cargando…</Card>
+        ) : filtrados.length === 0 ? (
+          <Card className="legal-card p-6 text-center text-sm text-muted-foreground">Sin resultados con esos filtros.</Card>
+        ) : (
+          paginados.map((c) => (
+            <Card key={c.id} className="legal-card p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 truncate font-semibold text-[color:var(--teal)]">{c.expediente || "— sin expediente —"}</p>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
+              </div>
+              {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+              <p className="mt-0.5 text-xs"><span className="font-medium">{c.materia || "—"}</span>{c.via_procesal ? ` · ${c.via_procesal}` : ""}{c.etapa_actual ? ` · ${c.etapa_actual}` : ""}</p>
+              {c.nota_adicional && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{c.nota_adicional}</p>}
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Paginación (web y cel): máximo 20 por página */}
+      {filtrados.length > PAGE && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>{filtrados.length} juicios · pág. {pag + 1} de {totalPag}</span>
+          <div className="flex gap-2">
+            <button onClick={() => setPagina(pag - 1)} disabled={pag === 0} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-40">Anterior</button>
+            <button onClick={() => setPagina(pag + 1)} disabled={pag >= totalPag - 1} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-40">Siguiente</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
