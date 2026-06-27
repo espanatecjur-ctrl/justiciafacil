@@ -34,6 +34,8 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   const [fTipo, setFTipo] = useState("todos");
   const [soloNoLeidos, setSoloNoLeidos] = useState(false);
   const [orden, setOrden] = useState<"urgencia" | "reciente">("urgencia");
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => { setPagina(0); }, [q, fColor, fTipo, soloNoLeidos, orden]);
   const [ultimaCorrida, setUltimaCorrida] = useState<{ corrida_at: string; total_expedientes: number | null; fuente: string | null } | null>(null);
   useEffect(() => {
     sbSelect<any>("robot_log", "select=corrida_at,total_expedientes,fuente&order=corrida_at.desc&limit=1").then((d) => setUltimaCorrida(d?.[0] ?? null)).catch(() => {});
@@ -94,6 +96,11 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
   const selExp = filas.find((f) => f.c.id === sel);
 
+  const porPagina = 20;
+  const totalPag = Math.max(1, Math.ceil(filas.length / porPagina));
+  const pag = Math.min(pagina, totalPag - 1);
+  const filasPag = filas.slice(pag * porPagina, pag * porPagina + porPagina);
+
   return (
     <div className="space-y-3">
       {ultimaCorrida && (
@@ -135,7 +142,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
             </div>
           </div>
           <div className="max-h-[560px] overflow-auto p-2">
-            {filas.length === 0 ? <p className="p-4 text-center text-sm text-muted-foreground">Sin expedientes.</p> : filas.map((f) => {
+            {filas.length === 0 ? <p className="p-4 text-center text-sm text-muted-foreground">Sin expedientes.</p> : filasPag.map((f) => {
               const fr = frescura(f.dias);
               const activo = f.c.id === sel;
               return (
@@ -155,9 +162,14 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
               );
             })}
           </div>
+          {filas.length > porPagina && (
+            <div className="flex items-center justify-between gap-2 border-t border-border p-2 text-xs">
+              <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={pag === 0} className="rounded-md border border-input px-2.5 py-1.5 disabled:opacity-40 hover:bg-muted">← Anterior</button>
+              <span className="text-muted-foreground">Página {pag + 1} de {totalPag} · {filas.length} exp.</span>
+              <button onClick={() => setPagina((p) => Math.min(totalPag - 1, p + 1))} disabled={pag >= totalPag - 1} className="rounded-md border border-input px-2.5 py-1.5 disabled:opacity-40 hover:bg-muted">Siguiente →</button>
+            </div>
+          )}
         </div>
-
-        {/* Histórico derecha */}
         <div className="rounded-xl border border-border bg-card">
           {!selExp ? (
             <div className="grid h-full min-h-[300px] place-items-center p-8 text-center text-sm text-muted-foreground">
