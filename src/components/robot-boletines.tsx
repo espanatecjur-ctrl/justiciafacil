@@ -24,7 +24,7 @@ export interface AcuerdoJudicial {
  */
 export function RobotBoletines({
   expedientes,
-  titulo = "Avance automático del robot",
+  titulo = "JUFA · avance automático",
 }: {
   expedientes?: (string | null)[];
   titulo?: string;
@@ -74,12 +74,12 @@ export function RobotBoletines({
             <p className="mt-1 text-sm text-white/70">Consultando el boletín…</p>
           ) : total === 0 ? (
             <p className="mt-1 text-sm text-white/75">
-              Sin movimientos nuevos en los expedientes de este módulo. El robot avisará en cuanto el boletín publique algo.
+              Sin movimientos nuevos en los expedientes de este módulo. JUFA avisará en cuanto el boletín publique algo.
             </p>
           ) : (
             <>
               <p className="mt-1 text-sm text-white/90">
-                El robot encontró <b>{total}</b> movimiento{total !== 1 ? "s" : ""}
+                JUFA encontró <b>{total}</b> movimiento{total !== 1 ? "s" : ""}
                 {urgentes > 0 && (
                   <> · <span className="text-amber-300">{urgentes} urgente{urgentes !== 1 ? "s" : ""}</span></>
                 )} en tus expedientes.
