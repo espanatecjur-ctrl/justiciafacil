@@ -46,6 +46,27 @@ const VEREDICTO_CLS: Record<string, string> = {
   PENDIENTE:      "bg-muted text-muted-foreground border-border",
 };
 
+// ---- Área actual (a qué unidad pertenece / quién la lleva hoy) ----
+const AREA_INFO: Record<string, string> = {
+  UCP:  "bg-[color:var(--teal)]/10 text-[color:var(--teal)] border-[color:var(--teal)]/30",
+  UCM:  "bg-indigo-50 text-indigo-800 border-indigo-200",
+  UDP:  "bg-purple-50 text-purple-800 border-purple-200",
+  URRJ: "bg-sky-50 text-sky-800 border-sky-200",
+};
+function normArea(u?: string | null): string {
+  const s = (u || "").toUpperCase();
+  if (s.includes("UDP")) return "UDP";
+  if (s.includes("UCM")) return "UCM";
+  if (s.includes("URRJ")) return "URRJ";
+  if (s.includes("UCP")) return "UCP";
+  return s.trim();
+}
+// si el dictamen ya pasó a Etapa B, el caso vive en UCM (aquí queda como antecedente)
+function areaActual(c: CasoJuridico, d?: DictamenRow): string {
+  if (d?.estado === "etapa_b") return "UCM";
+  return normArea(c.unidad) || "UCP";
+}
+
 const PAGE = 25;
 
 interface Seleccion { caso: CasoJuridico; dictamen: DictamenRow; pred?: PredFuente; tab: "requisitos" | "juridico" | "rppc"; }
@@ -101,8 +122,11 @@ function UCP() {
     return { ...REQ_VACIOS(), ...(d?.requisitos || {}) };
   };
 
+  // el registro de UCP NO muestra los casos de UDP
+  const baseUCP = useMemo(() => casos.filter((c) => normArea(c.unidad) !== "UDP"), [casos]);
+
   const stats = useMemo(() => {
-    const elegibles = casos.filter((c) => c.id && predPorCaso[c.id]);
+    const elegibles = baseUCP.filter((c) => c.id && predPorCaso[c.id]);
     let sinAbrir = 0, enReq = 0, listos = 0;
     for (const c of elegibles) {
       const d = dictPorCaso[c.id];
@@ -111,17 +135,17 @@ function UCP() {
     }
     return { total: elegibles.length, sinAbrir, enReq, listos };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [casos, predPorCaso, dictPorCaso]);
+  }, [baseUCP, predPorCaso, dictPorCaso]);
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return casos.filter((c) => {
+    return baseUCP.filter((c) => {
       if (modo === "dictaminables" && !(c.id && predPorCaso[c.id])) return false;
       if (!q) return true;
       return [c.expediente, c.cliente_nombre, c.direccion_garantia, c.juzgado]
         .some((v) => (v || "").toLowerCase().includes(q));
     });
-  }, [casos, predPorCaso, modo, busca]);
+  }, [baseUCP, predPorCaso, modo, busca]);
 
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
@@ -279,6 +303,7 @@ function UCP() {
                   <TableHead>Expediente</TableHead>
                   <TableHead>Garantía</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Área actual</TableHead>
                   <TableHead>Pre-dictamen</TableHead>
                   <TableHead>Requisitos</TableHead>
                   <TableHead>Estado</TableHead>
@@ -300,6 +325,19 @@ function UCP() {
                       <TableCell className="font-medium">{c.expediente || "—"}<div className="text-xs font-normal text-muted-foreground">{c.juzgado || ""}</div></TableCell>
                       <TableCell className="max-w-[200px] text-xs">{c.direccion_garantia || "—"}<div className="text-muted-foreground">{c.entidad || ""}</div></TableCell>
                       <TableCell className="text-xs">{c.cliente_nombre || c.cliente_codigo || "—"}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const a = areaActual(c, d);
+                          return (
+                            <div className="flex flex-col">
+                              <Badge variant="outline" className={`w-fit border ${AREA_INFO[a] || "bg-muted text-muted-foreground border-border"}`}>
+                                {a || "—"}{d?.estado === "etapa_b" ? " · antecedente" : ""}
+                              </Badge>
+                              {c.encargado_unidad && <span className="mt-0.5 text-[10px] text-muted-foreground">{c.encargado_unidad}</span>}
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>
                         {elegible
                           ? <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"><Scale className="h-3 w-3" /> POSITIVO</Badge>
