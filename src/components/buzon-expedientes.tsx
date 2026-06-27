@@ -230,14 +230,14 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
           )}
         </div>
       </div>
-      {agregar && selExp && <AgregarAcuerdoModal expediente={selExp.exp} juzgado={selExp.c.juzgado} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargar(); }} />}
+      {agregar && selExp && <AgregarAcuerdoModal expediente={selExp.exp} juzgado={selExp.c.juzgado} entidad={selExp.c.entidad} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargar(); }} />}
       {configBoletin && <ConfigBoletinModal caso={configBoletin} onClose={() => setConfigBoletin(null)} onGuardado={() => { const id = configBoletin.id; setConfigBoletin(null); sbSelect<CasoJuridico>("caso_juridico", `select=cve_distrito,cve_juzgado,nombre_juzgado&id=eq.${id}`).then((d) => { if (d?.[0]) setPatches((p) => ({ ...p, [id]: d[0] })); }).catch(() => {}); }} />}
       <BuscadorBoletin open={buscador} onClose={() => setBuscador(false)} />
     </div>
   );
 }
 
-function AgregarAcuerdoModal({ expediente, juzgado, onClose, onGuardado }: { expediente: string; juzgado?: string | null; onClose: () => void; onGuardado: () => void }) {
+function AgregarAcuerdoModal({ expediente, juzgado, entidad, onClose, onGuardado }: { expediente: string; juzgado?: string | null; entidad?: string | null; onClose: () => void; onGuardado: () => void }) {
   const [tipo, setTipo] = useState("Boletín");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [texto, setTexto] = useState("");
@@ -251,7 +251,7 @@ function AgregarAcuerdoModal({ expediente, juzgado, onClose, onGuardado }: { exp
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, {
         method: "POST", headers: wHeaders,
-        body: JSON.stringify({ expediente, juzgado: juzgado || null, fecha_acuerdo: fecha || null, tipo_acuerdo: tipo, texto: texto.trim(), urgente, leido: false, origen: "manual" }),
+        body: JSON.stringify({ expediente, juzgado: juzgado || null, entidad: entidad || "Sinaloa", fecha_acuerdo: fecha || null, tipo_acuerdo: tipo, texto: texto.trim(), urgente, leido: false, origen: "manual" }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       onGuardado();
