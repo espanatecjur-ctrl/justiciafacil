@@ -252,7 +252,7 @@ function URRJ() {
           <p className="text-base font-semibold">¿Cuál es la posición de DIIPA en este caso?</p>
           <p className="mb-4 text-sm text-muted-foreground">Cada posición tiene su propio recorrido de pre-dictamen.</p>
           {!puede("elaborar") && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">🔒 Tu rol no puede elaborar pre-dictámenes nuevos. Puedes consultar el historial de abajo.</div>}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } set("posicion", "Actor"); setVista("Actor"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
               <p className="font-semibold">Actor</p>
@@ -270,7 +270,7 @@ function URRJ() {
             </button>
           </div>
           <p className="mb-2 mt-5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Otros saneamientos</p>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button onClick={() => { if (!puede("elaborar")) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; } setVista("Contingencia"); }} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
               <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
               <p className="font-semibold">Contingencia inmobiliaria</p>
@@ -338,11 +338,11 @@ function URRJ() {
                 {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
               </select>
             </Campo>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Tipo de juicio"><select className={inp} value={d.tipoJuicio} onChange={(e) => set("tipoJuicio", e.target.value)}>{TIPOS_JUICIO.map((t) => <option key={t}>{t}</option>)}</select></Campo>
               <Campo label="Estado del juicio"><select className={inp} value={d.estado} onChange={(e) => set("estado", e.target.value)}>{ESTADOS_URRJ.map((t) => <option key={t}>{t}</option>)}</select></Campo>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Expediente"><input className={inp} value={d.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
               <Campo label="Juzgado"><input className={inp} value={d.juzgado} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
               <Campo label="Ubicación del inmueble"><input className={inp} value={d.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
@@ -356,7 +356,7 @@ function URRJ() {
         {paso === 1 && (
           <div className="space-y-4">
             <H titulo="1 · Verificación registral (RPP)" sub="Folio real y gravámenes. Lo primero y más importante." />
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Hipoteca inscrita y vigente?"><SiNo v={d.hipotecaInscrita} on={(x) => set("hipotecaInscrita", x)} /></Campo>
               <Campo label="Prelación"><select className={inp} value={d.prelacion} onChange={(e) => set("prelacion", e.target.value)}><option value="">—</option><option>Primer lugar</option><option>Hay acreedores anteriores</option></select></Campo>
               <Campo label="Propietario actual (según RPP)"><input className={inp} value={d.propietario} onChange={(e) => set("propietario", e.target.value)} /></Campo>
@@ -369,7 +369,7 @@ function URRJ() {
         {paso === 2 && (
           <div className="space-y-4">
             <H titulo="2 · Estado procesal real" sub="Lo que dice el expediente, no lo que dicen." />
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Etapa del juicio"><select className={inp} value={d.etapa} onChange={(e) => set("etapa", e.target.value)}><option value="">—</option><option>Admisión</option><option>Emplazamiento</option><option>Contestación</option><option>Pruebas</option><option>Sentencia</option><option>Ejecución</option><option>Remate</option></select></Campo>
               <Campo label="¿Sentencia firme a favor?"><SiNo v={d.sentenciaFirme} on={(x) => set("sentenciaFirme", x)} /></Campo>
               <Campo label="Situación"><select className={inp} value={d.situacion} onChange={(e) => set("situacion", e.target.value)}><option value="">—</option><option>En trámite</option><option>En ejecución</option><option>En amparo</option><option>Suspendido</option></select></Campo>
@@ -382,7 +382,7 @@ function URRJ() {
         {paso === 3 && (
           <div className="space-y-4">
             <H titulo="3 · Prescripción y caducidad" sub="El motor que más mata cesiones. Captura las fechas y el sistema calcula." />
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Fecha del último pago del acreditado"><input type="date" className={inp} value={d.ultimoPago} onChange={(e) => set("ultimoPago", e.target.value)} /></Campo>
               <Campo label="Tipo de acción"><select className={inp} value={d.tipoAccion} onChange={(e) => set("tipoAccion", e.target.value)}>{TIPOS_ACCION.map((t) => <option key={t.clave} value={t.clave}>{t.nombre}</option>)}</select></Campo>
               <Campo label="¿Está emplazado?"><SiNo v={d.emplazado} on={(x) => set("emplazado", x)} /></Campo>
@@ -392,7 +392,7 @@ function URRJ() {
             </div>
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">Ajustar plazos a mano (opcional)</summary>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Campo label="Plazo prescripción (años) — si quieres cambiarlo"><input type="number" className={inp} value={d.plazoPrescManual} onChange={(e) => set("plazoPrescManual", e.target.value)} placeholder="auto por ley" /></Campo>
                 <Campo label="Plazo caducidad (días) — si quieres cambiarlo"><input type="number" className={inp} value={d.plazoCaducManual} onChange={(e) => set("plazoCaducManual", e.target.value)} placeholder="auto por estado" /></Campo>
               </div>
@@ -405,7 +405,7 @@ function URRJ() {
         {paso === 4 && (
           <div className="space-y-4">
             <H titulo="4 · Posesión física y ocupantes" sub="Quién está en el inmueble y desde cuándo (alerta de usucapión)." />
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Quién posee el inmueble?"><select className={inp} value={d.quienPosee} onChange={(e) => set("quienPosee", e.target.value)}><option value="">—</option><option>El deudor</option><option>Inquilino</option><option>Tercero / invasor</option><option>Nadie</option></select></Campo>
               <Campo label="Posesión desde (fecha)"><input type="date" className={inp} value={d.inicioPosesion} onChange={(e) => set("inicioPosesion", e.target.value)} /></Campo>
               <Campo label="¿Tiene título aparente (buena fe)?"><SiNo v={d.buenaFe} on={(x) => set("buenaFe", x)} /></Campo>
@@ -418,7 +418,7 @@ function URRJ() {
         {paso === 5 && (
           <div className="space-y-4">
             <H titulo="5 · Cargas ocultas" sub="Todo esto se hereda con el inmueble y se come el margen. En pesos." />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Predial atrasado"><input type="number" className={inp} value={d.predial} onChange={(e) => set("predial", e.target.value)} /></Campo>
               <Campo label="Agua"><input type="number" className={inp} value={d.agua} onChange={(e) => set("agua", e.target.value)} /></Campo>
               <Campo label="Cuotas de condominio"><input type="number" className={inp} value={d.condominio} onChange={(e) => set("condominio", e.target.value)} /></Campo>
@@ -433,7 +433,7 @@ function URRJ() {
           <div className="space-y-4">
             <H titulo="6 · Cálculo de intereses" sub="Solo intereses de la deuda. La valuación y el precio los hace Administración." />
             <p className="text-xs font-medium text-muted-foreground">Cálculo de la deuda (año comercial 360 días, Art. 362 CCom)</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Campo label="Capital"><input type="number" className={inp} value={d.capital} onChange={(e) => set("capital", e.target.value)} /></Campo>
               <Campo label="Tasa ordinaria (% anual)"><input type="number" className={inp} value={d.tasaOrd} onChange={(e) => set("tasaOrd", e.target.value)} /></Campo>
               <Campo label="Tasa moratoria (% anual)"><input type="number" className={inp} value={d.tasaMor} onChange={(e) => set("tasaMor", e.target.value)} /></Campo>
@@ -468,7 +468,7 @@ function URRJ() {
               <label className="mb-1 block text-sm font-medium">Anotaciones del abogado (observaciones a mano)</label>
               <textarea value={d.anotacionesHumanas} onChange={(e) => set("anotacionesHumanas", e.target.value)} rows={4} placeholder="Escribe aquí cualquier observación, contexto o recomendación que el sistema no calcula…" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puede("firmar_elabora")} />
               <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puede("validar")} />
             </div>
@@ -498,7 +498,7 @@ function URRJ() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={d.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
                     <Campo label="Costos (litigio/desalojo/regularización)"><input type="number" className={inp} value={d.costosOperativos} onChange={(e) => set("costosOperativos", e.target.value)} /></Campo>
                     <Campo label="Precio de la cesión"><input type="number" className={inp} value={d.precioCesion} onChange={(e) => set("precioCesion", e.target.value)} /></Campo>
