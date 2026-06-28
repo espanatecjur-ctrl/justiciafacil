@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Search, Scale, AlertTriangle, Gavel, Archive, FilePlus } from "lucide-react";
 import { FilaAcciones } from "@/components/fila-acciones";
 import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
+import { ValidarJuzgado } from "@/components/validar-juzgado";
 
 export const Route = createFileRoute("/ucm")({
   head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
@@ -183,6 +184,7 @@ function UcmPage() {
                   <td className="px-4 py-3">
                     <p className="max-w-[260px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p>
                     <p className="text-xs text-muted-foreground">{c.distrito_judicial || ""}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+                    <div className="mt-1"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium">{c.materia || "—"}</p>
@@ -232,6 +234,7 @@ function UcmPage() {
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+              <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 text-xs"><span className="font-medium">{c.materia || "—"}</span>{c.via_procesal ? ` · ${c.via_procesal}` : ""}{c.etapa_actual ? ` · ${c.etapa_actual}` : ""}</p>
               {c.nota_adicional && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{c.nota_adicional}</p>}
             </Card>
