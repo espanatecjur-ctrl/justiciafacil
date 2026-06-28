@@ -1,19 +1,18 @@
 // ============================================================
 // PanelSeguimiento · cuadro de abajo de la ficha (común a los módulos)
 // ------------------------------------------------------------
-// Junta en un solo lugar el "seguimiento" del expediente:
-//   · TAREAS    (tabla `tarea`): se crean, se asignan a un colaborador
-//                (por su correo + rol), y se marcan pendiente → hecha.
-//   · ACTUACIONES: las que ya trae el boletín (acuerdo_judicial), solo verlas.
-//   · EVIDENCIA: archivo/foto subido al expediente (tipo de tarea 'evidencia').
-// El botón "Agregar" es un banner ELEVADO arriba del panel.
-// Parte 1: vive al fondo de la ficha UCP. (Parte 2: Inicio · Parte 3: reusar.)
+// TAREAS editables que se asignan a un colaborador (correo + rol)
+// y se marcan pendiente → hecha. El botón "Agregar" (banner elevado)
+// crea tareas y también evidencias. Las evidencias y las actuaciones
+// del boletín se MUESTRAN en el panel de Antecedentes (solo lectura),
+// no aquí, para no duplicar. Parte 2: widget "Mis tareas" del Inicio.
+// Acepta `caso` completo o solo `expediente` (reusable en cualquier módulo).
 // ============================================================
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { getAuth } from "@/lib/auth";
-import { ClipboardList, Plus, Gavel, Paperclip, Loader2, X, CheckSquare, Square, User } from "lucide-react";
+import { ClipboardList, Plus, Paperclip, Loader2, X, CheckSquare, Square, User } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -25,7 +24,6 @@ export interface Tarea {
   fecha_limite: string | null; estado: string; evidencia_url: string | null;
   creado_por: string | null; created_at: string;
 }
-interface Actuacion { id: string; expediente: string | null; fecha_acuerdo: string | null; tipo_acuerdo: string | null; texto: string | null; origen: string | null; }
 interface Colaborador { id: string; nombre: string; rol: string | null; correo: string | null; }
 
 const fmt = (f?: string | null) => {
@@ -34,10 +32,10 @@ const fmt = (f?: string | null) => {
   return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
 };
 
-export function PanelSeguimiento({ caso }: { caso: CasoJuridico }) {
-  const exp = (caso.expediente || "").trim();
+export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; expediente?: string }) {
+  const exp = (expediente ?? caso?.expediente ?? "").trim();
+  const casoId = (caso as any)?.id ?? null;
   const [tareas, setTareas] = useState<Tarea[]>([]);
-  const [actuaciones, setActuaciones] = useState<Actuacion[]>([]);
   const [colabs, setColabs] = useState<Colaborador[]>([]);
   const [agregar, setAgregar] = useState(false);
   const [correoYo, setCorreoYo] = useState<string | null>(null);
@@ -48,13 +46,13 @@ export function PanelSeguimiento({ caso }: { caso: CasoJuridico }) {
   };
   useEffect(() => {
     cargarTareas();
-    if (exp) sbSelect<Actuacion>("acuerdo_judicial", `select=id,expediente,fecha_acuerdo,tipo_acuerdo,texto,origen&expediente=eq.${encodeURIComponent(exp)}&order=fecha_acuerdo.desc&limit=20`).then(setActuaciones).catch(() => setActuaciones([]));
     sbSelect<Colaborador>("colaboradores", "select=id,nombre,rol,correo&activo=eq.true&order=nombre").then(setColabs).catch(() => setColabs([]));
     (async () => { try { const a = await getAuth(); const { data } = await a.auth.getSession(); setCorreoYo(data.session?.user?.email ?? null); } catch { /* sin sesión */ } })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exp]);
 
   const pendientes = tareas.filter((t) => t.estado !== "hecha" && t.tipo !== "evidencia").length;
+  const soloTareas = tareas.filter((t) => t.tipo !== "evidencia");
 
   const toggle = async (t: Tarea) => {
     const nuevo = t.estado === "hecha" ? "pendiente" : "hecha";
@@ -66,15 +64,15 @@ export function PanelSeguimiento({ caso }: { caso: CasoJuridico }) {
     <div className="mt-6 border-t-2 border-dashed border-border pt-4">
       {/* banner ELEVADO de agregar */}
       <div className="mb-3 flex items-center gap-2 rounded-xl border-2 border-[color:var(--teal)]/40 bg-card p-3 shadow-md">
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><ClipboardList className="h-4 w-4" /> Seguimiento · tareas y actuaciones</span>
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><ClipboardList className="h-4 w-4" /> Seguimiento · tareas</span>
         {pendientes > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">{pendientes} pendiente{pendientes === 1 ? "" : "s"}</span>}
         <button onClick={() => setAgregar(true)} className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-4 w-4" /> Agregar</button>
       </div>
 
-      {/* tareas + evidencia */}
+      {/* tareas */}
       <div className="space-y-2">
-        {tareas.length === 0 && <p className="text-xs text-muted-foreground">Sin tareas todavía. Agrega la primera (ej. "Visita al juzgado a revisar expediente").</p>}
-        {tareas.map((t) => {
+        {soloTareas.length === 0 && <p className="text-xs text-muted-foreground">Sin tareas todavía. Agrega la primera (ej. "Visita al juzgado a revisar expediente").</p>}
+        {soloTareas.map((t) => {
           const hecha = t.estado === "hecha";
           const esEvid = t.tipo === "evidencia";
           return (
@@ -99,29 +97,12 @@ export function PanelSeguimiento({ caso }: { caso: CasoJuridico }) {
         })}
       </div>
 
-      {/* actuaciones del boletín (solo ver) */}
-      {actuaciones.length > 0 && (
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold text-muted-foreground"><Gavel className="mr-1 inline h-3.5 w-3.5" /> Actuaciones (del boletín)</p>
-          <div className="space-y-1.5">
-            {actuaciones.map((a) => (
-              <div key={a.id} className="rounded-lg border border-border bg-muted/20 p-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm">{a.texto || "(sin texto)"}</p>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">{fmt(a.fecha_acuerdo)} · {a.origen === "robot" ? "🤖" : "✍️"}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {agregar && <AgregarModal caso={caso} exp={exp} colabs={colabs} creadoPor={correoYo} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
+      {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
     </div>
   );
 }
 
-function AgregarModal({ caso, exp, colabs, creadoPor, onClose, onGuardado }: { caso: CasoJuridico; exp: string; colabs: Colaborador[]; creadoPor: string | null; onClose: () => void; onGuardado: () => void }) {
+function AgregarModal({ casoId, exp, colabs, creadoPor, onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; onClose: () => void; onGuardado: () => void }) {
   const [tipo, setTipo] = useState<"tarea" | "evidencia">("tarea");
   const [titulo, setTitulo] = useState("");
   const [responsableId, setResponsableId] = useState("");
@@ -145,7 +126,7 @@ function AgregarModal({ caso, exp, colabs, creadoPor, onClose, onGuardado }: { c
       }
       const c = colabs.find((x) => x.id === responsableId);
       const body = {
-        caso_id: (caso as any).id || null, expediente: exp || null,
+        caso_id: casoId, expediente: exp || null,
         tipo, titulo: titulo.trim(),
         responsable_correo: c?.correo || null, responsable_nombre: c?.nombre || null, responsable_rol: c?.rol || null,
         fecha_limite: tipo === "tarea" && fecha ? fecha : null,
