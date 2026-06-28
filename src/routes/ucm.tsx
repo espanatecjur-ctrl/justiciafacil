@@ -1,16 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { sbSelect, type CasoJuridico } from "@/lib/supabase";
+import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { RobotBoletines } from "@/components/robot-boletines";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Scale, AlertTriangle, Gavel } from "lucide-react";
+import { Search, Scale, AlertTriangle, Gavel, MoreVertical, FileSearch, ClipboardPlus, Archive, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/ucm")({
   head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
   component: UcmPage,
 });
+
+const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
 function prioridadClase(p: string | null) {
   const v = (p || "").toUpperCase();
@@ -20,7 +22,48 @@ function prioridadClase(p: string | null) {
   return "bg-muted text-muted-foreground";
 }
 
+// ⚠️ rojo si al juicio le falta lo mínimo (juzgado para el robot, expediente o etapa)
+function leFalta(c: CasoJuridico): boolean {
+  const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
+  return sinJuzgado || !c.expediente || !c.etapa_actual;
+}
+
+// Botón ⋮ con menú (Abrir ficha · Agregar evidencia · Archivar · Borrar)
+function RowMenu({ abierto, onToggle, onAbrir, onBorrar }: { abierto: boolean; onToggle: () => void; onAbrir: () => void; onBorrar: () => void }) {
+  return (
+    <div className="relative">
+      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="grid h-8 w-8 place-items-center rounded-md hover:bg-muted" title="Acciones">
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => onToggle()} />
+          <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
+            <button onClick={onAbrir} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+              <FileSearch className="h-4 w-4 text-[color:var(--teal)]" /> Abrir ficha
+            </button>
+            <button disabled className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-muted-foreground/60">
+              <span className="flex items-center gap-2"><ClipboardPlus className="h-4 w-4" /> Agregar evidencia</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">Parte 2</span>
+            </button>
+            <button disabled className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-muted-foreground/60">
+              <span className="flex items-center gap-2"><Archive className="h-4 w-4" /> Archivar</span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">Parte 2</span>
+            </button>
+            <div className="border-t border-border" />
+            <button onClick={onBorrar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+              <Trash2 className="h-4 w-4" /> Borrar
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function UcmPage() {
+  const navigate = useNavigate();
+  const [menuId, setMenuId] = useState<string | null>(null);
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +71,17 @@ function UcmPage() {
   const [q, setQ] = useState("");
   const [entidad, setEntidad] = useState("todas");
   const [prioridad, setPrioridad] = useState("todas");
+
+  const abrirFicha = (c: CasoJuridico) => { setMenuId(null); navigate({ to: "/expediente", search: { id: c.id } }); };
+  const borrar = async (c: CasoJuridico) => {
+    setMenuId(null);
+    if (!confirm(`¿Borrar el expediente ${c.expediente || "(sin número)"}? Esta acción no se puede deshacer.`)) return;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "DELETE", headers: wHeaders });
+      if (!r.ok) throw new Error(String(r.status));
+      setCasos((p) => p.filter((x) => x.id !== c.id));
+    } catch (e: any) { alert("No se pudo borrar: " + e.message); }
+  };
 
   useEffect(() => {
     sbSelect<CasoJuridico>("caso_juridico", "select=*&order=prioridad.asc")
@@ -121,13 +175,17 @@ function UcmPage() {
                 <th className="text-left px-4 py-2.5">Etapa actual</th>
                 <th className="text-left px-4 py-2.5">Prioridad</th>
                 <th className="text-left px-4 py-2.5">Seguimiento</th>
+                <th className="px-2 py-2.5 w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {paginados.map((c) => (
                 <tr key={c.id} className="hover:bg-muted/30">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-[color:var(--teal)]">{c.expediente || "— sin expediente —"}</p>
+                    <p className="flex items-center gap-1.5 font-semibold text-[color:var(--teal)]">
+                      {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
+                      {c.expediente || "— sin expediente —"}
+                    </p>
                     <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
                   </td>
                   <td className="px-4 py-3">
@@ -145,13 +203,16 @@ function UcmPage() {
                   <td className="px-4 py-3 text-muted-foreground">
                     <p className="max-w-[260px] truncate" title={c.nota_adicional || ""}>{c.nota_adicional || "—"}</p>
                   </td>
+                  <td className="px-2 py-3 text-right">
+                    <RowMenu abierto={menuId === c.id} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onBorrar={() => borrar(c)} />
+                  </td>
                 </tr>
               ))}
               {!cargando && filtrados.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Sin resultados con esos filtros.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin resultados con esos filtros.</td></tr>
               )}
               {cargando && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>
               )}
             </tbody>
           </table>
@@ -168,8 +229,14 @@ function UcmPage() {
           paginados.map((c) => (
             <Card key={c.id} className="legal-card p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate font-semibold text-[color:var(--teal)]">{c.expediente || "— sin expediente —"}</p>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
+                <p className="flex min-w-0 items-center gap-1.5 truncate font-semibold text-[color:var(--teal)]">
+                  {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
+                  <span className="truncate">{c.expediente || "— sin expediente —"}</span>
+                </p>
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
+                  <RowMenu abierto={menuId === c.id} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onBorrar={() => borrar(c)} />
+                </div>
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
