@@ -13,7 +13,7 @@ function Boletines() {
       <PageHeader
         eyebrow="Procesal"
         title="Boletín Judicial"
-        description="Busca cualquier expediente en el boletín del Tribunal de Sinaloa, en vivo. No vigila nada: solo consulta lo que pidas."
+        description="Consulta cualquier expediente en vivo en los boletines de Sinaloa, Baja California Sur (La Paz) y Jalisco (Zona Metropolitana y Foráneos). Solo consulta lo que pidas; no vigila nada."
       />
       <BuscadorBoletin />
     </div>
