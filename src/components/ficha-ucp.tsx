@@ -104,6 +104,8 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
   const [hitos, setHitos] = useState<HitosJuridico>(() => dictamen.juridico?.hitos || {});
   // posición confirmada / recorrido embebido
   const [vistaPos, setVistaPos] = useState<VistaPosicion>("elegir");
+  // posición tentativa elegida en el banner (antes de confirmar)
+  const [posSel, setPosSel] = useState<Exclude<VistaPosicion, "elegir">>("Actor");
   // resultados que el recorrido va calculando en vivo (los 4 motores)
   const [motoresRecorrido, setMotoresRecorrido] = useState<ResultadosActor | null>(null);
   // cambios a mano que hizo el abogado sobre los hitos de motor (ganan al cálculo)
@@ -263,18 +265,61 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
 
         {/* ---------- JURÍDICO (10 hitos) ---------- */}
         <TabsContent value="juridico" className="mt-4 space-y-4">
+          {/* BANNER FIJO: Confirmar posición (sigue al hacer scroll) */}
+          <div className="sticky top-0 z-20 rounded-xl border-2 border-[color:var(--teal)]/40 bg-card/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+            {vistaPos === "elegir" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Confirmar posición</span>
+                <select value={posSel} onChange={(e) => setPosSel(e.target.value as Exclude<VistaPosicion, "elegir">)} className="rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <option value="Actor">Actor</option>
+                  <option value="Demandado">Demandado</option>
+                  <option value="Sucesorio">Sucesorio</option>
+                  <option value="Contingencia">Contingencia</option>
+                  <option value="Tramites">Trámites</option>
+                </select>
+                <button onClick={() => setVistaPos(posSel)} className="rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: "#0C5C46" }}>Confirmar</button>
+                <span className="text-xs text-muted-foreground">Por ahora Actor se engancha a los 10 hitos.</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Posición confirmada:</span>
+                <span className="rounded-full bg-[color:var(--teal)]/10 px-3 py-1 text-sm font-medium text-[color:var(--teal)]">{vistaPos}</span>
+                <button onClick={() => setVistaPos("elegir")} className="ml-auto rounded-md border border-input px-3 py-1.5 text-xs hover:bg-muted">Cambiar posición</button>
+              </div>
+            )}
+          </div>
+
           {!reqOK && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               Faltan requisitos de entrada. Puedes ir capturando, pero el dictamen no debe cerrarse hasta tener los 7.
             </div>
           )}
 
-          {/* MOTORES (hitos 2,3,4,10) — se calculan desde el recorrido por posición */}
+          {/* RECORRIDO (dictaminador) — debajo del banner */}
+          {vistaPos === "elegir" ? (
+            <Card className="legal-card">
+              <CardContent className="grid min-h-[120px] place-items-center p-6 text-center text-sm text-muted-foreground">
+                <span><Calculator className="mx-auto mb-2 h-6 w-6 opacity-40" />Confirma la posición arriba para desplegar el recorrido.</span>
+              </CardContent>
+            </Card>
+          ) : (
+            <DictaminadorPosicion
+              casos={[caso]}
+              vista={vistaPos}
+              onVista={setVistaPos}
+              precargar={precargaRecorrido}
+              onVolver={() => setVistaPos("elegir")}
+              puedeAdmin={puedeAdmin}
+              onResultados={setMotoresRecorrido}
+            />
+          )}
+
+          {/* INDICADORES (hitos 2,3,4,10) */}
           <Card className="legal-card">
             <CardContent className="space-y-4 p-4">
               <div className="flex items-center gap-2">
                 <Scale className="h-4 w-4 text-[color:var(--teal)]" />
-                <p className="text-sm font-semibold">Hitos de motor · desde el recorrido</p>
+                <p className="text-sm font-semibold">Indicadores · hitos de motor</p>
                 <span className="text-xs text-muted-foreground">(2 Prescripción · 3 Caducidad · 4 Usucapión · 10 Viabilidad)</span>
               </div>
 
@@ -309,27 +354,8 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
                   );
                 })}
                 {!motoresRecorrido && (
-                  <p className="text-xs text-muted-foreground">Aún no confirmas la posición. Confírmala abajo y llena el recorrido para que estos 4 hitos se calculen solos.</p>
+                  <p className="text-xs text-muted-foreground">Aún no confirmas la posición. Confírmala arriba y llena el recorrido para que estos 4 hitos se calculen solos.</p>
                 )}
-              </div>
-
-              {/* Confirmar posición + recorrido embebido */}
-              <div className="rounded-lg border border-dashed border-border p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <Calculator className="h-4 w-4 text-[color:var(--teal)]" />
-                  <p className="text-sm font-semibold">Confirmar posición y llenar el recorrido</p>
-                </div>
-                <DictaminadorPosicion
-                  casos={[caso]}
-                  vista={vistaPos}
-                  onVista={setVistaPos}
-                  precargar={precargaRecorrido}
-                  onVolver={() => setVistaPos("elegir")}
-                  puedeAdmin={puedeAdmin}
-                  onResultados={setMotoresRecorrido}
-                  titulo="Confirmar posición"
-                  subtitulo="Elige la posición de DIIPA. Por ahora Actor se engancha a los 10 hitos; las demás corren el recorrido."
-                />
               </div>
             </CardContent>
           </Card>
