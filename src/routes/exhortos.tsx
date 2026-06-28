@@ -5,7 +5,8 @@ import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/s
 import { NuevoExhortoModal } from "@/components/nuevo-exhorto";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Send, AlertTriangle, Plus, MoreVertical, FileSearch, ClipboardPlus, Archive, Trash2 } from "lucide-react";
+import { FilaAcciones } from "@/components/fila-acciones";
+import { Search, Send, AlertTriangle, Plus, Archive } from "lucide-react";
 
 export const Route = createFileRoute("/exhortos")({
   head: () => ({ meta: [{ title: "Exhortos — JusticiaFácil" }] }),
@@ -31,31 +32,8 @@ const fmt = (s: string | null | undefined) => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 };
 
-function RowMenu({ abierto, archivado, onToggle, onAbrir, onEvidencia, onArchivar, onBorrar }: { abierto: boolean; archivado: boolean; onToggle: () => void; onAbrir: () => void; onEvidencia: () => void; onArchivar: () => void; onBorrar: () => void }) {
-  return (
-    <div className="relative">
-      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="grid h-8 w-8 place-items-center rounded-md hover:bg-muted" title="Acciones">
-        <MoreVertical className="h-4 w-4" />
-      </button>
-      {abierto && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => onToggle()} />
-          <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
-            <button onClick={onAbrir} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileSearch className="h-4 w-4 text-[color:var(--teal)]" /> Abrir ficha</button>
-            <button onClick={onEvidencia} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><ClipboardPlus className="h-4 w-4 text-[color:var(--teal)]" /> Agregar evidencia</button>
-            <button onClick={onArchivar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-4 w-4" /> {archivado ? "Desarchivar" : "Archivar"}</button>
-            <div className="border-t border-border" />
-            <button onClick={onBorrar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /> Borrar</button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 function ExhortosPage() {
   const navigate = useNavigate();
-  const [menuId, setMenuId] = useState<string | null>(null);
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -71,10 +49,9 @@ function ExhortosPage() {
   };
   useEffect(() => { cargar(); }, []);
 
-  const abrirFicha = (c: CasoJuridico) => { setMenuId(null); navigate({ to: "/expediente", search: { id: c.id, nueva: false } }); };
-  const irEvidencia = (c: CasoJuridico) => { setMenuId(null); navigate({ to: "/expediente", search: { id: c.id, nueva: true } }); };
+  const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: false } }); };
+  const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true } }); };
   const archivar = async (c: CasoJuridico) => {
-    setMenuId(null);
     const nuevo = !c.archivado;
     try {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "PATCH", headers: wHeaders, body: JSON.stringify({ archivado: nuevo }) });
@@ -83,7 +60,6 @@ function ExhortosPage() {
     } catch (e: any) { alert("No se pudo archivar: " + e.message); }
   };
   const borrar = async (c: CasoJuridico) => {
-    setMenuId(null);
     if (!confirm(`¿Borrar el exhorto ${c.folio || c.expediente || "(sin folio)"}?`)) return;
     try {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "DELETE", headers: wHeaders });
@@ -160,7 +136,7 @@ function ExhortosPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {paginados.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/30">
+                <tr key={c.id} onClick={() => abrirFicha(c)} className="cursor-pointer hover:bg-muted/30">
                   <td className="px-4 py-3">
                     <p className="flex items-center gap-1.5 font-semibold text-[color:var(--teal)]">
                       {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
@@ -175,8 +151,8 @@ function ExhortosPage() {
                   <td className="px-4 py-3"><p className="max-w-[200px] truncate" title={c.diligencia || ""}>{c.diligencia || "—"}</p></td>
                   <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tono[(c.estatus_general || "").toUpperCase()] || "bg-muted text-muted-foreground"}`}>{c.estatus_general || "—"}</span></td>
                   <td className="px-4 py-3 tabular-nums">{fmt(c.fecha_vence)}</td>
-                  <td className="px-2 py-3 text-right">
-                    <RowMenu abierto={menuId === c.id} archivado={!!c.archivado} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
+                  <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <FilaAcciones archivado={!!c.archivado} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                   </td>
                 </tr>
               ))}
@@ -195,7 +171,7 @@ function ExhortosPage() {
           <Card className="legal-card p-6 text-center text-sm text-muted-foreground">Sin exhortos.</Card>
         ) : (
           paginados.map((c) => (
-            <Card key={c.id} className="legal-card p-3">
+            <Card key={c.id} onClick={() => abrirFicha(c)} className="legal-card cursor-pointer p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="flex min-w-0 items-center gap-1.5 truncate font-semibold text-[color:var(--teal)]">
                   {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
@@ -203,7 +179,7 @@ function ExhortosPage() {
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tono[(c.estatus_general || "").toUpperCase()] || "bg-muted text-muted-foreground"}`}>{c.estatus_general || "—"}</span>
-                  <RowMenu abierto={menuId === c.id} archivado={!!c.archivado} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
+                  <FilaAcciones archivado={!!c.archivado} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                 </div>
               </div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado_origen || "—"} → {c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
