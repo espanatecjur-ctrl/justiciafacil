@@ -43,7 +43,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPuede(p.acciones)); }, []);
   const can = (a: string) => puede.length === 0 || puede.includes(a);
   const navigate = useNavigate();
-  const abrirFicha = (f: Fila) => navigate({ to: "/ficha", search: { id: f.id } });
+  const abrirFicha = (_f: Fila) => navigate({ to: "/ucp" });
 
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&vigente=eq.true&order=created_at.desc&limit=500`, { headers })
