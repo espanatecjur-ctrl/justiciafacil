@@ -10,12 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UrrjRouteImport } from './routes/urrj'
+import { Route as UdpRouteImport } from './routes/udp'
 import { Route as UcpRouteImport } from './routes/ucp'
+import { Route as UcmRouteImport } from './routes/ucm'
 import { Route as TramitesRouteImport } from './routes/tramites'
 import { Route as RecursosRouteImport } from './routes/recursos'
-import { Route as HitosRouteImport } from './routes/hitos'
 import { Route as ExhortosRouteImport } from './routes/exhortos'
 import { Route as DictamenIaRouteImport } from './routes/dictamen-ia'
+import { Route as ControlDemandasRouteImport } from './routes/control-demandas'
+import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as ConectoresRouteImport } from './routes/conectores'
 import { Route as BoletinesRouteImport } from './routes/boletines'
 import { Route as AmparosRouteImport } from './routes/amparos'
@@ -30,9 +33,19 @@ const UrrjRoute = UrrjRouteImport.update({
   path: '/urrj',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UdpRoute = UdpRouteImport.update({
+  id: '/udp',
+  path: '/udp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UcpRoute = UcpRouteImport.update({
   id: '/ucp',
   path: '/ucp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UcmRoute = UcmRouteImport.update({
+  id: '/ucm',
+  path: '/ucm',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TramitesRoute = TramitesRouteImport.update({
@@ -45,11 +58,6 @@ const RecursosRoute = RecursosRouteImport.update({
   path: '/recursos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const HitosRoute = HitosRouteImport.update({
-  id: '/hitos',
-  path: '/hitos',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ExhortosRoute = ExhortosRouteImport.update({
   id: '/exhortos',
   path: '/exhortos',
@@ -58,6 +66,16 @@ const ExhortosRoute = ExhortosRouteImport.update({
 const DictamenIaRoute = DictamenIaRouteImport.update({
   id: '/dictamen-ia',
   path: '/dictamen-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControlDemandasRoute = ControlDemandasRouteImport.update({
+  id: '/control-demandas',
+  path: '/control-demandas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracionRoute = ConfiguracionRouteImport.update({
+  id: '/configuracion',
+  path: '/configuracion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConectoresRoute = ConectoresRouteImport.update({
@@ -106,12 +124,15 @@ export interface FileRoutesByFullPath {
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
   '/conectores': typeof ConectoresRoute
+  '/configuracion': typeof ConfiguracionRoute
+  '/control-demandas': typeof ControlDemandasRoute
   '/dictamen-ia': typeof DictamenIaRoute
   '/exhortos': typeof ExhortosRoute
-  '/hitos': typeof HitosRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
+  '/ucm': typeof UcmRoute
   '/ucp': typeof UcpRoute
+  '/udp': typeof UdpRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
@@ -123,12 +144,15 @@ export interface FileRoutesByTo {
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
   '/conectores': typeof ConectoresRoute
+  '/configuracion': typeof ConfiguracionRoute
+  '/control-demandas': typeof ControlDemandasRoute
   '/dictamen-ia': typeof DictamenIaRoute
   '/exhortos': typeof ExhortosRoute
-  '/hitos': typeof HitosRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
+  '/ucm': typeof UcmRoute
   '/ucp': typeof UcpRoute
+  '/udp': typeof UdpRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
@@ -141,12 +165,15 @@ export interface FileRoutesById {
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
   '/conectores': typeof ConectoresRoute
+  '/configuracion': typeof ConfiguracionRoute
+  '/control-demandas': typeof ControlDemandasRoute
   '/dictamen-ia': typeof DictamenIaRoute
   '/exhortos': typeof ExhortosRoute
-  '/hitos': typeof HitosRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
+  '/ucm': typeof UcmRoute
   '/ucp': typeof UcpRoute
+  '/udp': typeof UdpRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
@@ -160,12 +187,15 @@ export interface FileRouteTypes {
     | '/amparos'
     | '/boletines'
     | '/conectores'
+    | '/configuracion'
+    | '/control-demandas'
     | '/dictamen-ia'
     | '/exhortos'
-    | '/hitos'
     | '/recursos'
     | '/tramites'
+    | '/ucm'
     | '/ucp'
+    | '/udp'
     | '/urrj'
     | '/contratos/editor'
     | '/expedientes/$id'
@@ -177,12 +207,15 @@ export interface FileRouteTypes {
     | '/amparos'
     | '/boletines'
     | '/conectores'
+    | '/configuracion'
+    | '/control-demandas'
     | '/dictamen-ia'
     | '/exhortos'
-    | '/hitos'
     | '/recursos'
     | '/tramites'
+    | '/ucm'
     | '/ucp'
+    | '/udp'
     | '/urrj'
     | '/contratos/editor'
     | '/expedientes/$id'
@@ -194,12 +227,15 @@ export interface FileRouteTypes {
     | '/amparos'
     | '/boletines'
     | '/conectores'
+    | '/configuracion'
+    | '/control-demandas'
     | '/dictamen-ia'
     | '/exhortos'
-    | '/hitos'
     | '/recursos'
     | '/tramites'
+    | '/ucm'
     | '/ucp'
+    | '/udp'
     | '/urrj'
     | '/contratos/editor'
     | '/expedientes/$id'
@@ -212,12 +248,15 @@ export interface RootRouteChildren {
   AmparosRoute: typeof AmparosRoute
   BoletinesRoute: typeof BoletinesRoute
   ConectoresRoute: typeof ConectoresRoute
+  ConfiguracionRoute: typeof ConfiguracionRoute
+  ControlDemandasRoute: typeof ControlDemandasRoute
   DictamenIaRoute: typeof DictamenIaRoute
   ExhortosRoute: typeof ExhortosRoute
-  HitosRoute: typeof HitosRoute
   RecursosRoute: typeof RecursosRoute
   TramitesRoute: typeof TramitesRoute
+  UcmRoute: typeof UcmRoute
   UcpRoute: typeof UcpRoute
+  UdpRoute: typeof UdpRoute
   UrrjRoute: typeof UrrjRoute
   ContratosEditorRoute: typeof ContratosEditorRoute
   ExpedientesIdRoute: typeof ExpedientesIdRoute
@@ -234,11 +273,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UrrjRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/udp': {
+      id: '/udp'
+      path: '/udp'
+      fullPath: '/udp'
+      preLoaderRoute: typeof UdpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ucp': {
       id: '/ucp'
       path: '/ucp'
       fullPath: '/ucp'
       preLoaderRoute: typeof UcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ucm': {
+      id: '/ucm'
+      path: '/ucm'
+      fullPath: '/ucm'
+      preLoaderRoute: typeof UcmRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tramites': {
@@ -255,13 +308,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecursosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/hitos': {
-      id: '/hitos'
-      path: '/hitos'
-      fullPath: '/hitos'
-      preLoaderRoute: typeof HitosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/exhortos': {
       id: '/exhortos'
       path: '/exhortos'
@@ -274,6 +320,20 @@ declare module '@tanstack/react-router' {
       path: '/dictamen-ia'
       fullPath: '/dictamen-ia'
       preLoaderRoute: typeof DictamenIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/control-demandas': {
+      id: '/control-demandas'
+      path: '/control-demandas'
+      fullPath: '/control-demandas'
+      preLoaderRoute: typeof ControlDemandasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracion': {
+      id: '/configuracion'
+      path: '/configuracion'
+      fullPath: '/configuracion'
+      preLoaderRoute: typeof ConfiguracionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/conectores': {
@@ -340,12 +400,15 @@ const rootRouteChildren: RootRouteChildren = {
   AmparosRoute: AmparosRoute,
   BoletinesRoute: BoletinesRoute,
   ConectoresRoute: ConectoresRoute,
+  ConfiguracionRoute: ConfiguracionRoute,
+  ControlDemandasRoute: ControlDemandasRoute,
   DictamenIaRoute: DictamenIaRoute,
   ExhortosRoute: ExhortosRoute,
-  HitosRoute: HitosRoute,
   RecursosRoute: RecursosRoute,
   TramitesRoute: TramitesRoute,
+  UcmRoute: UcmRoute,
   UcpRoute: UcpRoute,
+  UdpRoute: UdpRoute,
   UrrjRoute: UrrjRoute,
   ContratosEditorRoute: ContratosEditorRoute,
   ExpedientesIdRoute: ExpedientesIdRoute,
