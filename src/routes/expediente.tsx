@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
 import {
-  ArrowLeft, Loader2, AlertTriangle, FileText, Landmark, Gavel, Scale,
-  DollarSign, Signature, ClipboardList, Megaphone, Lightbulb, Lock,
+  ArrowLeft, Loader2, AlertTriangle, Landmark, Gavel, Scale,
+  DollarSign, Signature, Megaphone, Lightbulb, Lock,
 } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -20,7 +21,10 @@ interface Acuerdo {
 }
 
 export const Route = createFileRoute("/expediente")({
-  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    id: typeof s.id === "string" ? s.id : undefined,
+    nueva: s.nueva === true || s.nueva === "true",
+  }),
   head: () => ({ meta: [{ title: "Ficha del expediente — JusticiaFácil" }] }),
   component: FichaExpedientePage,
 });
@@ -103,7 +107,7 @@ function Proximamente({ icon, titulo, nota }: { icon: React.ReactNode; titulo: s
 }
 
 function FichaExpedientePage() {
-  const { id } = Route.useSearch();
+  const { id, nueva } = Route.useSearch();
   const navigate = useNavigate();
   const [caso, setCaso] = useState<CasoJuridico | null>(null);
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
@@ -221,12 +225,14 @@ function FichaExpedientePage() {
         )}
       </Seccion>
 
-      {/* Secciones que llegan en las siguientes partes */}
+      {/* Seguimiento (evidencia) — Parte 2 */}
+      <EvidenciaSeguimiento casoId={c.id} expediente={c.expediente} abrirNueva={nueva} />
+
+      {/* Secciones que llegan en la siguiente parte */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Proximamente icon={<Gavel className="h-4 w-4" />} titulo="Pre-dictamen y dictámenes" nota="Pre-dictamen URRJ, dictamen jurídico y registral. (Parte 3)" />
         <Proximamente icon={<Signature className="h-4 w-4" />} titulo="Firmas" nota="Estado de firmas del expediente. (Parte 3)" />
         <Proximamente icon={<DollarSign className="h-4 w-4" />} titulo="Precios" nota="Valores de la garantía. (Parte 3)" />
-        <Proximamente icon={<ClipboardList className="h-4 w-4" />} titulo="Seguimiento (evidencia)" nota="Mini-baners de evidencia: fecha, nota, documento, valor, tarea y próxima actuación. (Parte 2)" />
       </div>
     </div>
   );
