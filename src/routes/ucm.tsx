@@ -105,7 +105,7 @@ function UcmPage() {
 
   const filtrados = useMemo(() => {
     return casos.filter((c) => {
-      if (["amparo", "recurso"].includes(c.tipo_registro || "juicio")) return false; // tienen su propia pantalla
+      if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return false; // tienen su propia pantalla
       if (verArchivados ? !c.archivado : !!c.archivado) return false;
       if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
       if (prioridad !== "todas" && (c.prioridad || "").toUpperCase() !== prioridad) return false;
