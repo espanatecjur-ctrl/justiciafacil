@@ -49,6 +49,21 @@ function ExhortosPage() {
   };
   useEffect(() => { cargar(); }, []);
 
+  // último acuerdo del boletín (lo que trajo el robot) por expediente
+  const [ultimos, setUltimos] = useState<Record<string, { fecha_acuerdo: string | null; texto: string | null }>>({});
+  useEffect(() => {
+    const exps = Array.from(new Set(casos.map((c) => c.expediente).filter(Boolean))) as string[];
+    if (!exps.length) { setUltimos({}); return; }
+    const inList = exps.map((e) => `"${e}"`).join(",");
+    fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=expediente,fecha_acuerdo,texto&expediente=in.(${encodeURIComponent(inList)})&order=fecha_acuerdo.desc`, { headers: wHeaders })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => {
+        const m: Record<string, any> = {};
+        for (const a of rows) if (a.expediente && !m[a.expediente]) m[a.expediente] = a;
+        setUltimos(m);
+      }).catch(() => {});
+  }, [casos]);
+
   const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: false } }); };
   const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true } }); };
   const archivar = async (c: CasoJuridico) => {
@@ -130,6 +145,7 @@ function ExhortosPage() {
                 <th className="text-left px-4 py-2.5">Origen → Exhortado</th>
                 <th className="text-left px-4 py-2.5">Diligencia</th>
                 <th className="text-left px-4 py-2.5">Estado</th>
+                <th className="text-left px-4 py-2.5">Último boletín (robot)</th>
                 <th className="text-left px-4 py-2.5">Vence</th>
                 <th className="px-2 py-2.5 w-12"></th>
               </tr>
@@ -150,14 +166,22 @@ function ExhortosPage() {
                   </td>
                   <td className="px-4 py-3"><p className="max-w-[200px] truncate" title={c.diligencia || ""}>{c.diligencia || "—"}</p></td>
                   <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tono[(c.estatus_general || "").toUpperCase()] || "bg-muted text-muted-foreground"}`}>{c.estatus_general || "—"}</span></td>
+                  <td className="px-4 py-3">
+                    {c.expediente && ultimos[c.expediente] ? (
+                      <div className="max-w-[260px]">
+                        <p className="text-xs font-medium text-[color:var(--teal)]">{fmt(ultimos[c.expediente].fecha_acuerdo)}</p>
+                        <p className="truncate text-xs text-muted-foreground" title={ultimos[c.expediente].texto || ""}>{ultimos[c.expediente].texto || "—"}</p>
+                      </div>
+                    ) : <span className="text-xs text-muted-foreground">Sin actuación aún</span>}
+                  </td>
                   <td className="px-4 py-3 tabular-nums">{fmt(c.fecha_vence)}</td>
                   <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <FilaAcciones archivado={!!c.archivado} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                   </td>
                 </tr>
               ))}
-              {!cargando && filtrados.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Sin exhortos. Usa "Nuevo exhorto".</td></tr>}
-              {cargando && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>}
+              {!cargando && filtrados.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin exhortos. Usa "Nuevo exhorto".</td></tr>}
+              {cargando && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>}
             </tbody>
           </table>
         </div>
@@ -184,6 +208,9 @@ function ExhortosPage() {
               </div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado_origen || "—"} → {c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
               {c.diligencia && <p className="mt-0.5 text-xs">Diligencia: {c.diligencia}</p>}
+              {c.expediente && ultimos[c.expediente] && (
+                <p className="mt-1 rounded bg-muted/40 p-1.5 text-xs"><span className="font-medium text-[color:var(--teal)]">Boletín {fmt(ultimos[c.expediente].fecha_acuerdo)}:</span> {ultimos[c.expediente].texto}</p>
+              )}
               {c.fecha_vence && <p className="mt-0.5 text-xs text-muted-foreground">Vence: {fmt(c.fecha_vence)}</p>}
             </Card>
           ))
