@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
+import { MisTareas } from "@/components/panel-seguimiento";
 import {
   Gavel, Newspaper, FileSearch, AlertTriangle, CalendarClock,
   ChevronRight, ShieldCheck, Bookmark, FileText, BadgeCheck,
@@ -155,6 +156,9 @@ function Inicio() {
 
         {/* ——— Derecha ——— */}
         <div className="space-y-6">
+          {/* Mis tareas (asignadas a mí) */}
+          <MisTareas />
+
           {/* Validaciones pendientes */}
           <Card className="legal-card p-5">
             <div className="mb-3 flex items-center gap-2">
