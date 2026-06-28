@@ -2,9 +2,11 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
+import { PanelSeguimiento } from "@/components/panel-seguimiento";
+import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import {
-  ArrowLeft, Loader2, AlertTriangle, Landmark, Gavel, Scale,
-  DollarSign, Signature, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
+  ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
+  DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
 } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -263,10 +265,14 @@ function FichaExpedientePage() {
       {/* Seguimiento (evidencia) — Parte 2 */}
       <EvidenciaSeguimiento casoId={c.id} expediente={c.expediente} abrirNueva={nueva} />
 
-      {/* Secciones que llegan en la siguiente parte */}
+      {/* Tareas asignables (pendiente → hecha) */}
+      <PanelSeguimiento caso={c} />
+
+      {/* ANTECEDENTES (solo lectura): pre-dictámenes, dictámenes, firmas, actuaciones y evidencias */}
+      <AntecedentesGarantia casoId={c.id} expediente={c.expediente} />
+
+      {/* Sección que llega en la siguiente parte */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Proximamente icon={<Gavel className="h-4 w-4" />} titulo="Pre-dictamen y dictámenes" nota="Pre-dictamen URRJ, dictamen jurídico y registral. (Parte 3)" />
-        <Proximamente icon={<Signature className="h-4 w-4" />} titulo="Firmas" nota="Estado de firmas del expediente. (Parte 3)" />
         <Proximamente icon={<DollarSign className="h-4 w-4" />} titulo="Precios" nota="Valores de la garantía. (Parte 3)" />
       </div>
     </div>
