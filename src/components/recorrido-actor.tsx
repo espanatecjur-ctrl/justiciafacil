@@ -22,6 +22,15 @@ import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 
 const NAVY = "#0B1E3A";
 
+/** Resultados de los 4 motores que el recorrido Actor entrega hacia afuera
+ *  (los usa la ficha UCP para reflejarlos en sus 4 hitos de motor). */
+export interface ResultadosActor {
+  prescripcion: ResultadoMotor;
+  caducidad: ResultadoMotor;
+  usucapion: ResultadoMotor;
+  viabilidad_economica: ResultadoMotor;
+}
+
 const TIPOS_JUICIO = ["Hipotecario", "Mercantil ejecutivo", "Penal", "Familiar"] as const;
 const QUE_CEDE = [
   "Derechos litigiosos (juicio vivo)",
@@ -103,6 +112,7 @@ const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-
 export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false,
+  onResultados,
 }: {
   casos: any[];
   onVolver: () => void;
@@ -110,6 +120,9 @@ export function RecorridoActor({
   puedeFirmarElabora?: boolean;
   puedeValidar?: boolean;
   puedeAdmin?: boolean;
+  /** Si se pasa, el recorrido avisa hacia afuera sus 4 resultados de motor
+   *  cada vez que cambian (lo usa la ficha UCP). */
+  onResultados?: (r: ResultadosActor) => void;
 }) {
   const [paso, setPaso] = useState(0);
   const [d, setD] = useState<Datos>(VACIO);
@@ -163,6 +176,17 @@ export function RecorridoActor({
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
   }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo]);
+
+  // avisa los resultados de motor hacia afuera (para la ficha UCP)
+  useEffect(() => {
+    if (!onResultados) return;
+    onResultados({
+      prescripcion: rPresc,
+      caducidad: rCaduc,
+      usucapion: usaUsucapion ? rUsuc : { semaforo: "verde", etiqueta: "No aplica", detalle: "No hay tercero poseyendo; la usucapión no aplica en este caso." },
+      viabilidad_economica: rViab,
+    });
+  }, [onResultados, rPresc, rCaduc, rUsuc, usaUsucapion, rViab]);
 
   const guardar = async (decision: string) => {
     setGuardando(true);
