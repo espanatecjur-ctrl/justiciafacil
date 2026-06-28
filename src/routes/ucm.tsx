@@ -29,7 +29,7 @@ function leFalta(c: CasoJuridico): boolean {
 }
 
 // Botón ⋮ con menú (Abrir ficha · Agregar evidencia · Archivar · Borrar)
-function RowMenu({ abierto, onToggle, onAbrir, onBorrar }: { abierto: boolean; onToggle: () => void; onAbrir: () => void; onBorrar: () => void }) {
+function RowMenu({ abierto, archivado, onToggle, onAbrir, onEvidencia, onArchivar, onBorrar }: { abierto: boolean; archivado: boolean; onToggle: () => void; onAbrir: () => void; onEvidencia: () => void; onArchivar: () => void; onBorrar: () => void }) {
   return (
     <div className="relative">
       <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className="grid h-8 w-8 place-items-center rounded-md hover:bg-muted" title="Acciones">
@@ -42,13 +42,11 @@ function RowMenu({ abierto, onToggle, onAbrir, onBorrar }: { abierto: boolean; o
             <button onClick={onAbrir} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
               <FileSearch className="h-4 w-4 text-[color:var(--teal)]" /> Abrir ficha
             </button>
-            <button disabled className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-muted-foreground/60">
-              <span className="flex items-center gap-2"><ClipboardPlus className="h-4 w-4" /> Agregar evidencia</span>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">Parte 2</span>
+            <button onClick={onEvidencia} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+              <ClipboardPlus className="h-4 w-4 text-[color:var(--teal)]" /> Agregar evidencia
             </button>
-            <button disabled className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-muted-foreground/60">
-              <span className="flex items-center gap-2"><Archive className="h-4 w-4" /> Archivar</span>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">Parte 2</span>
+            <button onClick={onArchivar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+              <Archive className="h-4 w-4" /> {archivado ? "Desarchivar" : "Archivar"}
             </button>
             <div className="border-t border-border" />
             <button onClick={onBorrar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
@@ -71,8 +69,19 @@ function UcmPage() {
   const [q, setQ] = useState("");
   const [entidad, setEntidad] = useState("todas");
   const [prioridad, setPrioridad] = useState("todas");
+  const [verArchivados, setVerArchivados] = useState(false);
 
-  const abrirFicha = (c: CasoJuridico) => { setMenuId(null); navigate({ to: "/expediente", search: { id: c.id } }); };
+  const abrirFicha = (c: CasoJuridico) => { setMenuId(null); navigate({ to: "/expediente", search: { id: c.id, nueva: false } }); };
+  const irEvidencia = (c: CasoJuridico) => { setMenuId(null); navigate({ to: "/expediente", search: { id: c.id, nueva: true } }); };
+  const archivar = async (c: CasoJuridico) => {
+    setMenuId(null);
+    const nuevo = !c.archivado;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "PATCH", headers: wHeaders, body: JSON.stringify({ archivado: nuevo }) });
+      if (!r.ok) throw new Error(String(r.status));
+      setCasos((p) => p.map((x) => (x.id === c.id ? { ...x, archivado: nuevo } : x)));
+    } catch (e: any) { alert("No se pudo archivar: " + e.message); }
+  };
   const borrar = async (c: CasoJuridico) => {
     setMenuId(null);
     if (!confirm(`¿Borrar el expediente ${c.expediente || "(sin número)"}? Esta acción no se puede deshacer.`)) return;
@@ -92,18 +101,19 @@ function UcmPage() {
 
   const filtrados = useMemo(() => {
     return casos.filter((c) => {
+      if (verArchivados ? !c.archivado : !!c.archivado) return false;
       if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
       if (prioridad !== "todas" && (c.prioridad || "").toUpperCase() !== prioridad) return false;
       if (!q) return true;
       const blob = `${c.expediente || ""} ${c.cliente_nombre || ""} ${c.juzgado || ""} ${c.proveedor || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [casos, q, entidad, prioridad]);
+  }, [casos, q, entidad, prioridad, verArchivados]);
 
   // paginación: máximo 20 por página (web y cel)
   const PAGE = 20;
   const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [q, entidad, prioridad]);
+  useEffect(() => { setPagina(0); }, [q, entidad, prioridad, verArchivados]);
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
   const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
@@ -158,6 +168,9 @@ function UcmPage() {
             <option value="BAJA">Baja</option>
           </select>
         </div>
+        <button onClick={() => setVerArchivados((v) => !v)} className={`mt-2 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs ${verArchivados ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}>
+          <Archive className="h-3.5 w-3.5" /> {verArchivados ? "Viendo archivados — volver a activos" : "Ver archivados"}
+        </button>
       </Card>
 
       {error && (
@@ -204,7 +217,7 @@ function UcmPage() {
                     <p className="max-w-[260px] truncate" title={c.nota_adicional || ""}>{c.nota_adicional || "—"}</p>
                   </td>
                   <td className="px-2 py-3 text-right">
-                    <RowMenu abierto={menuId === c.id} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onBorrar={() => borrar(c)} />
+                    <RowMenu abierto={menuId === c.id} archivado={!!c.archivado} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                   </td>
                 </tr>
               ))}
@@ -235,7 +248,7 @@ function UcmPage() {
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
-                  <RowMenu abierto={menuId === c.id} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onBorrar={() => borrar(c)} />
+                  <RowMenu abierto={menuId === c.id} archivado={!!c.archivado} onToggle={() => setMenuId(menuId === c.id ? null : c.id)} onAbrir={() => abrirFicha(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                 </div>
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
