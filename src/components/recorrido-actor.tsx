@@ -112,7 +112,7 @@ const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-
 export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false,
-  onResultados,
+  onResultados, modoFicha = false,
 }: {
   casos: any[];
   onVolver: () => void;
@@ -123,6 +123,10 @@ export function RecorridoActor({
   /** Si se pasa, el recorrido avisa hacia afuera sus 4 resultados de motor
    *  cada vez que cambian (lo usa la ficha UCP). */
   onResultados?: (r: ResultadosActor) => void;
+  /** En la ficha UCP: oculta el dictamen/firmas/decisión/PDF propios del
+   *  recorrido (el dictamen lo dan los 10 hitos de la ficha). Solo deja la
+   *  captura de datos + Administración (para el hito 10 Viabilidad). */
+  modoFicha?: boolean;
 }) {
   const [paso, setPaso] = useState(0);
   const [d, setD] = useState<Datos>(VACIO);
@@ -252,7 +256,7 @@ export function RecorridoActor({
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
           <span>{d.tipoJuicio} · {d.posicion} · {d.estado}</span>
-          <span>Fase {paso + 1} de {FASES.length}: {FASES[paso]}</span>
+          <span>Fase {paso + 1} de {FASES.length}: {modoFicha && paso === 7 ? "Administración / Viabilidad" : FASES[paso]}</span>
         </div>
         <div className="flex gap-1">
           {FASES.map((_, i) => (
@@ -392,6 +396,9 @@ export function RecorridoActor({
 
         {paso === 7 && (
           <div className="space-y-4">
+            {modoFicha ? (
+              <H titulo="Administración · valuación y precio" sub="De aquí sale el hito 10 (Viabilidad económica)." />
+            ) : (<>
             <H titulo="7 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
               <Aviso r={rPresc} /><Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
@@ -421,6 +428,7 @@ export function RecorridoActor({
               </button>
             </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+            </>)}
 
             {/* ---- Sección de Administración (valuación y precio) ---- */}
             <div className="mt-2 rounded-xl border border-dashed border-border p-4">
