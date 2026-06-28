@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { type BoletinJuzgado } from "@/components/config-boletin";
+import { cargarJuzgadosJalisco, nombreJuzgadoJAL, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
 import { X, Loader2, Check, FilePlus, Scale, Landmark, UserCheck, MapPin } from "lucide-react";
 
-const ROBOT = "https://robot-boletin-699470444450.us-central1.run.app";
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
 const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -58,7 +58,7 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
   const [distrito, setDistrito] = useState("");
   const [juzgadoId, setJuzgadoId] = useState("");
   const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS[1]);
-  const [jalJudges, setJalJudges] = useState<{ code: string; name: string }[]>([]);
+  const [jalJudges, setJalJudges] = useState<JuzgadoJAL[]>([]);
   const [jalCode, setJalCode] = useState("");
   // abogados
   const [colabs, setColabs] = useState<Colab[]>([]);
@@ -69,7 +69,7 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
 
   useEffect(() => {
     sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000").then((d) => setCat(d || [])).catch(() => {});
-    fetch(`${ROBOT}/jal-judges`).then((r) => r.json()).then((d) => setJalJudges(d.juzgados || [])).catch(() => {});
+    cargarJuzgadosJalisco().then(setJalJudges).catch(() => {});
     Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=id,nombre,rol,especialidad,activo&activo=eq.true&order=nombre`, { headers: wHeaders }).then((r) => (r.ok ? r.json() : [])),
       fetch(`${SUPABASE_URL}/rest/v1/urrj_permisos?select=config&id=eq.1`, { headers: wHeaders }).then((r) => (r.ok ? r.json() : [])),
@@ -103,7 +103,7 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
         jz = { nombre_juzgado: `${orgBCS}, La Paz, BCS`, juzgado: orgBCS };
       } else if (entidad === "Jalisco" && jalCode) {
         const jj = jalJudges.find((j) => j.code === jalCode);
-        jz = { nombre_juzgado: `${jj ? jj.name : "Juzgado"} [${jalCode}], Jalisco`, juzgado: jj ? jj.name : null };
+        jz = { nombre_juzgado: jj ? nombreJuzgadoJAL(jj) : `Juzgado [${jalCode}], Jalisco`, juzgado: jj ? jj.name : null };
       }
 
       const abg = abogados.find((a) => a.id === abogadoId);
@@ -233,7 +233,12 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
               <div><label className={lbl}>Juzgado (Jalisco · ZMG)</label>
                 <select className={inp} value={jalCode} onChange={(e) => setJalCode(e.target.value)} disabled={!jalJudges.length}>
                   <option value="">{jalJudges.length ? "Selecciona…" : "Cargando…"}</option>
-                  {jalJudges.map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  <optgroup label="Zona Metropolitana (Guadalajara)">
+                    {jalJudges.filter((j) => !j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  </optgroup>
+                  <optgroup label="Foráneos (municipios)">
+                    {jalJudges.filter((j) => j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  </optgroup>
                 </select>
               </div>
             ) : (
