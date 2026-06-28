@@ -9,10 +9,28 @@ export interface BoletinJuzgado {
   id: string; cve_distrito: string; nombre_distrito: string; cve_juzgado: string; nombre_juzgado: string; fuente?: string;
 }
 
-// El boletín manda el expediente sin diagonal: 00341/2017 -> 003412017
+// Órganos de La Paz, Baja California Sur (boletín del PJEBCS)
+const BCS_ORGANOS = [
+  "Juzgado Primero de Primera Instancia en el Ramo Civil",
+  "Juzgado Segundo de Primera Instancia en el Ramo Civil",
+  "Juzgado Primero de Primera Instancia en el Ramo Mercantil",
+  "Juzgado Segundo de Primera Instancia en el Ramo Mercantil",
+  "Juzgado Tercero de Primera Instancia en el Ramo Mercantil",
+  "Juzgado Primero de Primera Instancia en el Ramo Familiar",
+  "Juzgado Segundo de Primera Instancia en el Ramo Familiar",
+  "Juzgado Tercero de Primera Instancia en el Ramo Familiar",
+  "Juzgado Cuarto de Primera Instancia en el Ramo Familiar",
+  "Primera Sala Unitaria en Materia Civil",
+  "Segunda Sala Unitaria en Materia Civil",
+  "Tercera Sala Unitaria Civil y de Justicia Administrativa (Materia Civil)",
+];
+
+// El boletín de Sinaloa manda el expediente sin diagonal: 00341/2017 -> 003412017
 export const folioAsunto = (expediente?: string | null) => (expediente || "").replace(/\D/g, "");
 
 export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJuridico; onClose: () => void; onGuardado: () => void }) {
+  const isBCS = /baja|bcs/i.test(caso.entidad || "");
+
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState(caso.cve_distrito || "");
   const [juzgadoId, setJuzgadoId] = useState("");
@@ -22,11 +40,15 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // BCS: órgano de La Paz (preselecciona el que ya tenga guardado)
+  const orgGuardado = (caso.nombre_juzgado || "").replace(/,\s*La Paz.*$/i, "").trim();
+  const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS.includes(orgGuardado) ? orgGuardado : BCS_ORGANOS[1]);
+
   useEffect(() => {
+    if (isBCS) return; // BCS no usa el catálogo de Sinaloa
     sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000")
       .then((d) => {
         setCat(d || []);
-        // preseleccionar si el expediente ya tiene juzgado
         if (caso.cve_distrito && caso.cve_juzgado) {
           const match = (d || []).find((x) => x.cve_distrito === caso.cve_distrito && x.cve_juzgado === caso.cve_juzgado);
           if (match) { setDistrito(match.cve_distrito); setJuzgadoId(match.id); }
@@ -45,11 +67,20 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
   const guardar = async () => {
     setGuardando(true); setError(null);
     try {
-      let payloadCve = { cve_distrito: "", cve_juzgado: "", nombre_juzgado: "" };
+      // ----- BCS: solo guarda el órgano en nombre_juzgado -----
+      if (isBCS) {
+        if (!orgBCS) { setError("Elige el juzgado/órgano de La Paz."); setGuardando(false); return; }
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+          method: "PATCH", headers: wHeaders, body: JSON.stringify({ nombre_juzgado: `${orgBCS}, La Paz, BCS` }),
+        });
+        if (!res.ok) throw new Error(`Supabase ${res.status}`);
+        onGuardado(); return;
+      }
 
+      // ----- Sinaloa: distrito + juzgado del catálogo -----
+      let payloadCve = { cve_distrito: "", cve_juzgado: "", nombre_juzgado: "" };
       if (otro) {
         if (!nd.trim() || !cd.trim() || !nj.trim() || !cj.trim()) { setError("Llena distrito, juzgado y sus dos claves."); setGuardando(false); return; }
-        // 1) agregar al catálogo (para la próxima)
         await fetch(`${SUPABASE_URL}/rest/v1/boletin_juzgado`, {
           method: "POST", headers: wHeaders,
           body: JSON.stringify({ cve_distrito: cd.trim(), nombre_distrito: nd.trim(), cve_juzgado: cj.trim(), nombre_juzgado: nj.trim(), fuente: "manual" }),
@@ -60,8 +91,6 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
         if (!j) { setError("Elige el juzgado de la lista (o usa “otro”)."); setGuardando(false); return; }
         payloadCve = { cve_distrito: j.cve_distrito, cve_juzgado: j.cve_juzgado, nombre_juzgado: j.nombre_juzgado };
       }
-
-      // 2) guardar en el expediente
       const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
         method: "PATCH", headers: wHeaders, body: JSON.stringify(payloadCve),
       });
@@ -78,47 +107,67 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
           <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-3 p-4">
-          <p className="text-xs text-muted-foreground">Asigna el <b>distrito</b> y <b>juzgado</b> para que JUFA sepa dónde buscar este expediente en el boletín.</p>
-          {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
 
-          {!otro ? (
+          {isBCS ? (
+            // ===================== MODO BCS (La Paz) =====================
             <>
+              <p className="text-xs text-muted-foreground">Este expediente es de <b>Baja California Sur</b>. Elige el <b>juzgado/órgano de La Paz</b> donde está, para que el robot sepa dónde buscarlo.</p>
+              {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Distrito judicial</label>
-                <select className={inp} value={distrito} onChange={(e) => { setDistrito(e.target.value); setJuzgadoId(""); }}>
-                  <option value="">— elige distrito —</option>
-                  {distritos.map((d) => <option key={d.cve} value={d.cve}>{d.nombre}</option>)}
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado / Órgano (La Paz, BCS)</label>
+                <select className={inp} value={orgBCS} onChange={(e) => setOrgBCS(e.target.value)}>
+                  {BCS_ORGANOS.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado</label>
-                <select className={inp} value={juzgadoId} onChange={(e) => setJuzgadoId(e.target.value)} disabled={!distrito}>
-                  <option value="">— elige juzgado —</option>
-                  {juzgadosDeDistrito.map((j) => <option key={j.id} value={j.id}>{j.nombre_juzgado}</option>)}
-                </select>
+              <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                El robot buscará el <b>Expediente {caso.expediente}</b> en ese órgano del boletín de La Paz.
+                <br />💡 Tip: si no sabes cuál es, usa la pestaña <b>Boletín Judicial</b> (botón BCS) y ve probando órganos hasta que aparezcan acuerdos.
               </div>
-              <button onClick={() => setOtro(true)} className="text-xs text-[color:var(--teal)] hover:underline">¿No aparece tu juzgado? Agrégalo al catálogo →</button>
             </>
           ) : (
+            // ===================== MODO SINALOA =====================
             <>
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                Estás agregando un juzgado nuevo al catálogo. Las <b>claves</b> son los números que usa el boletín (ej. distrito 06, juzgado 13). Si no las sabes, JUFA las completará después.
+              <p className="text-xs text-muted-foreground">Asigna el <b>distrito</b> y <b>juzgado</b> para que el robot sepa dónde buscar este expediente en el boletín.</p>
+              {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
+              {!otro ? (
+                <>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Distrito judicial</label>
+                    <select className={inp} value={distrito} onChange={(e) => { setDistrito(e.target.value); setJuzgadoId(""); }}>
+                      <option value="">— elige distrito —</option>
+                      {distritos.map((d) => <option key={d.cve} value={d.cve}>{d.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado</label>
+                    <select className={inp} value={juzgadoId} onChange={(e) => setJuzgadoId(e.target.value)} disabled={!distrito}>
+                      <option value="">— elige juzgado —</option>
+                      {juzgadosDeDistrito.map((j) => <option key={j.id} value={j.id}>{j.nombre_juzgado}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={() => setOtro(true)} className="text-xs text-[color:var(--teal)] hover:underline">¿No aparece tu juzgado? Agrégalo al catálogo →</button>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    Estás agregando un juzgado nuevo al catálogo. Las <b>claves</b> son los números que usa el boletín (ej. distrito 06, juzgado 13). Si no las sabes, el robot las completará después.
+                  </div>
+                  <div className="grid grid-cols-[1fr_90px] gap-2">
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del distrito</label><input className={inp} value={nd} onChange={(e) => setNd(e.target.value)} placeholder="Culiacán" /></div>
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Clave</label><input className={inp} value={cd} onChange={(e) => setCd(e.target.value)} placeholder="06" /></div>
+                  </div>
+                  <div className="grid grid-cols-[1fr_90px] gap-2">
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del juzgado</label><input className={inp} value={nj} onChange={(e) => setNj(e.target.value)} placeholder="Juzgado Tercero Civil, Culiacán" /></div>
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Clave</label><input className={inp} value={cj} onChange={(e) => setCj(e.target.value)} placeholder="13" /></div>
+                  </div>
+                  <button onClick={() => setOtro(false)} className="text-xs text-[color:var(--teal)] hover:underline">← Volver a la lista</button>
+                </>
+              )}
+              <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                El robot buscará con: <b>FolioAsunto = {folioAsunto(caso.expediente) || "—"}</b> (tu expediente sin la diagonal).
               </div>
-              <div className="grid grid-cols-[1fr_90px] gap-2">
-                <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del distrito</label><input className={inp} value={nd} onChange={(e) => setNd(e.target.value)} placeholder="Culiacán" /></div>
-                <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Clave</label><input className={inp} value={cd} onChange={(e) => setCd(e.target.value)} placeholder="06" /></div>
-              </div>
-              <div className="grid grid-cols-[1fr_90px] gap-2">
-                <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del juzgado</label><input className={inp} value={nj} onChange={(e) => setNj(e.target.value)} placeholder="Juzgado Tercero Civil, Culiacán" /></div>
-                <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Clave</label><input className={inp} value={cj} onChange={(e) => setCj(e.target.value)} placeholder="13" /></div>
-              </div>
-              <button onClick={() => setOtro(false)} className="text-xs text-[color:var(--teal)] hover:underline">← Volver a la lista</button>
             </>
           )}
-
-          <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
-            JUFA buscará con: <b>FolioAsunto = {folioAsunto(caso.expediente) || "—"}</b> (tu expediente sin la diagonal).
-          </div>
 
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
