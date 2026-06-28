@@ -5,7 +5,8 @@ import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/s
 import { RobotBoletines } from "@/components/robot-boletines";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Scale, AlertTriangle, Gavel, MoreVertical, FileSearch, ClipboardPlus, Archive, Trash2 } from "lucide-react";
+import { Search, Scale, AlertTriangle, Gavel, MoreVertical, FileSearch, ClipboardPlus, Archive, Trash2, FilePlus } from "lucide-react";
+import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
 
 export const Route = createFileRoute("/ucm")({
   head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
@@ -62,6 +63,7 @@ function RowMenu({ abierto, archivado, onToggle, onAbrir, onEvidencia, onArchiva
 function UcmPage() {
   const navigate = useNavigate();
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [nuevoOpen, setNuevoOpen] = useState(false);
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,12 +94,14 @@ function UcmPage() {
     } catch (e: any) { alert("No se pudo borrar: " + e.message); }
   };
 
-  useEffect(() => {
+  const cargar = () => {
+    setCargando(true);
     sbSelect<CasoJuridico>("caso_juridico", "select=*&order=prioridad.asc")
       .then((d) => setCasos(d))
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
-  }, []);
+  };
+  useEffect(() => { cargar(); }, []);
 
   const filtrados = useMemo(() => {
     return casos.filter((c) => {
@@ -128,7 +132,14 @@ function UcmPage() {
         eyebrow="Unidad Civil y Mercantil"
         title="UCM · Seguimiento a juicios"
         description={cargando ? "Cargando juicios…" : `${filtrados.length} de ${casos.length} juicios de la unidad.`}
+        actions={
+          <button onClick={() => setNuevoOpen(true)} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
+            <FilePlus className="h-4 w-4" /> Nuevo expediente
+          </button>
+        }
       />
+
+      {nuevoOpen && <NuevoExpedienteModal onClose={() => setNuevoOpen(false)} onCreado={() => { setNuevoOpen(false); cargar(); }} />}
 
       {/* Barra del robot (indicador central de avance) */}
       <RobotBoletines expedientes={expedientes} />
