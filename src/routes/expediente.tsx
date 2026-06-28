@@ -152,7 +152,7 @@ function FichaExpedientePage() {
   const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
   const faltaAntecedente = !c.proveedor || !c.no_credito || !c.direccion_garantia || !(c.cliente_nombre || c.cliente_codigo);
   const faltaEstatus = esEspecial ? !c.estatus_general : (!c.etapa_actual || !c.estatus_general || !c.prioridad);
-  const faltaSeguimiento = sinJuzgado || acuerdos.length === 0;
+  const faltaSeguimiento = sinJuzgado; // solo es "falta" si no hay juzgado; sin actuaciones aún NO es falta (el robot las trae)
 
   return (
     <div className="space-y-4">
@@ -247,7 +247,16 @@ function FichaExpedientePage() {
             <p className="mt-2 text-xs text-muted-foreground">{acuerdos.length} actuaciones registradas en el boletín.</p>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">El juzgado ya está asignado, pero aún no hay actuaciones del boletín para este expediente.</p>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3 text-sm">
+              <Megaphone className="mt-0.5 h-4 w-4 shrink-0" style={{ color: TEAL }} />
+              <div>
+                <p className="font-medium" style={{ color: TEAL }}>Listo para el robot — aún sin actuaciones.</p>
+                <p className="mt-0.5 text-muted-foreground">El juzgado ya está asignado. El robot revisa el boletín <b>todos los días a las 9:00 AM</b> y, cuando aparezca un acuerdo de este expediente, se llenará aquí solo. No necesitas hacer nada.</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Si después de varios días sigue vacío, revisa que el <b>número de expediente</b> y el <b>juzgado</b> coincidan exactamente con los del boletín (puedes corregirlos en "Asignar juzgado").</p>
+          </div>
         )}
       </Seccion>
 
