@@ -11,6 +11,7 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
+import { Card } from "@/components/ui/card";
 import { getAuth } from "@/lib/auth";
 import { ClipboardList, Plus, Gavel, Paperclip, Loader2, X, CheckSquare, Square, User } from "lucide-react";
 
@@ -202,5 +203,81 @@ function AgregarModal({ caso, exp, colabs, creadoPor, onClose, onGuardado }: { c
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// MisTareas · widget de Inicio (Parte 2)
+// Muestra las tareas PENDIENTES asignadas al colaborador con la sesión
+// abierta (match por su correo). Permite marcarlas como hechas.
+// ============================================================
+export function MisTareas() {
+  const [tareas, setTareas] = useState<Tarea[]>([]);
+  const [correo, setCorreo] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const a = await getAuth();
+        const { data } = await a.auth.getSession();
+        const email = data.session?.user?.email ?? null;
+        setCorreo(email);
+        if (email) {
+          const t = await sbSelect<Tarea>("tarea", `select=*&responsable_correo=eq.${encodeURIComponent(email)}&estado=neq.hecha&tipo=eq.tarea&order=fecha_limite.asc.nullslast,created_at.desc`);
+          setTareas(t || []);
+        }
+      } catch { /* sin sesión */ } finally { setCargando(false); }
+    })();
+  }, []);
+
+  const marcarHecha = async (t: Tarea) => {
+    setTareas((p) => p.filter((x) => x.id !== t.id));
+    await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${t.id}`, { method: "PATCH", headers, body: JSON.stringify({ estado: "hecha", updated_at: new Date().toISOString() }) }).catch(() => {});
+  };
+
+  const diasPara = (f?: string | null) => {
+    if (!f) return null;
+    const d = new Date(String(f).slice(0, 10) + "T00:00:00");
+    if (isNaN(d.getTime())) return null;
+    return Math.floor((d.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000);
+  };
+
+  return (
+    <Card className="legal-card p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <ClipboardList className="h-4 w-4 text-[color:var(--teal)]" />
+        <h3 className="font-display text-base font-semibold">Mis tareas</h3>
+        {tareas.length > 0 && <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{tareas.length}</span>}
+      </div>
+      {cargando ? (
+        <p className="text-sm text-muted-foreground">Cargando…</p>
+      ) : !correo ? (
+        <p className="text-sm text-muted-foreground">Inicia sesión para ver tus tareas.</p>
+      ) : tareas.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No tienes tareas pendientes. 🎉</p>
+      ) : (
+        <div className="divide-y divide-border">
+          {tareas.map((t) => {
+            const dias = diasPara(t.fecha_limite);
+            const vencida = dias !== null && dias < 0;
+            const hoy = dias === 0;
+            return (
+              <div key={t.id} className="flex items-start gap-2.5 py-2.5">
+                <button onClick={() => marcarHecha(t)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" title="Marcar hecha"><Square className="h-4 w-4" /></button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{t.titulo}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t.expediente ? `Exp. ${t.expediente}` : "Sin expediente"}
+                    {t.fecha_limite ? ` · ${vencida ? "venció" : hoy ? "vence hoy" : "vence"} ${fmt(t.fecha_limite)}` : ""}
+                  </p>
+                </div>
+                {(vencida || hoy) && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${vencida ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{vencida ? "vencida" : "hoy"}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
