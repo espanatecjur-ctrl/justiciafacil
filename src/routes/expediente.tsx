@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Gavel, Scale,
-  DollarSign, Signature, Megaphone, Lightbulb, Lock, Shield,
+  DollarSign, Signature, Megaphone, Lightbulb, Lock, Shield, Layers,
 } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -183,6 +183,13 @@ function FichaExpedientePage() {
             <Dato label="Quejoso" valor={c.quejoso} importante />
             <Dato label="Autoridad responsable" valor={c.autoridad_responsable} importante />
             <Dato label="Acto reclamado" valor={c.acto_reclamado} importante />
+          </Seccion>
+        ) : c.tipo_registro === "recurso" ? (
+          <Seccion icon={<Layers className="h-4 w-4" style={{ color: TEAL }} />} titulo="Datos del recurso" falta={!c.promovente}>
+            <Dato label="Tipo de recurso" valor={c.tipo_recurso} />
+            <Dato label="Promovente" valor={c.promovente} importante />
+            <Dato label="Fecha de interposición" valor={c.fecha_interposicion} />
+            <Dato label="Resolución" valor={c.resolucion} />
           </Seccion>
         ) : (
           <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía" falta={faltaAntecedente}>
