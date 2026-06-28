@@ -2,7 +2,7 @@
 // Los dos vienen del robot. Cada juzgado trae una bandera "foraneo" para saber
 // qué API usa el robot y cómo guardar el nombre_juzgado.
 
-const ROBOT = "https://robot-boletin-699470444450.us-central1.run.app";
+export const ROBOT = "https://robot-boletin-699470444450.us-central1.run.app";
 
 export interface JuzgadoJAL {
   code: string;
