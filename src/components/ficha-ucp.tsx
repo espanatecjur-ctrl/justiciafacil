@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   Save, Loader2, FileStack, CalendarClock, Stamp,
 } from "lucide-react";
 import { type Precarga } from "@/lib/predictamen-guardar";
+import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { type ResultadosActor } from "@/components/recorrido-actor";
 import { SeccionRPPC } from "@/components/seccion-rppc";
@@ -107,6 +108,23 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
   const [motoresRecorrido, setMotoresRecorrido] = useState<ResultadosActor | null>(null);
   // cambios a mano que hizo el abogado sobre los hitos de motor (ganan al cálculo)
   const [motorOverride, setMotorOverride] = useState<Partial<Record<ClaveMotor, Semaforo>>>({});
+
+  // rol del usuario (para amarrar la sección Administración del recorrido a GAD/DGE)
+  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        const correo = data.session?.user?.email;
+        if (!correo) return;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+        const j = r.ok ? await r.json() : [];
+        setRolUsuario(j?.[0]?.rol ?? null);
+      } catch { /* si falla, queda sin permiso de admin */ }
+    })();
+  }, []);
+  const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
 
   // precarga del recorrido con los datos del pre-dictamen de esta garantía
   const precargaRecorrido = useMemo<Precarga | null>(() => (pred?.datos ? { datos: pred.datos } : null), [pred]);
@@ -307,7 +325,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
                   onVista={setVistaPos}
                   precargar={precargaRecorrido}
                   onVolver={() => setVistaPos("elegir")}
-                  puedeAdmin
+                  puedeAdmin={puedeAdmin}
                   onResultados={setMotoresRecorrido}
                   titulo="Confirmar posición"
                   subtitulo="Elige la posición de DIIPA. Por ahora Actor se engancha a los 10 hitos; las demás corren el recorrido."
