@@ -15,8 +15,19 @@ function frescura(dias: number | null) {
   if (dias <= 20) return { color: "#C2A24C", label: `Hace ${dias} días`, chip: "bg-amber-100 text-amber-800" };
   return { color: "#DC2626", label: `Hace ${dias} días`, chip: "bg-red-100 text-red-700" };
 }
-const diasDesde = (fecha?: string | null) => fecha ? Math.floor((Date.now() - new Date(fecha).getTime()) / 86400000) : null;
-const esHoy = (fecha?: string | null) => !!fecha && new Date(fecha).toDateString() === new Date().toDateString();
+// Lee una fecha "YYYY-MM-DD" como fecha LOCAL (sin brincar de día por zona horaria)
+const parseLocal = (fecha?: string | null): Date | null => {
+  if (!fecha) return null;
+  const m = String(fecha).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(fecha);
+};
+const fmtFecha = (fecha?: string | null) => {
+  const d = parseLocal(fecha);
+  return d ? d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+};
+const diasDesde = (fecha?: string | null) => { const d = parseLocal(fecha); return d ? Math.floor((Date.now() - d.getTime()) / 86400000) : null; };
+const esHoy = (fecha?: string | null) => { const d = parseLocal(fecha); return !!d && d.toDateString() === new Date().toDateString(); };
 
 const TIPO_COLOR: Record<string, string> = {
   Boletín: "bg-blue-100 text-blue-700", Amparo: "bg-purple-100 text-purple-700", Exhorto: "bg-cyan-100 text-cyan-700",
@@ -79,7 +90,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
       return true;
     });
     if (orden === "urgencia") f = f.sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
-    else f = f.sort((a, b) => (b.ultima ? new Date(b.ultima).getTime() : 0) - (a.ultima ? new Date(a.ultima).getTime() : 0));
+    else f = f.sort((a, b) => (parseLocal(b.ultima)?.getTime() ?? 0) - (parseLocal(a.ultima)?.getTime() ?? 0));
     return f;
   }, [casos, porExp, q, fColor, fTipo, soloNoLeidos, orden, patches]);
 
@@ -209,7 +220,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                           {a.urgente && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">URGENTE</span>}
                           {a.leido === false && <span className="rounded-full bg-[color:var(--teal)] px-2 py-0.5 text-[10px] font-semibold text-white">NUEVO</span>}
                         </div>
-                        <span className="text-xs text-muted-foreground">{a.fecha_acuerdo ? new Date(a.fecha_acuerdo).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
+                        <span className="text-xs text-muted-foreground">{fmtFecha(a.fecha_acuerdo)}</span>
                       </div>
                       <p className="text-sm">{a.texto || "(sin texto)"}</p>
                       <div className="mt-1 flex items-center justify-between">
