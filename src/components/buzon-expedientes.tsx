@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sbSelect, type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import type { AcuerdoJudicial } from "@/components/robot-boletines";
 import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin } from "lucide-react";
@@ -107,6 +107,14 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
   const selExp = filas.find((f) => f.c.id === sel);
 
+  // En celular: al entrar a un expediente, llevar la vista al detalle (los acuerdos).
+  const detalleRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (sel && typeof window !== "undefined" && window.innerWidth < 1024) {
+      detalleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [sel]);
+
   const porPagina = 20;
   const totalPag = Math.max(1, Math.ceil(filas.length / porPagina));
   const pag = Math.min(pagina, totalPag - 1);
@@ -145,7 +153,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
       <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
         {/* Lista izquierda */}
-        <div className="rounded-xl border border-border bg-card">
+        <div className={`rounded-xl border border-border bg-card ${sel ? "hidden lg:block" : "block"}`}>
           <div className="border-b border-border p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -181,13 +189,14 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-border bg-card">
+        <div ref={detalleRef} className={`rounded-xl border border-border bg-card ${sel ? "block" : "hidden lg:block"}`}>
           {!selExp ? (
             <div className="grid h-full min-h-[300px] place-items-center p-8 text-center text-sm text-muted-foreground">
               <div><FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />Elige un expediente para ver su boletín e histórico.</div>
             </div>
           ) : (
             <div className="p-4">
+              <button onClick={() => setSel(null)} className="lg:hidden mb-3 flex items-center gap-1 text-sm font-medium text-[color:var(--teal)]">← Volver a expedientes</button>
               <div className="mb-3 border-b border-border pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
