@@ -134,7 +134,6 @@ function Inicio() {
                 <span className="h-4 w-1 rounded" style={{ background: GOLD }} />
                 <h3 className="font-display text-lg font-semibold">Mi agenda</h3>
               </div>
-              <Link to="/hitos" className="flex items-center gap-1 text-xs text-[#0B1E3A]">Ver todo <ChevronRight className="h-3.5 w-3.5" /></Link>
             </div>
             <div className="divide-y divide-border">
               {AGENDA.map((a, i) => (
