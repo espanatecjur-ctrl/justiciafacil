@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Gavel, Scale,
-  DollarSign, Signature, Megaphone, Lightbulb, Lock,
+  DollarSign, Signature, Megaphone, Lightbulb, Lock, Shield,
 } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -176,15 +176,24 @@ function FichaExpedientePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Antecedente de la garantía */}
-        <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía" falta={faltaAntecedente}>
-          <Dato label="ID garantía" valor={c.gar_id} />
-          <Dato label="Proveedor / Administradora" valor={c.proveedor} importante />
-          <Dato label="No. de crédito" valor={c.no_credito} importante />
-          <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
-          <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
-          <Dato label="Tipo de proceso" valor={c.tipo_proceso} />
-        </Seccion>
+        {/* Antecedente: garantía (juicio) o datos del amparo */}
+        {c.tipo_registro === "amparo" ? (
+          <Seccion icon={<Shield className="h-4 w-4" style={{ color: TEAL }} />} titulo="Datos del amparo" falta={!c.quejoso || !c.acto_reclamado}>
+            <Dato label="Tipo de amparo" valor={c.tipo_amparo} />
+            <Dato label="Quejoso" valor={c.quejoso} importante />
+            <Dato label="Autoridad responsable" valor={c.autoridad_responsable} importante />
+            <Dato label="Acto reclamado" valor={c.acto_reclamado} importante />
+          </Seccion>
+        ) : (
+          <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía" falta={faltaAntecedente}>
+            <Dato label="ID garantía" valor={c.gar_id} />
+            <Dato label="Proveedor / Administradora" valor={c.proveedor} importante />
+            <Dato label="No. de crédito" valor={c.no_credito} importante />
+            <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+            <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
+            <Dato label="Tipo de proceso" valor={c.tipo_proceso} />
+          </Seccion>
+        )}
 
         {/* Estatus actual */}
         <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual" falta={faltaEstatus}>
