@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { sbSelect, type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import type { AcuerdoJudicial } from "@/components/robot-boletines";
-import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin } from "lucide-react";
+import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin, Eye } from "lucide-react";
 import { ConfigBoletinModal } from "@/components/config-boletin";
 
 const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -35,6 +36,7 @@ const TIPO_COLOR: Record<string, string> = {
 };
 
 export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
+  const navigate = useNavigate();
   const [acuerdos, setAcuerdos] = useState<AcuerdoJudicial[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -107,14 +109,6 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
   const selExp = filas.find((f) => f.c.id === sel);
 
-  // En celular: al entrar a un expediente, llevar la vista al detalle (los acuerdos).
-  const detalleRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (sel && typeof window !== "undefined" && window.innerWidth < 1024) {
-      detalleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [sel]);
-
   const porPagina = 20;
   const totalPag = Math.max(1, Math.ceil(filas.length / porPagina));
   const pag = Math.min(pagina, totalPag - 1);
@@ -153,7 +147,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
       <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
         {/* Lista izquierda */}
-        <div className={`rounded-xl border border-border bg-card ${sel ? "hidden lg:block" : "block"}`}>
+        <div className="rounded-xl border border-border bg-card">
           <div className="border-b border-border p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -165,7 +159,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
               const fr = frescura(f.dias);
               const activo = f.c.id === sel;
               return (
-                <button key={f.c.id} onClick={() => setSel(f.c.id)} className={`mb-1 flex w-full items-start gap-2.5 rounded-lg p-2.5 text-left transition-colors ${activo ? "bg-[color:var(--teal)]/10 ring-1 ring-[color:var(--teal)]/30" : "hover:bg-muted/50"}`}>
+                <div key={f.c.id} onClick={() => navigate({ to: "/expediente", search: { id: f.c.id, nueva: false } })} className={`mb-1 flex w-full cursor-pointer items-start gap-2.5 rounded-lg p-2.5 text-left transition-colors ${activo ? "bg-[color:var(--teal)]/10 ring-1 ring-[color:var(--teal)]/30" : "hover:bg-muted/50"}`}>
                   <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: fr.color }} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
@@ -177,7 +171,8 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                     {(f.c.actor || f.c.demandado) && <p className="truncate text-[11px] text-muted-foreground"><span className="font-medium text-foreground">{f.c.actor || "—"}</span> vs. <span className="font-medium text-foreground">{f.c.demandado || "—"}</span></p>}
                     <p className="mt-0.5 text-[11px]" style={{ color: fr.color }}>{fr.label}</p>
                   </div>
-                </button>
+                  <button onClick={(e) => { e.stopPropagation(); setSel(f.c.id); }} title="Ver boletín aquí mismo" className="mt-0.5 shrink-0 rounded-md border border-input p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                </div>
               );
             })}
           </div>
@@ -189,14 +184,13 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
             </div>
           )}
         </div>
-        <div ref={detalleRef} className={`rounded-xl border border-border bg-card ${sel ? "block" : "hidden lg:block"}`}>
+        <div className="rounded-xl border border-border bg-card">
           {!selExp ? (
             <div className="grid h-full min-h-[300px] place-items-center p-8 text-center text-sm text-muted-foreground">
               <div><FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />Elige un expediente para ver su boletín e histórico.</div>
             </div>
           ) : (
             <div className="p-4">
-              <button onClick={() => setSel(null)} className="lg:hidden mb-3 flex items-center gap-1 text-sm font-medium text-[color:var(--teal)]">← Volver a expedientes</button>
               <div className="mb-3 border-b border-border pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -206,6 +200,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                     {selExp.c.nombre_juzgado && <p className="mt-0.5 text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
                   </div>
                   <div className="flex shrink-0 gap-1.5">
+                    <button onClick={() => navigate({ to: "/expediente", search: { id: selExp.c.id, nueva: false } })} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white" style={{ background: "#0B1E3A" }}><FileText className="h-3.5 w-3.5" /> Abrir ficha</button>
                     <button onClick={() => setConfigBoletin(selExp.c)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><MapPin className="h-3.5 w-3.5" /> {selExp.c.cve_juzgado ? "Juzgado ✓" : "Asignar juzgado"}</button>
                     <button onClick={() => setAgregar(true)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-3.5 w-3.5" /> Agregar acuerdo</button>
                     {selExp.noLeidos > 0 && <button onClick={() => marcarTodosLeidos(selExp.exp)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><CheckCheck className="h-3.5 w-3.5" /> Marcar todos leídos</button>}
