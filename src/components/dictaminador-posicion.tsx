@@ -11,7 +11,7 @@
 // ============================================================
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { Scale } from "lucide-react";
-import { RecorridoActor } from "@/components/recorrido-actor";
+import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
 import { RecorridoDemandado } from "@/components/recorrido-demandado";
 import { RecorridoSucesorio } from "@/components/recorrido-sucesorio";
 import { RecorridoContingencia } from "@/components/recorrido-contingencia";
@@ -31,6 +31,9 @@ interface Props {
   puedeAdmin?: boolean;
   titulo?: string;
   subtitulo?: string;
+  /** Si se pasa, se reciben los resultados de motor del recorrido Actor
+   *  (lo usa la ficha UCP para reflejarlos en sus hitos). */
+  onResultados?: (r: ResultadosActor) => void;
   /** Si se pasa, se muestra EN LUGAR del selector cuando vista === "elegir"
    *  (JUFA lo usa para mostrar el historial en modo soloRegistro). */
   pantallaElegir?: React.ReactNode;
@@ -41,6 +44,7 @@ export function DictaminadorPosicion({
   puedeElaborar = true, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false,
   titulo = "¿Cuál es la posición de DIIPA en este caso?",
   subtitulo = "Cada posición tiene su propio recorrido de pre-dictamen.",
+  onResultados,
   pantallaElegir,
 }: Props) {
   // intento de abrir una posición (respeta el candado de elaborar)
@@ -91,7 +95,7 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} onResultados={onResultados} />;
   if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
