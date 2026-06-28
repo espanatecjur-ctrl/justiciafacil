@@ -72,6 +72,10 @@ export interface PredFuente {
 }
 
 const SEM_LABEL: Record<Semaforo, string> = { verde: "Verde", amarillo: "Amarillo", naranja: "Naranja", rojo: "Rojo", gris: "Sin evaluar" };
+const SEM_CHIP: Record<Semaforo, string> = {
+  verde: "bg-emerald-100 text-emerald-800", amarillo: "bg-amber-100 text-amber-800",
+  naranja: "bg-orange-100 text-orange-800", rojo: "bg-red-100 text-red-800", gris: "bg-muted text-muted-foreground",
+};
 const SEM_BTN: Record<Semaforo, string> = {
   verde: "bg-emerald-600 text-white", amarillo: "bg-amber-500 text-white",
   naranja: "bg-orange-500 text-white", rojo: "bg-red-600 text-white", gris: "bg-muted",
@@ -265,28 +269,81 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
 
         {/* ---------- JURÍDICO (10 hitos) ---------- */}
         <TabsContent value="juridico" className="mt-4 space-y-4">
-          {/* BANNER FIJO: Confirmar posición (sigue al hacer scroll) */}
-          <div className="sticky top-0 z-20 rounded-xl border-2 border-[color:var(--teal)]/40 bg-card/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-            {vistaPos === "elegir" ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Confirmar posición</span>
-                <select value={posSel} onChange={(e) => setPosSel(e.target.value as Exclude<VistaPosicion, "elegir">)} className="rounded-md border border-input bg-background px-3 py-1.5 text-sm">
-                  <option value="Actor">Actor</option>
-                  <option value="Demandado">Demandado</option>
-                  <option value="Sucesorio">Sucesorio</option>
-                  <option value="Contingencia">Contingencia</option>
-                  <option value="Tramites">Trámites</option>
-                </select>
-                <button onClick={() => setVistaPos(posSel)} className="rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: "#0C5C46" }}>Confirmar</button>
-                <span className="text-xs text-muted-foreground">Por ahora Actor se engancha a los 10 hitos.</span>
+          {/* BARRA FIJA: banner de posición + indicadores (siguen al hacer scroll) */}
+          <div className="sticky top-0 z-20 -mx-1 space-y-2 bg-background/95 px-1 pb-2 pt-1 backdrop-blur">
+            {/* banner de posición */}
+            <div className="rounded-xl border-2 border-[color:var(--teal)]/40 bg-card p-3">
+              {vistaPos === "elegir" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Confirmar posición</span>
+                  <select value={posSel} onChange={(e) => setPosSel(e.target.value as Exclude<VistaPosicion, "elegir">)} className="rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                    <option value="Actor">Actor</option>
+                    <option value="Demandado">Demandado</option>
+                    <option value="Sucesorio">Sucesorio</option>
+                    <option value="Contingencia">Contingencia</option>
+                    <option value="Tramites">Trámites</option>
+                  </select>
+                  <button onClick={() => setVistaPos(posSel)} className="rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: "#0C5C46" }}>Confirmar</button>
+                  <span className="text-xs text-muted-foreground">Por ahora Actor se engancha a los 10 hitos.</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Posición confirmada:</span>
+                  <span className="rounded-full bg-[color:var(--teal)]/10 px-3 py-1 text-sm font-medium text-[color:var(--teal)]">{vistaPos}</span>
+                  <button onClick={() => setVistaPos("elegir")} className="ml-auto rounded-md border border-input px-3 py-1.5 text-xs hover:bg-muted">Cambiar posición</button>
+                </div>
+              )}
+            </div>
+
+            {/* indicadores: comparación Sistema → Abogado */}
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="mb-2 text-xs font-semibold text-[color:var(--teal)]"><Scale className="mr-1 inline h-3.5 w-3.5" /> Indicadores · Sistema → Abogado</p>
+              <div className="space-y-2">
+                {HITOS_UCP.filter((h) => h.tipo === "motor").map((h) => {
+                  const c = h.clave as ClaveMotor;
+                  const sistemaSem = motoresRecorrido?.[c]?.semaforo;
+                  const ov = motorOverride[c];
+                  const est = hitosCalculados[c];
+                  const actualSem = est?.semaforo;
+                  const tieneValor = !!actualSem && actualSem !== "gris";
+                  const cambiado = !!ov && ov !== sistemaSem;
+                  return (
+                    <div key={c} className={`rounded-lg border p-2.5 ${cambiado ? "border-amber-300 bg-amber-50" : "border-border bg-background"}`}>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="basis-full text-sm font-medium sm:flex-1 sm:basis-auto">{h.num}. {h.label}
+                          {cambiado ? <span className="ml-1 text-[10px] font-normal text-amber-700">· cambiado</span>
+                            : tieneValor ? <span className="ml-1 text-[10px] font-normal text-muted-foreground">· sin cambio</span> : null}
+                        </span>
+                        {!tieneValor ? (
+                          <span className="text-xs text-muted-foreground">pendiente — falta llenar el recorrido</span>
+                        ) : sistemaSem ? (
+                          <>
+                            <span className="text-xs text-muted-foreground">Sistema</span>
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${SEM_CHIP[sistemaSem]}`}>{SEM_LABEL[sistemaSem]}</span>
+                            <span className="text-muted-foreground">{cambiado ? "→" : "="}</span>
+                            <span className="text-xs text-muted-foreground">Abogado</span>
+                            <span className={`rounded-full px-2 py-0.5 text-xs ${SEM_CHIP[actualSem]} ${cambiado ? "font-medium" : ""}`}>{SEM_LABEL[actualSem]}</span>
+                          </>
+                        ) : (
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${SEM_CHIP[actualSem]}`}>{SEM_LABEL[actualSem]}</span>
+                        )}
+                      </div>
+                      {tieneValor && (
+                        <div className="mt-2 flex items-center gap-1">
+                          {(["verde", "amarillo", "rojo"] as Semaforo[]).map((s) => (
+                            <button key={s} onClick={() => overrideMotor(c, s)} className={`rounded px-2 py-0.5 text-xs ${(ov ?? actualSem) === s ? SEM_BTN[s] : "bg-background border border-border text-muted-foreground"}`}>{SEM_LABEL[s]}</button>
+                          ))}
+                          {ov && <button onClick={() => autoMotor(c)} className="ml-auto rounded border border-border px-2 py-0.5 text-xs text-muted-foreground" title="Volver al cálculo del sistema">Auto</button>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {!motoresRecorrido && (
+                  <p className="text-xs text-muted-foreground">Aún no confirmas la posición. Confírmala arriba y llena el recorrido para que estos 4 hitos se calculen solos.</p>
+                )}
               </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Posición confirmada:</span>
-                <span className="rounded-full bg-[color:var(--teal)]/10 px-3 py-1 text-sm font-medium text-[color:var(--teal)]">{vistaPos}</span>
-                <button onClick={() => setVistaPos("elegir")} className="ml-auto rounded-md border border-input px-3 py-1.5 text-xs hover:bg-muted">Cambiar posición</button>
-              </div>
-            )}
+            </div>
           </div>
 
           {!reqOK && (
@@ -311,54 +368,9 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
               onVolver={() => setVistaPos("elegir")}
               puedeAdmin={puedeAdmin}
               onResultados={setMotoresRecorrido}
+              modoFicha
             />
           )}
-
-          {/* INDICADORES (hitos 2,3,4,10) */}
-          <Card className="legal-card">
-            <CardContent className="space-y-4 p-4">
-              <div className="flex items-center gap-2">
-                <Scale className="h-4 w-4 text-[color:var(--teal)]" />
-                <p className="text-sm font-semibold">Indicadores · hitos de motor</p>
-                <span className="text-xs text-muted-foreground">(2 Prescripción · 3 Caducidad · 4 Usucapión · 10 Viabilidad)</span>
-              </div>
-
-              {/* resumen de los 4 hitos de motor (reflejados del recorrido + cambio a mano del abogado) */}
-              <div className="space-y-2">
-                {HITOS_UCP.filter((h) => h.tipo === "motor").map((h) => {
-                  const c = h.clave as ClaveMotor;
-                  const est = hitosCalculados[c];
-                  const ov = motorOverride[c];
-                  const sugerido = motoresRecorrido?.[c]?.semaforo;
-                  return (
-                    <div key={c} className={`rounded-lg border p-3 ${semBg(est?.semaforo)}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium">{h.num}. {h.label}
-                          {est?.etiqueta ? <span className="ml-1 font-normal text-muted-foreground">· {est.etiqueta}{est.dato ? ` (${est.dato})` : ""}</span> : null}
-                        </p>
-                        <div className="flex items-center gap-1">
-                          {(["verde", "amarillo", "rojo"] as Semaforo[]).map((s) => (
-                            <button key={s} onClick={() => overrideMotor(c, s)}
-                              className={`rounded px-2 py-0.5 text-xs ${(ov ?? est?.semaforo) === s ? SEM_BTN[s] : "bg-background border border-border text-muted-foreground"}`}>
-                              {SEM_LABEL[s]}
-                            </button>
-                          ))}
-                          {ov && <button onClick={() => autoMotor(c)} className="rounded border border-border px-2 py-0.5 text-xs text-muted-foreground" title="Volver al cálculo del sistema">Auto</button>}
-                        </div>
-                      </div>
-                      {est?.detalle && <p className="mt-1 text-xs text-muted-foreground">{est.detalle}</p>}
-                      {ov && <p className="mt-1 text-[11px] font-medium text-amber-700">Cambiado a mano por el abogado{sugerido ? ` (el sistema sugería ${SEM_LABEL[sugerido]})` : ""}.</p>}
-                      <Textarea className="mt-2 min-h-[40px] text-sm" placeholder="Nota del abogado sobre este hito…"
-                        value={hitos[c]?.nota || ""} onChange={(e) => setNota(c, e.target.value)} />
-                    </div>
-                  );
-                })}
-                {!motoresRecorrido && (
-                  <p className="text-xs text-muted-foreground">Aún no confirmas la posición. Confírmala arriba y llena el recorrido para que estos 4 hitos se calculen solos.</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
 
           {/* CRITERIO (hitos 1,5,6,7,8,9) */}
           <Card className="legal-card">
