@@ -6,6 +6,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Scale } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
+import { SelectorGarantia } from "@/components/selector-garantia";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 
 export const Route = createFileRoute("/urrj")({
@@ -69,6 +70,10 @@ function URRJ() {
           </div>
         </div>
       </div>
+
+      {!soloRegistro && vista === "elegir" && (
+        <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
+      )}
 
       <DictaminadorPosicion
         casos={casos}
