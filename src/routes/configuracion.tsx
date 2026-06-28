@@ -1,211 +1,227 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
-import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { ROLES, MODULOS, TODOS_MODULOS, rolVeTodo, type ModuloClave } from "@/lib/roles";
-import { ColaboradoresConfig } from "@/components/colaboradores-config";
-import { AreasConfig } from "@/components/areas-config";
-import { PapeleraConfig } from "@/components/papelera-config";
-import { PermisosURRJConfig } from "@/components/permisos-urrj-config";
-import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale } from "lucide-react";
+import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { cargarJuzgadosJalisco, nombreJuzgadoJAL, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
+import { X, Loader2, MapPin, Check } from "lucide-react";
 
-export const Route = createFileRoute("/configuracion")({
-  validateSearch: (s: Record<string, unknown>) => ({ tab: typeof s.tab === "string" ? s.tab : undefined }),
-  head: () => ({ meta: [{ title: "Configuración — JusticiaFácil" }] }),
-  component: ConfiguracionPage,
-});
+const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
+const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
-const NAVY = "#0B1E3A";
-const GOLD = "#C2A24C";
+export interface BoletinJuzgado {
+  id: string; cve_distrito: string; nombre_distrito: string; cve_juzgado: string; nombre_juzgado: string; fuente?: string;
+}
 
-const headers = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  "Content-Type": "application/json",
-};
-
-const TABS = [
-  { key: "roles", label: "Roles y Permisos", icon: ShieldCheck },
-  { key: "colaboradores", label: "Colaboradores", icon: Users },
-  { key: "conectores", label: "Conectores de Juzgados", icon: Network },
-  { key: "folios", label: "Folios", icon: Bookmark },
-  { key: "areas", label: "Áreas y Equipo", icon: Scale },
-  { key: "papelera", label: "Papelera", icon: Trash2 },
+// Órganos de La Paz, Baja California Sur (boletín del PJEBCS)
+const BCS_ORGANOS = [
+  "Juzgado Primero de Primera Instancia en el Ramo Civil",
+  "Juzgado Segundo de Primera Instancia en el Ramo Civil",
+  "Juzgado Primero de Primera Instancia en el Ramo Mercantil",
+  "Juzgado Segundo de Primera Instancia en el Ramo Mercantil",
+  "Juzgado Tercero de Primera Instancia en el Ramo Mercantil",
+  "Juzgado Primero de Primera Instancia en el Ramo Familiar",
+  "Juzgado Segundo de Primera Instancia en el Ramo Familiar",
+  "Juzgado Tercero de Primera Instancia en el Ramo Familiar",
+  "Juzgado Cuarto de Primera Instancia en el Ramo Familiar",
+  "Primera Sala Unitaria en Materia Civil",
+  "Segunda Sala Unitaria en Materia Civil",
+  "Tercera Sala Unitaria Civil y de Justicia Administrativa (Materia Civil)",
 ];
 
-function ConfiguracionPage() {
-  const { tab } = Route.useSearch();
-  const [activa, setActiva] = useState<string>(tab && TABS.some((t) => t.key === tab) ? tab : "roles");
+// El boletín de Sinaloa manda el expediente sin diagonal: 00341/2017 -> 003412017
+export const folioAsunto = (expediente?: string | null) => (expediente || "").replace(/\D/g, "");
 
-  return (
-    <div className="space-y-6">
-      <PageHeader eyebrow="Sistema" title="Configuración" description="Roles, colaboradores, conectores, folios y papelera." />
+export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJuridico; onClose: () => void; onGuardado: () => void }) {
+  const isBCS = /baja|bcs/i.test(caso.entidad || "");
+  const isJAL = /jalisco/i.test(caso.entidad || "");
 
-      {/* Pestañas */}
-      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setActiva(t.key)}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
-              activa === t.key ? "bg-[#0B1E3A] text-white" : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            <t.icon className="h-4 w-4" /> {t.label}
-          </button>
-        ))}
-      </div>
-
-      {activa === "roles" && <RolesPermisos />}
-      {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><PermisosURRJConfig /></div>}
-      {activa === "colaboradores" && <ColaboradoresConfig />}
-      {activa === "areas" && <AreasConfig />}
-      {activa === "papelera" && <PapeleraConfig />}
-      {activa !== "roles" && activa !== "colaboradores" && activa !== "areas" && activa !== "papelera" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
-    </div>
-  );
-}
-
-function Proximamente({ nombre }: { nombre: string }) {
-  return (
-    <Card className="legal-card p-10 text-center">
-      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-[#C2A24C]/15 text-[#8A6E22]">
-        <Hammer className="h-6 w-6" />
-      </div>
-      <p className="font-display text-lg font-semibold">{nombre}</p>
-      <p className="mt-1 text-sm text-muted-foreground">Esta sección la construiremos en el siguiente paso. La estructura ya está lista.</p>
-    </Card>
-  );
-}
-
-// ============================ Roles y Permisos ============================
-function defaultsDeRol(codigo: string): ModuloClave[] {
-  const r = ROLES.find((x) => x.codigo === codigo);
-  if (!r) return [];
-  return r.modulos === "todos" ? [...TODOS_MODULOS] : [...r.modulos];
-}
-
-function RolesPermisos() {
-  const [modulos, setModulos] = useState<Record<string, ModuloClave[]>>({});
-  const [cargando, setCargando] = useState(true);
+  const [cat, setCat] = useState<BoletinJuzgado[]>([]);
+  const [distrito, setDistrito] = useState(caso.cve_distrito || "");
+  const [juzgadoId, setJuzgadoId] = useState("");
+  const [otro, setOtro] = useState(false);
+  const [nd, setNd] = useState(""); const [cd, setCd] = useState("");
+  const [nj, setNj] = useState(""); const [cj, setCj] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const [guardado, setGuardado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // BCS: órgano de La Paz (preselecciona el que ya tenga guardado)
+  const orgGuardado = (caso.nombre_juzgado || "").replace(/,\s*La Paz.*$/i, "").trim();
+  const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS.includes(orgGuardado) ? orgGuardado : BCS_ORGANOS[1]);
+
+  // Jalisco: catálogo de juzgados (M01, C01...) traído del robot
+  const [jalJudges, setJalJudges] = useState<JuzgadoJAL[]>([]);
+  const codeGuardado = ((caso.nombre_juzgado || "").match(/\[([A-Za-z]\d{2,3})\]/) || [])[1] || "";
+  const [jalCode, setJalCode] = useState(codeGuardado);
+
   useEffect(() => {
-    const editables = ROLES.filter((r) => !rolVeTodo(r.modulos));
-    fetch(`${SUPABASE_URL}/rest/v1/app_permisos?select=config&id=eq.1`, { headers })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Supabase ${r.status}`))))
-      .then((rows: { config?: { modulos?: Record<string, ModuloClave[]> } }[]) => {
-        const cfg = rows?.[0]?.config?.modulos ?? {};
-        const inicial: Record<string, ModuloClave[]> = {};
-        for (const r of editables) inicial[r.codigo] = cfg[r.codigo] ?? defaultsDeRol(r.codigo);
-        setModulos(inicial);
-      })
-      .catch(() => {
-        const inicial: Record<string, ModuloClave[]> = {};
-        for (const r of editables) inicial[r.codigo] = defaultsDeRol(r.codigo);
-        setModulos(inicial);
-        setError("No se pudo leer la configuración guardada; se muestran los valores de fábrica. (¿Falta correr el SQL de app_permisos?)");
-      })
-      .finally(() => setCargando(false));
+    if (isJAL) {
+      cargarJuzgadosJalisco().then(setJalJudges).catch(() => {});
+      return;
+    }
+    if (isBCS) return; // BCS no usa el catálogo de Sinaloa
+    sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000")
+      .then((d) => {
+        setCat(d || []);
+        if (caso.cve_distrito && caso.cve_juzgado) {
+          const match = (d || []).find((x) => x.cve_distrito === caso.cve_distrito && x.cve_juzgado === caso.cve_juzgado);
+          if (match) { setDistrito(match.cve_distrito); setJuzgadoId(match.id); }
+        }
+      }).catch(() => setCat([]));
   }, []);
 
-  const toggle = (rol: string, mod: ModuloClave) => {
-    setGuardado(false);
-    setModulos((prev) => {
-      const s = new Set(prev[rol] ?? []);
-      s.has(mod) ? s.delete(mod) : s.add(mod);
-      return { ...prev, [rol]: TODOS_MODULOS.filter((m) => s.has(m)) };
-    });
-  };
+  const distritos = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const j of cat) m.set(j.cve_distrito, j.nombre_distrito);
+    return [...m.entries()].map(([cve, nombre]) => ({ cve, nombre }));
+  }, [cat]);
+
+  const juzgadosDeDistrito = useMemo(() => cat.filter((j) => j.cve_distrito === distrito), [cat, distrito]);
 
   const guardar = async () => {
-    setGuardando(true);
-    setError(null);
+    setGuardando(true); setError(null);
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_permisos?id=eq.1`, {
-        method: "PATCH",
-        headers: { ...headers, Prefer: "return=representation" },
-        body: JSON.stringify({ config: { modulos }, updated_at: new Date().toISOString() }),
+      // ----- Jalisco: guarda nombre + código [M01] en nombre_juzgado -----
+      if (isJAL) {
+        if (!jalCode) { setError("Elige el juzgado de Jalisco."); setGuardando(false); return; }
+        const jj = jalJudges.find((j) => j.code === jalCode);
+        const nombre = jj ? nombreJuzgadoJAL(jj) : `Juzgado [${jalCode}], Jalisco`;
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+          method: "PATCH", headers: wHeaders, body: JSON.stringify({ nombre_juzgado: nombre }),
+        });
+        if (!res.ok) throw new Error(`Supabase ${res.status}`);
+        onGuardado(); return;
+      }
+
+      // ----- BCS: solo guarda el órgano en nombre_juzgado -----
+      if (isBCS) {
+        if (!orgBCS) { setError("Elige el juzgado/órgano de La Paz."); setGuardando(false); return; }
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+          method: "PATCH", headers: wHeaders, body: JSON.stringify({ nombre_juzgado: `${orgBCS}, La Paz, BCS` }),
+        });
+        if (!res.ok) throw new Error(`Supabase ${res.status}`);
+        onGuardado(); return;
+      }
+
+      // ----- Sinaloa: distrito + juzgado del catálogo -----
+      let payloadCve = { cve_distrito: "", cve_juzgado: "", nombre_juzgado: "" };
+      if (otro) {
+        if (!nd.trim() || !cd.trim() || !nj.trim() || !cj.trim()) { setError("Llena distrito, juzgado y sus dos claves."); setGuardando(false); return; }
+        await fetch(`${SUPABASE_URL}/rest/v1/boletin_juzgado`, {
+          method: "POST", headers: wHeaders,
+          body: JSON.stringify({ cve_distrito: cd.trim(), nombre_distrito: nd.trim(), cve_juzgado: cj.trim(), nombre_juzgado: nj.trim(), fuente: "manual" }),
+        }).catch(() => {});
+        payloadCve = { cve_distrito: cd.trim(), cve_juzgado: cj.trim(), nombre_juzgado: nj.trim() };
+      } else {
+        const j = cat.find((x) => x.id === juzgadoId);
+        if (!j) { setError("Elige el juzgado de la lista (o usa “otro”)."); setGuardando(false); return; }
+        payloadCve = { cve_distrito: j.cve_distrito, cve_juzgado: j.cve_juzgado, nombre_juzgado: j.nombre_juzgado };
+      }
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+        method: "PATCH", headers: wHeaders, body: JSON.stringify(payloadCve),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
-      const data = await res.json();
-      if (!data || data.length === 0) throw new Error("No existe la fila id=1. Corre el SQL de app_permisos.");
-      setGuardado(true);
-    } catch (e: any) {
-      setError("No se pudo guardar: " + e.message);
-    } finally {
-      setGuardando(false);
-    }
+      onGuardado();
+    } catch (e: any) { setError(e.message); } finally { setGuardando(false); }
   };
 
-  const porGrupo = useMemo(() => {
-    const g: Record<string, typeof ROLES> = {};
-    for (const r of ROLES) (g[r.grupo] ??= []).push(r);
-    return g;
-  }, []);
-
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-white" style={{ background: `linear-gradient(120deg, ${NAVY} 0%, #103A3A 60%, #0C5C46 100%)` }}>
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5" style={{ color: GOLD }} />
-          <p className="text-sm">Activa o desactiva los módulos por rol y guarda los cambios.</p>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg overflow-hidden rounded-xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 text-white" style={{ background: "#0B1E3A" }}>
+          <p className="flex items-center gap-2 font-semibold"><MapPin className="h-4 w-4" /> Domicilio judicial · {caso.expediente}</p>
+          <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
-        <button onClick={guardar} disabled={guardando} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[#0B1E3A] disabled:opacity-60" style={{ background: GOLD }}>
-          {guardado ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {guardando ? "Guardando…" : guardado ? "Guardado" : "Guardar cambios"}
-        </button>
-      </div>
+        <div className="space-y-3 p-4">
 
-      {error && <Card className="legal-card p-4 border-amber-200 bg-amber-50 text-sm text-amber-800">{error}</Card>}
-
-      {cargando ? (
-        <Card className="legal-card p-8 text-center text-muted-foreground">Cargando roles…</Card>
-      ) : (
-        Object.entries(porGrupo).map(([grupo, roles]) => (
-          <div key={grupo} className="space-y-3">
-            <h3 className="font-display text-lg font-semibold flex items-center gap-2">
-              <span className="h-4 w-1 rounded" style={{ background: GOLD }} /> {grupo}
-            </h3>
-            {roles.map((r) => {
-              const veTodo = rolVeTodo(r.modulos);
-              const activos = new Set(modulos[r.codigo] ?? []);
-              return (
-                <Card key={r.codigo} className="legal-card p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{r.nombre}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{r.codigo}</p>
-                    </div>
-                    {veTodo && (
-                      <span className="flex items-center gap-1 rounded-full bg-[#0B1E3A] px-2.5 py-1 text-[11px] text-white">
-                        <Lock className="h-3 w-3" /> Ve todo
-                      </span>
-                    )}
+          {isJAL ? (
+            // ===================== MODO JALISCO =====================
+            <>
+              <p className="text-xs text-muted-foreground">Este expediente es de <b>Jalisco</b>. Elige el <b>juzgado</b> donde está (Zona Metropolitana de Guadalajara), para que el robot lo siga en el boletín.</p>
+              {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado (Jalisco · ZMG)</label>
+                <select className={inp} value={jalCode} onChange={(e) => setJalCode(e.target.value)} disabled={!jalJudges.length}>
+                  <option value="">{jalJudges.length ? "— elige juzgado —" : "Cargando juzgados…"}</option>
+                  <optgroup label="Zona Metropolitana (Guadalajara)">
+                    {jalJudges.filter((j) => !j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  </optgroup>
+                  <optgroup label="Foráneos (municipios)">
+                    {jalJudges.filter((j) => j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  </optgroup>
+                </select>
+              </div>
+              <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                El robot buscará el <b>Expediente {caso.expediente}</b> en ese juzgado del boletín de Jalisco (lectura directa, muy rápida).
+                <br />💡 Tip: si no sabes cuál es, búscalo primero en la pestaña <b>Boletín Judicial</b>.
+              </div>
+            </>
+          ) : isBCS ? (
+            // ===================== MODO BCS (La Paz) =====================
+            <>
+              <p className="text-xs text-muted-foreground">Este expediente es de <b>Baja California Sur</b>. Elige el <b>juzgado/órgano de La Paz</b> donde está, para que el robot sepa dónde buscarlo.</p>
+              {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado / Órgano (La Paz, BCS)</label>
+                <select className={inp} value={orgBCS} onChange={(e) => setOrgBCS(e.target.value)}>
+                  {BCS_ORGANOS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                El robot buscará el <b>Expediente {caso.expediente}</b> en ese órgano del boletín de La Paz.
+                <br />💡 Tip: si no sabes cuál es, usa la pestaña <b>Boletín Judicial</b> (botón BCS) y ve probando órganos hasta que aparezcan acuerdos.
+              </div>
+            </>
+          ) : (
+            // ===================== MODO SINALOA =====================
+            <>
+              <p className="text-xs text-muted-foreground">Asigna el <b>distrito</b> y <b>juzgado</b> para que el robot sepa dónde buscar este expediente en el boletín.</p>
+              {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
+              {!otro ? (
+                <>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Distrito judicial</label>
+                    <select className={inp} value={distrito} onChange={(e) => { setDistrito(e.target.value); setJuzgadoId(""); }}>
+                      <option value="">— elige distrito —</option>
+                      {distritos.map((d) => <option key={d.cve} value={d.cve}>{d.nombre}</option>)}
+                    </select>
                   </div>
-                  {veTodo ? (
-                    <p className="text-sm text-muted-foreground">Acceso completo a todos los módulos (no editable).</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {MODULOS.map((m) => {
-                        const on = activos.has(m.clave);
-                        return (
-                          <button key={m.clave} onClick={() => toggle(r.codigo, m.clave)} className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${on ? "border-[#0C5C46] bg-[#0C5C46]/10 text-[#0C5C46]" : "border-input bg-background text-muted-foreground hover:bg-muted"}`}>
-                            {on ? "● " : "○ "}{m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado</label>
+                    <select className={inp} value={juzgadoId} onChange={(e) => setJuzgadoId(e.target.value)} disabled={!distrito}>
+                      <option value="">— elige juzgado —</option>
+                      {juzgadosDeDistrito.map((j) => <option key={j.id} value={j.id}>{j.nombre_juzgado}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={() => setOtro(true)} className="text-xs text-[color:var(--teal)] hover:underline">¿No aparece tu juzgado? Agrégalo al catálogo →</button>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    Estás agregando un juzgado nuevo al catálogo. Las <b>claves</b> son los números que usa el boletín (ej. distrito 06, juzgado 13). Si no las sabes, el robot las completará después.
+                  </div>
+                  <div className="grid grid-cols-[1fr_90px] gap-2">
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del distrito</label><input className={inp} value={nd} onChange={(e) => setNd(e.target.value)} placeholder="Culiacán" /></div>
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Clave</label><input className={inp} value={cd} onChange={(e) => setCd(e.target.value)} placeholder="06" /></div>
+                  </div>
+                  <div className="grid grid-cols-[1fr_90px] gap-2">
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre del juzgado</label><input className={inp} value={nj} onChange={(e) => setNj(e.target.value)} placeholder="Juzgado Tercero Civil, Culiacán" /></div>
+                    <div><label className="mb-1 block text-xs font-medium text-muted-foreground">Clave</label><input className={inp} value={cj} onChange={(e) => setCj(e.target.value)} placeholder="13" /></div>
+                  </div>
+                  <button onClick={() => setOtro(false)} className="text-xs text-[color:var(--teal)] hover:underline">← Volver a la lista</button>
+                </>
+              )}
+              <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                El robot buscará con: <b>FolioAsunto = {folioAsunto(caso.expediente) || "—"}</b> (tu expediente sin la diagonal).
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
+            <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar"}
+            </button>
           </div>
-        ))
-      )}
+        </div>
+      </div>
     </div>
   );
 }
