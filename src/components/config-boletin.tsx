@@ -30,6 +30,8 @@ export const folioAsunto = (expediente?: string | null) => (expediente || "").re
 
 export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJuridico; onClose: () => void; onGuardado: () => void }) {
   const isBCS = /baja|bcs/i.test(caso.entidad || "");
+  const isJAL = /jalisco/i.test(caso.entidad || "");
+  const ROBOT_JAL = "https://robot-boletin-699470444450.us-central1.run.app";
 
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState(caso.cve_distrito || "");
@@ -44,7 +46,16 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
   const orgGuardado = (caso.nombre_juzgado || "").replace(/,\s*La Paz.*$/i, "").trim();
   const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS.includes(orgGuardado) ? orgGuardado : BCS_ORGANOS[1]);
 
+  // Jalisco: catálogo de juzgados (M01, C01...) traído del robot
+  const [jalJudges, setJalJudges] = useState<{ code: string; name: string }[]>([]);
+  const codeGuardado = ((caso.nombre_juzgado || "").match(/\[([A-Za-z]\d{2,3})\]/) || [])[1] || "";
+  const [jalCode, setJalCode] = useState(codeGuardado);
+
   useEffect(() => {
+    if (isJAL) {
+      fetch(`${ROBOT_JAL}/jal-judges`).then((r) => r.json()).then((d) => setJalJudges(d.juzgados || [])).catch(() => {});
+      return;
+    }
     if (isBCS) return; // BCS no usa el catálogo de Sinaloa
     sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000")
       .then((d) => {
@@ -67,6 +78,18 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
   const guardar = async () => {
     setGuardando(true); setError(null);
     try {
+      // ----- Jalisco: guarda nombre + código [M01] en nombre_juzgado -----
+      if (isJAL) {
+        if (!jalCode) { setError("Elige el juzgado de Jalisco."); setGuardando(false); return; }
+        const jj = jalJudges.find((j) => j.code === jalCode);
+        const nombre = `${jj ? jj.name : "Juzgado"} [${jalCode}], Jalisco`;
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+          method: "PATCH", headers: wHeaders, body: JSON.stringify({ nombre_juzgado: nombre }),
+        });
+        if (!res.ok) throw new Error(`Supabase ${res.status}`);
+        onGuardado(); return;
+      }
+
       // ----- BCS: solo guarda el órgano en nombre_juzgado -----
       if (isBCS) {
         if (!orgBCS) { setError("Elige el juzgado/órgano de La Paz."); setGuardando(false); return; }
@@ -108,7 +131,24 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
         </div>
         <div className="space-y-3 p-4">
 
-          {isBCS ? (
+          {isJAL ? (
+            // ===================== MODO JALISCO =====================
+            <>
+              <p className="text-xs text-muted-foreground">Este expediente es de <b>Jalisco</b>. Elige el <b>juzgado</b> donde está (Zona Metropolitana de Guadalajara), para que el robot lo siga en el boletín.</p>
+              {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado (Jalisco · ZMG)</label>
+                <select className={inp} value={jalCode} onChange={(e) => setJalCode(e.target.value)} disabled={!jalJudges.length}>
+                  <option value="">{jalJudges.length ? "— elige juzgado —" : "Cargando juzgados…"}</option>
+                  {jalJudges.map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                </select>
+              </div>
+              <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                El robot buscará el <b>Expediente {caso.expediente}</b> en ese juzgado del boletín de Jalisco (lectura directa, muy rápida).
+                <br />💡 Tip: si no sabes cuál es, búscalo primero en la pestaña <b>Boletín Judicial</b>.
+              </div>
+            </>
+          ) : isBCS ? (
             // ===================== MODO BCS (La Paz) =====================
             <>
               <p className="text-xs text-muted-foreground">Este expediente es de <b>Baja California Sur</b>. Elige el <b>juzgado/órgano de La Paz</b> donde está, para que el robot sepa dónde buscarlo.</p>
