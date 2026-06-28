@@ -4,14 +4,13 @@
 // ============================================================
 
 export type ModuloClave =
-  | "inicio" | "expedientes" | "hitos" | "ucm" | "udp" | "control_demandas"
+  | "inicio" | "expedientes" | "ucm" | "udp" | "control_demandas"
   | "boletines" | "exhortos" | "amparos" | "recursos"
   | "contratos" | "tramites" | "ucp" | "urrj" | "conectores" | "configuracion";
 
 export const MODULOS: { clave: ModuloClave; label: string }[] = [
   { clave: "inicio", label: "Inicio" },
   { clave: "expedientes", label: "Expedientes" },
-  { clave: "hitos", label: "Hitos & Agenda" },
   { clave: "ucm", label: "UCM · Seguimiento" },
   { clave: "udp", label: "UDP · Defensa y Protección" },
   { clave: "control_demandas", label: "Control de demandas" },
@@ -36,7 +35,7 @@ export type DefinicionRol = {
   modulos: ModuloClave[] | "todos";
 };
 
-const BASE: ModuloClave[] = ["inicio", "expedientes", "hitos", "boletines"];
+const BASE: ModuloClave[] = ["inicio", "expedientes", "boletines"];
 
 export const ROLES: DefinicionRol[] = [
   { codigo: "Super_Admin", nombre: "Super Admin (DGE + Tecnología)", grupo: "Sistema", modulos: "todos" },
