@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { sbSelect } from "@/lib/supabase";
 import { type BoletinJuzgado } from "@/components/config-boletin";
+import { cargarJuzgadosJalisco, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
 import { Search, Loader2 } from "lucide-react";
 
 // URL del robot en Google Cloud Run (consulta en vivo el boletín, NO guarda nada)
@@ -39,7 +40,7 @@ export function BuscadorBoletin() {
   const [distrito, setDistrito] = useState("");
   const [juzgado, setJuzgado] = useState("");
   const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS[1]); // Segundo Civil por defecto
-  const [jalJudges, setJalJudges] = useState<{ code: string; name: string }[]>([]);
+  const [jalJudges, setJalJudges] = useState<JuzgadoJAL[]>([]);
   const [jalCode, setJalCode] = useState("");
   const [exp, setExp] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -49,7 +50,7 @@ export function BuscadorBoletin() {
   useEffect(() => {
     sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000")
       .then((d) => setCat(d || [])).catch(() => {});
-    fetch(`${ROBOT}/jal-judges`).then((r) => r.json()).then((d) => setJalJudges(d.juzgados || [])).catch(() => {});
+    cargarJuzgadosJalisco().then(setJalJudges).catch(() => {});
   }, []);
 
   const distritos = useMemo(() => Array.from(new Set(cat.map((c) => c.nombre_distrito))).sort(), [cat]);
@@ -67,7 +68,9 @@ export function BuscadorBoletin() {
       url = `${ROBOT}/bcs-buscar?exp=${encodeURIComponent(exp.trim())}&juzgado=${encodeURIComponent(orgBCS)}`;
     } else {
       if (!jalCode) { setErr("Elige el juzgado de Jalisco."); return; }
-      url = `${ROBOT}/jal-leer?exp=${encodeURIComponent(exp.trim())}&judged=${encodeURIComponent(jalCode)}`;
+      const esForaneo = jalJudges.find((j) => j.code === jalCode)?.foraneo;
+      const endpoint = esForaneo ? "jalf-leer" : "jal-leer";
+      url = `${ROBOT}/${endpoint}?exp=${encodeURIComponent(exp.trim())}&judged=${encodeURIComponent(jalCode)}`;
     }
     setErr(null); setCargando(true); setRes(null);
     try {
@@ -147,7 +150,12 @@ export function BuscadorBoletin() {
               <label className="mb-1 block text-xs font-medium">Juzgado (Jalisco · ZMG)</label>
               <select className={inp} value={jalCode} onChange={(e) => setJalCode(e.target.value)} disabled={!jalJudges.length}>
                 <option value="">{jalJudges.length ? "Selecciona…" : "Cargando juzgados…"}</option>
-                {jalJudges.map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                <optgroup label="Zona Metropolitana (Guadalajara)">
+                  {jalJudges.filter((j) => !j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                </optgroup>
+                <optgroup label="Foráneos (municipios)">
+                  {jalJudges.filter((j) => j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                </optgroup>
               </select>
             </div>
             <div>
