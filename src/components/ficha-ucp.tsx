@@ -20,6 +20,7 @@ import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictamina
 import { type ResultadosActor } from "@/components/recorrido-actor";
 import { SeccionRPPC } from "@/components/seccion-rppc";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
+import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { SeccionFinal } from "@/components/seccion-final";
 
 const headers = {
@@ -426,6 +427,8 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
 
       {/* PANEL DE SEGUIMIENTO (cuadro de abajo, común a los módulos) */}
       <PanelSeguimiento caso={caso} />
+      {/* ANTECEDENTES (solo lectura) — todo lo de la garantía, con ojito por permiso */}
+      <AntecedentesGarantia casoId={caso.id} expediente={caso.expediente} />
     </div>
   );
 }
