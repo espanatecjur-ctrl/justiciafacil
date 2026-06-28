@@ -130,7 +130,8 @@ function FichaExpedientePage() {
       .finally(() => setCargando(false));
   }, [id]);
 
-  const volver = () => navigate({ to: "/ucm" });
+  const destino = caso?.tipo_registro === "amparo" ? "/amparos" : caso?.tipo_registro === "recurso" ? "/recursos" : caso?.tipo_registro === "exhorto" ? "/exhortos" : "/ucm";
+  const volver = () => navigate({ to: destino });
 
   if (cargando) return (
     <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>
@@ -138,7 +139,7 @@ function FichaExpedientePage() {
   if (!caso) return (
     <div className="rounded-xl border border-border bg-card p-8 text-center">
       <p className="text-sm text-muted-foreground">No se encontró el expediente.</p>
-      <button onClick={volver} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Volver a UCM</button>
+      <button onClick={volver} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Volver</button>
     </div>
   );
 
@@ -148,15 +149,16 @@ function FichaExpedientePage() {
   const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
 
   // banderas de faltantes por sección
+  const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
   const faltaAntecedente = !c.proveedor || !c.no_credito || !c.direccion_garantia || !(c.cliente_nombre || c.cliente_codigo);
-  const faltaEstatus = !c.etapa_actual || !c.estatus_general || !c.prioridad;
+  const faltaEstatus = esEspecial ? !c.estatus_general : (!c.etapa_actual || !c.estatus_general || !c.prioridad);
   const faltaSeguimiento = sinJuzgado || acuerdos.length === 0;
 
   return (
     <div className="space-y-4">
       {/* volver */}
       <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" /> Volver a UCM
+        <ArrowLeft className="h-3.5 w-3.5" /> Volver
       </button>
 
       {/* Encabezado */}
@@ -212,9 +214,9 @@ function FichaExpedientePage() {
 
         {/* Estatus actual */}
         <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual" falta={faltaEstatus}>
-          <Dato label="Etapa actual" valor={c.etapa_actual} importante />
-          <Dato label="Estatus general" valor={c.estatus_general} importante />
-          <Dato label="Prioridad" valor={c.prioridad} importante />
+          {!esEspecial && <Dato label="Etapa actual" valor={c.etapa_actual} importante />}
+          <Dato label={esEspecial ? "Estado" : "Estatus general"} valor={c.estatus_general} importante />
+          <Dato label="Prioridad" valor={c.prioridad} importante={!esEspecial} />
           <Dato label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
           <Dato label="Nota adicional" valor={c.nota_adicional} />
         </Seccion>
