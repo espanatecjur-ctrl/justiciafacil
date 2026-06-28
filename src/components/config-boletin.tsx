@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { cargarJuzgadosJalisco, nombreJuzgadoJAL, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
 import { X, Loader2, MapPin, Check } from "lucide-react";
 
 const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -31,7 +32,6 @@ export const folioAsunto = (expediente?: string | null) => (expediente || "").re
 export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJuridico; onClose: () => void; onGuardado: () => void }) {
   const isBCS = /baja|bcs/i.test(caso.entidad || "");
   const isJAL = /jalisco/i.test(caso.entidad || "");
-  const ROBOT_JAL = "https://robot-boletin-699470444450.us-central1.run.app";
 
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState(caso.cve_distrito || "");
@@ -47,13 +47,13 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
   const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS.includes(orgGuardado) ? orgGuardado : BCS_ORGANOS[1]);
 
   // Jalisco: catálogo de juzgados (M01, C01...) traído del robot
-  const [jalJudges, setJalJudges] = useState<{ code: string; name: string }[]>([]);
+  const [jalJudges, setJalJudges] = useState<JuzgadoJAL[]>([]);
   const codeGuardado = ((caso.nombre_juzgado || "").match(/\[([A-Za-z]\d{2,3})\]/) || [])[1] || "";
   const [jalCode, setJalCode] = useState(codeGuardado);
 
   useEffect(() => {
     if (isJAL) {
-      fetch(`${ROBOT_JAL}/jal-judges`).then((r) => r.json()).then((d) => setJalJudges(d.juzgados || [])).catch(() => {});
+      cargarJuzgadosJalisco().then(setJalJudges).catch(() => {});
       return;
     }
     if (isBCS) return; // BCS no usa el catálogo de Sinaloa
@@ -82,7 +82,7 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
       if (isJAL) {
         if (!jalCode) { setError("Elige el juzgado de Jalisco."); setGuardando(false); return; }
         const jj = jalJudges.find((j) => j.code === jalCode);
-        const nombre = `${jj ? jj.name : "Juzgado"} [${jalCode}], Jalisco`;
+        const nombre = jj ? nombreJuzgadoJAL(jj) : `Juzgado [${jalCode}], Jalisco`;
         const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
           method: "PATCH", headers: wHeaders, body: JSON.stringify({ nombre_juzgado: nombre }),
         });
@@ -140,7 +140,12 @@ export function ConfigBoletinModal({ caso, onClose, onGuardado }: { caso: CasoJu
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">Juzgado (Jalisco · ZMG)</label>
                 <select className={inp} value={jalCode} onChange={(e) => setJalCode(e.target.value)} disabled={!jalJudges.length}>
                   <option value="">{jalJudges.length ? "— elige juzgado —" : "Cargando juzgados…"}</option>
-                  {jalJudges.map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  <optgroup label="Zona Metropolitana (Guadalajara)">
+                    {jalJudges.filter((j) => !j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  </optgroup>
+                  <optgroup label="Foráneos (municipios)">
+                    {jalJudges.filter((j) => j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
+                  </optgroup>
                 </select>
               </div>
               <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
