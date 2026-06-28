@@ -12,14 +12,14 @@ import {
 } from "@/lib/ucp-dictamen";
 import {
   ArrowLeft, Building2, Scale, Landmark, CheckCircle2, CircleDashed, Calculator,
-  Save, Loader2, FileStack, CalendarClock, Stamp,
+  Save, Loader2, FileStack, Stamp,
 } from "lucide-react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { type ResultadosActor } from "@/components/recorrido-actor";
 import { SeccionRPPC } from "@/components/seccion-rppc";
-import { SeccionR2 } from "@/components/seccion-r2";
+import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { SeccionFinal } from "@/components/seccion-final";
 
 const headers = {
@@ -96,7 +96,7 @@ interface Props {
 }
 
 export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVolver, onGuardado }: Props) {
-  const [tab, setTab] = useState(tabInicial);
+  const [tab, setTab] = useState(tabInicial === "r2" ? "juridico" : tabInicial);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -232,7 +232,6 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           <TabsTrigger value="requisitos"><FileStack className="mr-1 h-4 w-4" /> Requisitos</TabsTrigger>
           <TabsTrigger value="juridico"><Scale className="mr-1 h-4 w-4" /> Jurídico</TabsTrigger>
           <TabsTrigger value="rppc"><Landmark className="mr-1 h-4 w-4" /> RPPC / Registral</TabsTrigger>
-          <TabsTrigger value="r2"><CalendarClock className="mr-1 h-4 w-4" /> Seguimiento R2</TabsTrigger>
           <TabsTrigger value="final"><Stamp className="mr-1 h-4 w-4" /> Dictamen final</TabsTrigger>
         </TabsList>
 
@@ -419,16 +418,14 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           <SeccionRPPC caso={caso} dictamen={dictamen} pred={pred} onGuardado={onGuardado} />
         </TabsContent>
 
-        {/* ---------- SEGUIMIENTO R2 ---------- */}
-        <TabsContent value="r2" className="mt-4">
-          <SeccionR2 caso={caso} dictamen={dictamen} onGuardado={onGuardado} />
-        </TabsContent>
-
         {/* ---------- DICTAMEN FINAL ---------- */}
         <TabsContent value="final" className="mt-4">
           <SeccionFinal caso={caso} dictamen={dictamen} pred={pred} onGuardado={onGuardado} />
         </TabsContent>
       </Tabs>
+
+      {/* PANEL DE SEGUIMIENTO (cuadro de abajo, común a los módulos) */}
+      <PanelSeguimiento caso={caso} />
     </div>
   );
 }
