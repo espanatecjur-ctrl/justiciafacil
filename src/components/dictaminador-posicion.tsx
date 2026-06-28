@@ -34,6 +34,8 @@ interface Props {
   /** Si se pasa, se reciben los resultados de motor del recorrido Actor
    *  (lo usa la ficha UCP para reflejarlos en sus hitos). */
   onResultados?: (r: ResultadosActor) => void;
+  /** En la ficha UCP: el recorrido Actor oculta su propio dictamen/firmas. */
+  modoFicha?: boolean;
   /** Si se pasa, se muestra EN LUGAR del selector cuando vista === "elegir"
    *  (JUFA lo usa para mostrar el historial en modo soloRegistro). */
   pantallaElegir?: React.ReactNode;
@@ -45,6 +47,7 @@ export function DictaminadorPosicion({
   titulo = "¿Cuál es la posición de DIIPA en este caso?",
   subtitulo = "Cada posición tiene su propio recorrido de pre-dictamen.",
   onResultados,
+  modoFicha = false,
   pantallaElegir,
 }: Props) {
   // intento de abrir una posición (respeta el candado de elaborar)
@@ -95,7 +98,7 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} onResultados={onResultados} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} onResultados={onResultados} modoFicha={modoFicha} />;
   if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
