@@ -62,8 +62,6 @@ function normArea(u?: string | null): string {
   if (s.includes("UCP")) return "UCP";
   return s.trim();
 }
-// estas garantías ya son de UCM (compradas y procesadas); aquí solo se completa el dictamen.
-// si vienen marcadas "UCP" o sin unidad, las tratamos como UCM (les falta llenar sus datos).
 function areaActual(c: CasoJuridico, d?: DictamenRow): string {
   if (d?.estado === "etapa_b") return "UCM";
   const a = normArea(c.unidad);
@@ -87,9 +85,9 @@ function UCP() {
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [abriendo, setAbriendo] = useState<string | null>(null);
 
-  // alta de garantía
+  // alta de garantía (folios capturados a mano; después se conectan a SIGA)
   const [dlg, setDlg] = useState(false);
-  const [nueva, setNueva] = useState({ expediente: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", materia: "" });
+  const [nueva, setNueva] = useState({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_codigo: "", materia: "" });
   const [guardandoAlta, setGuardandoAlta] = useState(false);
 
   const cargar = () => {
@@ -125,7 +123,6 @@ function UCP() {
     return { ...REQ_VACIOS(), ...(d?.requisitos || {}) };
   };
 
-  // el registro de UCP NO muestra los casos de UDP
   const baseUCP = useMemo(() => casos.filter((c) => normArea(c.unidad) !== "UDP"), [casos]);
 
   const stats = useMemo(() => {
@@ -154,7 +151,6 @@ function UCP() {
   const pag = Math.min(pagina, totalPag - 1);
   const visibles = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
 
-  // crea el dictamen si no existe y devuelve la fila
   const ensureDictamen = async (c: CasoJuridico): Promise<DictamenRow | null> => {
     const ya = dictPorCaso[c.id];
     if (ya) return ya;
@@ -177,7 +173,6 @@ function UCP() {
       if (!d) throw new Error("sin dictamen");
       const pr = predPorCaso[c.id];
       setSeleccion({ caso: c, dictamen: d, pred: pr ? { datos: pr.datos, resultados: pr.resultados } : undefined, tab });
-      // refresca el listado por debajo (para reflejar el dictamen recién creado)
       cargar();
     } catch (e: any) {
       setError("No se pudo abrir: " + e.message);
@@ -190,12 +185,18 @@ function UCP() {
     }
     setGuardandoAlta(true); setError(null);
     try {
+      // Limpia los campos vacíos para no mandar cadenas en blanco a columnas que no aplican
+      const payload: Record<string, string> = {};
+      for (const [k, v] of Object.entries(nueva)) {
+        const val = (v || "").trim();
+        if (val) payload[k] = val;
+      }
       const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, {
-        method: "POST", headers, body: JSON.stringify(nueva),
+        method: "POST", headers, body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status} — revisa el permiso de inserción en caso_juridico`);
       setDlg(false);
-      setNueva({ expediente: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", materia: "" });
+      setNueva({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_codigo: "", materia: "" });
       cargar();
     } catch (e: any) {
       setError("No se pudo agregar la garantía: " + e.message);
@@ -233,9 +234,14 @@ function UCP() {
                 <DialogHeader><DialogTitle>Agregar garantía al registro</DialogTitle></DialogHeader>
                 <div className="grid gap-3 py-2">
                   {([
-                    ["expediente", "Expediente"], ["direccion_garantia", "Dirección de la garantía"],
+                    ["expediente", "Expediente"],
+                    ["no_credito", "No. de crédito"],
+                    ["gar_id", "ID garantía / folio (de SIGA)"],
+                    ["direccion_garantia", "Dirección de la garantía"],
                     ["juzgado", "Juzgado"], ["entidad", "Estado / entidad"],
-                    ["cliente_nombre", "Cliente"], ["materia", "Materia"],
+                    ["cliente_nombre", "Cliente"],
+                    ["cliente_codigo", "Folio del cliente (de SIGA)"],
+                    ["materia", "Materia"],
                   ] as const).map(([k, label]) => (
                     <label key={k} className="block text-sm">
                       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
@@ -243,8 +249,8 @@ function UCP() {
                     </label>
                   ))}
                   <p className="text-xs text-muted-foreground">
-                    La garantía nueva entra al registro; para poder dictaminarla en UCP primero necesita su
-                    pre-dictamen URRJ positivo.
+                    Los folios (garantía y cliente) hoy se capturan a mano; más adelante se conectarán con SIGA.
+                    La garantía nueva entra al registro; para dictaminarla en UCP primero necesita su pre-dictamen URRJ positivo.
                   </p>
                 </div>
                 <DialogFooter>
@@ -271,7 +277,6 @@ function UCP() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
-      {/* filtros */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -379,7 +384,6 @@ function UCP() {
         </Card>
       )}
 
-      {/* paginación */}
       {filtrados.length > PAGE && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>{filtrados.length} garantías · página {pag + 1} de {totalPag}</span>
