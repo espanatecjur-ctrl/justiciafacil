@@ -79,7 +79,7 @@ function UCP() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [modo, setModo] = useState<"dictaminables" | "todas">("dictaminables");
+  const [modo, setModo] = useState<"dictaminables" | "todas" | "recientes">("dictaminables");
   const [busca, setBusca] = useState("");
   const [pagina, setPagina] = useState(0);
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
@@ -139,13 +139,18 @@ function UCP() {
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return baseUCP.filter((c) => {
+    let lista = baseUCP.filter((c) => {
       if (modo === "dictaminables" && !(c.id && predPorCaso[c.id])) return false;
+      if (modo === "recientes" && dictPorCaso[c.id]?.estado === "etapa_b") return false; // las que ya están en UCM no
       if (!q) return true;
-      return [c.expediente, c.cliente_nombre, c.direccion_garantia, c.juzgado]
-        .some((v) => (v || "").toLowerCase().includes(q));
+      return [c.expediente, c.cliente_nombre, c.direccion_garantia, c.juzgado, (c as any).gar_id, (c as any).no_credito, c.cliente_codigo]
+        .some((v) => (v || "").toString().toLowerCase().includes(q));
     });
-  }, [baseUCP, predPorCaso, modo, busca]);
+    if (modo === "recientes") {
+      lista = [...lista].sort((a, b) => String((b as any).created_at || "").localeCompare(String((a as any).created_at || "")));
+    }
+    return lista;
+  }, [baseUCP, predPorCaso, dictPorCaso, modo, busca]);
 
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
@@ -283,10 +288,10 @@ function UCP() {
           <Input className="pl-8" placeholder="Buscar por expediente, cliente, garantía o juzgado…"
             value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(0); }} />
         </div>
-        {(["dictaminables", "todas"] as const).map((m) => (
+        {(["dictaminables", "recientes", "todas"] as const).map((m) => (
           <button key={m} onClick={() => { setModo(m); setPagina(0); }}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium ${modo === m ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-border text-muted-foreground"}`}>
-            {m === "dictaminables" ? "Dictaminables" : "Todas"}
+            {m === "dictaminables" ? "Dictaminables" : m === "recientes" ? "Recientes (UCP)" : "Todas"}
           </button>
         ))}
       </div>
