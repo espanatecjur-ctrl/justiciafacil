@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { X, Loader2, Scale, Check, CircleDot, Circle, MapPin, Megaphone, Save, Settings2 } from "lucide-react";
 import { type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { CATALOGO_ETAPAS, POSICIONES, tipoJuicioPorClave, listaTiposJuicio, type EtapaJuicio } from "@/lib/etapas-juicio";
-import { obtenerSeguimiento, guardarSeguimiento, type SeguimientoJuicio } from "@/lib/seguimiento-juicio";
+import { obtenerSeguimiento, guardarSeguimiento, estadoChecklist, marcarChecklist, type SeguimientoJuicio, type MarcaChecklist } from "@/lib/seguimiento-juicio";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { ChevronDown, ChevronRight, FileCheck2, FileX2 } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -30,6 +31,15 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
   const [config, setConfig] = useState(false); // mostrar el configurador
   const [guardando, setGuardando] = useState(false);
 
+  // checklist por etapa
+  const [expandida, setExpandida] = useState<string | null>(null);
+  const [etapasConDoc, setEtapasConDoc] = useState<Set<string>>(new Set());
+  const [marcas, setMarcas] = useState<MarcaChecklist[]>([]);
+
+  const cargarChecklist = () => {
+    estadoChecklist(caso).then((r) => { setEtapasConDoc(r.etapasConDoc); setMarcas(r.marcas); }).catch(() => {});
+  };
+
   useEffect(() => {
     (async () => {
       setCargando(true);
@@ -43,6 +53,7 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
         const d = r.ok ? await r.json() : [];
         setUltimoAcuerdo(d?.[0] || null);
       }
+      cargarChecklist();
       setCargando(false);
     })();
     // eslint-disable-next-line
@@ -77,6 +88,21 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
     if (set.has(clave)) set.delete(clave); else set.add(clave);
     const s = await guardarSeguimiento(caso, seg.id, { etapas_hechas: [...set] });
     if (s) setSeg(s);
+  };
+
+  // ¿un documento esperado ya está cubierto? (auto por etapa con doc, o palomeo manual)
+  const marcaDe = (etapaClave: string, docNombre: string) => marcas.find((m) => m.etapa === etapaClave && m.doc_nombre === docNombre) || null;
+
+  const togglePalomeo = async (etapaClave: string, docNombre: string) => {
+    const m = marcaDe(etapaClave, docNombre);
+    const nuevo = !(m && m.hecho);
+    const res = await marcarChecklist(caso, etapaClave, docNombre, m?.id || null, nuevo);
+    if (res) {
+      setMarcas((prev) => {
+        const sin = prev.filter((x) => x.id !== res.id && !(x.etapa === etapaClave && x.doc_nombre === docNombre));
+        return [...sin, res];
+      });
+    }
   };
 
   const estatusActual = (() => {
@@ -153,19 +179,50 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
                     {etapas.map((e) => {
                       const esActual = e.clave === etapaActual;
                       const esHecha = hechas.has(e.clave);
+                      const abierta = expandida === e.clave;
                       return (
-                        <div key={e.clave} className={`flex items-start gap-2 rounded-lg border p-2.5 ${esActual ? "border-[color:var(--teal)] bg-[color:var(--teal)]/5" : "border-border"}`}>
-                          <button onClick={() => toggleHecha(e.clave)} title="Marcar completada" className="mt-0.5 shrink-0">
-                            {esActual ? <CircleDot className="h-4 w-4" style={{ color: TEAL }} /> : esHecha ? <Check className="h-4 w-4 text-[color:var(--teal)]" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
-                          </button>
-                          <button onClick={() => marcarActual(e.clave)} className="min-w-0 flex-1 text-left">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`text-sm ${esActual ? "font-semibold" : esHecha ? "font-medium" : ""}`}>{e.nombre}</span>
-                              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{e.fase}</span>
-                              {esActual && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ background: TEAL }}>EN CURSO</span>}
+                        <div key={e.clave} className={`rounded-lg border ${esActual ? "border-[color:var(--teal)] bg-[color:var(--teal)]/5" : "border-border"}`}>
+                          <div className="flex items-start gap-2 p-2.5">
+                            <button onClick={() => toggleHecha(e.clave)} title="Marcar completada" className="mt-0.5 shrink-0">
+                              {esActual ? <CircleDot className="h-4 w-4" style={{ color: TEAL }} /> : esHecha ? <Check className="h-4 w-4 text-[color:var(--teal)]" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
+                            </button>
+                            <button onClick={() => marcarActual(e.clave)} className="min-w-0 flex-1 text-left">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={`text-sm ${esActual ? "font-semibold" : esHecha ? "font-medium" : ""}`}>{e.nombre}</span>
+                                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{e.fase}</span>
+                                {esActual && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ background: TEAL }}>EN CURSO</span>}
+                              </div>
+                              {e.resumen && <p className="mt-0.5 text-[11px] text-muted-foreground">{e.resumen}</p>}
+                            </button>
+                            <button onClick={() => setExpandida(abierta ? null : e.clave)} title="Ver documentos de esta etapa" className="mt-0.5 shrink-0 text-muted-foreground">
+                              {abierta ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </button>
+                          </div>
+
+                          {/* checklist de documentos esperados de esta etapa */}
+                          {abierta && (
+                            <div className="border-t border-border/60 px-3 py-2.5">
+                              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Documentos que deben existir en esta etapa:</p>
+                              <div className="space-y-1">
+                                {e.docs.map((doc) => {
+                                  const auto = etapasConDoc.has(e.clave); // hay al menos un archivo ligado a la etapa
+                                  const manual = !!marcaDe(e.clave, doc.nombre)?.hecho;
+                                  const cubierto = auto || manual;
+                                  return (
+                                    <div key={doc.nombre} className="flex items-center gap-2 text-xs">
+                                      <button onClick={() => togglePalomeo(e.clave, doc.nombre)} className="shrink-0" title={manual ? "Quitar palomita" : "Marcar como ya existe"}>
+                                        {cubierto ? <FileCheck2 className="h-4 w-4 text-[color:var(--teal)]" /> : <FileX2 className="h-4 w-4 text-muted-foreground" />}
+                                      </button>
+                                      <span className={cubierto ? "" : "text-muted-foreground"}>{doc.nombre}</span>
+                                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">{doc.acto}</span>
+                                      {doc.obligatorio && <span className="text-[9px] font-semibold text-red-600">obligatorio</span>}
+                                      {auto && <span className="text-[9px] text-[color:var(--teal)]">✓ por archivo</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            {e.resumen && <p className="mt-0.5 text-[11px] text-muted-foreground">{e.resumen}</p>}
-                          </button>
+                          )}
                         </div>
                       );
                     })}
