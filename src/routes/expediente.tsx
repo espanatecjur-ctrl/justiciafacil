@@ -1,8 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
-import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
-import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
@@ -33,7 +31,6 @@ export const Route = createFileRoute("/expediente")({
   component: FichaExpedientePage,
 });
 
-// Parsea "YYYY-MM-DD" como fecha LOCAL (evita que se vea un día antes)
 function parseLocal(s: string | null): Date | null {
   if (!s) return null;
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -51,7 +48,6 @@ function diasDesde(s: string | null): number | null {
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 
-// Sugerencia simple de "qué sigue" según el último acuerdo del boletín
 function sugerencia(texto: string | null): string {
   const t = (texto || "").toUpperCase();
   if (!t) return "Aún no hay actuación registrada en el boletín. Verifica que el juzgado esté asignado.";
@@ -65,7 +61,6 @@ function sugerencia(texto: string | null): string {
   return "Registrar la próxima actuación y dar impulso procesal.";
 }
 
-// Triangulito rojo cuando falta info
 function Faltante({ texto = "Falta información" }: { texto?: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700" title={texto}>
@@ -74,7 +69,6 @@ function Faltante({ texto = "Falta información" }: { texto?: string }) {
   );
 }
 
-// Tarjeta de sección reutilizable
 function Seccion({ icon, titulo, falta, children }: { icon: React.ReactNode; titulo: string; falta?: boolean; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -87,7 +81,6 @@ function Seccion({ icon, titulo, falta, children }: { icon: React.ReactNode; tit
   );
 }
 
-// Fila de dato: label + valor (marca ⚠️ si vacío y es importante)
 function Dato({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
   const vacio = !valor || !String(valor).trim();
   return (
@@ -100,7 +93,6 @@ function Dato({ label, valor, importante }: { label: string; valor?: string | nu
   );
 }
 
-// Sección "próximamente" (placeholder de partes 2 y 3)
 function Proximamente({ icon, titulo, nota }: { icon: React.ReactNode; titulo: string; nota: string }) {
   return (
     <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4">
@@ -111,7 +103,7 @@ function Proximamente({ icon, titulo, nota }: { icon: React.ReactNode; titulo: s
 }
 
 function FichaExpedientePage() {
-  const { id, nueva } = Route.useSearch();
+  const { id } = Route.useSearch();
   const navigate = useNavigate();
   const [caso, setCaso] = useState<CasoJuridico | null>(null);
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
@@ -152,12 +144,11 @@ function FichaExpedientePage() {
   const dias = ultima ? diasDesde(ultima.fecha_acuerdo) : null;
   const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
 
-  // banderas de faltantes por sección
   const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
   const areaFicha = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : "UCM";
   const faltaAntecedente = !c.proveedor || !c.no_credito || !c.direccion_garantia || !(c.cliente_nombre || c.cliente_codigo);
   const faltaEstatus = esEspecial ? !c.estatus_general : (!c.etapa_actual || !c.estatus_general || !c.prioridad);
-  const faltaSeguimiento = sinJuzgado; // solo es "falta" si no hay juzgado; sin actuaciones aún NO es falta (el robot las trae)
+  const faltaSeguimiento = sinJuzgado;
 
   return (
     <div className="space-y-4">
@@ -186,7 +177,6 @@ function FichaExpedientePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Antecedente: garantía (juicio) o datos del amparo */}
         {c.tipo_registro === "amparo" ? (
           <Seccion icon={<Shield className="h-4 w-4" style={{ color: TEAL }} />} titulo="Datos del amparo" falta={!c.quejoso || !c.acto_reclamado}>
             <Dato label="Tipo de amparo" valor={c.tipo_amparo} />
@@ -220,7 +210,6 @@ function FichaExpedientePage() {
           </Seccion>
         )}
 
-        {/* Estatus actual */}
         <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual" falta={faltaEstatus}>
           {!esEspecial && <Dato label="Etapa actual" valor={c.etapa_actual} importante />}
           <Dato label={esEspecial ? "Estado" : "Estatus general"} valor={c.estatus_general} importante />
@@ -230,7 +219,6 @@ function FichaExpedientePage() {
         </Seccion>
       </div>
 
-      {/* Última actuación en el boletín + Qué sigue */}
       <Seccion icon={<Megaphone className="h-4 w-4" style={{ color: TEAL }} />} titulo="Última actuación en el boletín" falta={faltaSeguimiento}>
         {sinJuzgado ? (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -268,19 +256,12 @@ function FichaExpedientePage() {
         )}
       </Seccion>
 
-      {/* Seguimiento (evidencia) — Parte 2 */}
-      <EvidenciaSeguimiento casoId={c.id} expediente={c.expediente} abrirNueva={nueva} />
-
-      {/* Documentos de la garantía (suben a Drive + visor flotante) */}
+      {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
       <DocumentosGarantia area={areaFicha} caso={c} />
 
-      {/* Tareas asignables (pendiente → hecha) */}
-      <PanelSeguimiento caso={c} />
-
-      {/* ANTECEDENTES (solo lectura): pre-dictámenes, dictámenes, firmas, actuaciones y evidencias */}
+      {/* ANTECEDENTES (solo lectura) */}
       <AntecedentesGarantia casoId={c.id} expediente={c.expediente} />
 
-      {/* Sección que llega en la siguiente parte */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Proximamente icon={<DollarSign className="h-4 w-4" />} titulo="Precios" nota="Valores de la garantía. (Parte 3)" />
       </div>
