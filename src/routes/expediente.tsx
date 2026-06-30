@@ -1,566 +1,290 @@
-// JusticiaFácil · Catálogo de etapas procesales por tipo de juicio
-// Cada tipo tiene dos versiones: "oral" (sistema nuevo CNPCF) y "escrita" (tradicional).
-// El modal de "Seguimiento del juicio" lee este catálogo según el tipo del expediente.
-//
-// NOTA: Es un borrador técnico para revisión de la abogada (Paola). Las etapas y los
-// documentos esperados se pueden ajustar; este archivo es la única fuente del catálogo.
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
+import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
+import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
+import {
+  ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
+  DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
+} from "lucide-react";
 
-export type ActoTipo = "promocion" | "acuerdo" | "audiencia" | "acta" | "resolucion";
+const NAVY = "#0B1E3A";
+const TEAL = "#0C5C46";
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-export interface DocEsperado {
-  nombre: string;        // qué documento debe existir
-  acto: ActoTipo;        // promoción (la mete la parte) / acuerdo (lo da el juzgado) / etc.
-  obligatorio?: boolean; // si es indispensable de la etapa
+interface Acuerdo {
+  id: string;
+  expediente: string | null;
+  fecha_acuerdo: string | null;
+  texto: string | null;
+  tipo_acuerdo: string | null;
+  urgente: boolean | null;
 }
 
-export interface EtapaJuicio {
-  clave: string;         // id corto y único dentro del tipo
-  nombre: string;        // nombre visible
-  fase: string;          // agrupador (Postulatoria, Audiencia Preliminar, Juicio, Ejecución…)
-  resumen?: string;      // 1 línea de qué pasa aquí
-  docs: DocEsperado[];   // documentos que deberían existir en esta etapa
+export const Route = createFileRoute("/expediente")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    id: typeof s.id === "string" ? s.id : undefined,
+    nueva: s.nueva === true || s.nueva === "true",
+  }),
+  head: () => ({ meta: [{ title: "Ficha del expediente — JusticiaFácil" }] }),
+  component: FichaExpedientePage,
+});
+
+// Parsea "YYYY-MM-DD" como fecha LOCAL (evita que se vea un día antes)
+function parseLocal(s: string | null): Date | null {
+  if (!s) return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+function fmtFecha(s: string | null): string {
+  const d = parseLocal(s);
+  return d ? d.toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" }) : "—";
+}
+function diasDesde(s: string | null): number | null {
+  const d = parseLocal(s);
+  if (!d) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 
-export interface TipoJuicio {
-  clave: string;         // id del tipo+versión, ej. "ordinario_civil_oral"
-  tipo: string;          // ej. "Ordinario Civil"
-  via: "oral" | "escrita";
-  ley: string;           // fundamento
-  etapas: EtapaJuicio[];
+// Sugerencia simple de "qué sigue" según el último acuerdo del boletín
+function sugerencia(texto: string | null): string {
+  const t = (texto || "").toUpperCase();
+  if (!t) return "Aún no hay actuación registrada en el boletín. Verifica que el juzgado esté asignado.";
+  if (t.includes("ESCRITURA")) return "Dar seguimiento a la escrituración / otorgamiento en rebeldía.";
+  if (t.includes("REMATE") || t.includes("AUDIENCIA")) return "Confirmar la fecha de audiencia/remate y preparar lo necesario.";
+  if (t.includes("SENTENCIA")) return "Revisar la sentencia: términos para recurso o para iniciar ejecución.";
+  if (t.includes("EJECUCION") || t.includes("EJECUCIÓN")) return "Impulsar el procedimiento de ejecución.";
+  if (t.includes("GIRESE OFICIO") || t.includes("GIRENSE OFICIOS")) return "Vigilar la respuesta del oficio girado.";
+  if (t.includes("LIQUIDACION") || t.includes("PLANILLA")) return "Dar seguimiento a la planilla de liquidación.";
+  if (t.includes("NO HA LUGAR") || t.includes("PREVIENE")) return "Atender la prevención / subsanar lo requerido por el juzgado.";
+  return "Registrar la próxima actuación y dar impulso procesal.";
 }
 
-// =====================================================================
-// 1) ORDINARIO CIVIL — ORAL (CNPCF)
-// =====================================================================
-const ordinarioCivilOral: TipoJuicio = {
-  clave: "ordinario_civil_oral",
-  tipo: "Ordinario Civil",
-  via: "oral",
-  ley: "Código Nacional de Procedimientos Civiles y Familiares (CNPCF)",
-  etapas: [
-    {
-      clave: "demanda", nombre: "Presentación de la demanda", fase: "Postulatoria",
-      resumen: "Prestaciones, hechos y derecho. Se ofrecen TODAS las pruebas desde aquí (o precluye).",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Documento(s) base de la acción", acto: "promocion", obligatorio: true },
-        { nombre: "Ofrecimiento de pruebas (anexo)", acto: "promocion", obligatorio: true },
-      ],
-    },
-    {
-      clave: "admision", nombre: "Auto admisorio / prevención", fase: "Postulatoria",
-      resumen: "El juzgado admite, previene (si hay omisión subsanable) o desecha.",
-      docs: [
-        { nombre: "Auto admisorio", acto: "acuerdo", obligatorio: true },
-        { nombre: "Cumplimiento de prevención (si la hubo)", acto: "promocion" },
-      ],
-    },
-    {
-      clave: "emplazamiento", nombre: "Emplazamiento", fase: "Postulatoria",
-      resumen: "Notificación personal al demandado para que comparezca a juicio.",
-      docs: [
-        { nombre: "Razón / acta de emplazamiento del actuario", acto: "acta", obligatorio: true },
-      ],
-    },
-    {
-      clave: "contestacion", nombre: "Contestación y reconvención", fase: "Postulatoria",
-      resumen: "El demandado contesta hecho por hecho, opone excepciones y ofrece sus pruebas. Si reconviene, el actor contesta la reconvención.",
-      docs: [
-        { nombre: "Escrito de contestación (o acuse de rebeldía)", acto: "promocion", obligatorio: true },
-        { nombre: "Escrito de reconvención (si la hay)", acto: "promocion" },
-        { nombre: "Contestación a la reconvención (si la hay)", acto: "promocion" },
-      ],
-    },
-    {
-      clave: "vista_contestacion", nombre: "Vista con la contestación", fase: "Postulatoria",
-      resumen: "Se da vista al actor para manifestar lo que a su derecho convenga.",
-      docs: [
-        { nombre: "Acuerdo que da vista", acto: "acuerdo" },
-        { nombre: "Escrito de desahogo de vista", acto: "promocion" },
-      ],
-    },
-    {
-      clave: "audiencia_preliminar", nombre: "Audiencia preliminar", fase: "Audiencia preliminar (oral)",
-      resumen: "Depuración, conciliación/mediación, hechos no controvertidos, acuerdos probatorios y admisión de pruebas.",
-      docs: [
-        { nombre: "Acuerdo que cita a audiencia preliminar", acto: "acuerdo" },
-        { nombre: "Acta de la audiencia preliminar", acto: "audiencia", obligatorio: true },
-        { nombre: "Auto de admisión/calificación de pruebas", acto: "acuerdo", obligatorio: true },
-      ],
-    },
-    {
-      clave: "audiencia_juicio", nombre: "Audiencia de juicio", fase: "Audiencia de juicio (oral)",
-      resumen: "Desahogo oral de pruebas (declaración de parte, testimoniales, periciales), alegatos de clausura.",
-      docs: [
-        { nombre: "Acuerdo que cita a audiencia de juicio", acto: "acuerdo" },
-        { nombre: "Acta de la audiencia de juicio", acto: "audiencia", obligatorio: true },
-      ],
-    },
-    {
-      clave: "sentencia", nombre: "Sentencia definitiva", fase: "Audiencia de juicio (oral)",
-      resumen: "El juez explica oralmente el sentido del fallo; luego se entrega por escrito.",
-      docs: [
-        { nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true },
-      ],
-    },
-    {
-      clave: "apelacion", nombre: "Apelación (si la hay)", fase: "Recursos",
-      resumen: "Recurso ante el superior. Tramitación y resolución.",
-      docs: [
-        { nombre: "Escrito de apelación", acto: "promocion" },
-        { nombre: "Resolución de la apelación", acto: "resolucion" },
-      ],
-    },
-    {
-      clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
-      resumen: "Amparo directo o indirecto contra la resolución.",
-      docs: [
-        { nombre: "Demanda de amparo", acto: "promocion" },
-        { nombre: "Sentencia / ejecutoria de amparo", acto: "resolucion" },
-      ],
-    },
-    {
-      clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Cumplimiento forzoso: solicitud de ejecución y vía de apremio (embargo, remate).",
-      docs: [
-        { nombre: "Solicitud de ejecución", acto: "promocion" },
-        { nombre: "Auto que ordena la ejecución", acto: "acuerdo" },
-      ],
-    },
-  ],
-};
-
-// =====================================================================
-// 2) ORDINARIO CIVIL — ESCRITA (tradicional, códigos estatales)
-// =====================================================================
-const ordinarioCivilEscrita: TipoJuicio = {
-  clave: "ordinario_civil_escrita",
-  tipo: "Ordinario Civil",
-  via: "escrita",
-  ley: "Código de Procedimientos Civiles estatal (sistema escrito)",
-  etapas: [
-    { clave: "demanda", nombre: "Presentación de la demanda", fase: "Postulatoria",
-      resumen: "Escrito inicial con prestaciones, hechos y derecho.",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Documento(s) base de la acción", acto: "promocion", obligatorio: true },
-      ] },
-    { clave: "admision", nombre: "Auto admisorio / radicación", fase: "Postulatoria",
-      resumen: "El juzgado admite y radica el asunto.",
-      docs: [{ nombre: "Auto admisorio", acto: "acuerdo", obligatorio: true }] },
-    { clave: "emplazamiento", nombre: "Emplazamiento", fase: "Postulatoria",
-      resumen: "Notificación personal al demandado.",
-      docs: [{ nombre: "Razón / acta de emplazamiento", acto: "acta", obligatorio: true }] },
-    { clave: "contestacion", nombre: "Contestación (o rebeldía)", fase: "Postulatoria",
-      resumen: "Contestación con excepciones; o acuse de rebeldía.",
-      docs: [{ nombre: "Contestación o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
-    { clave: "ofrecimiento_pruebas", nombre: "Ofrecimiento de pruebas", fase: "Probatoria",
-      resumen: "Periodo para ofrecer pruebas (posterior a la litis, a diferencia del oral).",
-      docs: [
-        { nombre: "Escrito de ofrecimiento de pruebas (actor)", acto: "promocion" },
-        { nombre: "Escrito de ofrecimiento de pruebas (demandado)", acto: "promocion" },
-        { nombre: "Auto de admisión de pruebas", acto: "acuerdo" },
-      ] },
-    { clave: "desahogo", nombre: "Desahogo de pruebas", fase: "Probatoria",
-      resumen: "Se desahogan testimoniales, periciales, confesional, etc.",
-      docs: [{ nombre: "Constancias de desahogo", acto: "acta" }] },
-    { clave: "alegatos", nombre: "Alegatos", fase: "Conclusiva",
-      resumen: "Las partes presentan sus alegatos por escrito.",
-      docs: [{ nombre: "Escrito de alegatos", acto: "promocion" }] },
-    { clave: "citacion_sentencia", nombre: "Citación para sentencia", fase: "Conclusiva",
-      resumen: "El juzgado cita para oír sentencia.",
-      docs: [{ nombre: "Auto que cita para sentencia", acto: "acuerdo" }] },
-    { clave: "sentencia", nombre: "Sentencia definitiva", fase: "Conclusiva",
-      resumen: "Resolución de primera instancia.",
-      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
-    { clave: "apelacion", nombre: "Apelación (si la hay)", fase: "Recursos",
-      resumen: "Recurso ante el superior.",
-      docs: [{ nombre: "Escrito de apelación", acto: "promocion" }, { nombre: "Resolución de apelación", acto: "resolucion" }] },
-    { clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
-      resumen: "Amparo contra la resolución.",
-      docs: [{ nombre: "Demanda de amparo", acto: "promocion" }, { nombre: "Ejecutoria de amparo", acto: "resolucion" }] },
-    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Cumplimiento forzoso y vía de apremio.",
-      docs: [{ nombre: "Solicitud de ejecución", acto: "promocion" }, { nombre: "Auto de ejecución", acto: "acuerdo" }] },
-  ],
-};
-
-// =====================================================================
-// 3) EJECUTIVO MERCANTIL — ESCRITA (Código de Comercio)
-// =====================================================================
-const ejecutivoMercantilEscrita: TipoJuicio = {
-  clave: "ejecutivo_mercantil_escrita",
-  tipo: "Ejecutivo Mercantil",
-  via: "escrita",
-  ley: "Código de Comercio (sistema escrito tradicional)",
-  etapas: [
-    { clave: "demanda", nombre: "Demanda con título ejecutivo", fase: "Postulatoria",
-      resumen: "Escrito inicial acompañado del título que trae aparejada ejecución.",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Título ejecutivo (documento base)", acto: "promocion", obligatorio: true },
-      ] },
-    { clave: "auto_exequendo", nombre: "Auto de exequendo (admisión + mandamiento)", fase: "Ejecución inicial",
-      resumen: "Admite la demanda y ordena requerir de pago, embargar y emplazar.",
-      docs: [{ nombre: "Auto de exequendo", acto: "acuerdo", obligatorio: true }] },
-    { clave: "requerimiento_embargo", nombre: "Requerimiento de pago, embargo y emplazamiento", fase: "Ejecución inicial",
-      resumen: "Diligencia del actuario: requiere pago, traba embargo y emplaza.",
-      docs: [{ nombre: "Acta de la diligencia (actuario)", acto: "acta", obligatorio: true }] },
-    { clave: "contestacion", nombre: "Contestación u oposición de excepciones", fase: "Postulatoria",
-      resumen: "El demandado opone excepciones (o rebeldía) y ofrece pruebas.",
-      docs: [{ nombre: "Contestación / oposición o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
-    { clave: "pruebas", nombre: "Admisión y desahogo de pruebas", fase: "Probatoria",
-      resumen: "Ofrecimiento, admisión y desahogo de pruebas.",
-      docs: [{ nombre: "Auto de admisión de pruebas", acto: "acuerdo" }, { nombre: "Constancias de desahogo", acto: "acta" }] },
-    { clave: "alegatos", nombre: "Alegatos", fase: "Conclusiva",
-      resumen: "Alegatos de las partes.",
-      docs: [{ nombre: "Escrito de alegatos", acto: "promocion" }] },
-    { clave: "sentencia", nombre: "Sentencia", fase: "Conclusiva",
-      resumen: "Sentencia de primera instancia.",
-      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
-    { clave: "apelacion", nombre: "Apelación (si la hay)", fase: "Recursos",
-      resumen: "Recurso ante el superior.",
-      docs: [{ nombre: "Escrito de apelación", acto: "promocion" }, { nombre: "Resolución de apelación", acto: "resolucion" }] },
-    { clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
-      resumen: "Amparo contra la resolución.",
-      docs: [{ nombre: "Demanda de amparo", acto: "promocion" }, { nombre: "Ejecutoria de amparo", acto: "resolucion" }] },
-    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Se hace efectivo el fallo sobre lo embargado.",
-      docs: [{ nombre: "Auto que ordena la ejecución", acto: "acuerdo" }] },
-    { clave: "avaluo", nombre: "Avalúo", fase: "Ejecución",
-      resumen: "Avalúo del bien embargado.",
-      docs: [{ nombre: "Avalúo (perito)", acto: "promocion" }, { nombre: "Acuerdo que tiene por rendido el avalúo", acto: "acuerdo" }] },
-    { clave: "remate", nombre: "Remate / almoneda", fase: "Ejecución",
-      resumen: "Convocatoria y celebración de la almoneda.",
-      docs: [{ nombre: "Convocatoria / edictos", acto: "acuerdo" }, { nombre: "Acta de remate", acto: "acta" }] },
-    { clave: "adjudicacion", nombre: "Adjudicación", fase: "Ejecución",
-      resumen: "Adjudicación a favor del postor / actor.",
-      docs: [{ nombre: "Auto de adjudicación", acto: "acuerdo", obligatorio: true }] },
-    { clave: "escrituracion", nombre: "Escrituración y entrega", fase: "Ejecución",
-      resumen: "Otorgamiento de escritura (en rebeldía si aplica) y entrega del inmueble.",
-      docs: [
-        { nombre: "Solicitud de escrituración / firma en rebeldía", acto: "promocion" },
-        { nombre: "Escritura", acto: "resolucion" },
-        { nombre: "Acta de entrega del inmueble", acto: "acta" },
-      ] },
-  ],
-};
-
-// =====================================================================
-// 4) ESPECIAL HIPOTECARIO — ESCRITA (clave para garantías hipotecarias)
-// =====================================================================
-const hipotecarioEscrita: TipoJuicio = {
-  clave: "hipotecario_escrita",
-  tipo: "Especial Hipotecario",
-  via: "escrita",
-  ley: "Código de Procedimientos Civiles / Comercio (juicio especial hipotecario)",
-  etapas: [
-    { clave: "demanda", nombre: "Demanda hipotecaria", fase: "Postulatoria",
-      resumen: "Escrito inicial con el contrato de hipoteca como base.",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Contrato / escritura de hipoteca (base)", acto: "promocion", obligatorio: true },
-        { nombre: "Certificado de gravámenes", acto: "promocion" },
-      ] },
-    { clave: "admision_cedula", nombre: "Admisión y cédula hipotecaria", fase: "Postulatoria",
-      resumen: "Se admite y se expide/registra la cédula hipotecaria (anotación en el RPP).",
-      docs: [
-        { nombre: "Auto admisorio", acto: "acuerdo", obligatorio: true },
-        { nombre: "Cédula hipotecaria", acto: "acuerdo", obligatorio: true },
-        { nombre: "Constancia de inscripción en el RPP", acto: "promocion" },
-      ] },
-    { clave: "emplazamiento", nombre: "Emplazamiento", fase: "Postulatoria",
-      resumen: "Notificación personal al deudor / demandado.",
-      docs: [{ nombre: "Acta de emplazamiento", acto: "acta", obligatorio: true }] },
-    { clave: "contestacion", nombre: "Contestación (o rebeldía)", fase: "Postulatoria",
-      resumen: "Contestación con excepciones; o acuse de rebeldía.",
-      docs: [{ nombre: "Contestación o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
-    { clave: "pruebas", nombre: "Audiencia y pruebas", fase: "Probatoria",
-      resumen: "Ofrecimiento, admisión y desahogo de pruebas.",
-      docs: [{ nombre: "Auto de admisión de pruebas", acto: "acuerdo" }, { nombre: "Constancias de desahogo", acto: "acta" }] },
-    { clave: "alegatos", nombre: "Alegatos", fase: "Conclusiva",
-      resumen: "Alegatos de las partes.",
-      docs: [{ nombre: "Escrito de alegatos", acto: "promocion" }] },
-    { clave: "sentencia", nombre: "Sentencia", fase: "Conclusiva",
-      resumen: "Sentencia que, en su caso, ordena el remate del bien hipotecado.",
-      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
-    { clave: "apelacion_amparo", nombre: "Apelación / Amparo (si hay)", fase: "Recursos",
-      resumen: "Medios de impugnación.",
-      docs: [{ nombre: "Escrito de apelación / amparo", acto: "promocion" }, { nombre: "Resolución", acto: "resolucion" }] },
-    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Se ordena ejecutar la sentencia sobre el inmueble.",
-      docs: [{ nombre: "Auto que ordena la ejecución", acto: "acuerdo" }] },
-    { clave: "avaluo", nombre: "Avalúo", fase: "Ejecución",
-      resumen: "Avalúo del inmueble hipotecado.",
-      docs: [{ nombre: "Avalúo (perito)", acto: "promocion" }, { nombre: "Acuerdo que lo tiene por rendido", acto: "acuerdo" }] },
-    { clave: "remate", nombre: "Remate / almoneda", fase: "Ejecución",
-      resumen: "Convocatoria y almoneda del inmueble.",
-      docs: [{ nombre: "Convocatoria / edictos", acto: "acuerdo" }, { nombre: "Acta de remate", acto: "acta" }] },
-    { clave: "adjudicacion", nombre: "Adjudicación", fase: "Ejecución",
-      resumen: "Adjudicación del inmueble.",
-      docs: [{ nombre: "Auto de adjudicación", acto: "acuerdo", obligatorio: true }] },
-    { clave: "escrituracion", nombre: "Escrituración y entrega", fase: "Ejecución",
-      resumen: "Escritura (en rebeldía si aplica) y entrega del inmueble.",
-      docs: [
-        { nombre: "Solicitud de escrituración / firma en rebeldía", acto: "promocion" },
-        { nombre: "Escritura", acto: "resolucion" },
-        { nombre: "Acta de entrega / posesión", acto: "acta" },
-      ] },
-  ],
-};
-
-// =====================================================================
-// 5) ORDINARIO MERCANTIL — ORAL (Código de Comercio, juicio oral mercantil)
-// =====================================================================
-const ordinarioMercantilOral: TipoJuicio = {
-  clave: "ordinario_mercantil_oral",
-  tipo: "Ordinario Mercantil",
-  via: "oral",
-  ley: "Código de Comercio (juicio oral mercantil)",
-  etapas: [
-    { clave: "demanda", nombre: "Demanda", fase: "Postulatoria",
-      resumen: "Escrito inicial; se ofrecen las pruebas desde aquí.",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Documento(s) base", acto: "promocion", obligatorio: true },
-        { nombre: "Ofrecimiento de pruebas", acto: "promocion" },
-      ] },
-    { clave: "admision", nombre: "Auto admisorio", fase: "Postulatoria",
-      resumen: "Admisión o prevención.",
-      docs: [{ nombre: "Auto admisorio", acto: "acuerdo", obligatorio: true }] },
-    { clave: "emplazamiento", nombre: "Emplazamiento", fase: "Postulatoria",
-      resumen: "Notificación personal al demandado.",
-      docs: [{ nombre: "Acta de emplazamiento", acto: "acta", obligatorio: true }] },
-    { clave: "contestacion", nombre: "Contestación y reconvención", fase: "Postulatoria",
-      resumen: "Contestación con excepciones y pruebas; reconvención si la hay.",
-      docs: [{ nombre: "Contestación o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
-    { clave: "audiencia_preliminar", nombre: "Audiencia preliminar", fase: "Audiencia preliminar (oral)",
-      resumen: "Depuración, conciliación, fijación de litis y admisión de pruebas.",
-      docs: [{ nombre: "Acta de audiencia preliminar", acto: "audiencia", obligatorio: true }, { nombre: "Auto de admisión de pruebas", acto: "acuerdo" }] },
-    { clave: "audiencia_juicio", nombre: "Audiencia de juicio", fase: "Audiencia de juicio (oral)",
-      resumen: "Desahogo oral de pruebas y alegatos.",
-      docs: [{ nombre: "Acta de audiencia de juicio", acto: "audiencia", obligatorio: true }] },
-    { clave: "sentencia", nombre: "Sentencia", fase: "Audiencia de juicio (oral)",
-      resumen: "El juez dicta sentencia oralmente; luego por escrito.",
-      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
-    { clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
-      resumen: "En el oral mercantil no procede apelación; procede amparo.",
-      docs: [{ nombre: "Demanda de amparo", acto: "promocion" }, { nombre: "Ejecutoria de amparo", acto: "resolucion" }] },
-    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Cumplimiento forzoso.",
-      docs: [{ nombre: "Auto de ejecución", acto: "acuerdo" }] },
-  ],
-};
-
-// =====================================================================
-// 6) SUCESORIO — INTESTAMENTARIO (escrita)
-// =====================================================================
-const sucesorioIntestamentario: TipoJuicio = {
-  clave: "sucesorio_intestamentario",
-  tipo: "Sucesorio Intestamentario",
-  via: "escrita",
-  ley: "Código de Procedimientos Civiles (sucesiones)",
-  etapas: [
-    { clave: "denuncia", nombre: "Denuncia del intestado", fase: "Primera sección (sucesión)",
-      resumen: "Se denuncia la sucesión y se acredita el parentesco y la muerte.",
-      docs: [
-        { nombre: "Escrito de denuncia", acto: "promocion", obligatorio: true },
-        { nombre: "Acta de defunción", acto: "promocion", obligatorio: true },
-        { nombre: "Actas que acrediten parentesco", acto: "promocion" },
-      ] },
-    { clave: "radicacion", nombre: "Radicación e informes", fase: "Primera sección (sucesión)",
-      resumen: "Se radica y se piden informes (testamentos, etc.).",
-      docs: [{ nombre: "Auto de radicación", acto: "acuerdo", obligatorio: true }, { nombre: "Informes de no testamento", acto: "acuerdo" }] },
-    { clave: "junta_herederos", nombre: "Junta de herederos y nombramiento de albacea", fase: "Primera sección (sucesión)",
-      resumen: "Reconocimiento de herederos y designación del albacea.",
-      docs: [{ nombre: "Acta de junta de herederos", acto: "acta" }, { nombre: "Auto que declara herederos y nombra albacea", acto: "acuerdo", obligatorio: true }] },
-    { clave: "inventario", nombre: "Inventario y avalúo", fase: "Segunda sección (inventarios)",
-      resumen: "El albacea formula inventario y avalúo de los bienes.",
-      docs: [{ nombre: "Inventario y avalúo", acto: "promocion", obligatorio: true }, { nombre: "Auto que aprueba el inventario", acto: "acuerdo" }] },
-    { clave: "administracion", nombre: "Administración", fase: "Tercera sección (administración)",
-      resumen: "Rendición de cuentas de la administración del albacea.",
-      docs: [{ nombre: "Cuentas de administración", acto: "promocion" }] },
-    { clave: "particion", nombre: "Proyecto de partición y adjudicación", fase: "Cuarta sección (partición)",
-      resumen: "Proyecto de partición, aprobación y adjudicación a herederos.",
-      docs: [
-        { nombre: "Proyecto de partición", acto: "promocion", obligatorio: true },
-        { nombre: "Auto que aprueba la partición", acto: "acuerdo", obligatorio: true },
-        { nombre: "Escritura de adjudicación", acto: "resolucion" },
-      ] },
-  ],
-};
-
-// =====================================================================
-// 7) SUCESORIO — TESTAMENTARIO (escrita)
-// =====================================================================
-const sucesorioTestamentario: TipoJuicio = {
-  clave: "sucesorio_testamentario",
-  tipo: "Sucesorio Testamentario",
-  via: "escrita",
-  ley: "Código de Procedimientos Civiles (sucesiones)",
-  etapas: [
-    { clave: "denuncia", nombre: "Denuncia con testamento", fase: "Primera sección (sucesión)",
-      resumen: "Se denuncia la sucesión acompañando el testamento.",
-      docs: [
-        { nombre: "Escrito de denuncia", acto: "promocion", obligatorio: true },
-        { nombre: "Testamento", acto: "promocion", obligatorio: true },
-        { nombre: "Acta de defunción", acto: "promocion", obligatorio: true },
-      ] },
-    { clave: "radicacion", nombre: "Radicación y apertura del testamento", fase: "Primera sección (sucesión)",
-      resumen: "Se radica y se reconoce la validez del testamento.",
-      docs: [{ nombre: "Auto de radicación", acto: "acuerdo", obligatorio: true }] },
-    { clave: "albacea", nombre: "Reconocimiento de herederos y albacea", fase: "Primera sección (sucesión)",
-      resumen: "Reconocimiento conforme al testamento y nombramiento de albacea.",
-      docs: [{ nombre: "Auto que reconoce herederos y nombra albacea", acto: "acuerdo", obligatorio: true }] },
-    { clave: "inventario", nombre: "Inventario y avalúo", fase: "Segunda sección (inventarios)",
-      resumen: "Inventario y avalúo de bienes.",
-      docs: [{ nombre: "Inventario y avalúo", acto: "promocion", obligatorio: true }, { nombre: "Auto que lo aprueba", acto: "acuerdo" }] },
-    { clave: "administracion", nombre: "Administración", fase: "Tercera sección (administración)",
-      resumen: "Rendición de cuentas del albacea.",
-      docs: [{ nombre: "Cuentas de administración", acto: "promocion" }] },
-    { clave: "particion", nombre: "Partición y adjudicación", fase: "Cuarta sección (partición)",
-      resumen: "Partición conforme al testamento y adjudicación.",
-      docs: [
-        { nombre: "Proyecto de partición", acto: "promocion", obligatorio: true },
-        { nombre: "Auto que aprueba la partición", acto: "acuerdo", obligatorio: true },
-        { nombre: "Escritura de adjudicación", acto: "resolucion" },
-      ] },
-  ],
-};
-
-// =====================================================================
-// 8) EJECUTIVO CIVIL — ESCRITA (Código de Procedimientos Civiles)
-// =====================================================================
-const ejecutivoCivilEscrita: TipoJuicio = {
-  clave: "ejecutivo_civil_escrita",
-  tipo: "Ejecutivo Civil",
-  via: "escrita",
-  ley: "Código de Procedimientos Civiles (vía ejecutiva)",
-  etapas: [
-    { clave: "demanda", nombre: "Demanda con documento ejecutivo", fase: "Postulatoria",
-      resumen: "Escrito inicial acompañado del documento que trae aparejada ejecución.",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Documento base (título ejecutivo)", acto: "promocion", obligatorio: true },
-      ] },
-    { clave: "auto_ejecucion", nombre: "Auto de ejecución (admisión + mandamiento)", fase: "Ejecución inicial",
-      resumen: "Admite y ordena requerir de pago, embargar y emplazar.",
-      docs: [{ nombre: "Auto de ejecución / exequendo", acto: "acuerdo", obligatorio: true }] },
-    { clave: "requerimiento_embargo", nombre: "Requerimiento de pago, embargo y emplazamiento", fase: "Ejecución inicial",
-      resumen: "Diligencia del actuario: requiere pago, traba embargo y emplaza.",
-      docs: [{ nombre: "Acta de la diligencia (actuario)", acto: "acta", obligatorio: true }] },
-    { clave: "contestacion", nombre: "Contestación u oposición de excepciones", fase: "Postulatoria",
-      resumen: "El demandado opone excepciones (o rebeldía) y ofrece pruebas.",
-      docs: [{ nombre: "Contestación / oposición o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
-    { clave: "pruebas", nombre: "Admisión y desahogo de pruebas", fase: "Probatoria",
-      resumen: "Ofrecimiento, admisión y desahogo de pruebas.",
-      docs: [{ nombre: "Auto de admisión de pruebas", acto: "acuerdo" }, { nombre: "Constancias de desahogo", acto: "acta" }] },
-    { clave: "alegatos", nombre: "Alegatos", fase: "Conclusiva",
-      resumen: "Alegatos de las partes.",
-      docs: [{ nombre: "Escrito de alegatos", acto: "promocion" }] },
-    { clave: "sentencia", nombre: "Sentencia", fase: "Conclusiva",
-      resumen: "Sentencia de primera instancia.",
-      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
-    { clave: "apelacion", nombre: "Apelación (si la hay)", fase: "Recursos",
-      resumen: "Recurso ante el superior.",
-      docs: [{ nombre: "Escrito de apelación", acto: "promocion" }, { nombre: "Resolución de apelación", acto: "resolucion" }] },
-    { clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
-      resumen: "Amparo contra la resolución.",
-      docs: [{ nombre: "Demanda de amparo", acto: "promocion" }, { nombre: "Ejecutoria de amparo", acto: "resolucion" }] },
-    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Se hace efectivo el fallo sobre lo embargado.",
-      docs: [{ nombre: "Auto que ordena la ejecución", acto: "acuerdo" }] },
-    { clave: "avaluo", nombre: "Avalúo", fase: "Ejecución",
-      resumen: "Avalúo del bien embargado.",
-      docs: [{ nombre: "Avalúo (perito)", acto: "promocion" }, { nombre: "Acuerdo que lo tiene por rendido", acto: "acuerdo" }] },
-    { clave: "remate", nombre: "Remate / almoneda", fase: "Ejecución",
-      resumen: "Convocatoria y celebración de la almoneda.",
-      docs: [{ nombre: "Convocatoria / edictos", acto: "acuerdo" }, { nombre: "Acta de remate", acto: "acta" }] },
-    { clave: "adjudicacion", nombre: "Adjudicación", fase: "Ejecución",
-      resumen: "Adjudicación a favor del postor / actor.",
-      docs: [{ nombre: "Auto de adjudicación", acto: "acuerdo", obligatorio: true }] },
-    { clave: "escrituracion", nombre: "Escrituración y entrega", fase: "Ejecución",
-      resumen: "Escritura (en rebeldía si aplica) y entrega del inmueble.",
-      docs: [
-        { nombre: "Solicitud de escrituración / firma en rebeldía", acto: "promocion" },
-        { nombre: "Escritura", acto: "resolucion" },
-        { nombre: "Acta de entrega del inmueble", acto: "acta" },
-      ] },
-  ],
-};
-
-// =====================================================================
-// 9) ORAL MERCANTIL — ESCRITA (tramitación escrita previa a las audiencias)
-// =====================================================================
-const oralMercantilEscrita: TipoJuicio = {
-  clave: "oral_mercantil_escrita",
-  tipo: "Oral Mercantil",
-  via: "escrita",
-  ley: "Código de Comercio (juicio oral mercantil — fase escrita)",
-  etapas: [
-    { clave: "demanda", nombre: "Demanda", fase: "Postulatoria",
-      resumen: "Escrito inicial; se ofrecen las pruebas desde aquí.",
-      docs: [
-        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
-        { nombre: "Documento(s) base", acto: "promocion", obligatorio: true },
-        { nombre: "Ofrecimiento de pruebas", acto: "promocion" },
-      ] },
-    { clave: "admision", nombre: "Auto admisorio", fase: "Postulatoria",
-      resumen: "Admisión o prevención.",
-      docs: [{ nombre: "Auto admisorio", acto: "acuerdo", obligatorio: true }] },
-    { clave: "emplazamiento", nombre: "Emplazamiento", fase: "Postulatoria",
-      resumen: "Notificación personal al demandado.",
-      docs: [{ nombre: "Acta de emplazamiento", acto: "acta", obligatorio: true }] },
-    { clave: "contestacion", nombre: "Contestación y reconvención", fase: "Postulatoria",
-      resumen: "Contestación con excepciones y pruebas; reconvención si la hay.",
-      docs: [{ nombre: "Contestación o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
-    { clave: "audiencia_preliminar", nombre: "Audiencia preliminar", fase: "Audiencia preliminar",
-      resumen: "Depuración, conciliación, fijación de litis y admisión de pruebas.",
-      docs: [{ nombre: "Acta de audiencia preliminar", acto: "audiencia", obligatorio: true }, { nombre: "Auto de admisión de pruebas", acto: "acuerdo" }] },
-    { clave: "audiencia_juicio", nombre: "Audiencia de juicio", fase: "Audiencia de juicio",
-      resumen: "Desahogo de pruebas y alegatos.",
-      docs: [{ nombre: "Acta de audiencia de juicio", acto: "audiencia", obligatorio: true }] },
-    { clave: "sentencia", nombre: "Sentencia", fase: "Audiencia de juicio",
-      resumen: "Sentencia definitiva.",
-      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
-    { clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
-      resumen: "En el oral mercantil no procede apelación; procede amparo.",
-      docs: [{ nombre: "Demanda de amparo", acto: "promocion" }, { nombre: "Ejecutoria de amparo", acto: "resolucion" }] },
-    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
-      resumen: "Cumplimiento forzoso.",
-      docs: [{ nombre: "Auto de ejecución", acto: "acuerdo" }] },
-  ],
-};
-
-// =====================================================================
-// Catálogo completo
-// =====================================================================
-export const CATALOGO_ETAPAS: TipoJuicio[] = [
-  ordinarioCivilOral,
-  ordinarioCivilEscrita,
-  ejecutivoMercantilEscrita,
-  ejecutivoCivilEscrita,
-  hipotecarioEscrita,
-  ordinarioMercantilOral,
-  oralMercantilEscrita,
-  sucesorioIntestamentario,
-  sucesorioTestamentario,
-];
-
-// posiciones de DIIPA (del pre-dictamen URRJ)
-export const POSICIONES = ["Actor", "Demandado", "Sucesión", "Contingencia"] as const;
-export type Posicion = typeof POSICIONES[number];
-
-// helper: busca un tipo por su clave
-export function tipoJuicioPorClave(clave: string | null | undefined): TipoJuicio | null {
-  if (!clave) return null;
-  return CATALOGO_ETAPAS.find((t) => t.clave === clave) || null;
+// Triangulito rojo cuando falta info
+function Faltante({ texto = "Falta información" }: { texto?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700" title={texto}>
+      <AlertTriangle className="h-3 w-3" /> {texto}
+    </span>
+  );
 }
 
-// helper: lista para selects (tipo + vía)
-export function listaTiposJuicio(): { clave: string; etiqueta: string }[] {
-  return CATALOGO_ETAPAS.map((t) => ({
-    clave: t.clave,
-    etiqueta: `${t.tipo} · ${t.via === "oral" ? "Oral (nuevo)" : "Escrito (tradicional)"}`,
-  }));
+// Tarjeta de sección reutilizable
+function Seccion({ icon, titulo, falta, children }: { icon: React.ReactNode; titulo: string; falta?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+        {falta && <Faltante />}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Fila de dato: label + valor (marca ⚠️ si vacío y es importante)
+function Dato({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
+  const vacio = !valor || !String(valor).trim();
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">
+        {vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}
+      </span>
+    </div>
+  );
+}
+
+// Sección "próximamente" (placeholder de partes 2 y 3)
+function Proximamente({ icon, titulo, nota }: { icon: React.ReactNode; titulo: string; nota: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">{icon} {titulo} <Lock className="h-3.5 w-3.5" /></p>
+      <p className="mt-1 text-xs text-muted-foreground">{nota}</p>
+    </div>
+  );
+}
+
+function FichaExpedientePage() {
+  const { id } = Route.useSearch();
+  const navigate = useNavigate();
+  const [caso, setCaso] = useState<CasoJuridico | null>(null);
+  const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [verSeguimiento, setVerSeguimiento] = useState(false);
+
+  useEffect(() => {
+    if (!id) { setCargando(false); return; }
+    fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${id}`, { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(async (d) => {
+        const c: CasoJuridico | null = d?.[0] ?? null;
+        setCaso(c);
+        if (c?.expediente) {
+          const exp = c.expediente.trim();
+          const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(exp)}&order=fecha_acuerdo.desc&limit=200`, { headers });
+          setAcuerdos(ra.ok ? await ra.json() : []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCargando(false));
+  }, [id]);
+
+  const destino = caso?.tipo_registro === "amparo" ? "/amparos" : caso?.tipo_registro === "recurso" ? "/recursos" : caso?.tipo_registro === "exhorto" ? "/exhortos" : "/ucm";
+  const volver = () => navigate({ to: destino });
+
+  if (cargando) return (
+    <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>
+  );
+  if (!caso) return (
+    <div className="rounded-xl border border-border bg-card p-8 text-center">
+      <p className="text-sm text-muted-foreground">No se encontró el expediente.</p>
+      <button onClick={volver} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Volver</button>
+    </div>
+  );
+
+  const c = caso;
+  const ultima = acuerdos[0] || null;
+  const dias = ultima ? diasDesde(ultima.fecha_acuerdo) : null;
+  const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
+
+  // banderas de faltantes por sección
+  const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
+  const areaFicha = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : "UCM";
+  const faltaAntecedente = !c.proveedor || !c.no_credito || !c.direccion_garantia || !(c.cliente_nombre || c.cliente_codigo);
+  const faltaEstatus = esEspecial ? !c.estatus_general : (!c.etapa_actual || !c.estatus_general || !c.prioridad);
+  const faltaSeguimiento = sinJuzgado; // solo es "falta" si no hay juzgado; sin actuaciones aún NO es falta (el robot las trae)
+
+  return (
+    <div className="space-y-4">
+      {/* volver + carpeta en Drive */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" /> Volver
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setVerSeguimiento(true)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: NAVY }}>
+            <Scale className="h-4 w-4" /> Seguimiento del juicio
+          </button>
+          <BotonCarpetaDrive area={areaFicha} caso={c} />
+        </div>
+      </div>
+
+      {/* Encabezado */}
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${TEAL})` }}>
+        <p className="text-xs uppercase tracking-wider text-white/60">Ficha del expediente</p>
+        <h1 className="mt-0.5 text-2xl font-bold">{c.expediente || "— sin expediente —"}</h1>
+        <p className="mt-1 text-sm text-white/85">
+          {(c.actor || "—")} <span className="text-white/50">vs</span> {(c.demandado || "—")}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          {c.materia && <span className="rounded-full bg-white/15 px-2.5 py-0.5">{c.materia}</span>}
+          {c.via_procesal && <span className="rounded-full bg-white/15 px-2.5 py-0.5">{c.via_procesal}</span>}
+          {c.entidad && <span className="rounded-full bg-white/15 px-2.5 py-0.5">{c.entidad}</span>}
+          {c.prioridad && <span className="rounded-full bg-white/15 px-2.5 py-0.5">Prioridad {c.prioridad}</span>}
+        </div>
+        <p className="mt-2 text-xs text-white/70">{c.nombre_juzgado || c.juzgado || "Juzgado sin asignar"}{c.distrito_judicial ? ` · ${c.distrito_judicial}` : ""}</p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Antecedente: garantía (juicio) o datos del amparo */}
+        {c.tipo_registro === "amparo" ? (
+          <Seccion icon={<Shield className="h-4 w-4" style={{ color: TEAL }} />} titulo="Datos del amparo" falta={!c.quejoso || !c.acto_reclamado}>
+            <Dato label="Tipo de amparo" valor={c.tipo_amparo} />
+            <Dato label="Quejoso" valor={c.quejoso} importante />
+            <Dato label="Autoridad responsable" valor={c.autoridad_responsable} importante />
+            <Dato label="Acto reclamado" valor={c.acto_reclamado} importante />
+          </Seccion>
+        ) : c.tipo_registro === "recurso" ? (
+          <Seccion icon={<Layers className="h-4 w-4" style={{ color: TEAL }} />} titulo="Datos del recurso" falta={!c.promovente}>
+            <Dato label="Tipo de recurso" valor={c.tipo_recurso} />
+            <Dato label="Promovente" valor={c.promovente} importante />
+            <Dato label="Fecha de interposición" valor={c.fecha_interposicion} />
+            <Dato label="Resolución" valor={c.resolucion} />
+          </Seccion>
+        ) : c.tipo_registro === "exhorto" ? (
+          <Seccion icon={<Send className="h-4 w-4" style={{ color: TEAL }} />} titulo="Datos del exhorto" falta={!c.diligencia}>
+            <Dato label="Folio" valor={c.folio} />
+            <Dato label="Expediente origen" valor={c.expediente_origen} />
+            <Dato label="Juzgado origen" valor={c.juzgado_origen} />
+            <Dato label="Diligencia" valor={c.diligencia} importante />
+            <Dato label="Vence" valor={c.fecha_vence} />
+          </Seccion>
+        ) : (
+          <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía" falta={faltaAntecedente}>
+            <Dato label="ID garantía" valor={c.gar_id} />
+            <Dato label="Proveedor / Administradora" valor={c.proveedor} importante />
+            <Dato label="No. de crédito" valor={c.no_credito} importante />
+            <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+            <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
+            <Dato label="Tipo de proceso" valor={c.tipo_proceso} />
+          </Seccion>
+        )}
+
+        {/* Estatus actual */}
+        <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual" falta={faltaEstatus}>
+          {!esEspecial && <Dato label="Etapa actual" valor={c.etapa_actual} importante />}
+          <Dato label={esEspecial ? "Estado" : "Estatus general"} valor={c.estatus_general} importante />
+          <Dato label="Prioridad" valor={c.prioridad} importante={!esEspecial} />
+          <Dato label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
+          <Dato label="Nota adicional" valor={c.nota_adicional} />
+        </Seccion>
+      </div>
+
+      {/* Última actuación en el boletín + Qué sigue */}
+      <Seccion icon={<Megaphone className="h-4 w-4" style={{ color: TEAL }} />} titulo="Última actuación en el boletín" falta={faltaSeguimiento}>
+        {sinJuzgado ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <AlertTriangle className="mr-1 inline h-4 w-4" /> Falta asignar el juzgado para que el robot pueda seguir este expediente en el boletín.
+          </div>
+        ) : ultima ? (
+          <>
+            <div className="rounded-md bg-muted/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">{fmtFecha(ultima.fecha_acuerdo)}{dias != null && ` · hace ${dias} días`}</span>
+                {ultima.urgente && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">urgente</span>}
+              </div>
+              <p className="mt-1 text-sm">{ultima.texto || "—"}</p>
+            </div>
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" style={{ color: TEAL }} />
+              <div>
+                <p className="text-xs font-semibold" style={{ color: TEAL }}>Qué sigue (sugerencia)</p>
+                <p className="text-sm">{sugerencia(ultima.texto)}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{acuerdos.length} actuaciones registradas en el boletín.</p>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-start gap-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3 text-sm">
+              <Megaphone className="mt-0.5 h-4 w-4 shrink-0" style={{ color: TEAL }} />
+              <div>
+                <p className="font-medium" style={{ color: TEAL }}>Listo para el robot — aún sin actuaciones.</p>
+                <p className="mt-0.5 text-muted-foreground">El juzgado ya está asignado. El robot revisa el boletín <b>todos los días a las 9:00 AM</b> y, cuando aparezca un acuerdo de este expediente, se llenará aquí solo. No necesitas hacer nada.</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Si después de varios días sigue vacío, revisa que el <b>número de expediente</b> y el <b>juzgado</b> coincidan exactamente con los del boletín (puedes corregirlos en "Asignar juzgado").</p>
+          </div>
+        )}
+      </Seccion>
+
+      {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
+      <DocumentosGarantia area={areaFicha} caso={c} />
+
+      {/* ANTECEDENTES (solo lectura): pre-dictámenes, dictámenes, firmas, actuaciones y evidencias */}
+      <AntecedentesGarantia casoId={c.id} expediente={c.expediente} />
+
+      {/* Sección que llega en la siguiente parte */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Proximamente icon={<DollarSign className="h-4 w-4" />} titulo="Precios" nota="Valores de la garantía. (Parte 3)" />
+      </div>
+
+      {verSeguimiento && <SeguimientoJuicioModal area={areaFicha} caso={c} onClose={() => setVerSeguimiento(false)} />}
+    </div>
+  );
 }
