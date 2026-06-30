@@ -4,6 +4,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
+import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
   DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
@@ -152,16 +153,20 @@ function FichaExpedientePage() {
 
   // banderas de faltantes por sección
   const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
+  const areaFicha = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : "UCM";
   const faltaAntecedente = !c.proveedor || !c.no_credito || !c.direccion_garantia || !(c.cliente_nombre || c.cliente_codigo);
   const faltaEstatus = esEspecial ? !c.estatus_general : (!c.etapa_actual || !c.estatus_general || !c.prioridad);
   const faltaSeguimiento = sinJuzgado; // solo es "falta" si no hay juzgado; sin actuaciones aún NO es falta (el robot las trae)
 
   return (
     <div className="space-y-4">
-      {/* volver */}
-      <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" /> Volver
-      </button>
+      {/* volver + carpeta en Drive */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" /> Volver
+        </button>
+        <BotonCarpetaDrive area={areaFicha} caso={c} />
+      </div>
 
       {/* Encabezado */}
       <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${TEAL})` }}>
