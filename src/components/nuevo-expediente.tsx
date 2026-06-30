@@ -153,6 +153,8 @@ export function NuevoExpedienteModal({ onClose, onCreado, caso }: { onClose: () 
     if (!expediente.trim()) { setErrBuscar("Escribe el número de expediente."); return; }
     if (!juzgadoElegido) { setErrBuscar("Elige primero el juzgado."); return; }
     setBuscando(true); setErrBuscar(null); setRes(null); setConfirmado(false);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 40000); // 40s máximo, para que no se quede colgado
     try {
       let url = "";
       const exp = encodeURIComponent(expediente.trim());
@@ -164,14 +166,17 @@ export function NuevoExpedienteModal({ onClose, onCreado, caso }: { onClose: () 
       } else if (entidad === "Sinaloa") {
         const j = cat.find((x) => x.id === juzgadoId);
         url = `${ROBOT}/buscar?entidad=Sinaloa&distrito=${encodeURIComponent(j?.nombre_distrito || "")}&juzgado=${encodeURIComponent((j?.nombre_juzgado || "").split(",")[0])}&exp=${exp}`;
-      } else { setErrBuscar("CDMX no tiene robot; llénalo a mano abajo."); setBuscando(false); return; }
+      } else { setErrBuscar("CDMX no tiene robot; llénalo a mano abajo."); clearTimeout(t); setBuscando(false); return; }
 
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: ctrl.signal });
       const data: ResBuscar = await r.json();
       if (!data.ok) { setErrBuscar(data.error || "El robot no encontró nada."); setRes(null); }
       else { setRes(data); }
-    } catch (e: any) { setErrBuscar("No se pudo conectar con el robot. " + (e.message || "")); }
-    finally { setBuscando(false); }
+    } catch (e: any) {
+      if (e?.name === "AbortError") setErrBuscar("El robot tardó demasiado (a veces tarda en 'despertar'). Intenta otra vez en un momento, o llena a mano abajo.");
+      else setErrBuscar("No se pudo conectar con el robot. " + (e?.message || ""));
+    }
+    finally { clearTimeout(t); setBuscando(false); }
   }
 
   // al confirmar, copia los datos del robot al formulario
