@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Loader2, Check, Gavel, Camera, ClipboardList, File as FileIcon, Upload, Paperclip } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { guardarMovimiento, type DatosMovimiento, type DocumentoGarantia } from "@/lib/drive";
+import { tipoJuicioPorClave } from "@/lib/etapas-juicio";
+import { obtenerSeguimiento } from "@/lib/seguimiento-juicio";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -26,7 +28,10 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
   const [tipo, setTipo] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [colabs, setColabs] = useState<Colab[]>([]);
+  const [etapasJuicio, setEtapasJuicio] = useState<{ clave: string; nombre: string }[]>([]);
+  const [etapa, setEtapa] = useState("");
 
+  // campos
   const [fecha, setFecha] = useState(hoy());
   const [nota, setNota] = useState("");
   const [proxima, setProxima] = useState("");
@@ -42,6 +47,15 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
       .then((r) => (r.ok ? r.json() : [])).then(setColabs).catch(() => {});
   }, []);
 
+  // carga las etapas del juicio si ya está configurado el seguimiento
+  useEffect(() => {
+    obtenerSeguimiento(caso).then((s) => {
+      const td = tipoJuicioPorClave(s?.tipo_juicio);
+      if (td) setEtapasJuicio(td.etapas.map((e) => ({ clave: e.clave, nombre: e.nombre })));
+    }).catch(() => {});
+    // eslint-disable-next-line
+  }, [caso.id]);
+
   const tdef = useMemo(() => TIPOS.find((t) => t.v === tipo), [tipo]);
 
   const guardar = async () => {
@@ -49,12 +63,13 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
     setGuardando(true); setError(null);
     const datos: DatosMovimiento = {
       tipo,
-      fecha_mov: fecha || null,
+      fecha_mov: tipo === "actuacion" ? (fecha || null) : (fecha || null),
       nota: nota.trim() || null,
       proxima_actuacion: tipo === "actuacion" ? (proxima.trim() || null) : null,
       fecha_proxima: tipo === "actuacion" ? (fechaProxima || null) : null,
       asignado_a: tipo === "tarea" ? (asignado.trim() || null) : null,
       fecha_limite: tipo === "tarea" ? (fechaLimite || null) : null,
+      etapa: etapa || null,
     };
     const r = await guardarMovimiento(area, caso, datos, file);
     setGuardando(false);
@@ -71,6 +86,7 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
         </div>
 
         <div className="space-y-4 p-4">
+          {/* Archivo (opcional) */}
           <div>
             <label className={lbl}>Archivo (opcional)</label>
             {file ? (
@@ -86,6 +102,7 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
             )}
           </div>
 
+          {/* ¿Qué es esto? */}
           <div>
             <label className={lbl}>¿Qué es esto?</label>
             <div className="grid grid-cols-2 gap-2">
@@ -106,10 +123,12 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
             </div>
           </div>
 
+          {/* Campos según el tipo */}
           {tipo && (
             <div className="space-y-3 rounded-lg border border-border p-3">
               <p className="text-xs font-medium" style={{ color: TEAL }}>Datos de la {tdef?.t.toLowerCase()}</p>
 
+              {/* fecha: aplica a actuación/evidencia/tarea/otro */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className={lbl}>Fecha</label>
@@ -129,6 +148,7 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
                 )}
               </div>
 
+              {/* nota: todos menos "otro" la piden; en "otro" es opcional igual */}
               <div>
                 <label className={lbl}>{tipo === "tarea" ? "¿Qué hay que hacer?" : "Nota / qué pasó"}{tipo === "otro" ? " (opcional)" : ""}</label>
                 <textarea className={inp} rows={2} value={nota} onChange={(e) => setNota(e.target.value)} placeholder={tipo === "tarea" ? "ej. Revisar el convenio y responder" : "ej. Se señaló fecha de remate"} />
@@ -138,6 +158,17 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
                 <div>
                   <label className={lbl}>Próxima actuación (opcional)</label>
                   <input className={inp} value={proxima} onChange={(e) => setProxima(e.target.value)} placeholder="ej. Audiencia de remate" />
+                </div>
+              )}
+
+              {etapasJuicio.length > 0 && (
+                <div>
+                  <label className={lbl}>¿A qué etapa del juicio pertenece? (opcional)</label>
+                  <select className={inp} value={etapa} onChange={(e) => setEtapa(e.target.value)}>
+                    <option value="">— sin etapa —</option>
+                    {etapasJuicio.map((e) => <option key={e.clave} value={e.clave}>{e.nombre}</option>)}
+                  </select>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Si lo ligas a una etapa, se palomea solo en el checklist del seguimiento.</p>
                 </div>
               )}
 
