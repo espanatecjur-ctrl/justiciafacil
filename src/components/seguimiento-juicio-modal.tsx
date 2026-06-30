@@ -5,7 +5,7 @@ import { CATALOGO_ETAPAS, POSICIONES, tipoJuicioPorClave, listaTiposJuicio, type
 import { obtenerSeguimiento, guardarSeguimiento, estadoChecklist, marcarChecklist, listarProcesal, agregarProcesal, type SeguimientoJuicio, type MarcaChecklist, type SeguimientoProcesal } from "@/lib/seguimiento-juicio";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { ChulearDocumentoModal } from "@/components/chulear-documento";
-import { ChevronDown, ChevronRight, FileCheck2, FileX2, Plus, ClipboardList, Loader2 as Spin } from "lucide-react";
+import { ChevronDown, ChevronRight, FileCheck2, FileX2, Plus, ClipboardList, Loader2 as Spin, Eye } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -35,7 +35,9 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
   // checklist por etapa
   const [expandida, setExpandida] = useState<string | null>(null);
   const [etapasConDoc, setEtapasConDoc] = useState<Set<string>>(new Set());
+  const [docsPorEtapa, setDocsPorEtapa] = useState<Record<string, { nombre: string | null; link: string | null; drive_id: string | null; mime: string | null }[]>>({});
   const [marcas, setMarcas] = useState<MarcaChecklist[]>([]);
+  const [verDoc, setVerDoc] = useState<{ nombre: string | null; link: string | null; drive_id: string | null } | null>(null);
 
   // seguimiento procesal (bitácora + notas de estrategia)
   const [procesal, setProcesal] = useState<SeguimientoProcesal[]>([]);
@@ -45,7 +47,7 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
   const [chulear, setChulear] = useState<{ etapa: string; doc: string } | null>(null);
 
   const cargarChecklist = () => {
-    estadoChecklist(caso).then((r) => { setEtapasConDoc(r.etapasConDoc); setMarcas(r.marcas); }).catch(() => {});
+    estadoChecklist(caso).then((r) => { setEtapasConDoc(r.etapasConDoc); setDocsPorEtapa(r.docsPorEtapa); setMarcas(r.marcas); }).catch(() => {});
     listarProcesal(caso).then(setProcesal).catch(() => {});
   };
 
@@ -217,15 +219,19 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
                                   const auto = etapasConDoc.has(e.clave); // hay al menos un archivo ligado a la etapa
                                   const manual = !!marcaDe(e.clave, doc.nombre)?.hecho;
                                   const cubierto = auto || manual;
+                                  const docEtapa = (docsPorEtapa[e.clave] || [])[0]; // primer archivo de la etapa
                                   return (
                                     <div key={doc.nombre} className="flex items-center gap-2 text-xs">
                                       <button onClick={() => { if (cubierto && manual) { togglePalomeo(e.clave, doc.nombre); } else if (!cubierto) { setChulear({ etapa: e.clave, doc: doc.nombre }); } }} className="shrink-0" title={cubierto ? (manual ? "Quitar palomita" : "Ya cubierto por archivo") : "Chulear: subir documento"}>
                                         {cubierto ? <FileCheck2 className="h-4 w-4 text-[color:var(--teal)]" /> : <FileX2 className="h-4 w-4 text-muted-foreground" />}
                                       </button>
-                                      <span className={cubierto ? "" : "text-muted-foreground"}>{doc.nombre}</span>
+                                      <span className={`flex-1 ${cubierto ? "" : "text-muted-foreground"}`}>{doc.nombre}</span>
                                       <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">{doc.acto}</span>
                                       {doc.obligatorio && <span className="text-[9px] font-semibold text-red-600">obligatorio</span>}
                                       {auto && <span className="text-[9px] text-[color:var(--teal)]">✓ por archivo</span>}
+                                      {auto && docEtapa?.link && (
+                                        <button onClick={() => setVerDoc(docEtapa)} title="Ver documento" className="shrink-0 grid h-6 w-6 place-items-center rounded hover:bg-muted"><Eye className="h-3.5 w-3.5 text-[color:var(--teal)]" /></button>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -303,6 +309,20 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
           onClose={() => setChulear(null)}
           onListo={() => { setChulear(null); cargarChecklist(); }}
         />
+      )}
+
+      {verDoc && verDoc.link && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={() => setVerDoc(null)}>
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-card shadow-xl" onClick={(ev) => ev.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2 p-3 text-white" style={{ background: NAVY }}>
+              <p className="truncate text-sm font-semibold">{verDoc.nombre || "Documento"}</p>
+              <button onClick={() => setVerDoc(null)} className="text-sm">Cerrar ✕</button>
+            </div>
+            <iframe
+              src={verDoc.drive_id ? `https://drive.google.com/file/d/${verDoc.drive_id}/preview` : (verDoc.link.match(/\/d\/([^/]+)/) ? `https://drive.google.com/file/d/${verDoc.link.match(/\/d\/([^/]+)/)![1]}/preview` : verDoc.link)}
+              title={verDoc.nombre || "Documento"} className="h-[70vh] w-full border-0 bg-muted" />
+          </div>
+        </div>
       )}
     </div>
   );
