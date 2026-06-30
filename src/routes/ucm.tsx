@@ -200,7 +200,7 @@ function UcmPage() {
                     <p className="max-w-[260px] truncate" title={c.nota_adicional || ""}>{c.nota_adicional || "—"}</p>
                   </td>
                   <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <FilaAcciones archivado={!!c.archivado} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
+                    <FilaAcciones archivado={!!c.archivado} area="UCM" caso={c} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                   </td>
                 </tr>
               ))}
@@ -231,7 +231,7 @@ function UcmPage() {
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
-                  <FilaAcciones archivado={!!c.archivado} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
+                  <FilaAcciones archivado={!!c.archivado} area="UCM" caso={c} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                 </div>
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
