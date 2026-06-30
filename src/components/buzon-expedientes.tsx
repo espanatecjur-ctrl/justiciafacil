@@ -4,6 +4,7 @@ import { sbSelect, type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/s
 import type { AcuerdoJudicial } from "@/components/robot-boletines";
 import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin, Eye } from "lucide-react";
 import { ConfigBoletinModal } from "@/components/config-boletin";
+import { MiniMovimientos } from "@/components/mini-movimientos";
 
 const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -232,9 +233,11 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
                         {a.leido === false && <button onClick={() => marcarLeido(a.id)} className="flex items-center gap-1 text-[11px] text-[color:var(--teal)] hover:underline"><Check className="h-3 w-3" /> Marcar leído</button>}
                       </div>
                     </div>
-                  ))}
+                 ))}
                 </div>
               )}
+
+              <MiniMovimientos caso={selExp.c} />
             </div>
           )}
         </div>
