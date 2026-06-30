@@ -1,258 +1,176 @@
-// ============================================================
-// JusticiaFácil · Carpeta en Drive
-// Llama a la Netlify Function /.netlify/functions/crear-carpeta
-// que crea (o reutiliza) la ruta:  Área → "ROL · correo" → garantía
-// ============================================================
-import { getAuth } from "@/lib/auth";
+// JusticiaFácil · Seguimiento procesal del juicio (lectura/guardado)
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-// "ROL · correo" del usuario que está usando la app (de la sesión + colaboradores)
-async function quienSolicita(): Promise<string> {
-  try {
-    const auth = await getAuth();
-    const { data } = await auth.auth.getSession();
-    const correo = data?.session?.user?.email ?? null;
-    if (!correo) return "SIN-SESION";
-    let rol = "";
-    try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
-      const d = r.ok ? await r.json() : [];
-      rol = d?.[0]?.rol || "";
-    } catch { /* sin rol */ }
-    return rol ? `${rol} · ${correo}` : correo;
-  } catch {
-    return "SIN-SESION";
-  }
-}
-
-// Nombre de la carpeta de la garantía: folio (gar_id) y si no hay, expediente.
-export function nombreGarantia(caso: { gar_id?: string | null; expediente?: string | null; id?: string }): string {
-  const base = (caso.gar_id || caso.expediente || caso.id || "garantia").toString().trim();
-  return base.replace(/[\\/]/g, "-"); // las diagonales no van en nombres de carpeta
-}
-
-export type ResultadoCarpeta = { ok: boolean; link?: string; carpetaId?: string; error?: string };
-
-export async function crearCarpetaDrive(area: string, caso: CasoJuridico): Promise<ResultadoCarpeta> {
-  const solicita = await quienSolicita();
-  const garantia = nombreGarantia(caso);
-  try {
-    const r = await fetch("/.netlify/functions/crear-carpeta", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ area, solicita, garantia }),
-    });
-    const data = await r.json();
-    if (!data.ok) return { ok: false, error: data.error || "No se pudo crear la carpeta." };
-    return { ok: true, link: data.link, carpetaId: data.carpetaId };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
-  }
-}
-
-// ===== Documentos de la garantía =====
-
-export type DocumentoGarantia = {
+export interface SeguimientoJuicio {
   id: string;
   caso_id: string | null;
   expediente: string | null;
-  nombre: string | null;
-  link: string | null;
-  drive_id: string | null;
-  mime: string | null;
-  tipo: string | null;       // actuacion | evidencia | tarea | otro
-  subido_por: string | null; // "ROL · correo"
-  created_at: string;
-  // registro central de movimientos
-  fecha_mov: string | null;
+  tipo_juicio: string | null;
+  posicion: string | null;
+  etapa_actual: string | null;
+  etapas_hechas: string[];
   nota: string | null;
-  proxima_actuacion: string | null;
-  fecha_proxima: string | null;
-  asignado_a: string | null;
-  fecha_limite: string | null;
-  estado: string | null;
-  en_papelera: boolean | null;
-  papelera_fecha: string | null;
-  etapa: string | null;       // a qué etapa del juicio pertenece
-};
-
-// convierte un File del navegador a base64 (sin el prefijo data:)
-function archivoABase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => {
-      const s = String(fr.result || "");
-      const coma = s.indexOf(",");
-      resolve(coma >= 0 ? s.slice(coma + 1) : s);
-    };
-    fr.onerror = () => reject(new Error("No se pudo leer el archivo."));
-    fr.readAsDataURL(file);
-  });
+  created_at: string;
+  updated_at: string;
 }
 
-export type ResultadoSubida = { ok: boolean; doc?: DocumentoGarantia; error?: string };
+export interface SeguimientoProcesal {
+  id: string;
+  caso_id: string | null;
+  expediente: string | null;
+  etapa: string | null;
+  fecha: string | null;
+  nota: string | null;
+  tipo_acto: string | null;
+  created_at: string;
+}
 
-// Sube el archivo a Drive (carpeta de la garantía) y registra la fila en documento_garantia.
-export async function subirDocumento(area: string, caso: CasoJuridico, file: File, tipo: string = "otro"): Promise<ResultadoSubida> {
+// Trae el seguimiento del juicio (o null si todavía no se ha configurado).
+export async function obtenerSeguimiento(caso: CasoJuridico): Promise<SeguimientoJuicio | null> {
   try {
-    const solicita = await quienSolicita();
-    const garantia = nombreGarantia(caso);
-    const archivo = await archivoABase64(file);
+    const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_juicio?select=*&${filtro}&limit=1`, { headers });
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
+  } catch {
+    return null;
+  }
+}
 
-    // 1) subir a Drive
-    const r = await fetch("/.netlify/functions/subir-documento", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream" }),
-    });
-    const data = await r.json();
-    if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
-
-    // 2) registrar en la base para listarlo en la ficha
+// Crea o actualiza el seguimiento (1 por expediente).
+export async function guardarSeguimiento(
+  caso: CasoJuridico,
+  existenteId: string | null,
+  cambios: Partial<Pick<SeguimientoJuicio, "tipo_juicio" | "posicion" | "etapa_actual" | "etapas_hechas" | "nota">>
+): Promise<SeguimientoJuicio | null> {
+  try {
+    if (existenteId) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_juicio?id=eq.${existenteId}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ ...cambios, updated_at: new Date().toISOString() }),
+      });
+      const d = r.ok ? await r.json() : [];
+      return d?.[0] || null;
+    }
     const fila = {
       caso_id: caso.id || null,
       expediente: caso.expediente || null,
-      nombre: data.nombre || file.name,
-      link: data.link,
-      drive_id: data.id || null,
-      mime: file.type || null,
-      tipo,
-      subido_por: solicita,
+      tipo_juicio: cambios.tipo_juicio || null,
+      posicion: cambios.posicion || null,
+      etapa_actual: cambios.etapa_actual || null,
+      etapas_hechas: cambios.etapas_hechas || [],
+      nota: cambios.nota || null,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_juicio`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
       body: JSON.stringify(fila),
     });
-    const filas = ins.ok ? await ins.json() : [];
-    const doc: DocumentoGarantia = filas?.[0] || { id: data.id, created_at: new Date().toISOString(), ...fila } as DocumentoGarantia;
-    return { ok: true, doc };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
+  } catch {
+    return null;
   }
 }
 
-// Lista los movimientos de un expediente (más recientes primero, sin papelera).
-export async function listarDocumentos(caso: CasoJuridico): Promise<DocumentoGarantia[]> {
+// Lista los seguimientos procesales sueltos (notas del juicio que agregas a mano).
+export async function listarProcesal(caso: CasoJuridico): Promise<SeguimientoProcesal[]> {
   try {
-    const filtro = caso.id
-      ? `caso_id=eq.${caso.id}`
-      : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=*&${filtro}&en_papelera=eq.false&order=created_at.desc`, { headers });
+    const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_procesal?select=*&${filtro}&order=fecha.desc.nullslast,created_at.desc`, { headers });
     return r.ok ? await r.json() : [];
   } catch {
     return [];
   }
 }
 
-// Borra el registro de la base (no borra el archivo de Drive).
-export async function borrarDocumento(id: string): Promise<boolean> {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${id}`, { method: "DELETE", headers });
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
-
-// ===== Movimiento (registro central: actuación / evidencia / tarea / documento) =====
-
-export type DatosMovimiento = {
-  tipo: string;                 // actuacion | evidencia | tarea | otro
-  fecha_mov?: string | null;    // fecha del movimiento
-  nota?: string | null;
-  proxima_actuacion?: string | null;
-  fecha_proxima?: string | null;
-  asignado_a?: string | null;
-  fecha_limite?: string | null;
-  estado?: string | null;       // tarea: pendiente / hecha
-  etapa?: string | null;        // a qué etapa del juicio pertenece
-};
-
-// Guarda un movimiento. Si trae archivo, lo sube a Drive primero.
-export async function guardarMovimiento(
-  area: string,
+// Agrega un seguimiento procesal suelto.
+export async function agregarProcesal(
   caso: CasoJuridico,
-  datos: DatosMovimiento,
-  file?: File | null
-): Promise<ResultadoSubida> {
+  datos: { etapa?: string | null; fecha?: string | null; nota: string; tipo_acto?: string | null }
+): Promise<SeguimientoProcesal | null> {
   try {
-    const solicita = await quienSolicita();
-
-    // 1) si hay archivo, súbelo a Drive
-    let archivoInfo: { nombre: string; link: string; drive_id: string | null; mime: string | null } | null = null;
-    if (file) {
-      const garantia = nombreGarantia(caso);
-      const archivo = await archivoABase64(file);
-      const r = await fetch("/.netlify/functions/subir-documento", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream" }),
-      });
-      const data = await r.json();
-      if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
-      archivoInfo = { nombre: data.nombre || file.name, link: data.link, drive_id: data.id || null, mime: file.type || null };
-    }
-
-    // 2) registrar la fila (registro central)
-    const fila: any = {
+    const fila = {
       caso_id: caso.id || null,
       expediente: caso.expediente || null,
-      tipo: datos.tipo || "otro",
-      subido_por: solicita,
-      fecha_mov: datos.fecha_mov || null,
-      nota: datos.nota || null,
-      proxima_actuacion: datos.proxima_actuacion || null,
-      fecha_proxima: datos.fecha_proxima || null,
-      asignado_a: datos.asignado_a || null,
-      fecha_limite: datos.fecha_limite || null,
-      estado: datos.estado || (datos.tipo === "tarea" ? "pendiente" : null),
       etapa: datos.etapa || null,
-      en_papelera: false,
-      nombre: archivoInfo?.nombre || null,
-      link: archivoInfo?.link || null,
-      drive_id: archivoInfo?.drive_id || null,
-      mime: archivoInfo?.mime || null,
+      fecha: datos.fecha || null,
+      nota: datos.nota,
+      tipo_acto: datos.tipo_acto || null,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_procesal`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
       body: JSON.stringify(fila),
     });
-    if (!ins.ok) return { ok: false, error: "No se pudo guardar el movimiento (" + ins.status + ")." };
-    const filas = await ins.json();
-    return { ok: true, doc: filas?.[0] as DocumentoGarantia };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
+  } catch {
+    return null;
   }
 }
 
-// Edita un movimiento existente.
-export async function editarMovimiento(id: string, cambios: Partial<DatosMovimiento>): Promise<boolean> {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${id}`, {
-      method: "PATCH",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify(cambios),
-    });
-    return r.ok;
-  } catch {
-    return false;
-  }
+// ===== Checklist de documentos por etapa =====
+
+export interface MarcaChecklist {
+  id: string;
+  etapa: string | null;
+  doc_nombre: string | null;
+  hecho: boolean;
 }
 
-// Manda a la papelera (no borra) / restaura.
-export async function moverPapelera(id: string, aPapelera: boolean): Promise<boolean> {
+// Trae: (1) las etapas que ya tienen documento subido, y (2) los palomeos manuales.
+export async function estadoChecklist(caso: CasoJuridico): Promise<{ etapasConDoc: Set<string>; marcas: MarcaChecklist[] }> {
+  const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
+  let etapasConDoc = new Set<string>();
+  let marcas: MarcaChecklist[] = [];
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${id}`, {
-      method: "PATCH",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ en_papelera: aPapelera, papelera_fecha: aPapelera ? new Date().toISOString() : null }),
+    // documentos subidos que tienen etapa
+    const rd = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=etapa&${filtro}&en_papelera=eq.false&etapa=not.is.null`, { headers });
+    const docs = rd.ok ? await rd.json() : [];
+    etapasConDoc = new Set(docs.map((d: any) => d.etapa).filter(Boolean));
+  } catch { /* nada */ }
+  try {
+    const rm = await fetch(`${SUPABASE_URL}/rest/v1/checklist_etapa?select=id,etapa,doc_nombre,hecho&${filtro}`, { headers });
+    marcas = rm.ok ? await rm.json() : [];
+  } catch { /* nada */ }
+  return { etapasConDoc, marcas };
+}
+
+// Palomea/despalomea un documento esperado a mano.
+export async function marcarChecklist(
+  caso: CasoJuridico,
+  etapa: string,
+  docNombre: string,
+  existenteId: string | null,
+  hecho: boolean
+): Promise<MarcaChecklist | null> {
+  try {
+    if (existenteId) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/checklist_etapa?id=eq.${existenteId}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ hecho }),
+      });
+      const d = r.ok ? await r.json() : [];
+      return d?.[0] || null;
+    }
+    const fila = {
+      caso_id: caso.id || null,
+      expediente: caso.expediente || null,
+      etapa, doc_nombre: docNombre, hecho,
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/checklist_etapa`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(fila),
     });
-    return r.ok;
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
   } catch {
-    return false;
+    return null;
   }
 }
