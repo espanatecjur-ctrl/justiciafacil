@@ -5,6 +5,7 @@ import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
+import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
   DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
@@ -74,12 +75,15 @@ function Faltante({ texto = "Falta información" }: { texto?: string }) {
 }
 
 // Tarjeta de sección reutilizable
-function Seccion({ icon, titulo, falta, children }: { icon: React.ReactNode; titulo: string; falta?: boolean; children: React.ReactNode }) {
+function Seccion({ icon, titulo, falta, accion, children }: { icon: React.ReactNode; titulo: string; falta?: boolean; accion?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
-        {falta && <Faltante />}
+        <div className="flex items-center gap-2">
+          {falta && <Faltante />}
+          {accion}
+        </div>
       </div>
       {children}
     </div>
@@ -166,12 +170,7 @@ function FichaExpedientePage() {
         <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" /> Volver
         </button>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setVerSeguimiento(true)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: NAVY }}>
-            <Scale className="h-4 w-4" /> Seguimiento del juicio
-          </button>
-          <BotonCarpetaDrive area={areaFicha} caso={c} />
-        </div>
+        <BotonCarpetaDrive area={areaFicha} caso={c} />
       </div>
 
       {/* Encabezado */}
@@ -189,6 +188,9 @@ function FichaExpedientePage() {
         </div>
         <p className="mt-2 text-xs text-white/70">{c.nombre_juzgado || c.juzgado || "Juzgado sin asignar"}{c.distrito_judicial ? ` · ${c.distrito_judicial}` : ""}</p>
       </div>
+
+      {/* Línea del tiempo del juicio (dónde vamos y qué sigue) */}
+      <LineaTiempoJuicio caso={c} onAbrir={() => setVerSeguimiento(true)} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Antecedente: garantía (juicio) o datos del amparo */}
@@ -236,7 +238,12 @@ function FichaExpedientePage() {
       </div>
 
       {/* Última actuación en el boletín + Qué sigue */}
-      <Seccion icon={<Megaphone className="h-4 w-4" style={{ color: TEAL }} />} titulo="Última actuación en el boletín" falta={faltaSeguimiento}>
+      <Seccion icon={<Megaphone className="h-4 w-4" style={{ color: TEAL }} />} titulo="Última actuación en el boletín" falta={faltaSeguimiento}
+        accion={
+          <button onClick={() => setVerSeguimiento(true)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ background: NAVY }}>
+            <Scale className="h-3.5 w-3.5" /> Seguimiento del juicio
+          </button>
+        }>
         {sinJuzgado ? (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             <AlertTriangle className="mr-1 inline h-4 w-4" /> Falta asignar el juzgado para que el robot pueda seguir este expediente en el boletín.
