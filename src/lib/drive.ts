@@ -52,13 +52,23 @@ export type DocumentoGarantia = {
   id: string;
   caso_id: string | null;
   expediente: string | null;
-  nombre: string;
-  link: string;
+  nombre: string | null;
+  link: string | null;
   drive_id: string | null;
   mime: string | null;
   tipo: string | null;       // actuacion | evidencia | tarea | otro
   subido_por: string | null; // "ROL · correo"
   created_at: string;
+  // registro central de movimientos
+  fecha_mov: string | null;
+  nota: string | null;
+  proxima_actuacion: string | null;
+  fecha_proxima: string | null;
+  asignado_a: string | null;
+  fecha_limite: string | null;
+  estado: string | null;
+  en_papelera: boolean | null;
+  papelera_fecha: string | null;
 };
 
 // convierte un File del navegador a base64 (sin el prefijo data:)
@@ -84,7 +94,6 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
     const garantia = nombreGarantia(caso);
     const archivo = await archivoABase64(file);
 
-    // 1) subir a Drive
     const r = await fetch("/.netlify/functions/subir-documento", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -93,7 +102,6 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
     const data = await r.json();
     if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
 
-    // 2) registrar en la base para listarlo en la ficha
     const fila = {
       caso_id: caso.id || null,
       expediente: caso.expediente || null,
@@ -117,13 +125,13 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
   }
 }
 
-// Lista los documentos de un expediente (más recientes primero).
+// Lista los movimientos de un expediente (más recientes primero, sin papelera).
 export async function listarDocumentos(caso: CasoJuridico): Promise<DocumentoGarantia[]> {
   try {
     const filtro = caso.id
       ? `caso_id=eq.${caso.id}`
       : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=*&${filtro}&order=created_at.desc`, { headers });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=*&${filtro}&en_papelera=eq.false&order=created_at.desc`, { headers });
     return r.ok ? await r.json() : [];
   } catch {
     return [];
@@ -134,6 +142,102 @@ export async function listarDocumentos(caso: CasoJuridico): Promise<DocumentoGar
 export async function borrarDocumento(id: string): Promise<boolean> {
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${id}`, { method: "DELETE", headers });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ===== Movimiento (registro central: actuación / evidencia / tarea / documento) =====
+
+export type DatosMovimiento = {
+  tipo: string;                 // actuacion | evidencia | tarea | otro
+  fecha_mov?: string | null;
+  nota?: string | null;
+  proxima_actuacion?: string | null;
+  fecha_proxima?: string | null;
+  asignado_a?: string | null;
+  fecha_limite?: string | null;
+  estado?: string | null;
+};
+
+// Guarda un movimiento. Si trae archivo, lo sube a Drive primero.
+export async function guardarMovimiento(
+  area: string,
+  caso: CasoJuridico,
+  datos: DatosMovimiento,
+  file?: File | null
+): Promise<ResultadoSubida> {
+  try {
+    const solicita = await quienSolicita();
+
+    let archivoInfo: { nombre: string; link: string; drive_id: string | null; mime: string | null } | null = null;
+    if (file) {
+      const garantia = nombreGarantia(caso);
+      const archivo = await archivoABase64(file);
+      const r = await fetch("/.netlify/functions/subir-documento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream" }),
+      });
+      const data = await r.json();
+      if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
+      archivoInfo = { nombre: data.nombre || file.name, link: data.link, drive_id: data.id || null, mime: file.type || null };
+    }
+
+    const fila: any = {
+      caso_id: caso.id || null,
+      expediente: caso.expediente || null,
+      tipo: datos.tipo || "otro",
+      subido_por: solicita,
+      fecha_mov: datos.fecha_mov || null,
+      nota: datos.nota || null,
+      proxima_actuacion: datos.proxima_actuacion || null,
+      fecha_proxima: datos.fecha_proxima || null,
+      asignado_a: datos.asignado_a || null,
+      fecha_limite: datos.fecha_limite || null,
+      estado: datos.estado || (datos.tipo === "tarea" ? "pendiente" : null),
+      en_papelera: false,
+      nombre: archivoInfo?.nombre || null,
+      link: archivoInfo?.link || null,
+      drive_id: archivoInfo?.drive_id || null,
+      mime: archivoInfo?.mime || null,
+    };
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(fila),
+    });
+    if (!ins.ok) return { ok: false, error: "No se pudo guardar el movimiento (" + ins.status + ")." };
+    const filas = await ins.json();
+    return { ok: true, doc: filas?.[0] as DocumentoGarantia };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+// Edita un movimiento existente.
+export async function editarMovimiento(id: string, cambios: Partial<DatosMovimiento>): Promise<boolean> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(cambios),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Manda a la papelera (no borra) / restaura.
+export async function moverPapelera(id: string, aPapelera: boolean): Promise<boolean> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ en_papelera: aPapelera, papelera_fecha: aPapelera ? new Date().toISOString() : null }),
+    });
     return r.ok;
   } catch {
     return false;
