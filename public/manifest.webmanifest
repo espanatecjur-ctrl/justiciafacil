@@ -1,0 +1,17 @@
+{
+  "name": "JusticiaFácil — DIIPA",
+  "short_name": "JusticiaFácil",
+  "description": "Plataforma jurídica de DIIPA: expedientes, juicios, boletines y trámites.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0B1E3A",
+  "lang": "es-MX",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
