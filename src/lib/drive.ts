@@ -52,6 +52,24 @@ export async function crearCarpetaDrive(area: string, caso: CasoJuridico): Promi
   }
 }
 
+// Verifica si la carpeta de la garantía YA existe en Drive (no la crea).
+export async function verificarCarpeta(area: string, caso: CasoJuridico): Promise<{ existe: boolean; link?: string | null }> {
+  const solicita = await quienSolicita();
+  const garantia = nombreGarantia(caso);
+  try {
+    const r = await fetch("/.netlify/functions/crear-carpeta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ area, solicita, garantia, soloVerificar: true }),
+    });
+    const data = await r.json();
+    if (!data.ok) return { existe: false };
+    return { existe: !!data.existe, link: data.link };
+  } catch {
+    return { existe: false };
+  }
+}
+
 // ===== Documentos de la garantía =====
 
 export type DocumentoGarantia = {
