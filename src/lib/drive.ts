@@ -1,9 +1,14 @@
-// JusticiaFácil · Carpeta y Documentos en Drive
+// ============================================================
+// JusticiaFácil · Carpeta en Drive
+// Llama a la Netlify Function /.netlify/functions/crear-carpeta
+// que crea (o reutiliza) la ruta:  Área → "ROL · correo" → garantía
+// ============================================================
 import { getAuth } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+// "ROL · correo" del usuario que está usando la app (de la sesión + colaboradores)
 async function quienSolicita(): Promise<string> {
   try {
     const auth = await getAuth();
@@ -22,9 +27,10 @@ async function quienSolicita(): Promise<string> {
   }
 }
 
+// Nombre de la carpeta de la garantía: folio (gar_id) y si no hay, expediente.
 export function nombreGarantia(caso: { gar_id?: string | null; expediente?: string | null; id?: string }): string {
   const base = (caso.gar_id || caso.expediente || caso.id || "garantia").toString().trim();
-  return base.replace(/[\\/]/g, "-");
+  return base.replace(/[\\/]/g, "-"); // las diagonales no van en nombres de carpeta
 }
 
 export type ResultadoCarpeta = { ok: boolean; link?: string; carpetaId?: string; error?: string };
@@ -69,6 +75,7 @@ export type DocumentoGarantia = {
   estado: string | null;
   en_papelera: boolean | null;
   papelera_fecha: string | null;
+  etapa: string | null;       // a qué etapa del juicio pertenece
 };
 
 // convierte un File del navegador a base64 (sin el prefijo data:)
@@ -94,6 +101,7 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
     const garantia = nombreGarantia(caso);
     const archivo = await archivoABase64(file);
 
+    // 1) subir a Drive
     const r = await fetch("/.netlify/functions/subir-documento", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,6 +110,7 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
     const data = await r.json();
     if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
 
+    // 2) registrar en la base para listarlo en la ficha
     const fila = {
       caso_id: caso.id || null,
       expediente: caso.expediente || null,
@@ -152,13 +161,14 @@ export async function borrarDocumento(id: string): Promise<boolean> {
 
 export type DatosMovimiento = {
   tipo: string;                 // actuacion | evidencia | tarea | otro
-  fecha_mov?: string | null;
+  fecha_mov?: string | null;    // fecha del movimiento
   nota?: string | null;
   proxima_actuacion?: string | null;
   fecha_proxima?: string | null;
   asignado_a?: string | null;
   fecha_limite?: string | null;
-  estado?: string | null;
+  estado?: string | null;       // tarea: pendiente / hecha
+  etapa?: string | null;        // a qué etapa del juicio pertenece
 };
 
 // Guarda un movimiento. Si trae archivo, lo sube a Drive primero.
@@ -171,6 +181,7 @@ export async function guardarMovimiento(
   try {
     const solicita = await quienSolicita();
 
+    // 1) si hay archivo, súbelo a Drive
     let archivoInfo: { nombre: string; link: string; drive_id: string | null; mime: string | null } | null = null;
     if (file) {
       const garantia = nombreGarantia(caso);
@@ -185,6 +196,7 @@ export async function guardarMovimiento(
       archivoInfo = { nombre: data.nombre || file.name, link: data.link, drive_id: data.id || null, mime: file.type || null };
     }
 
+    // 2) registrar la fila (registro central)
     const fila: any = {
       caso_id: caso.id || null,
       expediente: caso.expediente || null,
@@ -197,6 +209,7 @@ export async function guardarMovimiento(
       asignado_a: datos.asignado_a || null,
       fecha_limite: datos.fecha_limite || null,
       estado: datos.estado || (datos.tipo === "tarea" ? "pendiente" : null),
+      etapa: datos.etapa || null,
       en_papelera: false,
       nombre: archivoInfo?.nombre || null,
       link: archivoInfo?.link || null,
