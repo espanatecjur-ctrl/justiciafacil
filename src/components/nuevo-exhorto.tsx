@@ -82,6 +82,8 @@ export function NuevoExhortoModal({ onClose, onCreado }: { onClose: () => void; 
     if (!expediente.trim()) { setErrBuscar("Escribe el expediente que busca el juzgado exhortado."); return; }
     if (!juzgadoElegido) { setErrBuscar("Elige primero el juzgado exhortado."); return; }
     setBuscando(true); setErrBuscar(null); setRes(null); setConfirmado(false);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 40000); // 40s máximo, para que no se quede colgado
     try {
       let url = "";
       const exp = encodeURIComponent(expediente.trim());
@@ -93,9 +95,9 @@ export function NuevoExhortoModal({ onClose, onCreado }: { onClose: () => void; 
       } else if (entidad === "Sinaloa") {
         const j = cat.find((x) => x.id === juzgadoId);
         url = `${ROBOT}/buscar?entidad=Sinaloa&distrito=${encodeURIComponent(j?.nombre_distrito || "")}&juzgado=${encodeURIComponent((j?.nombre_juzgado || "").split(",")[0])}&exp=${exp}`;
-      } else { setErrBuscar("CDMX no tiene robot; agrégalo a mano abajo."); setBuscando(false); return; }
+      } else { setErrBuscar("CDMX no tiene robot; agrégalo a mano abajo."); clearTimeout(t); setBuscando(false); return; }
 
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: ctrl.signal });
       const data: ResBuscar = await r.json();
       if (!data.ok) { setErrBuscar(data.error || "El robot no encontró nada."); setRes(null); }
       else {
@@ -103,8 +105,11 @@ export function NuevoExhortoModal({ onClose, onCreado }: { onClose: () => void; 
         if (data.exp_origen) setExpedienteOrigen(data.exp_origen);
         setEstado("Recibido");
       }
-    } catch (e: any) { setErrBuscar("No se pudo conectar con el robot. " + (e.message || "")); }
-    finally { setBuscando(false); }
+    } catch (e: any) {
+      if (e?.name === "AbortError") setErrBuscar("El robot tardó demasiado (a veces tarda en 'despertar'). Intenta otra vez en un momento, o agrégalo a mano abajo.");
+      else setErrBuscar("No se pudo conectar con el robot. " + (e?.message || ""));
+    }
+    finally { clearTimeout(t); setBuscando(false); }
   }
 
   async function agregar() {
