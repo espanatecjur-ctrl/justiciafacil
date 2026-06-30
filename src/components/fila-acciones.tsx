@@ -1,14 +1,16 @@
 import { useRef, useState } from "react";
 import { MoreVertical, ClipboardPlus, Archive, Trash2, Pencil } from "lucide-react";
+import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
+import { type CasoJuridico } from "@/lib/supabase";
 
-// Menú ⋮ que flota con position:fixed para que NUNCA lo corte la tabla.
-// La acción de "abrir ficha" ya no va aquí: se hace tocando el renglón.
-export function FilaAcciones({ archivado, onEditar, onEvidencia, onArchivar, onBorrar }: {
+export function FilaAcciones({ archivado, onEditar, onEvidencia, onArchivar, onBorrar, area, caso }: {
   archivado: boolean;
   onEditar?: () => void;
   onEvidencia: () => void;
   onArchivar: () => void;
   onBorrar: () => void;
+  area?: string;
+  caso?: CasoJuridico;
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -36,6 +38,7 @@ export function FilaAcciones({ archivado, onEditar, onEvidencia, onArchivar, onB
                 <Pencil className="h-4 w-4 text-[color:var(--teal)]" /> Editar / validar
               </button>
             )}
+            {area && caso && <BotonCarpetaDrive area={area} caso={caso} variante="menu" />}
             <button onClick={() => { cerrar(); onEvidencia(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted">
               <ClipboardPlus className="h-4 w-4 text-[color:var(--teal)]" /> Agregar evidencia
             </button>
