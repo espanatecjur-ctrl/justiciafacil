@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { sbSelect, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { type BoletinJuzgado } from "@/components/config-boletin";
 import { cargarJuzgadosJalisco, nombreJuzgadoJAL, ROBOT, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
 import { X, Loader2, Check, FilePlus, Scale, Landmark, UserCheck, MapPin, Search, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -41,24 +41,25 @@ function coincideMateria(esp: string | null, materia: string) {
   return e.split(/\s+/).filter((w) => w.length >= 4).some((w) => m.includes(w));
 }
 
-export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => void; onCreado: () => void }) {
+export function NuevoExpedienteModal({ onClose, onCreado, caso }: { onClose: () => void; onCreado: () => void; caso?: CasoJuridico }) {
+  const esEdicion = !!caso;
   // datos del juicio
-  const [expediente, setExpediente] = useState("");
-  const [entidad, setEntidad] = useState("Sinaloa");
-  const [materia, setMateria] = useState("");
-  const [via, setVia] = useState("");
-  const [actor, setActor] = useState("");
-  const [demandado, setDemandado] = useState("");
+  const [expediente, setExpediente] = useState(caso?.expediente || "");
+  const [entidad, setEntidad] = useState(caso?.entidad || "Sinaloa");
+  const [materia, setMateria] = useState(caso?.materia || "");
+  const [via, setVia] = useState(caso?.via_procesal || "");
+  const [actor, setActor] = useState(caso?.actor || "");
+  const [demandado, setDemandado] = useState(caso?.demandado || "");
   // garantía
-  const [cliente, setCliente] = useState("");
-  const [proveedor, setProveedor] = useState("");
-  const [noCredito, setNoCredito] = useState("");
-  const [direccion, setDireccion] = useState("");
+  const [cliente, setCliente] = useState(caso?.cliente_nombre || "");
+  const [proveedor, setProveedor] = useState(caso?.proveedor || "");
+  const [noCredito, setNoCredito] = useState(caso?.no_credito || "");
+  const [direccion, setDireccion] = useState(caso?.direccion_garantia || "");
   // estatus
-  const [etapa, setEtapa] = useState("");
-  const [estatus, setEstatus] = useState("");
-  const [prioridad, setPrioridad] = useState("");
-  const [nota, setNota] = useState("");
+  const [etapa, setEtapa] = useState(caso?.etapa_actual || "");
+  const [estatus, setEstatus] = useState(caso?.estatus_general || "");
+  const [prioridad, setPrioridad] = useState(caso?.prioridad || "");
+  const [nota, setNota] = useState(caso?.nota_adicional || "");
   // abogado
   const [abogadoId, setAbogadoId] = useState("");
   // juzgado
@@ -95,6 +96,31 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
       setRolesElaboran([...new Set([...roles, ...VEN_TODO])]);
     }).catch(() => {});
   }, []);
+
+  // En modo edición: pre-selecciona el juzgado que ya trae el registro
+  useEffect(() => {
+    if (!caso || cat.length === 0) return;
+    if ((caso.entidad || "") === "Sinaloa") {
+      const j = cat.find((x) =>
+        (caso.cve_juzgado && x.cve_juzgado === caso.cve_juzgado && (!caso.cve_distrito || x.cve_distrito === caso.cve_distrito)) ||
+        (caso.nombre_juzgado && x.nombre_juzgado === caso.nombre_juzgado));
+      if (j) { setDistrito(j.nombre_distrito); setJuzgadoId(j.id); }
+    }
+  }, [caso, cat]);
+  useEffect(() => {
+    if (!caso || jalJudges.length === 0) return;
+    if ((caso.entidad || "") === "Jalisco") {
+      const m = (caso.nombre_juzgado || "").match(/\[([^\]]+)\]/);
+      if (m && jalJudges.some((j) => j.code === m[1])) setJalCode(m[1]);
+    }
+  }, [caso, jalJudges]);
+  useEffect(() => {
+    if (!caso) return;
+    if ((caso.entidad || "") === "BCS" && caso.nombre_juzgado) {
+      const found = BCS_ORGANOS.find((o) => (caso.nombre_juzgado || "").startsWith(o));
+      if (found) setOrgBCS(found);
+    }
+  }, [caso]);
 
   const distritos = useMemo(() => Array.from(new Set(cat.map((c) => c.nombre_distrito))).sort(), [cat]);
   const juzgadosDeDistrito = useMemo(() => cat.filter((c) => c.nombre_distrito === distrito), [cat, distrito]);
@@ -179,15 +205,16 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
         nota_adicional: nota.trim() || null,
         abogado_id: abg ? abg.id : null,
         abogado_nombre: abg ? abg.nombre : null,
-        unidad: "UCM",
-        archivado: false,
+        unidad: esEdicion ? (caso!.unidad || "UCM") : "UCM",
+        ...(esEdicion ? {} : { archivado: false }),
         ...jz,
       };
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, { method: "POST", headers: { ...wHeaders, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
-      if (!r.ok) throw new Error("No se pudo crear (" + r.status + ").");
+      const url = esEdicion ? `${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso!.id}` : `${SUPABASE_URL}/rest/v1/caso_juridico`;
+      const r = await fetch(url, { method: esEdicion ? "PATCH" : "POST", headers: { ...wHeaders, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+      if (!r.ok) throw new Error("No se pudo guardar (" + r.status + ").");
 
-      // si confirmamos un resultado del robot, guardamos sus actuaciones en el historial
-      if (confirmado && res?.acuerdos?.length) {
+      // solo al CREAR (y si confirmamos el robot) guardamos sus actuaciones; al editar el robot ya las trae
+      if (!esEdicion && confirmado && res?.acuerdos?.length) {
         const filas = res.acuerdos.map((a) => ({
           expediente: exp, juzgado: jz.nombre_juzgado || "", fecha_acuerdo: a.fecha, tipo_acuerdo: "Boletín",
           entidad, texto: a.texto, urgente: false, leido: false, origen: "robot",
@@ -201,7 +228,7 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
   // ¿quedará listo para el robot?
   const robotListo = juzgadoElegido;
   // ¿mostramos ya el formulario? (tras confirmar, o a mano, o CDMX, o si no hubo resultados)
-  const mostrarForm = confirmado || manual || entidad === "CDMX" || (res !== null && res.n === 0);
+  const mostrarForm = esEdicion || confirmado || manual || entidad === "CDMX" || (res !== null && res.n === 0);
 
   // selector de juzgado según entidad (se usa en el Paso 1)
   const SelectorJuzgado = () => (
@@ -247,7 +274,7 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between p-4 text-white" style={{ background: NAVY }}>
-          <p className="flex items-center gap-2 font-semibold"><FilePlus className="h-4 w-4" /> Nuevo expediente</p>
+          <p className="flex items-center gap-2 font-semibold"><FilePlus className="h-4 w-4" /> {esEdicion ? "Validar / editar expediente" : "Nuevo expediente"}</p>
           <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
 
@@ -383,7 +410,7 @@ export function NuevoExpedienteModal({ onClose, onCreado }: { onClose: () => voi
               <div className="flex justify-end gap-2 pt-1">
                 <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
                 <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: TEAL }}>
-                  {guardando ? <><Loader2 className="h-4 w-4 animate-spin" /> Creando…</> : <><Check className="h-4 w-4" /> Crear expediente</>}
+                  {guardando ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</> : <><Check className="h-4 w-4" /> {esEdicion ? "Guardar cambios" : "Crear expediente"}</>}
                 </button>
               </div>
             </>
