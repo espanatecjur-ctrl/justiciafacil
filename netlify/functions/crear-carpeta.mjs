@@ -1,11 +1,5 @@
-// ============================================================
 // JusticiaFácil · Crea (o reutiliza) la carpeta de una garantía en Drive
 // Estructura:  Unidad compartida → Área (UCP/UCM/UDP) → "ROL · correo" → garantía
-// Usa la MISMA cuenta de servicio de Google que JurisConecta.
-// Variables de entorno en Netlify:
-//   GOOGLE_SERVICE_ACCOUNT  = el JSON completo de la credencial
-//   GOOGLE_DRIVE_FOLDER_ID  = ID de la unidad compartida (raíz)
-// ============================================================
 import crypto from "crypto";
 
 function base64url(input) {
@@ -37,7 +31,6 @@ async function obtenerAccessToken(clientEmail, privateKey) {
   return data.access_token;
 }
 
-// Busca una carpeta por nombre dentro de un padre; si no existe, la crea.
 async function buscarOCrearCarpeta(accessToken, nombre, parentId) {
   const seguro = String(nombre).replace(/'/g, "\\'");
   const q = `name='${seguro}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
@@ -61,7 +54,6 @@ async function buscarOCrearCarpeta(accessToken, nombre, parentId) {
   return dc.id || parentId;
 }
 
-// Recorre una RUTA (Área → solicita → garantía) creando cada nivel si falta.
 async function carpetaDeRuta(accessToken, raizId, ruta) {
   let parentId = raizId;
   for (const nombre of ruta) {
@@ -93,7 +85,6 @@ export default async (req) => {
 
     const accessToken = await obtenerAccessToken(cred.client_email, privateKey);
 
-    // Ruta: Área → "ROL · correo" → garantía. (solicita es opcional)
     const ruta = [area, solicita, garantia].filter(Boolean).map(String);
     const carpetaId = await carpetaDeRuta(accessToken, folderId, ruta);
 
