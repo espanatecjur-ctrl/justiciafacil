@@ -34,6 +34,7 @@ function leFalta(c: CasoJuridico): boolean {
 function UcmPage() {
   const navigate = useNavigate();
   const [nuevoOpen, setNuevoOpen] = useState(false);
+  const [editCaso, setEditCaso] = useState<CasoJuridico | null>(null);
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +110,7 @@ function UcmPage() {
       />
 
       {nuevoOpen && <NuevoExpedienteModal onClose={() => setNuevoOpen(false)} onCreado={() => { setNuevoOpen(false); cargar(); }} />}
+      {editCaso && <NuevoExpedienteModal caso={editCaso} onClose={() => setEditCaso(null)} onCreado={() => { setEditCaso(null); cargar(); }} />}
 
       {/* Barra del robot (indicador central de avance) */}
       <RobotBoletines expedientes={expedientes} />
@@ -198,7 +200,7 @@ function UcmPage() {
                     <p className="max-w-[260px] truncate" title={c.nota_adicional || ""}>{c.nota_adicional || "—"}</p>
                   </td>
                   <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <FilaAcciones archivado={!!c.archivado} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
+                    <FilaAcciones archivado={!!c.archivado} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                   </td>
                 </tr>
               ))}
@@ -229,7 +231,7 @@ function UcmPage() {
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
-                  <FilaAcciones archivado={!!c.archivado} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
+                  <FilaAcciones archivado={!!c.archivado} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
                 </div>
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
