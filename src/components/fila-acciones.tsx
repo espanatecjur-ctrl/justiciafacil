@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
-import { MoreVertical, ClipboardPlus, Archive, Trash2 } from "lucide-react";
+import { MoreVertical, ClipboardPlus, Archive, Trash2, Pencil } from "lucide-react";
 
 // Menú ⋮ que flota con position:fixed para que NUNCA lo corte la tabla.
 // La acción de "abrir ficha" ya no va aquí: se hace tocando el renglón.
-export function FilaAcciones({ archivado, onEvidencia, onArchivar, onBorrar }: {
+export function FilaAcciones({ archivado, onEditar, onEvidencia, onArchivar, onBorrar }: {
   archivado: boolean;
+  onEditar?: () => void;
   onEvidencia: () => void;
   onArchivar: () => void;
   onBorrar: () => void;
@@ -30,6 +31,11 @@ export function FilaAcciones({ archivado, onEvidencia, onArchivar, onBorrar }: {
         <>
           <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); cerrar(); }} />
           <div className="fixed z-50 w-56 overflow-hidden rounded-lg border border-border bg-card shadow-xl" style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}>
+            {onEditar && (
+              <button onClick={() => { cerrar(); onEditar(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted">
+                <Pencil className="h-4 w-4 text-[color:var(--teal)]" /> Editar / validar
+              </button>
+            )}
             <button onClick={() => { cerrar(); onEvidencia(); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted">
               <ClipboardPlus className="h-4 w-4 text-[color:var(--teal)]" /> Agregar evidencia
             </button>
