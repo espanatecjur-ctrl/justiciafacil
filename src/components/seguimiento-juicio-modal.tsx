@@ -4,6 +4,7 @@ import { type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { CATALOGO_ETAPAS, POSICIONES, tipoJuicioPorClave, listaTiposJuicio, type EtapaJuicio } from "@/lib/etapas-juicio";
 import { obtenerSeguimiento, guardarSeguimiento, estadoChecklist, marcarChecklist, listarProcesal, agregarProcesal, type SeguimientoJuicio, type MarcaChecklist, type SeguimientoProcesal } from "@/lib/seguimiento-juicio";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { ChulearDocumentoModal } from "@/components/chulear-documento";
 import { ChevronDown, ChevronRight, FileCheck2, FileX2, Plus, ClipboardList, Loader2 as Spin } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -39,6 +40,9 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
   // seguimiento procesal (bitácora + notas de estrategia)
   const [procesal, setProcesal] = useState<SeguimientoProcesal[]>([]);
   const [agregarProc, setAgregarProc] = useState(false);
+
+  // chulear documento (pide tipo + archivo obligatorio)
+  const [chulear, setChulear] = useState<{ etapa: string; doc: string } | null>(null);
 
   const cargarChecklist = () => {
     estadoChecklist(caso).then((r) => { setEtapasConDoc(r.etapasConDoc); setMarcas(r.marcas); }).catch(() => {});
@@ -215,7 +219,7 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
                                   const cubierto = auto || manual;
                                   return (
                                     <div key={doc.nombre} className="flex items-center gap-2 text-xs">
-                                      <button onClick={() => togglePalomeo(e.clave, doc.nombre)} className="shrink-0" title={manual ? "Quitar palomita" : "Marcar como ya existe"}>
+                                      <button onClick={() => { if (cubierto && manual) { togglePalomeo(e.clave, doc.nombre); } else if (!cubierto) { setChulear({ etapa: e.clave, doc: doc.nombre }); } }} className="shrink-0" title={cubierto ? (manual ? "Quitar palomita" : "Ya cubierto por archivo") : "Chulear: subir documento"}>
                                         {cubierto ? <FileCheck2 className="h-4 w-4 text-[color:var(--teal)]" /> : <FileX2 className="h-4 w-4 text-muted-foreground" />}
                                       </button>
                                       <span className={cubierto ? "" : "text-muted-foreground"}>{doc.nombre}</span>
@@ -289,6 +293,15 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
             if (r) setProcesal((p) => [r, ...p]);
             setAgregarProc(false);
           }}
+        />
+      )}
+
+      {chulear && (
+        <ChulearDocumentoModal
+          area={area} caso={caso}
+          etapaClave={chulear.etapa} docNombre={chulear.doc}
+          onClose={() => setChulear(null)}
+          onListo={() => { setChulear(null); cargarChecklist(); }}
         />
       )}
     </div>
