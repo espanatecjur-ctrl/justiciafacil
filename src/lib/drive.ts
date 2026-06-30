@@ -1,14 +1,9 @@
-// ============================================================
-// JusticiaFácil · Carpeta en Drive
-// Llama a la Netlify Function /.netlify/functions/crear-carpeta
-// que crea (o reutiliza) la ruta:  Área → "ROL · correo" → garantía
-// ============================================================
+// JusticiaFácil · Carpeta en Drive (llama a /.netlify/functions/crear-carpeta)
 import { getAuth } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-// "ROL · correo" del usuario que está usando la app (de la sesión + colaboradores)
 async function quienSolicita(): Promise<string> {
   try {
     const auth = await getAuth();
@@ -27,10 +22,9 @@ async function quienSolicita(): Promise<string> {
   }
 }
 
-// Nombre de la carpeta de la garantía: folio (gar_id) y si no hay, expediente.
 export function nombreGarantia(caso: { gar_id?: string | null; expediente?: string | null; id?: string }): string {
   const base = (caso.gar_id || caso.expediente || caso.id || "garantia").toString().trim();
-  return base.replace(/[\\/]/g, "-"); // las diagonales no van en nombres de carpeta
+  return base.replace(/[\\/]/g, "-");
 }
 
 export type ResultadoCarpeta = { ok: boolean; link?: string; carpetaId?: string; error?: string };
