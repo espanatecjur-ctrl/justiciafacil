@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { X, Loader2, Scale, Check, CircleDot, Circle, MapPin, Megaphone, Save, Settings2 } from "lucide-react";
 import { type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { CATALOGO_ETAPAS, POSICIONES, tipoJuicioPorClave, listaTiposJuicio, type EtapaJuicio } from "@/lib/etapas-juicio";
-import { obtenerSeguimiento, guardarSeguimiento, estadoChecklist, marcarChecklist, type SeguimientoJuicio, type MarcaChecklist } from "@/lib/seguimiento-juicio";
+import { obtenerSeguimiento, guardarSeguimiento, estadoChecklist, marcarChecklist, listarProcesal, agregarProcesal, type SeguimientoJuicio, type MarcaChecklist, type SeguimientoProcesal } from "@/lib/seguimiento-juicio";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
-import { ChevronDown, ChevronRight, FileCheck2, FileX2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FileCheck2, FileX2, Plus, ClipboardList, Loader2 as Spin } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -36,8 +36,13 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
   const [etapasConDoc, setEtapasConDoc] = useState<Set<string>>(new Set());
   const [marcas, setMarcas] = useState<MarcaChecklist[]>([]);
 
+  // seguimiento procesal (bitácora + notas de estrategia)
+  const [procesal, setProcesal] = useState<SeguimientoProcesal[]>([]);
+  const [agregarProc, setAgregarProc] = useState(false);
+
   const cargarChecklist = () => {
     estadoChecklist(caso).then((r) => { setEtapasConDoc(r.etapasConDoc); setMarcas(r.marcas); }).catch(() => {});
+    listarProcesal(caso).then(setProcesal).catch(() => {});
   };
 
   useEffect(() => {
@@ -232,12 +237,117 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
                 <p className="text-sm text-muted-foreground">No se encontraron las etapas de este tipo.</p>
               )}
 
+              {/* Seguimiento procesal: bitácora + notas de estrategia, ligado a etapa */}
+              {tipoDef && (
+                <div className="border-t border-border pt-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: NAVY }}>
+                      <ClipboardList className="h-4 w-4" style={{ color: TEAL }} /> Seguimiento procesal
+                    </p>
+                    <button onClick={() => setAgregarProc(true)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-white" style={{ background: TEAL }}>
+                      <Plus className="h-3.5 w-3.5" /> Agregar
+                    </button>
+                  </div>
+                  {procesal.length === 0 ? (
+                    <p className="rounded-md bg-muted/40 p-2.5 text-center text-[11px] text-muted-foreground">Sin apuntes todavía. Agrega notas de estrategia u observaciones del juicio.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {procesal.map((p) => {
+                        const et = etapas.find((e) => e.clave === p.etapa);
+                        return (
+                          <div key={p.id} className="rounded-md border border-border bg-muted/20 p-2.5 text-xs">
+                            <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                              <span className="text-muted-foreground">{fmt(p.fecha)}</span>
+                              {et && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{et.nombre}</span>}
+                              {p.tipo_acto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: "#E6F1FB", color: "#0C447C" }}>{p.tipo_acto}</span>}
+                            </div>
+                            <p>{p.nota}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* documentos y movimientos (también dentro del modal) */}
               <div className="border-t border-border pt-3">
                 <DocumentosGarantia area={area} caso={caso} />
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {agregarProc && (
+        <AgregarProcesalModal
+          etapas={etapas}
+          etapaActual={etapaActual}
+          onClose={() => setAgregarProc(false)}
+          onGuardar={async (datos) => {
+            const r = await agregarProcesal(caso, datos);
+            if (r) setProcesal((p) => [r, ...p]);
+            setAgregarProc(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- Sub-modal: agregar un apunte de seguimiento procesal ----
+function AgregarProcesalModal({ etapas, etapaActual, onClose, onGuardar }: {
+  etapas: EtapaJuicio[];
+  etapaActual: string | null;
+  onClose: () => void;
+  onGuardar: (datos: { etapa: string; fecha: string; nota: string; tipo_acto: string }) => Promise<void>;
+}) {
+  const [etapa, setEtapa] = useState(etapaActual || "");
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [tipoActo, setTipoActo] = useState("");
+  const [nota, setNota] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const ACTOS = ["promocion", "acuerdo", "audiencia", "acta", "resolucion", "nota"];
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 text-white" style={{ background: NAVY }}>
+          <p className="flex items-center gap-2 font-semibold"><ClipboardList className="h-4 w-4" /> Agregar seguimiento procesal</p>
+          <button onClick={onClose}>✕</button>
+        </div>
+        <div className="space-y-3 p-4">
+          <div>
+            <label className={lbl}>Etapa del juicio</label>
+            <select className={inp} value={etapa} onChange={(e) => setEtapa(e.target.value)}>
+              <option value="">— elegir —</option>
+              {etapas.map((e) => <option key={e.clave} value={e.clave}>{e.nombre}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Fecha</label>
+              <input type="date" className={inp} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            </div>
+            <div>
+              <label className={lbl}>Tipo de acto</label>
+              <select className={inp} value={tipoActo} onChange={(e) => setTipoActo(e.target.value)}>
+                <option value="">— opcional —</option>
+                {ACTOS.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Nota / observación</label>
+            <textarea className={inp} rows={3} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="ej. Vigilar el término para apelar; el juzgado va lento con los oficios." />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
+            <button disabled={!etapa || !nota.trim() || guardando} onClick={async () => { setGuardando(true); await onGuardar({ etapa, fecha, nota: nota.trim(), tipo_acto: tipoActo }); }}
+              className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50" style={{ background: TEAL }}>
+              {guardando ? <Spin className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Guardar
+            </button>
+          </div>
         </div>
       </div>
     </div>
