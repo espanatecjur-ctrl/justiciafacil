@@ -122,22 +122,27 @@ export interface MarcaChecklist {
   hecho: boolean;
 }
 
-// Trae: (1) las etapas que ya tienen documento subido, y (2) los palomeos manuales.
-export async function estadoChecklist(caso: CasoJuridico): Promise<{ etapasConDoc: Set<string>; marcas: MarcaChecklist[] }> {
+// Trae: (1) las etapas que ya tienen documento subido, (2) los docs con link por etapa, y (3) los palomeos manuales.
+export async function estadoChecklist(caso: CasoJuridico): Promise<{ etapasConDoc: Set<string>; docsPorEtapa: Record<string, { nombre: string | null; link: string | null; drive_id: string | null; mime: string | null }[]>; marcas: MarcaChecklist[] }> {
   const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
   let etapasConDoc = new Set<string>();
+  let docsPorEtapa: Record<string, { nombre: string | null; link: string | null; drive_id: string | null; mime: string | null }[]> = {};
   let marcas: MarcaChecklist[] = [];
   try {
-    // documentos subidos que tienen etapa
-    const rd = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=etapa&${filtro}&en_papelera=eq.false&etapa=not.is.null`, { headers });
+    // documentos subidos que tienen etapa (con su link para verlos)
+    const rd = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=etapa,nombre,link,drive_id,mime&${filtro}&en_papelera=eq.false&etapa=not.is.null`, { headers });
     const docs = rd.ok ? await rd.json() : [];
-    etapasConDoc = new Set(docs.map((d: any) => d.etapa).filter(Boolean));
+    for (const d of docs) {
+      if (!d.etapa) continue;
+      etapasConDoc.add(d.etapa);
+      (docsPorEtapa[d.etapa] ||= []).push({ nombre: d.nombre, link: d.link, drive_id: d.drive_id, mime: d.mime });
+    }
   } catch { /* nada */ }
   try {
     const rm = await fetch(`${SUPABASE_URL}/rest/v1/checklist_etapa?select=id,etapa,doc_nombre,hecho&${filtro}`, { headers });
     marcas = rm.ok ? await rm.json() : [];
   } catch { /* nada */ }
-  return { etapasConDoc, marcas };
+  return { etapasConDoc, docsPorEtapa, marcas };
 }
 
 // Palomea/despalomea un documento esperado a mano.
