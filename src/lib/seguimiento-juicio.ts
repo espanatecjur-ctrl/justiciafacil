@@ -1,0 +1,114 @@
+// JusticiaFácil · Seguimiento procesal del juicio (lectura/guardado)
+import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+
+export interface SeguimientoJuicio {
+  id: string;
+  caso_id: string | null;
+  expediente: string | null;
+  tipo_juicio: string | null;
+  posicion: string | null;
+  etapa_actual: string | null;
+  etapas_hechas: string[];
+  nota: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SeguimientoProcesal {
+  id: string;
+  caso_id: string | null;
+  expediente: string | null;
+  etapa: string | null;
+  fecha: string | null;
+  nota: string | null;
+  tipo_acto: string | null;
+  created_at: string;
+}
+
+// Trae el seguimiento del juicio (o null si todavía no se ha configurado).
+export async function obtenerSeguimiento(caso: CasoJuridico): Promise<SeguimientoJuicio | null> {
+  try {
+    const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_juicio?select=*&${filtro}&limit=1`, { headers });
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+// Crea o actualiza el seguimiento (1 por expediente).
+export async function guardarSeguimiento(
+  caso: CasoJuridico,
+  existenteId: string | null,
+  cambios: Partial<Pick<SeguimientoJuicio, "tipo_juicio" | "posicion" | "etapa_actual" | "etapas_hechas" | "nota">>
+): Promise<SeguimientoJuicio | null> {
+  try {
+    if (existenteId) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_juicio?id=eq.${existenteId}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ ...cambios, updated_at: new Date().toISOString() }),
+      });
+      const d = r.ok ? await r.json() : [];
+      return d?.[0] || null;
+    }
+    const fila = {
+      caso_id: caso.id || null,
+      expediente: caso.expediente || null,
+      tipo_juicio: cambios.tipo_juicio || null,
+      posicion: cambios.posicion || null,
+      etapa_actual: cambios.etapa_actual || null,
+      etapas_hechas: cambios.etapas_hechas || [],
+      nota: cambios.nota || null,
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_juicio`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(fila),
+    });
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+// Lista los seguimientos procesales sueltos (notas del juicio que agregas a mano).
+export async function listarProcesal(caso: CasoJuridico): Promise<SeguimientoProcesal[]> {
+  try {
+    const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_procesal?select=*&${filtro}&order=fecha.desc.nullslast,created_at.desc`, { headers });
+    return r.ok ? await r.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+// Agrega un seguimiento procesal suelto.
+export async function agregarProcesal(
+  caso: CasoJuridico,
+  datos: { etapa?: string | null; fecha?: string | null; nota: string; tipo_acto?: string | null }
+): Promise<SeguimientoProcesal | null> {
+  try {
+    const fila = {
+      caso_id: caso.id || null,
+      expediente: caso.expediente || null,
+      etapa: datos.etapa || null,
+      fecha: datos.fecha || null,
+      nota: datos.nota,
+      tipo_acto: datos.tipo_acto || null,
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/seguimiento_procesal`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(fila),
+    });
+    const d = r.ok ? await r.json() : [];
+    return d?.[0] || null;
+  } catch {
+    return null;
+  }
+}
