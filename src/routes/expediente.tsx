@@ -5,6 +5,7 @@ import { EvidenciaSeguimiento } from "@/components/evidencia-seguimiento";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
+import { DocumentosGarantia } from "@/components/documentos-garantia";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
   DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
@@ -269,6 +270,9 @@ function FichaExpedientePage() {
 
       {/* Seguimiento (evidencia) — Parte 2 */}
       <EvidenciaSeguimiento casoId={c.id} expediente={c.expediente} abrirNueva={nueva} />
+
+      {/* Documentos de la garantía (suben a Drive + visor flotante) */}
+      <DocumentosGarantia area={areaFicha} caso={c} />
 
       {/* Tareas asignables (pendiente → hecha) */}
       <PanelSeguimiento caso={c} />
