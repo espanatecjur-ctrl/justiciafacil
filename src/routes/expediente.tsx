@@ -158,18 +158,24 @@ function FichaExpedientePage() {
 
   // banderas de faltantes por sección
   const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
-  const areaFicha = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : "UCM";
+  const areaFicha = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : (c.unidad || "").toUpperCase().includes("URRJ") ? "URRJ" : "UCM";
+  // color de la etiqueta según el área
+  const colorArea: Record<string, string> = { URRJ: "#7A4FB0", UCM: "#0C5C46", UCP: "#0C447C", UDP: "#854F0B" };
+  const areaBg = colorArea[areaFicha] || "#0B1E3A";
   const faltaAntecedente = !c.proveedor || !c.no_credito || !c.direccion_garantia || !(c.cliente_nombre || c.cliente_codigo);
   const faltaEstatus = esEspecial ? !c.estatus_general : (!c.etapa_actual || !c.estatus_general || !c.prioridad);
   const faltaSeguimiento = sinJuzgado; // solo es "falta" si no hay juzgado; sin actuaciones aún NO es falta (el robot las trae)
 
   return (
     <div className="space-y-4">
-      {/* volver + carpeta en Drive */}
+      {/* volver + área + carpeta en Drive */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" /> Volver
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" /> Volver
+          </button>
+          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: areaBg }} title={`Ficha del área ${areaFicha}`}>{areaFicha}</span>
+        </div>
         <BotonCarpetaDrive area={areaFicha} caso={c} />
       </div>
 
