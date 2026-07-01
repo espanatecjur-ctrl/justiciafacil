@@ -12,6 +12,7 @@ import {
   Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle,
 } from "@/components/ui/dialog";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import {
   FichaUCP, REQ_VACIOS, reqCompletos, reqCuenta,
   type Requisitos, type DictamenRow, type PredFuente,
@@ -74,6 +75,7 @@ interface Seleccion { caso: CasoJuridico; dictamen: DictamenRow; pred?: PredFuen
 
 function UCP() {
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
+  const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [preds, setPreds] = useState<PredRow[]>([]);
   const [dicts, setDicts] = useState<DictamenRow[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -100,7 +102,11 @@ function UCP() {
       fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=id,caso_id,predictamen_id,estado,requisitos,juridico,registral,contable,firmas,rppc,veredicto,vigente&vigente=eq.true`, { headers })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`dictamen ${r.status} — ¿corriste el SQL?`)))),
     ])
-      .then(([c, p, d]) => { setCasos(c); setPreds(p); setDicts(d); })
+      .then(([c, p, d]) => {
+        setCasos(c); setPreds(p); setDicts(d);
+        const ids = (c as CasoJuridico[]).map((x) => x.id).filter(Boolean) as string[];
+        diasSinAvanceLote(ids).then(setDiasAvance).catch(() => {});
+      })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
   };
@@ -335,7 +341,7 @@ function UCP() {
                   const cargandoFila = abriendo === c.id;
                   return (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.expediente || "—"}<div className="text-xs font-normal text-muted-foreground">{c.juzgado || ""}</div></TableCell>
+                      <TableCell className="font-medium">{c.expediente || "—"}<div className="text-xs font-normal text-muted-foreground">{c.juzgado || ""}</div>{c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (<span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>⚠ {diasAvance[c.id] >= 9999 ? "sin avances" : `${diasAvance[c.id]}d sin avance`}</span>)}</TableCell>
                       <TableCell className="max-w-[200px] text-xs">{c.direccion_garantia || "—"}<div className="text-muted-foreground">{c.entidad || ""}</div></TableCell>
                       <TableCell className="text-xs">{c.cliente_nombre || c.cliente_codigo || "—"}</TableCell>
                       <TableCell>
