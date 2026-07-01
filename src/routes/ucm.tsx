@@ -44,8 +44,8 @@ function UcmPage() {
   const [prioridad, setPrioridad] = useState("todas");
   const [verArchivados, setVerArchivados] = useState(false);
 
-  const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: false } }); };
-  const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true } }); };
+  const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: false, origen: "ucm" } as any }); };
+  const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true, origen: "ucm" } as any }); };
   const archivar = async (c: CasoJuridico) => {
     const nuevo = !c.archivado;
     try {
