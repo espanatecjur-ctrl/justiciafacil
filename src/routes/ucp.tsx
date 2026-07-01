@@ -92,6 +92,37 @@ function UCP() {
   const [nueva, setNueva] = useState({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_codigo: "", materia: "" });
   const [guardandoAlta, setGuardandoAlta] = useState(false);
 
+  // escoger de URRJ + juicio/derecho de crédito
+  const [buscaURRJ, setBuscaURRJ] = useState("");
+  const [buscandoURRJ, setBuscandoURRJ] = useState(false);
+  const [buscoURRJ, setBuscoURRJ] = useState(false);
+  const [resultURRJ, setResultURRJ] = useState<any[]>([]);
+  const [sinJuicio, setSinJuicio] = useState(false);
+  const [motivoSinJuicio, setMotivoSinJuicio] = useState("");
+
+  // busca garantías que ya pasaron por URRJ (pre-dictámenes)
+  const buscarEnURRJ = async () => {
+    if (buscaURRJ.trim().length < 2) return;
+    setBuscandoURRJ(true); setBuscoURRJ(true);
+    try {
+      const enc = encodeURIComponent(`%${buscaURRJ.trim()}%`);
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,expediente,direccion_garantia,dictamen_final,datos&or=(expediente.ilike.${enc},folio.ilike.${enc})&en_papelera=eq.false&limit=15`, { headers });
+      setResultURRJ(r.ok ? await r.json() : []);
+    } catch { setResultURRJ([]); }
+    setBuscandoURRJ(false);
+  };
+
+  // toma una garantía de URRJ y precarga el formulario
+  const tomarDeURRJ = (u: any) => {
+    setNueva((p) => ({
+      ...p,
+      expediente: u.expediente || p.expediente,
+      gar_id: u.datos?.gar_id || p.gar_id,
+      direccion_garantia: u.direccion_garantia || u.datos?.ubicacion || p.direccion_garantia,
+    }));
+    setResultURRJ([]); setBuscaURRJ("");
+  };
+
   const cargar = () => {
     setCargando(true); setError(null);
     Promise.all([
@@ -203,11 +234,12 @@ function UCP() {
         if (val) payload[k] = val;
       }
       const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, {
-        method: "POST", headers, body: JSON.stringify(payload),
+        method: "POST", headers, body: JSON.stringify({ ...payload, ...(sinJuicio ? { nota: `Sin juicio/derecho de crédito: ${motivoSinJuicio || "no especificado"}` } : {}) }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status} — revisa el permiso de inserción en caso_juridico`);
       setDlg(false);
       setNueva({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_codigo: "", materia: "" });
+      setSinJuicio(false); setMotivoSinJuicio(""); setResultURRJ([]); setBuscaURRJ("");
       cargar();
     } catch (e: any) {
       setError("No se pudo agregar la garantía: " + e.message);
@@ -244,6 +276,28 @@ function UCP() {
               <DialogContent>
                 <DialogHeader><DialogTitle>Agregar garantía al registro</DialogTitle></DialogHeader>
                 <div className="grid gap-3 py-2">
+                  {/* Escoger de URRJ (garantías que ya pasaron pre-dictamen) */}
+                  <div className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
+                    <p className="mb-1.5 text-xs font-semibold" style={{ color: "#0C5C46" }}>Escoger de URRJ (ya tiene pre-dictamen)</p>
+                    <div className="flex gap-2">
+                      <Input placeholder="Buscar por expediente o garantía…" value={buscaURRJ} onChange={(e) => setBuscaURRJ(e.target.value)} className="flex-1 text-sm" />
+                      <Button size="sm" variant="outline" onClick={buscarEnURRJ} disabled={buscandoURRJ}>{buscandoURRJ ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}</Button>
+                    </div>
+                    {resultURRJ.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {resultURRJ.map((u) => (
+                          <button key={u.id} onClick={() => tomarDeURRJ(u)} className="block w-full rounded border border-input bg-background px-2 py-1.5 text-left text-xs hover:bg-muted/40">
+                            <b>{u.expediente || u.folio || "—"}</b> · {u.datos?.ubicacion || u.direccion_garantia || "sin dirección"}
+                            {u.dictamen_final && <span className="ml-1 rounded-full bg-[color:var(--teal)]/10 px-1.5 text-[9px] text-[color:var(--teal)]">{u.dictamen_final}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {buscoURRJ && !buscandoURRJ && resultURRJ.length === 0 && <p className="mt-1.5 text-[11px] text-muted-foreground">No se encontró en URRJ. Puedes capturarla nueva abajo.</p>}
+                  </div>
+
+                  <p className="text-center text-[11px] text-muted-foreground">— o captura una nueva —</p>
+
                   {([
                     ["expediente", "Expediente"],
                     ["no_credito", "No. de crédito"],
@@ -259,6 +313,18 @@ function UCP() {
                       <Input value={(nueva as any)[k]} onChange={(e) => setNueva((p) => ({ ...p, [k]: e.target.value }))} />
                     </label>
                   ))}
+
+                  {/* Juicio / derecho de crédito */}
+                  <div className="rounded-md border border-input p-2.5">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={sinJuicio} onChange={(e) => setSinJuicio(e.target.checked)} />
+                      <span>No tiene juicio / derecho de crédito</span>
+                    </label>
+                    {sinJuicio && (
+                      <Input className="mt-2 text-sm" placeholder="¿Por qué no tiene? (motivo)" value={motivoSinJuicio} onChange={(e) => setMotivoSinJuicio(e.target.value)} />
+                    )}
+                  </div>
+
                   <p className="text-xs text-muted-foreground">
                     Los folios (garantía y cliente) hoy se capturan a mano; más adelante se conectarán con SIGA.
                     La garantía nueva entra al registro; para dictaminarla en UCP primero necesita su pre-dictamen URRJ positivo.
