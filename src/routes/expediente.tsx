@@ -6,6 +6,7 @@ import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
+import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { VincularClienteModal } from "@/components/vincular-cliente";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
@@ -203,6 +204,9 @@ function FichaExpedientePage() {
         </div>
         <p className="mt-2 text-xs text-white/70">{c.nombre_juzgado || c.juzgado || "Juzgado sin asignar"}{c.distrito_judicial ? ` · ${c.distrito_judicial}` : ""}</p>
       </div>
+
+      {/* Línea de vida: recorrido por áreas (URRJ→SVT→UCP→UFC→UCM) */}
+      <LineaVidaAreas caso={c} />
 
       {/* Línea del tiempo del juicio (dónde vamos y qué sigue) */}
       <LineaTiempoJuicio caso={c} onAbrir={() => setVerSeguimiento(true)} />
