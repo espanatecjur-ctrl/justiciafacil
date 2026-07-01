@@ -50,7 +50,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
       const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id&expediente=eq.${encodeURIComponent(f.expediente.trim())}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
       const d = r.ok ? await r.json() : [];
       const casoId = d?.[0]?.id;
-      if (casoId) navigate({ to: "/expediente", search: { id: casoId } as any });
+      if (casoId) navigate({ to: "/expediente", search: { id: casoId, origen: "urrj" } as any });
       else alert("No se encontró un expediente con ese número en el sistema.");
     } catch {
       alert("No se pudo abrir la ficha. Intenta de nuevo.");
