@@ -4,7 +4,7 @@
 // ============================================================
 
 export type ModuloClave =
-  | "inicio" | "expedientes" | "ucm" | "udp" | "control_demandas"
+  | "inicio" | "expedientes" | "ucm" | "udp"
   | "boletines" | "exhortos" | "amparos" | "recursos"
   | "contratos" | "tramites" | "ucp" | "urrj" | "conectores" | "configuracion";
 
@@ -13,7 +13,6 @@ export const MODULOS: { clave: ModuloClave; label: string }[] = [
   { clave: "expedientes", label: "Expedientes" },
   { clave: "ucm", label: "UCM · Seguimiento" },
   { clave: "udp", label: "UDP · Defensa y Protección" },
-  { clave: "control_demandas", label: "Control de demandas" },
   { clave: "boletines", label: "Boletines" },
   { clave: "exhortos", label: "Exhortos" },
   { clave: "amparos", label: "Amparos" },
@@ -44,7 +43,7 @@ export const ROLES: DefinicionRol[] = [
   { codigo: "DIL", nombre: "Dirección Jurídica (cubre URRJ)", grupo: "Jurídico", modulos: "todos" },
   { codigo: "URRJ", nombre: "Unidad de Resolución Jurídica (pre-dictamen)", grupo: "Jurídico", modulos: [...BASE, "urrj"] },
   { codigo: "UCP", nombre: "Unidad de Consolidación Patrimonial", grupo: "Jurídico", modulos: [...BASE, "ucp", "ucm", "contratos"] },
-  { codigo: "UCM", nombre: "Unidad UCM (seguimiento a juicios)", grupo: "Jurídico", modulos: [...BASE, "ucm", "control_demandas"] },
+  { codigo: "UCM", nombre: "Unidad UCM (seguimiento a juicios)", grupo: "Jurídico", modulos: [...BASE, "ucm"] },
   { codigo: "UDP", nombre: "Unidad UDP (Defensa y Protección)", grupo: "Jurídico", modulos: [...BASE, "udp"] },
   { codigo: "UFC", nombre: "Unidad UFC (formalización)", grupo: "Jurídico", modulos: [...BASE, "contratos", "tramites", "conectores"] },
   { codigo: "GAD", nombre: "Gerencia Administrativa", grupo: "Administración", modulos: [...BASE, "urrj"] },
