@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Search, Scale, AlertTriangle, Gavel, Archive, FilePlus } from "lucide-react";
 import { FilaAcciones } from "@/components/fila-acciones";
 import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
+import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import { ValidarJuzgado } from "@/components/validar-juzgado";
 
 export const Route = createFileRoute("/ucm")({
@@ -42,6 +43,7 @@ function UcmPage() {
   const [q, setQ] = useState("");
   const [entidad, setEntidad] = useState("todas");
   const [prioridad, setPrioridad] = useState("todas");
+  const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [verArchivados, setVerArchivados] = useState(false);
 
   const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: false, origen: "ucm" } as any }); };
@@ -66,7 +68,12 @@ function UcmPage() {
   const cargar = () => {
     setCargando(true);
     sbSelect<CasoJuridico>("caso_juridico", "select=*&order=prioridad.asc")
-      .then((d) => setCasos(d))
+      .then((d) => {
+        setCasos(d);
+        // cargar días sin avance en lote (una sola tanda de consultas)
+        const ids = d.map((x) => x.id).filter(Boolean) as string[];
+        diasSinAvanceLote(ids).then(setDiasAvance).catch(() => {});
+      })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
   };
@@ -182,6 +189,11 @@ function UcmPage() {
                       {c.expediente || "— sin expediente —"}
                     </p>
                     <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
+                    {c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (
+                      <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+                        <AlertTriangle className="h-2.5 w-2.5" /> {diasAvance[c.id] >= 9999 ? "sin avances" : `${diasAvance[c.id]}d sin avance`}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <p className="max-w-[260px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p>
