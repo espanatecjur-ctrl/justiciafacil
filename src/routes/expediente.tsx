@@ -28,6 +28,7 @@ export const Route = createFileRoute("/expediente")({
   validateSearch: (s: Record<string, unknown>) => ({
     id: typeof s.id === "string" ? s.id : undefined,
     nueva: s.nueva === true || s.nueva === "true",
+    origen: typeof s.origen === "string" ? s.origen : undefined,
   }),
   head: () => ({ meta: [{ title: "Ficha del expediente — JusticiaFácil" }] }),
   component: FichaExpedientePage,
@@ -114,7 +115,7 @@ function Proximamente({ icon, titulo, nota }: { icon: React.ReactNode; titulo: s
 }
 
 function FichaExpedientePage() {
-  const { id } = Route.useSearch();
+  const { id, origen } = Route.useSearch();
   const navigate = useNavigate();
   const [caso, setCaso] = useState<CasoJuridico | null>(null);
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
@@ -138,7 +139,11 @@ function FichaExpedientePage() {
       .finally(() => setCargando(false));
   }, [id]);
 
-  const destino = caso?.tipo_registro === "amparo" ? "/amparos" : caso?.tipo_registro === "recurso" ? "/recursos" : caso?.tipo_registro === "exhorto" ? "/exhortos" : "/ucm";
+  // si vino de una área específica (ej. URRJ), regresa ahí; si no, por tipo de registro
+  const rutasOrigen: Record<string, string> = { urrj: "/urrj", ucp: "/ucp", udp: "/udp", ucm: "/ucm", expedientes: "/expedientes" };
+  const destino = origen && rutasOrigen[origen]
+    ? rutasOrigen[origen]
+    : caso?.tipo_registro === "amparo" ? "/amparos" : caso?.tipo_registro === "recurso" ? "/recursos" : caso?.tipo_registro === "exhorto" ? "/exhortos" : "/ucm";
   const volver = () => navigate({ to: destino });
 
   if (cargando) return (
