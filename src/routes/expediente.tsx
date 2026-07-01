@@ -6,6 +6,7 @@ import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
+import { VincularClienteModal } from "@/components/vincular-cliente";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
   DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
@@ -121,6 +122,7 @@ function FichaExpedientePage() {
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
   const [cargando, setCargando] = useState(true);
   const [verSeguimiento, setVerSeguimiento] = useState(false);
+  const [verVincular, setVerVincular] = useState(false);
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -235,7 +237,12 @@ function FichaExpedientePage() {
             <Dato label="Proveedor / Administradora" valor={c.proveedor} importante />
             <Dato label="No. de crédito" valor={c.no_credito} importante />
             <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
-            <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
+            <div className="flex items-center justify-between gap-2">
+              <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
+              <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+                <Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}
+              </button>
+            </div>
             <Dato label="Tipo de proceso" valor={c.tipo_proceso} />
           </Seccion>
         )}
@@ -305,6 +312,7 @@ function FichaExpedientePage() {
       </div>
 
       {verSeguimiento && <SeguimientoJuicioModal area={areaFicha} caso={c} onClose={() => setVerSeguimiento(false)} />}
+      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setCaso({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_id: cl.id }); setVerVincular(false); }} />}
     </div>
   );
 }
