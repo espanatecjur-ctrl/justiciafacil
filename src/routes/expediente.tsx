@@ -8,6 +8,7 @@ import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { VincularClienteModal } from "@/components/vincular-cliente";
+import { BadgeAvance } from "@/components/badge-avance";
 import {
   ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
   DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
@@ -185,6 +186,7 @@ function FichaExpedientePage() {
             <ArrowLeft className="h-3.5 w-3.5" /> Volver
           </button>
           <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: areaBg }} title={`Ficha del área ${areaFicha}`}>{areaFicha}</span>
+          <BadgeAvance caso={c} />
         </div>
         <BotonCarpetaDrive area={areaFicha} caso={c} />
       </div>
