@@ -50,3 +50,37 @@ export async function diasSinAvance(caso: CasoJuridico): Promise<{ dias: number 
 export function enAlerta(dias: number | null): boolean {
   return dias === null || dias >= DIAS_ALERTA;
 }
+
+// ---- VERSIÓN EN LOTE (para listas de muchos casos) ----
+// Trae, en pocas consultas, la última fecha de avance de MUCHOS casos a la vez.
+// Devuelve un mapa { caso_id -> días sin avance }.
+export async function diasSinAvanceLote(casoIds: string[]): Promise<Record<string, number>> {
+  const mapa: Record<string, number> = {};
+  const ids = casoIds.filter(Boolean);
+  if (ids.length === 0) return mapa;
+  const lista = `(${ids.map((x) => `"${x}"`).join(",")})`;
+
+  // guarda la fecha más reciente vista por caso
+  const ultimas: Record<string, string> = {};
+  const registrar = (caso_id: string | null, fecha: string | null) => {
+    if (!caso_id || !fecha) return;
+    if (!ultimas[caso_id] || fecha > ultimas[caso_id]) ultimas[caso_id] = fecha;
+  };
+
+  const traer = async (tabla: string, campo: string, extra = "") => {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?select=caso_id,${campo}&caso_id=in.${lista}${extra}`, { headers });
+      if (r.ok) { const filas = await r.json(); for (const f of filas) registrar(f.caso_id, f[campo]); }
+    } catch { /* silencioso */ }
+  };
+
+  await traer("documento_garantia", "created_at", "&en_papelera=eq.false");
+  await traer("seguimiento_procesal", "created_at");
+  await traer("recorrido_area", "updated_at");
+
+  for (const id of ids) {
+    const u = ultimas[id];
+    mapa[id] = u ? Math.floor((Date.now() - new Date(u).getTime()) / (1000 * 60 * 60 * 24)) : 99999;
+  }
+  return mapa;
+}
