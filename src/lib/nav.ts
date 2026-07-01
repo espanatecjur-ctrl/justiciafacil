@@ -1,6 +1,6 @@
 import {
   Home, FolderOpen, Newspaper, Send, Shield, GitBranch, Bot,
-  FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, Swords, ShieldHalf, Settings,
+  FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, ShieldHalf, Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,7 +20,6 @@ export const navItems: NavItem[] = [
 
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "UDP · Defensa y Protección", to: "/udp", icon: ShieldHalf, group: "Procesal" },
-  { label: "Control de demandas", to: "/control-demandas", icon: Swords, group: "Procesal" },
   { label: "Boletines Judiciales", to: "/boletines", icon: Newspaper, group: "Procesal" },
   { label: "Exhortos", to: "/exhortos", icon: Send, group: "Procesal" },
   { label: "Amparos", to: "/amparos", icon: Shield, group: "Procesal" },
