@@ -44,6 +44,7 @@ export interface CasoJuridico {
   prioridad: string | null;
   tiene_cliente: string | null;
   cliente_nombre: string | null;
+  cliente_id: string | null;
   direccion_garantia: string | null;
   unidad: string | null;
   encargado_unidad: string | null;
