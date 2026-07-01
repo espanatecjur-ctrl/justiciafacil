@@ -163,7 +163,9 @@ function FichaExpedientePage() {
 
   // banderas de faltantes por sección
   const esEspecial = ["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio");
-  const areaFicha = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : (c.unidad || "").toUpperCase().includes("URRJ") ? "URRJ" : "UCM";
+  // el área de la ficha: primero respeta de dónde vino (origen), si no, la deduce de la unidad
+  const areaPorUnidad = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : (c.unidad || "").toUpperCase().includes("URRJ") ? "URRJ" : "UCM";
+  const areaFicha = origen ? origen.toUpperCase() : areaPorUnidad;
   // color de la etiqueta según el área
   const colorArea: Record<string, string> = { URRJ: "#7A4FB0", UCM: "#0C5C46", UCP: "#0C447C", UDP: "#854F0B" };
   const areaBg = colorArea[areaFicha] || "#0B1E3A";
