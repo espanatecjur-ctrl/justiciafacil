@@ -20,6 +20,8 @@ export const navItems: NavItem[] = [
 
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "UDP · Defensa y Protección", to: "/udp", icon: ShieldHalf, group: "Procesal" },
+  { label: "UFC · Formalizaciones", to: "/ufc", icon: FileSignature, group: "Procesal" },
+
   { label: "Boletines Judiciales", to: "/boletines", icon: Newspaper, group: "Procesal" },
   { label: "Exhortos", to: "/exhortos", icon: Send, group: "Procesal" },
   { label: "Amparos", to: "/amparos", icon: Shield, group: "Procesal" },
