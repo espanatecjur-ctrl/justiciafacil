@@ -43,7 +43,21 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPuede(p.acciones)); }, []);
   const can = (a: string) => puede.length === 0 || puede.includes(a);
   const navigate = useNavigate();
-  const abrirFicha = (_f: Fila) => navigate({ to: "/ucp" });
+  // Abre la ficha del expediente: busca el caso por número de expediente y navega a /expediente?id=...
+  const abrirFicha = async (f: Fila) => {
+    if (!f.expediente) { alert("Este pre-dictamen no tiene número de expediente ligado."); return; }
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id&expediente=eq.${encodeURIComponent(f.expediente.trim())}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+      const d = r.ok ? await r.json() : [];
+      const casoId = d?.[0]?.id;
+      if (casoId) navigate({ to: "/expediente", search: { id: casoId } as any });
+      else alert("No se encontró un expediente con ese número en el sistema.");
+    } catch {
+      alert("No se pudo abrir la ficha. Intenta de nuevo.");
+    }
+  };
+  // Ver el pre-dictamen (la vista de ficha de la garantía con el dictamen)
+  const [verPre, setVerPre] = useState<Fila | null>(null);
 
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&vigente=eq.true&order=created_at.desc&limit=500`, { headers })
@@ -77,6 +91,8 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
       <Ic className="h-4 w-4" /> {children}
     </button>
   );
+
+  if (verPre) return <FichaGarantia f={verPre} onVolver={() => setVerPre(null)} />;
 
   return (
     <div className="rounded-xl border border-border bg-card">
@@ -132,6 +148,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
         return (
           <div onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
             <Item icon={FolderOpen} onClick={() => { setMenu(null); abrirFicha(f); }}>Abrir ficha</Item>
+            <Item icon={FileText} onClick={() => { setMenu(null); setVerPre(f); }}>Ver pre-dictamen</Item>
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
             {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
