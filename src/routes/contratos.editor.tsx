@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Download, FileText } from "lucide-react";
 import { z } from "zod";
+import { SelectorApoderado } from "@/components/selector-apoderado";
+import { apoderadosSeed, valoresApoderado, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -64,6 +66,18 @@ function EditorContratos() {
   const [tipo, setTipo] = useState<ContratoTipo>((tipoQuery as ContratoTipo) || "prestacion_servicios");
   const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? plantillas[0], [tipo]);
   const [valores, setValores] = useState<Record<string, unknown>>({});
+  const [apoderadoId, setApoderadoId] = useState<string>("");
+
+  // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
+  // Al quitarlo, se borran esas mismas llaves.
+  function seleccionarApoderado(a: Apoderado | null) {
+    setApoderadoId(a?.id ?? "");
+    setValores((s) => {
+      const limpio = { ...s };
+      Object.values(APODERADO_KEYS).forEach((k) => delete limpio[k]);
+      return a ? { ...limpio, ...valoresApoderado(a) } : limpio;
+    });
+  }
 
   const camposVisibles = plantilla.campos.filter((c) => {
     if (!c.dependeDe) return true;
@@ -130,13 +144,23 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">Plantilla</Label>
         <select
           value={tipo}
-          onChange={(e) => { setTipo(e.target.value as ContratoTipo); setValores({}); }}
+          onChange={(e) => {
+            setTipo(e.target.value as ContratoTipo);
+            const a = apoderadosSeed.find((x) => x.id === apoderadoId);
+            setValores(a ? { ...valoresApoderado(a) } : {});
+          }}
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           {plantillas.map((p) => <option key={p.tipo} value={p.tipo}>{p.nombre}</option>)}
         </select>
         <p className="mt-2 text-xs text-muted-foreground">{plantilla.descripcion}</p>
       </Card>
+
+      <SelectorApoderado
+        apoderados={apoderadosSeed}
+        value={apoderadoId}
+        onSelect={seleccionarApoderado}
+      />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
         <Card className="legal-card">
