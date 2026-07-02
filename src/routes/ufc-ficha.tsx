@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, FileSignature, Loader2, Save, X, Send } from "lucide-react";
 import { obtenerFormalizacion, actualizarFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, ESTADOS_TRAMITE, type Formalizacion } from "@/lib/formalizacion";
 import { crearSolicitud, TIPOS_DOCUMENTO_SOLICITUD, limite24hHabiles } from "@/lib/solicitud-contrato";
+import { usuarioActualEtiqueta } from "@/lib/auth";
 
 export const Route = createFileRoute("/ufc-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -25,6 +26,9 @@ function UFCFicha() {
   const [enviando, setEnviando] = useState(false);
   const [msgSol, setMsgSol] = useState("");
   const [sol, setSol] = useState({ tipo_documento: TIPOS_DOCUMENTO_SOLICITUD[0], detalle: "", solicitante: "" });
+
+  // El solicitante se auto-llena con el ROL · correo del usuario en sesión.
+  useEffect(() => { usuarioActualEtiqueta().then((v) => setSol((s) => ({ ...s, solicitante: v }))); }, []);
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -109,7 +113,10 @@ function UFCFicha() {
             <textarea className={inp} rows={3} value={sol.detalle} onChange={(e) => setSol({ ...sol, detalle: e.target.value })} placeholder="Ej. Escriturar 3 lotes adjudicados a favor del cesionario…" />
 
             <label className={`${lbl} mt-3`}>¿Quién lo solicita?</label>
-            <input className={inp} value={sol.solicitante} onChange={(e) => setSol({ ...sol, solicitante: e.target.value })} placeholder="Tu nombre" />
+            <div className="flex items-center gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-sm">
+              <span className="truncate">{sol.solicitante || "Detectando sesión…"}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Se toma solo de tu sesión (rol · correo). No se captura a mano.</p>
 
             <p className="mt-3 text-[11px] text-muted-foreground">Plazo de entrega: <b>24 horas hábiles</b> (el fin de semana no cuenta).</p>
 
