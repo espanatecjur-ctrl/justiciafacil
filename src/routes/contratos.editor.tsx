@@ -132,12 +132,14 @@ function EditorContratos() {
 
   const cuerpo = renderContrato(plantilla, valores);
 
-  // Guardar el documento con folio real (Parte A).
+  // Guardar el documento con folio real (Parte A/D).
   const [guardando, setGuardando] = useState(false);
   const [folioGuardado, setFolioGuardado] = useState<string | null>(null);
-  async function guardar() {
+
+  // Registra el documento una sola vez y devuelve su folio (o el ya asignado).
+  async function obtenerFolio(): Promise<string | null> {
+    if (folioGuardado) return folioGuardado;
     setGuardando(true);
-    setFolioGuardado(null);
     const apo = apoderados.find((a) => a.id === apoderadoId);
     const cuantiaNum = parseFloat(String(valores.valorOperacion ?? "").replace(/[^0-9.]/g, "")) || null;
     const folioDoc = String(valores.folioCarta ?? valores.numeroOficio ?? "").trim();
@@ -154,12 +156,24 @@ function EditorContratos() {
       fecha_generado: new Date().toISOString(),
     });
     setGuardando(false);
-    if (r.ok) setFolioGuardado(r.folio ?? "");
-    else window.alert("No se pudo guardar. ¿Corriste el SQL de contrato_generado en el proyecto correcto?");
+    if (r.ok && r.folio) { setFolioGuardado(r.folio); return r.folio; }
+    return null;
   }
 
-  // Entrar al editor: congela el contrato actual como punto de partida.
-  function entrarWord() {
+  async function guardar() {
+    const folio = await obtenerFolio();
+    if (!folio) window.alert("No se pudo guardar. ¿Corriste el SQL de contrato_generado en el proyecto correcto?");
+  }
+
+  // Encabezado de folio que se estampa en cada documento exportado/impreso.
+  function encabezadoFolio(folio: string | null) {
+    const fecha = new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+    return folio ? `Folio: ${folio}    ·    Generado: ${fecha}` : "BORRADOR — documento sin folio registrado";
+  }
+
+  // Entrar al editor: registra folio y congela el contrato actual.
+  async function entrarWord() {
+    await obtenerFolio();
     setSemillaWord(textoPlanoAHtml(cuerpo));
     setClaveWord((k) => k + 1);
     setModo("word");
@@ -171,39 +185,45 @@ function EditorContratos() {
     setClaveWord((k) => k + 1);
   }
 
-  function exportarTxt() {
-    const blob = new Blob([cuerpo], { type: "text/plain;charset=utf-8" });
+  async function exportarTxt() {
+    const folio = await obtenerFolio();
+    const texto = `${encabezadoFolio(folio)}\n\n${cuerpo}`;
+    const blob = new Blob([texto], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${plantilla.nombre.replace(/\s+/g, "_")}_${Date.now()}.txt`;
+    a.download = `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  function exportarHtml() {
+  async function exportarHtml() {
+    const folio = await obtenerFolio();
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${plantilla.nombre}</title>
 <style>body{font-family:'Libre Baskerville',Georgia,serif;max-width:780px;margin:40px auto;padding:0 40px;line-height:1.7;color:#1a1a1a}
 h1{font-size:18px;text-align:center;text-transform:uppercase;letter-spacing:.08em}
+.folio{text-align:right;font-size:11px;color:#555;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:14px}
 pre{white-space:pre-wrap;font-family:inherit;font-size:14px}</style></head>
-<body><h1>${plantilla.nombre}</h1><pre>${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
+<body><div class="folio">${encabezadoFolio(folio)}</div><h1>${plantilla.nombre}</h1><pre>${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${plantilla.nombre.replace(/\s+/g, "_")}_${Date.now()}.html`;
+    a.download = `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.html`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  function imprimir() {
+  async function imprimir() {
+    const folio = await obtenerFolio();
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(`<!doctype html><html><head><title>${plantilla.nombre}</title>
 <style>body{font-family:'Libre Baskerville',Georgia,serif;max-width:780px;margin:40px auto;padding:0 40px;line-height:1.7}
 h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.08em}
+.folio{text-align:right;font-size:10px;color:#555;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:12px}
 pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
-<body><h1>${plantilla.nombre}</h1><pre>${cuerpo.replace(/</g, "&lt;")}</pre>
+<body><div class="folio">${encabezadoFolio(folio)}</div><h1>${plantilla.nombre}</h1><pre>${cuerpo.replace(/</g, "&lt;")}</pre>
 <script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   }
@@ -241,6 +261,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
             setTipo(e.target.value as ContratoTipo);
             const a = apoderados.find((x) => x.id === apoderadoId);
             setValores(a ? { ...valoresApoderado(a) } : {});
+            setFolioGuardado(null);
           }}
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
@@ -349,7 +370,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
                 </div>
               </>
             ) : (
-              <EditorWord key={claveWord} initialHtml={semillaWord} titulo={plantilla.nombre} />
+              <EditorWord key={claveWord} initialHtml={semillaWord} titulo={plantilla.nombre} folio={folioGuardado} />
             )}
           </CardContent>
         </Card>
