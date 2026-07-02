@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, FileSignature, Loader2, Save } from "lucide-react";
+import { ArrowLeft, FileSignature, Loader2, Save, X, Send } from "lucide-react";
 import { obtenerFormalizacion, actualizarFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, ESTADOS_TRAMITE, type Formalizacion } from "@/lib/formalizacion";
+import { crearSolicitud, TIPOS_DOCUMENTO_SOLICITUD, limite24hHabiles } from "@/lib/solicitud-contrato";
 
 export const Route = createFileRoute("/ufc-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -19,6 +20,11 @@ function UFCFicha() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState("");
+  // Mini formulario de solicitud a Contratos
+  const [pidiendo, setPidiendo] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [msgSol, setMsgSol] = useState("");
+  const [sol, setSol] = useState({ tipo_documento: TIPOS_DOCUMENTO_SOLICITUD[0], detalle: "", solicitante: "" });
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -36,6 +42,29 @@ function UFCFicha() {
     setTimeout(() => setMsg(""), 2500);
   };
 
+  const enviarSolicitud = async () => {
+    if (!f) return;
+    setEnviando(true); setMsgSol("");
+    const ok = await crearSolicitud({
+      garantia_ref: f.id_interno || f.direccion_garantia || "Sin ID",
+      origen: "UFC",
+      area: "UFC",
+      tipo_documento: sol.tipo_documento,
+      detalle: sol.detalle,
+      solicitante: sol.solicitante,
+      estado: "Pendiente",
+      fecha_solicitud: new Date().toISOString(),
+      fecha_limite: limite24hHabiles().toISOString(),
+    });
+    setEnviando(false);
+    if (ok) {
+      setMsgSol("Solicitud enviada a Contratos ✓");
+      setTimeout(() => { setPidiendo(false); setMsgSol(""); setSol({ tipo_documento: TIPOS_DOCUMENTO_SOLICITUD[0], detalle: "", solicitante: "" }); }, 1400);
+    } else {
+      setMsgSol("No se pudo enviar (¿corriste el SQL de solicitudes?).");
+    }
+  };
+
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
   if (!f) return <div className="p-8 text-sm text-muted-foreground">No se encontró la formalización. <button onClick={() => navigate({ to: "/ufc" })} className="underline">Volver</button></div>;
 
@@ -47,10 +76,53 @@ function UFCFicha() {
       {/* barra superior */}
       <div className="flex items-center justify-between gap-2">
         <button onClick={() => navigate({ to: "/ufc" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UFC</button>
-        <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: TEAL }}>
-          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar {msg && <span className="ml-1 text-xs">· {msg}</span>}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPidiendo(true)}
+            className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-medium"
+            style={{ borderColor: TEAL, color: TEAL }}
+          >
+            <FileSignature className="h-4 w-4" /> Solicitar a Contratos
+          </button>
+          <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: TEAL }}>
+            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar {msg && <span className="ml-1 text-xs">· {msg}</span>}
+          </button>
+        </div>
       </div>
+
+      {/* Mini formulario: solicitar a Contratos */}
+      {pidiendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !enviando && setPidiendo(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-base font-bold" style={{ color: NAVY }}>Solicitar a Contratos</p>
+              <button onClick={() => setPidiendo(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Garantía: <b>{f.id_interno || f.direccion_garantia || "Sin ID"}</b> · Área: UFC</p>
+
+            <label className={lbl}>¿Qué se necesita elaborar?</label>
+            <select className={inp} value={sol.tipo_documento} onChange={(e) => setSol({ ...sol, tipo_documento: e.target.value })}>
+              {TIPOS_DOCUMENTO_SOLICITUD.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            <label className={`${lbl} mt-3`}>Detalle de lo que se necesita</label>
+            <textarea className={inp} rows={3} value={sol.detalle} onChange={(e) => setSol({ ...sol, detalle: e.target.value })} placeholder="Ej. Escriturar 3 lotes adjudicados a favor del cesionario…" />
+
+            <label className={`${lbl} mt-3`}>¿Quién lo solicita?</label>
+            <input className={inp} value={sol.solicitante} onChange={(e) => setSol({ ...sol, solicitante: e.target.value })} placeholder="Tu nombre" />
+
+            <p className="mt-3 text-[11px] text-muted-foreground">Plazo de entrega: <b>24 horas hábiles</b> (el fin de semana no cuenta).</p>
+
+            <div className="mt-4 flex items-center gap-2">
+              <button onClick={enviarSolicitud} disabled={enviando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: TEAL }}>
+                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar solicitud
+              </button>
+              <button onClick={() => setPidiendo(false)} className="rounded-md border px-4 py-2 text-sm">Cancelar</button>
+              {msgSol && <span className="text-xs">{msgSol}</span>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* encabezado */}
       <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${TEAL})` }}>
