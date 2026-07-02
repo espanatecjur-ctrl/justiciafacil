@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { TIPOS_PODER } from "@/lib/apoderados";
 import type { ApoderadoRow } from "@/lib/apoderados";
 import { UserPlus, Pencil, Trash2, X, Loader2, ScrollText, Save } from "lucide-react";
 
@@ -132,7 +133,12 @@ export function ApoderadosConfig() {
             <Campo label="Nombre completo *"><Input value={editando.nombre ?? ""} onChange={(e) => set("nombre", e.target.value)} /></Campo>
             <Campo label="Cargo (cómo firma)"><Input value={editando.cargo ?? ""} onChange={(e) => set("cargo", e.target.value)} placeholder="Apoderado Legal / Representante Legal" /></Campo>
             <Campo label="Empresa que representa" full><Input value={editando.empresa ?? ""} onChange={(e) => set("empresa", e.target.value)} /></Campo>
-            <Campo label="Tipo de poder" full><Input value={editando.tipo_poder ?? ""} onChange={(e) => set("tipo_poder", e.target.value)} placeholder="general para pleitos y cobranzas…" /></Campo>
+            <Campo label="Tipo de poder" full>
+              <Input list="tipos-poder" value={editando.tipo_poder ?? ""} onChange={(e) => set("tipo_poder", e.target.value)} placeholder="Selecciona un tipo o escríbelo…" />
+              <datalist id="tipos-poder">
+                {TIPOS_PODER.map((t) => <option key={t} value={t} />)}
+              </datalist>
+            </Campo>
 
             <div className="md:col-span-2 mt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Escritura del poder</div>
             <Campo label="No. de escritura"><Input value={editando.escritura_numero ?? ""} onChange={(e) => set("escritura_numero", e.target.value)} /></Campo>
