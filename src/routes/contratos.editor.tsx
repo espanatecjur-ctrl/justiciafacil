@@ -208,6 +208,7 @@ function EditorContratos() {
       cco: ccoMail,
       asunto: asuntoMail,
       mensaje: mensajeMail,
+      folio: folio,
       adjuntoNombre: adj.nombre,
       adjuntoBase64: adj.base64,
     });
