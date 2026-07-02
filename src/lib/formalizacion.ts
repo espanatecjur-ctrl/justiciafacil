@@ -15,6 +15,19 @@ export async function listarCasosVinculables(): Promise<CasoJuridico[]> {
   }
 }
 
+/** Devuelve la formalización vinculada a un caso (o null si no hay). */
+export async function formalizacionDeCaso(casoId: string): Promise<{ id?: string; estado_tramite?: string | null } | null> {
+  try {
+    const r = await sbSelect<{ id: string; estado_tramite: string | null }>(
+      "formalizacion",
+      `select=id,estado_tramite&caso_id=eq.${casoId}&order=created_at.desc`,
+    );
+    return r[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
 export interface Formalizacion {
