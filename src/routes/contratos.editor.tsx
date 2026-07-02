@@ -373,7 +373,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
 
       {mostrarEnviar && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => !enviandoSistema && setMostrarEnviar(false)}>
-          <div className="my-6 w-full max-w-4xl rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="my-4 w-[94vw] max-w-6xl rounded-xl bg-white p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <p className="flex items-center gap-2 text-base font-bold text-[#0B1E3A]">
                 <Mail className="h-5 w-5" /> Enviar por correo
@@ -408,7 +408,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
                 </div>
                 <div>
                   <label className="text-[11px] font-medium text-muted-foreground">Mensaje</label>
-                  <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={6}
+                  <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={12}
                     className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                 </div>
               </div>
@@ -416,10 +416,10 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
               {/* Columna derecha: vista previa del documento */}
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground">Vista previa del documento que se enviará</label>
-                <div className="mt-0.5 h-[300px] overflow-y-auto rounded-md border border-border bg-[oklch(0.99_0.005_85)] p-4">
-                  <p className="mb-1 text-right text-[10px] text-muted-foreground">{folioGuardado ? `Folio: ${folioGuardado}` : "Se registrará al enviar"}</p>
-                  <p className="mb-2 text-center text-xs font-bold uppercase">{plantilla.nombre}</p>
-                  <pre className="whitespace-pre-wrap font-display text-[11px] leading-relaxed text-foreground">{cuerpo}</pre>
+                <div className="mt-0.5 h-[62vh] overflow-y-auto rounded-md border border-border bg-[oklch(0.99_0.005_85)] p-5">
+                  <p className="mb-1 text-right text-[11px] text-muted-foreground">{folioGuardado ? `Folio: ${folioGuardado}` : "Se registrará al enviar"}</p>
+                  <p className="mb-3 text-center text-sm font-bold uppercase">{plantilla.nombre}</p>
+                  <pre className="whitespace-pre-wrap font-display text-[13px] leading-relaxed text-foreground">{cuerpo}</pre>
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
                   <Check className="h-3.5 w-3.5" /> Se adjuntan automáticamente <b>Word</b> y <b>PDF</b>.
