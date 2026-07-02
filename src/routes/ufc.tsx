@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Search, FileSignature, FilePlus, Loader2, MapPin } from "lucide-react";
-import { listarFormalizaciones, crearFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, type Formalizacion } from "@/lib/formalizacion";
+import { listarFormalizaciones, crearFormalizacion, listarCasosVinculables, TIPOS_PROCESO, TIPOS_CONTRATO, type Formalizacion } from "@/lib/formalizacion";
+import type { CasoJuridico } from "@/lib/supabase";
 
 export const Route = createFileRoute("/ufc")({
   head: () => ({ meta: [{ title: "UFC · Formalizaciones — JusticiaFácil" }] }),
@@ -108,9 +109,32 @@ function UFC() {
 function NuevaFormalizacion({ onClose, onCreada }: { onClose: () => void; onCreada: (f: Formalizacion | null) => void }) {
   const [d, setD] = useState<Formalizacion>({ tipo_proceso: TIPOS_PROCESO[0], tipo_contrato: TIPOS_CONTRATO[0] });
   const [guardando, setGuardando] = useState(false);
+  const [casos, setCasos] = useState<CasoJuridico[]>([]);
+  const [vinc, setVinc] = useState("");
   const set = (k: keyof Formalizacion, v: string) => setD((p) => ({ ...p, [k]: v }));
   const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
   const lbl = "mb-1 block text-xs font-medium text-muted-foreground";
+
+  useEffect(() => { listarCasosVinculables().then(setCasos); }, []);
+
+  // Al vincular un caso de UCM/UCP, se auto-llena la identificación.
+  const vincular = (id: string) => {
+    setVinc(id);
+    const c = casos.find((x) => x.id === id);
+    if (!c) return;
+    setD((p) => ({
+      ...p,
+      caso_id: c.id,
+      unidad_pertenece: c.unidad || p.unidad_pertenece || null,
+      id_interno: c.gar_id || p.id_interno || "",
+      direccion_garantia: c.direccion_garantia || "",
+      expediente: c.expediente || "",
+      distrito_judicial: c.distrito_judicial || "",
+      juzgado: c.nombre_juzgado || c.juzgado || "",
+      via_procesal: c.via_procesal || "",
+      tipo_juicio: c.materia || c.tipo_proceso || "",
+    }));
+  };
 
   const guardar = async () => {
     setGuardando(true);
@@ -127,6 +151,18 @@ function NuevaFormalizacion({ onClose, onCreada }: { onClose: () => void; onCrea
           <p className="text-xs text-white/70">Bloque 1 · Identificación. Los demás datos se llenan en la ficha.</p>
         </div>
         <div className="space-y-3 overflow-y-auto p-4">
+          <div className="rounded-md border border-[color:var(--teal,#0C5C46)]/30 bg-[color:var(--teal,#0C5C46)]/5 p-3">
+            <label className={lbl}>Vincular con un caso de UCM / UCP (auto-llena todo)</label>
+            <select className={inp} value={vinc} onChange={(e) => vincular(e.target.value)}>
+              <option value="">— Sin vincular (capturar a mano) —</option>
+              {casos.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {(c.unidad || "—")} · {c.expediente || "s/exp"} · {(c.direccion_garantia || "sin dirección").slice(0, 40)}
+                </option>
+              ))}
+            </select>
+            {vinc && <p className="mt-1 text-[11px] text-[color:var(--teal,#0C5C46)]">Vinculado ✓ Los datos se llenaron desde el caso; puedes ajustarlos abajo.</p>}
+          </div>
           <div><label className={lbl}>ID interno (GAR-xxxx)</label><input className={inp} value={d.id_interno || ""} onChange={(e) => set("id_interno", e.target.value)} placeholder="GAR-603217539" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={lbl}>Tipo de proceso</label><select className={inp} value={d.tipo_proceso || ""} onChange={(e) => set("tipo_proceso", e.target.value)}>{TIPOS_PROCESO.map((t) => <option key={t}>{t}</option>)}</select></div>
