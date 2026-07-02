@@ -71,3 +71,17 @@ export async function listarSolicitudes(): Promise<SolicitudContrato[]> {
     return [];
   }
 }
+
+/** Cambia el estado de una solicitud (seguimiento). */
+export async function actualizarEstadoSolicitud(id: string, estado: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_contrato?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=minimal" },
+      body: JSON.stringify({ estado }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
