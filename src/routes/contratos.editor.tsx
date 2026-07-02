@@ -14,7 +14,7 @@ import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
-import { guardarContrato } from "@/lib/contrato-generado";
+import { guardarContrato, listarCartasCambio, type ContratoGenerado } from "@/lib/contrato-generado";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -72,6 +72,25 @@ function EditorContratos() {
   // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
   const [apoderados, setApoderados] = useState<Apoderado[]>([]);
   useEffect(() => { cargarApoderados().then(setApoderados); }, []);
+
+  // Cartas de Cambio registradas, para auto-llenar el Contrato (Parte C).
+  const [cartas, setCartas] = useState<ContratoGenerado[]>([]);
+  useEffect(() => {
+    if (tipo === "contrato_cambio") listarCartasCambio().then(setCartas);
+  }, [tipo]);
+
+  // Copia los datos de una Carta registrada al Contrato (mismo mapeo que el Paquete).
+  function autollenarDesdeCarta(v: Record<string, unknown>) {
+    setValores((cur) => {
+      const nuevo = { ...cur };
+      Object.values(APODERADO_KEYS).forEach((k) => { if (v[k] != null) nuevo[k] = v[k]; });
+      if (v.nombreCliente) nuevo.nombreCliente = v.nombreCliente;
+      if (v.folioContratoAnterior) nuevo.folioContratoAnterior = v.folioContratoAnterior;
+      if (v.valorOperacion) nuevo.valorOperacion = v.valorOperacion;
+      if (v.garantiaCambio) nuevo.garantiaNueva = v.garantiaCambio;
+      return nuevo;
+    });
+  }
   const [modo, setModo] = useState<"preview" | "word">("preview");
   // "Semilla" = el contrato ya llenado que se carga al editor Word.
   // Se congela al entrar (o al Regenerar) para no borrar los cambios manuales.
@@ -235,6 +254,34 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         value={apoderadoId}
         onSelect={seleccionarApoderado}
       />
+
+      {tipo === "contrato_cambio" && (
+        <div className="rounded-lg border border-[color:var(--gold,#C2A24C)]/40 bg-amber-50/60 px-4 py-3">
+          <label className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+            Auto-llenar desde una Carta de Cambio registrada
+          </label>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const c = cartas.find((x) => x.id === e.target.value);
+              if (c?.valores) autollenarDesdeCarta(c.valores as Record<string, unknown>);
+            }}
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">
+              {cartas.length ? "— Escoge una carta registrada —" : "No hay cartas guardadas todavía"}
+            </option>
+            {cartas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.folio || "s/folio"} · {c.nombre_cliente || "sin cliente"}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-amber-800/80">
+            Jala cliente, folio anterior, garantía y valor de la carta que escojas. Lo demás lo completas abajo.
+          </p>
+        </div>
+      )}
 
       {tipo === "carta_cambio" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-4 py-3">
