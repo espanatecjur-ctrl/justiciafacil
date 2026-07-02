@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { contratos } from "@/lib/mock-data";
 import { plantillas } from "@/lib/contract-templates";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Loader2 } from "lucide-react";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
+import { listarContratos, type ContratoGenerado } from "@/lib/contrato-generado";
 
 export const Route = createFileRoute("/contratos/")({
   head: () => ({ meta: [{ title: "Contratos — SIGA-DIIPA" }] }),
@@ -14,12 +15,15 @@ export const Route = createFileRoute("/contratos/")({
 });
 
 const estadoTono: Record<string, string> = {
-  borrador: "bg-slate-100 text-slate-800",
-  revision: "bg-amber-100 text-amber-900",
-  firmado: "bg-emerald-100 text-emerald-900",
-  rescindido: "bg-red-100 text-red-900",
-  vencido: "bg-zinc-200 text-zinc-700",
+  generado: "bg-emerald-100 text-emerald-900",
+  archivado: "bg-slate-100 text-slate-800",
+  papelera: "bg-red-100 text-red-900",
 };
+
+function fmtFecha(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 function ContratosIndex() {
   return (
@@ -27,7 +31,7 @@ function ContratosIndex() {
       <PageHeader
         eyebrow="Documentos"
         title="Contratos"
-        description="Repositorio de contratos firmados, en revisión y plantillas auto-llenables."
+        description="Repositorio de contratos generados, guardados y plantillas auto-llenables."
         actions={
           <Link to="/contratos/editor">
             <Button className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
@@ -57,37 +61,58 @@ function ContratosIndex() {
 
       <SolicitudesContratoTabla />
 
-      <div>
-        <h2 className="font-display text-lg font-bold mb-3">Contratos existentes</h2>
-        <Card className="legal-card overflow-hidden">
+      <ContratosExistentes />
+    </div>
+  );
+}
+
+function ContratosExistentes() {
+  const [lista, setLista] = useState<ContratoGenerado[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    listarContratos("generado").then(setLista).finally(() => setCargando(false));
+  }, []);
+
+  return (
+    <div>
+      <h2 className="font-display text-lg font-bold mb-3">Contratos existentes</h2>
+      <Card className="legal-card overflow-hidden">
+        {cargando ? (
+          <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
+        ) : lista.length === 0 ? (
+          <div className="p-4 text-sm text-muted-foreground">Aún no hay contratos guardados. Genera uno en el Editor y pícale “Guardar”.</div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="text-left px-4 py-2.5">Título</th>
-                  <th className="text-left px-4 py-2.5">Tipo</th>
-                  <th className="text-left px-4 py-2.5">Partes</th>
-                  <th className="text-left px-4 py-2.5">Firma</th>
+                  <th className="text-left px-4 py-2.5">Folio</th>
+                  <th className="text-left px-4 py-2.5">Documento</th>
+                  <th className="text-left px-4 py-2.5">Cliente</th>
+                  <th className="text-left px-4 py-2.5">Firma (apoderado)</th>
+                  <th className="text-left px-4 py-2.5">Fecha</th>
                   <th className="text-left px-4 py-2.5">Cuantía</th>
                   <th className="text-left px-4 py-2.5">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {contratos.map((c) => (
+                {lista.map((c) => (
                   <tr key={c.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 font-medium">{c.titulo}</td>
-                    <td className="px-4 py-3 capitalize">{c.tipo.replace(/_/g, " ")}</td>
-                    <td className="px-4 py-3 text-xs">{c.partes.join(" · ")}</td>
-                    <td className="px-4 py-3 tabular-nums">{c.fechaFirma}</td>
-                    <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${c.cuantia.toLocaleString("es-MX")}` : "—"}</td>
-                    <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado]}`}>{c.estado}</Badge></td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold">{c.folio || "—"}</td>
+                    <td className="px-4 py-3">{c.nombre_documento || "—"}</td>
+                    <td className="px-4 py-3">{c.nombre_cliente || "—"}</td>
+                    <td className="px-4 py-3 text-xs">{c.apoderado || "—"}</td>
+                    <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
+                    <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
+                    <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado || "generado"] || ""}`}>{c.estado || "generado"}</Badge></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </Card>
-      </div>
+        )}
+      </Card>
     </div>
   );
 }
