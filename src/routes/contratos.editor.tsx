@@ -171,6 +171,20 @@ function EditorContratos() {
     return folio ? `Folio: ${folio}    ·    Generado: ${fecha}` : "BORRADOR — documento sin folio registrado";
   }
 
+  // Reelaborar: si venimos de la tabla con datos guardados, los cargamos (Parte E).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("reelaborar_contrato");
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.tipo) setTipo(d.tipo as ContratoTipo);
+        if (d.valores) setValores(d.valores as Record<string, unknown>);
+        setFolioGuardado(null); // reelaborar = documento nuevo, folio nuevo
+        sessionStorage.removeItem("reelaborar_contrato");
+      }
+    } catch { /* nada */ }
+  }, []);
+
   // Entrar al editor: registra folio y congela el contrato actual.
   async function entrarWord() {
     await obtenerFolio();
