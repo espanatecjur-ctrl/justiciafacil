@@ -372,6 +372,71 @@ ______________________________________________________________
 C. {{nombreCliente}}
 Cliente`;
 
+// ============================================================================
+//  Oficio de Solicitud de Servicios Notariales (para formalizaciones)
+// ============================================================================
+const oficioNotarialCampos: PlantillaCampo[] = [
+  { id: "fechaOficio", label: "Fecha del oficio", tipo: "text", requerido: true, ayuda: "Ej. 17 de junio" },
+  { id: "numeroOficio", label: "Número de oficio (folio)", tipo: "text", requerido: true, ayuda: "Se pone en DIIPA/___/2026" },
+  { id: "notarioDestino", label: "Notario(a) destinatario (opcional)", tipo: "text", ayuda: "Si lo sabes; si no, queda genérico" },
+  { id: "juicioNumero", label: "Número de juicio", tipo: "text", requerido: true, ayuda: "Ej. 1393/2017" },
+  { id: "juzgadoJuicio", label: "Juzgado del juicio", tipo: "textarea", ayuda: "Ej. Juzgado Octavo de Jurisdicción Concurrente…" },
+  { id: "adjudicacionUbicacion", label: "Ubicación de los lotes adjudicados", tipo: "textarea", requerido: true },
+  { id: "exhortoNumero", label: "Número de exhorto", tipo: "text", ayuda: "Ej. 82/2026" },
+  { id: "juzgadoExhorto", label: "Juzgado del exhorto", tipo: "textarea", ayuda: "Ej. Juzgado Primero de lo Civil de Tlajomulco…" },
+];
+
+const oficioNotarialCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
+Inmuebles Accesibles
+Oficina Guadalajara: Calle Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco · Tel. 33 3712 4705
+
+Guadalajara, Jalisco, a {{fechaOficio}} de 2026.
+Oficio: DIIPA/{{numeroOficio}}/2026
+
+Asunto: Solicitud de servicios notariales y cotización.
+
+C. NOTARIO(A) PÚBLICO(A) TITULAR{{#notarioDestino}}
+{{notarioDestino}}{{/notarioDestino}}
+P R E S E N T E.
+
+Por medio del presente, en mi carácter de Apoderada Legal y Administradora Única de DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V. («DIIPA»), me dirijo a usted de la manera más atenta para solicitar los servicios de la notaría a su digno cargo y, previa revisión de la documentación que se anexa, la emisión de una cotización de honorarios y gastos a la brevedad posible.
+
+I. De la sociedad.
+DIIPA es una sociedad mercantil constituida mediante escritura pública número 1,809, Volumen II, Libro 4, de fecha 20 de abril de 2022, otorgada ante la fe del Lic. Luis Manuel Boucieguez Velarde, Notario Público número 256 de Mazatlán, Sinaloa, e inscrita en el Registro Público de Comercio de Mazatlán bajo el Folio Mercantil Electrónico N-2022029617, con domicilio social en la Ciudad de Mazatlán, Sinaloa.
+
+II. De la representación y los apoderados.
+• La suscrita, Erika Paola España Méndez, comparece como Administradora Única y Apoderada Legal de la sociedad, conforme a la escritura constitutiva antes citada.
+• El C. Milton Castro Cervantes funge como Apoderado General para Pleitos y Cobranzas, reconocido dentro del procedimiento judicial que más adelante se describe y facultado para suscribir las cesiones correspondientes, conforme a la escritura pública número 2,388 otorgada ante el Lic. Eduardo Antonio Rocha Pacheco, Notario Público número 234 de Culiacán, Sinaloa.
+• Lo anterior, sin perjuicio de los demás apoderados designados en la escritura constitutiva, la cual se anexa para su revisión.
+
+III. Del estado actual del expediente.
+Los derechos objeto de las operaciones derivan del Juicio Ordinario Mercantil número {{juicioNumero}}, radicado ante el {{juzgadoJuicio}}, en el que DIIPA obtuvo adjudicación por remate judicial de diversos lotes ubicados en {{adjudicacionUbicacion}}. Para su ejecución se libró el exhorto número {{exhortoNumero}}, turnado al {{juzgadoExhorto}}. A la fecha, el procedimiento registra: (i) el reconocimiento del Apoderado General para Pleitos y Cobranzas de la sociedad; (ii) el desechamiento de los incidentes de nulidad promovidos por la contraparte; y (iii) la aceptación y reconsideración de los honorarios del perito valuador designado, etapa que antecede al señalamiento de la fecha de desalojo.
+
+IV. De los servicios solicitados.
+Atentamente solicito a usted:
+• La formalización y, en su caso, protocolización de las cesiones de derechos litigiosos y adjudicatarios, así como la firma de los contratos respectivos.
+• La posterior escrituración de las garantías adjudicadas a favor de los cesionarios.
+• Los trámites notariales y registrales que correspondan. Por tratarse de una operación en conjunto (en masa), se requiere conocer sus honorarios y tiempos estimados.
+
+V. De la cotización.
+Solicito que la cotización de honorarios y gastos se gire a la brevedad posible a los siguientes datos de contacto:
+• Correo: erikapaola@diipadesarrollos.com
+• WhatsApp: 33 1881 7553
+• Oficina Guadalajara: Calle Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco · Tel. 33 3712 4705
+
+VI. Anexos.
+Para su revisión se acompañan: (1) copia del expediente y las constancias procesales del juicio {{juicioNumero}} y del exhorto {{exhortoNumero}}; (2) las escrituras de adjudicación de los inmuebles; (3) la escritura constitutiva y documentos de la sociedad; y (4) la escritura del poder del apoderado.
+
+Sin otro particular, agradezco de antemano su atención y quedo a sus órdenes para cualquier aclaración.
+
+A T E N T A M E N T E
+
+
+______________________________________________________________
+Erika Paola España Méndez
+Apoderada Legal y Administradora Única
+Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V.`;
+
 export const plantillas: PlantillaContrato[] = [
   {
     tipo: "carta_cambio",
@@ -379,6 +444,13 @@ export const plantillas: PlantillaContrato[] = [
     descripcion: "Primer documento del Paquete de Cambio. Se firma antes de los dictámenes; rescinde el contrato anterior y fija los 3 escenarios económicos.",
     campos: cartaCambioCampos,
     cuerpo: cartaCambioCuerpo,
+  },
+  {
+    tipo: "oficio_notarial",
+    nombre: "Oficio de Solicitud de Servicios Notariales",
+    descripcion: "Oficio para pedir a una notaría la formalización de cesiones, escrituración y su cotización. Para formalizaciones.",
+    campos: oficioNotarialCampos,
+    cuerpo: oficioNotarialCuerpo,
   },
   {
     tipo: "contrato_cambio",
