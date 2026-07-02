@@ -8,6 +8,7 @@
 // Requiere la tabla `solicitud_contrato` (ver SQL de esta parte).
 // ============================================================
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect } from "@/lib/supabase";
+import type { ContratoTipo } from "@/lib/legal-types";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -21,6 +22,14 @@ export const TIPOS_DOCUMENTO_SOLICITUD = [
 ];
 
 export const ESTADOS_SOLICITUD = ["Pendiente", "En proceso", "Entregada"];
+
+/** Relaciona el tipo pedido con la plantilla del editor (para "Elaborar"). */
+export const MAPA_TIPO_PLANTILLA: Record<string, ContratoTipo> = {
+  "Oficio de solicitud notarial": "oficio_notarial",
+  "Carta de Intención de Cambio": "carta_cambio",
+  "Contrato de Cambio de Garantía": "contrato_cambio",
+  "Contrato de prestación de servicios": "prestacion_servicios",
+};
 
 export interface SolicitudContrato {
   id?: string;
