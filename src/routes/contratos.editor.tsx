@@ -80,6 +80,23 @@ function EditorContratos() {
 
   // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
   // Al quitarlo, se borran esas mismas llaves.
+  // Pasa los datos de la Carta de Cambio al Contrato de Cambio (Paquete de Cambio).
+  // Conserva el apoderado y mapea los campos que comparten.
+  function llenarContrato() {
+    setValores((v) => {
+      const nuevo: Record<string, unknown> = {};
+      Object.values(APODERADO_KEYS).forEach((k) => { if (v[k] != null) nuevo[k] = v[k]; });
+      if (v.nombreCliente) nuevo.nombreCliente = v.nombreCliente;
+      if (v.folioContratoAnterior) nuevo.folioContratoAnterior = v.folioContratoAnterior;
+      if (v.valorOperacion) nuevo.valorOperacion = v.valorOperacion;
+      if (v.garantiaCambio) nuevo.garantiaNueva = v.garantiaCambio; // la garantía del cambio
+      return nuevo;
+    });
+    setTipo("contrato_cambio");
+    setModo("preview");
+    setFolioGuardado(null);
+  }
+
   function seleccionarApoderado(a: Apoderado | null) {
     setApoderadoId(a?.id ?? "");
     setValores((s) => {
@@ -218,6 +235,17 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         value={apoderadoId}
         onSelect={seleccionarApoderado}
       />
+
+      {tipo === "carta_cambio" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-4 py-3">
+          <p className="text-sm text-foreground/80">
+            <span className="font-semibold">Paquete de Cambio:</span> al terminar la Carta, pasa sus datos al Contrato de Cambio (cliente, folio anterior, garantía y valor).
+          </p>
+          <Button onClick={llenarContrato} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+            <FileText className="h-4 w-4 mr-1.5" /> Llenar Contrato de Cambio →
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
         <Card className="legal-card">
