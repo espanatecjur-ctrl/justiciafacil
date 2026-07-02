@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Download, FileText, Eye, PenLine, RefreshCw, Save, Check } from "lucide-react";
+import { Download, FileText, Eye, PenLine, RefreshCw, Save, Check, Mail, X } from "lucide-react";
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
@@ -171,6 +171,25 @@ function EditorContratos() {
     return folio ? `Folio: ${folio}    ·    Generado: ${fecha}` : "BORRADOR — documento sin folio registrado";
   }
 
+  // Enviar por correo (sin auto-envío): abre el correo del asesor ya pre-llenado.
+  const [mostrarEnviar, setMostrarEnviar] = useState(false);
+  const [correoPara, setCorreoPara] = useState("");
+  async function abrirEnviar() {
+    await obtenerFolio(); // registra y asegura folio antes de enviar
+    setMostrarEnviar(true);
+  }
+  async function abrirCorreo() {
+    const folio = await obtenerFolio();
+    const asunto = `${plantilla.nombre}${folio ? ` — Folio ${folio}` : ""}`;
+    const cuerpoMail =
+      `Estimado(a):\n\n` +
+      `Adjunto el documento "${plantilla.nombre}"${folio ? ` con folio ${folio}` : ""} para su revisión.\n\n` +
+      `[ Recuerda ADJUNTAR el archivo que descargaste (Word o PDF) antes de enviar. ]\n\n` +
+      `Atentamente,\nDIIPA · Inmuebles Accesibles`;
+    const mail = `mailto:${encodeURIComponent(correoPara)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpoMail)}`;
+    window.location.href = mail;
+  }
+
   // Reelaborar: si venimos de la tabla con datos guardados, los cargamos (Parte E).
   useEffect(() => {
     try {
@@ -263,9 +282,39 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
             <Button onClick={imprimir} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
               <FileText className="h-4 w-4 mr-1.5" /> Imprimir / PDF
             </Button>
+            <Button onClick={abrirEnviar} className="bg-[#C2A24C] hover:bg-[#C2A24C]/90 text-[#0B1E3A]">
+              <Mail className="h-4 w-4 mr-1.5" /> Enviar
+            </Button>
           </div>
         }
       />
+
+      {mostrarEnviar && (
+        <div className="rounded-lg border border-[#C2A24C]/50 bg-[#C2A24C]/10 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#0B1E3A]">
+              <Mail className="h-4 w-4" /> Enviar por correo
+            </p>
+            <button onClick={() => setMostrarEnviar(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Se abre <b>tu</b> correo con el mensaje ya escrito (con el folio). <b>Adjunta</b> el archivo que descargaste (Word o PDF), revísalo y lo envías desde tu cuenta. El sistema nunca envía solo.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="email"
+              value={correoPara}
+              onChange={(e) => setCorreoPara(e.target.value)}
+              placeholder="correo@cliente.com"
+              className="h-9 flex-1 min-w-[200px] rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> Descargar primero</Button>
+            <Button onClick={abrirCorreo} className="bg-[#C2A24C] hover:bg-[#C2A24C]/90 text-[#0B1E3A]">
+              <Mail className="h-4 w-4 mr-1.5" /> Abrir correo
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Card className="legal-card p-4">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">Plantilla</Label>
