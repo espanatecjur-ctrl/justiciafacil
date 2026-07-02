@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
 import { plantillas, renderContrato, type PlantillaCampo } from "@/lib/contract-templates";
 import type { ContratoTipo } from "@/lib/legal-types";
@@ -13,7 +13,7 @@ import { Download, FileText, Eye, PenLine, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
-import { apoderadosSeed, valoresApoderado, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
+import { apoderadosSeed, valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -68,6 +68,9 @@ function EditorContratos() {
   const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? plantillas[0], [tipo]);
   const [valores, setValores] = useState<Record<string, unknown>>({});
   const [apoderadoId, setApoderadoId] = useState<string>("");
+  // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
+  const [apoderados, setApoderados] = useState<Apoderado[]>(apoderadosSeed);
+  useEffect(() => { cargarApoderados().then(setApoderados); }, []);
   const [modo, setModo] = useState<"preview" | "word">("preview");
   // "Semilla" = el contrato ya llenado que se carga al editor Word.
   // Se congela al entrar (o al Regenerar) para no borrar los cambios manuales.
@@ -165,7 +168,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
           value={tipo}
           onChange={(e) => {
             setTipo(e.target.value as ContratoTipo);
-            const a = apoderadosSeed.find((x) => x.id === apoderadoId);
+            const a = apoderados.find((x) => x.id === apoderadoId);
             setValores(a ? { ...valoresApoderado(a) } : {});
           }}
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -176,7 +179,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
       </Card>
 
       <SelectorApoderado
-        apoderados={apoderadosSeed}
+        apoderados={apoderados}
         value={apoderadoId}
         onSelect={seleccionarApoderado}
       />
