@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, Eye, PenLine, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
+import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
 import { apoderadosSeed, valoresApoderado, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
@@ -67,6 +68,11 @@ function EditorContratos() {
   const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? plantillas[0], [tipo]);
   const [valores, setValores] = useState<Record<string, unknown>>({});
   const [apoderadoId, setApoderadoId] = useState<string>("");
+  const [modo, setModo] = useState<"preview" | "word">("preview");
+  // "Semilla" = el contrato ya llenado que se carga al editor Word.
+  // Se congela al entrar (o al Regenerar) para no borrar los cambios manuales.
+  const [semillaWord, setSemillaWord] = useState<string>("");
+  const [claveWord, setClaveWord] = useState(0);
 
   // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
   // Al quitarlo, se borran esas mismas llaves.
@@ -85,6 +91,19 @@ function EditorContratos() {
   });
 
   const cuerpo = renderContrato(plantilla, valores);
+
+  // Entrar al editor Word: congela el contrato actual como punto de partida.
+  function entrarWord() {
+    setSemillaWord(textoPlanoAHtml(`${plantilla.nombre}\n\n${cuerpo}`));
+    setClaveWord((k) => k + 1);
+    setModo("word");
+  }
+  // Regenerar: vuelve a cargar desde los datos (descarta cambios manuales).
+  function regenerarWord() {
+    if (!window.confirm("Esto vuelve a armar el documento desde los datos y se perderán los cambios que hiciste a mano. ¿Continuar?")) return;
+    setSemillaWord(textoPlanoAHtml(`${plantilla.nombre}\n\n${cuerpo}`));
+    setClaveWord((k) => k + 1);
+  }
 
   function exportarTxt() {
     const blob = new Blob([cuerpo], { type: "text/plain;charset=utf-8" });
@@ -183,14 +202,42 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         </Card>
 
         <Card className="legal-card bg-[oklch(0.99_0.005_85)]">
-          <CardContent className="p-8">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-1">Vista previa</p>
-            <h2 className="font-display text-base font-bold uppercase tracking-wide text-center mb-6">{plantilla.nombre}</h2>
-            <pre className="whitespace-pre-wrap font-display text-[13px] leading-relaxed text-foreground">{cuerpo}</pre>
-            <div className="mt-10 grid grid-cols-2 gap-8 text-center text-xs text-muted-foreground">
-              <div><div className="border-t border-foreground/50 pt-1">Parte A</div></div>
-              <div><div className="border-t border-foreground/50 pt-1">Parte B</div></div>
+          <CardContent className="p-4 md:p-6">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="inline-flex rounded-md border border-border overflow-hidden">
+                <button
+                  onClick={() => setModo("preview")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${modo === "preview" ? "bg-[color:var(--teal)] text-white" : "bg-background text-foreground/70 hover:bg-muted"}`}
+                >
+                  <Eye className="h-3.5 w-3.5" /> Vista previa
+                </button>
+                <button
+                  onClick={entrarWord}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${modo === "word" ? "bg-[color:var(--teal)] text-white" : "bg-background text-foreground/70 hover:bg-muted"}`}
+                >
+                  <PenLine className="h-3.5 w-3.5" /> Editar como Word
+                </button>
+              </div>
+              {modo === "word" && (
+                <Button variant="outline" size="sm" onClick={regenerarWord} title="Volver a armar desde los datos">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Regenerar
+                </Button>
+              )}
             </div>
+
+            {modo === "preview" ? (
+              <>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-1">Vista previa</p>
+                <h2 className="font-display text-base font-bold uppercase tracking-wide text-center mb-6">{plantilla.nombre}</h2>
+                <pre className="whitespace-pre-wrap font-display text-[13px] leading-relaxed text-foreground">{cuerpo}</pre>
+                <div className="mt-10 grid grid-cols-2 gap-8 text-center text-xs text-muted-foreground">
+                  <div><div className="border-t border-foreground/50 pt-1">Parte A</div></div>
+                  <div><div className="border-t border-foreground/50 pt-1">Parte B</div></div>
+                </div>
+              </>
+            ) : (
+              <EditorWord key={claveWord} initialHtml={semillaWord} titulo={plantilla.nombre} />
+            )}
           </CardContent>
         </Card>
       </div>
