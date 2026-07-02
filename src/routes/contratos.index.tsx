@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, Plus } from "lucide-react";
+import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
 
 export const Route = createFileRoute("/contratos/")({
   head: () => ({ meta: [{ title: "Contratos — SIGA-DIIPA" }] }),
@@ -53,6 +54,8 @@ function ContratosIndex() {
           ))}
         </div>
       </div>
+
+      <SolicitudesContratoTabla />
 
       <div>
         <h2 className="font-display text-lg font-bold mb-3">Contratos existentes</h2>
