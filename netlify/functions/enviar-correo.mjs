@@ -21,7 +21,7 @@ export default async (req) => {
       return new Response(JSON.stringify({ ok: false, error: "Método no permitido" }), { status: 405 });
     }
 
-    const { para, cc, cco, asunto, mensaje, adjuntoNombre, adjuntoBase64, folio } = await req.json();
+    const { para, cc, cco, asunto, mensaje, adjuntos, folio } = await req.json();
 
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM;
@@ -52,8 +52,10 @@ export default async (req) => {
     if (ccArr.length) body.cc = ccArr;
     const bccArr = listar(cco);
     if (bccArr.length) body.bcc = bccArr;
-    if (adjuntoBase64 && adjuntoNombre) {
-      body.attachments = [{ filename: adjuntoNombre, content: adjuntoBase64 }];
+    if (Array.isArray(adjuntos) && adjuntos.length) {
+      body.attachments = adjuntos
+        .filter((a) => a && a.base64 && a.nombre)
+        .map((a) => ({ filename: a.nombre, content: a.base64 }));
     }
 
     // Registra el envío ANTES de mandar (para que el pixel funcione).
