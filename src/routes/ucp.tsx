@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, StatTile } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
   type Requisitos, type DictamenRow, type PredFuente,
 } from "@/components/ficha-ucp";
 import {
-  Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen,
+  Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen, Eye,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ucp")({
@@ -74,6 +74,7 @@ const PAGE = 25;
 interface Seleccion { caso: CasoJuridico; dictamen: DictamenRow; pred?: PredFuente; tab: "requisitos" | "juridico" | "rppc"; }
 
 function UCP() {
+  const navigate = useNavigate();
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [preds, setPreds] = useState<PredRow[]>([]);
@@ -437,6 +438,9 @@ function UCP() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => navigate({ to: "/ucp-ficha", search: { id: c.id } as any })}>
+                            <Eye className="h-4 w-4" /> Ver ficha
+                          </Button>
                           <Button size="sm" variant="ghost" disabled={cargandoFila} onClick={() => abrir(c, "requisitos")}>
                             {cargandoFila ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileStack className="h-4 w-4" />} Abrir
                           </Button>
