@@ -65,7 +65,7 @@ function ConfiguracionPage() {
       {activa === "apoderados" && <ApoderadosConfig />}
       {activa === "areas" && <AreasConfig />}
       {activa === "papelera" && <PapeleraConfig />}
-      {activa !== "roles" && activa !== "colaboradores" && activa !== "areas" && activa !== "papelera" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
+      {activa !== "roles" && activa !== "colaboradores" && activa !== "apoderados" && activa !== "areas" && activa !== "papelera" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
     </div>
   );
 }
