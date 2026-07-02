@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Download, FileText, Eye, PenLine, RefreshCw } from "lucide-react";
+import { Download, FileText, Eye, PenLine, RefreshCw, Save, Check } from "lucide-react";
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
+import { guardarContrato } from "@/lib/contrato-generado";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -95,6 +96,32 @@ function EditorContratos() {
 
   const cuerpo = renderContrato(plantilla, valores);
 
+  // Guardar el documento con folio real (Parte A).
+  const [guardando, setGuardando] = useState(false);
+  const [folioGuardado, setFolioGuardado] = useState<string | null>(null);
+  async function guardar() {
+    setGuardando(true);
+    setFolioGuardado(null);
+    const apo = apoderados.find((a) => a.id === apoderadoId);
+    const cuantiaNum = parseFloat(String(valores.valorOperacion ?? "").replace(/[^0-9.]/g, "")) || null;
+    const folioDoc = String(valores.folioCarta ?? valores.numeroOficio ?? "").trim();
+    const r = await guardarContrato({
+      tipo,
+      nombre_documento: plantilla.nombre,
+      titulo: plantilla.nombre + (folioDoc ? ` — ${folioDoc}` : ""),
+      nombre_cliente: String(valores.nombreCliente ?? ""),
+      apoderado: apo?.nombre ?? "",
+      valores: valores as Record<string, unknown>,
+      cuerpo,
+      cuantia: cuantiaNum,
+      estado: "generado",
+      fecha_generado: new Date().toISOString(),
+    });
+    setGuardando(false);
+    if (r.ok) setFolioGuardado(r.folio ?? "");
+    else window.alert("No se pudo guardar. ¿Corriste el SQL de contrato_generado en el proyecto correcto?");
+  }
+
   // Entrar al editor: congela el contrato actual como punto de partida.
   function entrarWord() {
     setSemillaWord(textoPlanoAHtml(cuerpo));
@@ -152,7 +179,15 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         title="Editor de Contratos"
         description="Selecciona una plantilla, llena los datos y exporta el documento listo para revisión o firma."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {folioGuardado && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-900">
+                <Check className="h-3.5 w-3.5" /> Guardado · {folioGuardado}
+              </span>
+            )}
+            <Button onClick={guardar} disabled={guardando} className="bg-[#0B1E3A] hover:bg-[#0B1E3A]/90 text-white">
+              <Save className="h-4 w-4 mr-1.5" /> {guardando ? "Guardando…" : "Guardar"}
+            </Button>
             <Button variant="outline" onClick={exportarTxt}><Download className="h-4 w-4 mr-1.5" /> TXT</Button>
             <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> HTML</Button>
             <Button onClick={imprimir} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
