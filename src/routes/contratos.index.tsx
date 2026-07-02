@@ -1,13 +1,13 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { plantillas } from "@/lib/contract-templates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Loader2 } from "lucide-react";
+import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2 } from "lucide-react";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
-import { listarContratos, type ContratoGenerado } from "@/lib/contrato-generado";
+import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
 
 export const Route = createFileRoute("/contratos/")({
   head: () => ({ meta: [{ title: "Contratos — SIGA-DIIPA" }] }),
@@ -70,9 +70,11 @@ function ContratosExistentes() {
   const [lista, setLista] = useState<ContratoGenerado[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
+  const recargar = () => {
+    setCargando(true);
     listarContratos("generado").then(setLista).finally(() => setCargando(false));
-  }, []);
+  };
+  useEffect(recargar, []);
 
   return (
     <div>
@@ -94,6 +96,7 @@ function ContratosExistentes() {
                   <th className="text-left px-4 py-2.5">Fecha</th>
                   <th className="text-left px-4 py-2.5">Cuantía</th>
                   <th className="text-left px-4 py-2.5">Estado</th>
+                  <th className="text-right px-4 py-2.5">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -106,6 +109,7 @@ function ContratosExistentes() {
                     <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
                     <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
                     <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado || "generado"] || ""}`}>{c.estado || "generado"}</Badge></td>
+                    <td className="px-4 py-3 text-right"><MenuAcciones c={c} onCambio={recargar} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -113,6 +117,49 @@ function ContratosExistentes() {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => void }) {
+  const [abierto, setAbierto] = useState(false);
+  const navigate = useNavigate();
+
+  const reelaborar = () => {
+    // Guarda los datos para que el Editor los cargue y navega allá.
+    sessionStorage.setItem("reelaborar_contrato", JSON.stringify({ tipo: c.tipo, valores: c.valores ?? {} }));
+    navigate({ to: "/contratos/editor", search: c.tipo ? { tipo: c.tipo } : {} });
+  };
+  const cambiarEstado = async (estado: string) => {
+    setAbierto(false);
+    if (c.id) { await actualizarEstadoContrato(c.id, estado); onCambio(); }
+  };
+
+  return (
+    <div className="relative inline-block text-left">
+      <button
+        onClick={() => setAbierto((v) => !v)}
+        className="rounded-md p-1.5 hover:bg-muted"
+        title="Acciones"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
+          <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+            <button onClick={reelaborar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+              <PenLine className="h-3.5 w-3.5" /> Reelaborar
+            </button>
+            <button onClick={() => cambiarEstado("archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+              <Archive className="h-3.5 w-3.5" /> Archivar
+            </button>
+            <button onClick={() => cambiarEstado("papelera")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+              <Trash2 className="h-3.5 w-3.5" /> Mover a papelera
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
