@@ -88,8 +88,10 @@ function BtnHerramienta({ onClick, title, children }: { onClick: () => void; tit
   );
 }
 
-export function EditorWord({ initialHtml, titulo }: { initialHtml: string; titulo: string }) {
+export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string; titulo: string; folio?: string | null }) {
   const ref = useRef<HTMLDivElement>(null);
+  const folioLinea = folio ? `Folio: ${folio}` : "BORRADOR — documento sin folio registrado";
+  const folioHtml = `<p style="text-align:right;font-size:9pt;color:#555;border-bottom:1px solid #ddd;padding-bottom:4px;margin:0 0 10px">${folioLinea}</p>`;
   const rangoRef = useRef<Range | null>(null);
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [pie, setPie] = useState("");     // pie de página
@@ -164,8 +166,8 @@ export function EditorWord({ initialHtml, titulo }: { initialHtml: string; titul
       ? `@page Sec1{size:21.59cm 27.94cm;margin:2.5cm;${tienePie ? "mso-footer:f1;" : ""}${tieneMarca ? "mso-header:h1;" : ""}} div.Sec1{page:Sec1}`
       : `@page{size:21.59cm 27.94cm;margin:2.5cm}`;
     const cuerpoHtml = usaSeccion
-      ? `<div class="Sec1">${contenido}${headerDiv}${footerDiv}</div>`
-      : contenido;
+      ? `<div class="Sec1">${folioHtml}${contenido}${headerDiv}${footerDiv}</div>`
+      : `${folioHtml}${contenido}`;
 
     const html =
       `<html xmlns:v='urn:schemas-microsoft-com:vml' ` +
@@ -198,7 +200,7 @@ export function EditorWord({ initialHtml, titulo }: { initialHtml: string; titul
     w.document.write(
       `<!doctype html><html><head><meta charset='utf-8'><title>${titulo}</title>` +
         `<style>@page{margin:2.5cm}${estilosDoc}body{max-width:800px;margin:0 auto}${marcaCss}${pieCss}</style></head>` +
-        `<body>${wmDiv}${contenido}${pieDiv}<script>window.onload=()=>window.print()<\/script></body></html>`,
+        `<body>${wmDiv}${folioHtml}${contenido}${pieDiv}<script>window.onload=()=>window.print()<\/script></body></html>`,
     );
     w.document.close();
   }
@@ -280,6 +282,7 @@ export function EditorWord({ initialHtml, titulo }: { initialHtml: string; titul
       </div>
 
       {/* Hoja editable (con marca de agua detrás y pie abajo) */}
+      <p className={`mb-1 text-right text-[11px] ${folio ? "text-muted-foreground" : "text-amber-700"}`}>{folioLinea}</p>
       <div className="relative rounded-md border border-border bg-white shadow-inner overflow-hidden">
         {marca.trim() && (
           <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
