@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2 } from "lucide-react";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
 import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
+import { listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
 
 export const Route = createFileRoute("/contratos/")({
   head: () => ({ meta: [{ title: "Contratos — SIGA-DIIPA" }] }),
@@ -68,11 +69,18 @@ function ContratosIndex() {
 
 function ContratosExistentes() {
   const [lista, setLista] = useState<ContratoGenerado[]>([]);
+  const [envios, setEnvios] = useState<Record<string, EnvioRegistro>>({});
   const [cargando, setCargando] = useState(true);
 
   const recargar = () => {
     setCargando(true);
     listarContratos("generado").then(setLista).finally(() => setCargando(false));
+    listarEnvios().then((arr) => {
+      // envíos vienen del más reciente al más viejo: el primero por folio es el último envío
+      const mapa: Record<string, EnvioRegistro> = {};
+      for (const e of arr) if (e.folio && !mapa[e.folio]) mapa[e.folio] = e;
+      setEnvios(mapa);
+    });
   };
   useEffect(recargar, []);
 
@@ -96,6 +104,7 @@ function ContratosExistentes() {
                   <th className="text-left px-4 py-2.5">Fecha</th>
                   <th className="text-left px-4 py-2.5">Cuantía</th>
                   <th className="text-left px-4 py-2.5">Estado</th>
+                  <th className="text-left px-4 py-2.5">Correo</th>
                   <th className="text-right px-4 py-2.5">Acciones</th>
                 </tr>
               </thead>
@@ -109,6 +118,17 @@ function ContratosExistentes() {
                     <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
                     <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
                     <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado || "generado"] || ""}`}>{c.estado || "generado"}</Badge></td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const e = c.folio ? envios[c.folio] : undefined;
+                        if (!e) return <span className="text-xs text-muted-foreground">—</span>;
+                        if (e.estado === "abierto") {
+                          const t = e.abierto_at ? new Date(e.abierto_at).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+                          return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={`Abierto ${t}`}>Abierto ✓</span>;
+                        }
+                        return <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">Enviado</span>;
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-right"><MenuAcciones c={c} onCambio={recargar} /></td>
                   </tr>
                 ))}
