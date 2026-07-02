@@ -171,23 +171,39 @@ function EditorContratos() {
     return folio ? `Folio: ${folio}    ·    Generado: ${fecha}` : "BORRADOR — documento sin folio registrado";
   }
 
-  // Enviar por correo (sin auto-envío): abre el correo del asesor ya pre-llenado.
+  // Enviar por correo (sin auto-envío): el mensaje se arma en su propio banner.
   const [mostrarEnviar, setMostrarEnviar] = useState(false);
   const [correoPara, setCorreoPara] = useState("");
+  const [asuntoMail, setAsuntoMail] = useState("");
+  const [mensajeMail, setMensajeMail] = useState("");
+  const [copiado, setCopiado] = useState(false);
+
   async function abrirEnviar() {
-    await obtenerFolio(); // registra y asegura folio antes de enviar
-    setMostrarEnviar(true);
-  }
-  async function abrirCorreo() {
-    const folio = await obtenerFolio();
-    const asunto = `${plantilla.nombre}${folio ? ` — Folio ${folio}` : ""}`;
-    const cuerpoMail =
+    const folio = await obtenerFolio(); // registra y asegura folio
+    setAsuntoMail(`${plantilla.nombre}${folio ? ` — Folio ${folio}` : ""}`);
+    setMensajeMail(
       `Estimado(a):\n\n` +
       `Adjunto el documento "${plantilla.nombre}"${folio ? ` con folio ${folio}` : ""} para su revisión.\n\n` +
-      `[ Recuerda ADJUNTAR el archivo que descargaste (Word o PDF) antes de enviar. ]\n\n` +
-      `Atentamente,\nDIIPA · Inmuebles Accesibles`;
-    const mail = `mailto:${encodeURIComponent(correoPara)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpoMail)}`;
-    window.location.href = mail;
+      `[ Recuerda ADJUNTAR el archivo descargado (Word o PDF) antes de enviar. ]\n\n` +
+      `Atentamente,\nDIIPA · Inmuebles Accesibles`,
+    );
+    setCopiado(false);
+    setMostrarEnviar(true);
+  }
+
+  const linkGmail = () =>
+    `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(correoPara)}&su=${encodeURIComponent(asuntoMail)}&body=${encodeURIComponent(mensajeMail)}`;
+  const linkOutlook = () =>
+    `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(correoPara)}&subject=${encodeURIComponent(asuntoMail)}&body=${encodeURIComponent(mensajeMail)}`;
+  const linkMailto = () =>
+    `mailto:${encodeURIComponent(correoPara)}?subject=${encodeURIComponent(asuntoMail)}&body=${encodeURIComponent(mensajeMail)}`;
+
+  async function copiarMensaje() {
+    try {
+      await navigator.clipboard.writeText(`Para: ${correoPara}\nAsunto: ${asuntoMail}\n\n${mensajeMail}`);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch { /* nada */ }
   }
 
   // Reelaborar: si venimos de la tabla con datos guardados, los cargamos (Parte E).
@@ -290,28 +306,45 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
       />
 
       {mostrarEnviar && (
-        <div className="rounded-lg border border-[#C2A24C]/50 bg-[#C2A24C]/10 p-4">
+        <div className="rounded-lg border border-[#C2A24C]/60 bg-[#C2A24C]/10 p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="flex items-center gap-2 text-sm font-semibold text-[#0B1E3A]">
               <Mail className="h-4 w-4" /> Enviar por correo
             </p>
             <button onClick={() => setMostrarEnviar(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
           </div>
-          <p className="mb-2 text-xs text-muted-foreground">
-            Se abre <b>tu</b> correo con el mensaje ya escrito (con el folio). <b>Adjunta</b> el archivo que descargaste (Word o PDF), revísalo y lo envías desde tu cuenta. El sistema nunca envía solo.
+
+          <div className="grid gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground">Para (correo)</label>
+                <input type="email" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} placeholder="correo@cliente.com"
+                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
+                <input value={asuntoMail} onChange={(e) => setAsuntoMail(e.target.value)}
+                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">Mensaje</label>
+              <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={5}
+                className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+            </div>
+          </div>
+
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Escoge por dónde mandarlo. Se abre <b>tu</b> correo con todo listo; <b>adjunta</b> el archivo descargado, revísalo y lo envías tú. El sistema nunca envía solo.
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="email"
-              value={correoPara}
-              onChange={(e) => setCorreoPara(e.target.value)}
-              placeholder="correo@cliente.com"
-              className="h-9 flex-1 min-w-[200px] rounded-md border border-input bg-background px-3 text-sm"
-            />
-            <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> Descargar primero</Button>
-            <Button onClick={abrirCorreo} className="bg-[#C2A24C] hover:bg-[#C2A24C]/90 text-[#0B1E3A]">
-              <Mail className="h-4 w-4 mr-1.5" /> Abrir correo
-            </Button>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> Descargar</Button>
+            <span className="mx-1 h-5 w-px bg-border" />
+            <Button onClick={() => window.open(linkGmail(), "_blank")} className="bg-[#0B1E3A] hover:bg-[#0B1E3A]/90 text-white"><Mail className="h-4 w-4 mr-1.5" /> Gmail</Button>
+            <Button onClick={() => window.open(linkOutlook(), "_blank")} variant="outline"><Mail className="h-4 w-4 mr-1.5" /> Outlook</Button>
+            <Button onClick={() => { window.location.href = linkMailto(); }} variant="outline"><Mail className="h-4 w-4 mr-1.5" /> Correo predet.</Button>
+            <Button onClick={copiarMensaje} variant="outline">{copiado ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <>Copiar mensaje</>}</Button>
           </div>
         </div>
       )}
