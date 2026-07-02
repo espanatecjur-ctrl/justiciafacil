@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Check, X as XIcon, Clock, Circle } from "lucide-react";
 import { type CasoJuridico } from "@/lib/supabase";
 import { getAuth } from "@/lib/auth";
+import { formalizacionDeCaso } from "@/lib/formalizacion";
 import { AREAS_LINEA, COLOR, colorDeArea, textoDictamen, obtenerRecorrido, marcarArea, type PasoRecorrido, type Dictamen } from "@/lib/recorrido";
 
 const NAVY = "#0B1E3A";
@@ -19,6 +21,9 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
   const [jur, setJur] = useState<Dictamen>(null);
   const [nota, setNota] = useState("");
   const [guardando, setGuardando] = useState(false);
+  // Formalización vinculada (para la bolita de UFC: estatus, no dictamen).
+  const [form, setForm] = useState<{ id?: string; estado_tramite?: string | null } | null>(null);
+  useEffect(() => { if (caso.id) formalizacionDeCaso(caso.id).then(setForm); }, [caso.id]);
 
   const cargar = () => { obtenerRecorrido(caso).then(setPasos).finally(() => setCargando(false)); };
   useEffect(cargar, [caso.id]);
@@ -60,11 +65,17 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
       <div className="flex items-start gap-0 overflow-x-auto pb-1">
         {AREAS_LINEA.map((area, i) => {
           const esSVT = area === "SVT";
+          const esUFC = area === "UFC";
           const paso = pasos[area];
-          const c = esSVT ? "gris" : colorDeArea(paso);
+          const c = esSVT ? "gris" : esUFC ? (form?.id ? "verde" : "gris") : colorDeArea(paso);
           const col = COLOR[c];
           const ultimo = i === AREAS_LINEA.length - 1;
           const activa = abierta === area;
+          const etiqueta = esSVT
+            ? "no aplica aún"
+            : esUFC
+              ? (form?.estado_tramite || (form?.id ? "En proceso" : "Sin formalización"))
+              : col.texto;
           return (
             <div key={area} className="flex min-w-[64px] flex-1 flex-col items-center">
               <div className="flex w-full items-center">
@@ -74,21 +85,41 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
                   disabled={esSVT}
                   className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 ${activa ? "ring-2 ring-offset-1" : ""}`}
                   style={{ borderColor: col.color, background: col.bg }}
-                  title={esSVT ? "SVT — no aplica todavía" : `${area}: ${col.texto}`}
+                  title={esSVT ? "SVT — no aplica todavía" : esUFC ? `UFC: ${etiqueta}` : `${area}: ${col.texto}`}
                 >
                   {iconoColor(c)}
                 </button>
                 <div className="h-0.5 flex-1" style={{ background: ultimo ? "transparent" : "#e5e7eb" }} />
               </div>
               <span className="mt-1 text-center text-[10px] font-semibold" style={{ color: col.color }}>{area}</span>
-              <span className="text-center text-[8px] text-muted-foreground">{esSVT ? "no aplica aún" : col.texto}</span>
+              <span className="text-center text-[8px] text-muted-foreground">{etiqueta}</span>
             </div>
           );
         })}
       </div>
 
+      {/* Panel especial de UFC: estatus de la formalización (no dictamen) */}
+      {abierta === "UFC" && (
+        <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
+          <p className="mb-2 text-xs font-semibold" style={{ color: NAVY }}>UFC — formalización</p>
+          {form?.id ? (
+            <>
+              <p className="text-xs">Estatus: <b style={{ color: COLOR.verde.color }}>{form.estado_tramite || "En proceso"}</b></p>
+              <Link to="/ufc-ficha" search={{ id: form.id } as any} className="mt-2 inline-block text-[11px] font-medium" style={{ color: "#0C5C46" }}>
+                Abrir ficha de formalización →
+              </Link>
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">Esta garantía aún no tiene formalización. Se crea en UFC vinculando el caso; al vincularla, esta bolita se pone verde y aquí verás su estatus.</p>
+          )}
+          <div className="mt-2">
+            <button onClick={() => setAbierta(null)} className="rounded-md border border-input px-3 py-1.5 text-xs">Cerrar</button>
+          </div>
+        </div>
+      )}
+
       {/* detalle desplegado del área abierta */}
-      {abierta && (
+      {abierta && abierta !== "UFC" && (
         <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
           <p className="mb-2 text-xs font-semibold" style={{ color: NAVY }}>{abierta} — dictamen</p>
 
