@@ -22,6 +22,7 @@ import { SeccionRPPC } from "@/components/seccion-rppc";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { SeccionFinal } from "@/components/seccion-final";
+import { FirmasDictamen } from "@/components/firmas-dictamen";
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -412,6 +413,19 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
               </Button>
             </CardContent>
           </Card>
+
+          {/* Firmas del dictamen jurídico: Elabora + Valida DIL */}
+          <FirmasDictamen
+            dictamenId={dictamen.id}
+            firmas={dictamen.firmas as Record<string, any> | null}
+            claveElabora="jur_elabora"
+            claveValida="jur_dil"
+            tituloElabora="Elabora · dictamen jurídico"
+            tituloValida="Valida · DIL (Director de Integridad Legal)"
+            cargoElabora="Abogado dictaminador"
+            cargoValida="Director de Integridad Legal"
+            onGuardado={onGuardado}
+          />
         </TabsContent>
 
         {/* ---------- RPPC / REGISTRAL ---------- */}
