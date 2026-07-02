@@ -13,8 +13,7 @@ export interface EnvioCorreo {
   asunto: string;
   mensaje: string;
   folio?: string | null;   // documento enviado (para el rastreo)
-  adjuntoNombre?: string;
-  adjuntoBase64?: string;  // contenido del adjunto en base64
+  adjuntos?: { nombre: string; base64: string }[]; // Word y PDF
 }
 
 export interface EnvioRegistro {
