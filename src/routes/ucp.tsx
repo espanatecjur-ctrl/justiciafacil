@@ -19,6 +19,7 @@ import {
 } from "@/components/ficha-ucp";
 import {
   Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen, Eye,
+  MoreVertical, UserCheck, Upload, CheckCircle2, FileText,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ucp")({
@@ -87,6 +88,8 @@ function UCP() {
   const [pagina, setPagina] = useState(0);
   const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
   const [abriendo, setAbriendo] = useState<string | null>(null);
+  // menú de 3 puntitos por fila
+  const [menuUCP, setMenuUCP] = useState<{ id: string; x: number; y: number } | null>(null);
 
   // alta de garantía (folios capturados a mano; después se conectan a SIGA)
   const [dlg, setDlg] = useState(false);
@@ -143,6 +146,16 @@ function UCP() {
       .finally(() => setCargando(false));
   };
   useEffect(cargar, []);
+
+  useEffect(() => {
+    const fn = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-menu-ucp]")) return;
+      setMenuUCP(null);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
 
   const predPorCaso = useMemo(() => {
     const m: Record<string, PredRow> = {};
@@ -437,23 +450,12 @@ function UCP() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap items-center justify-end gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => navigate({ to: "/ucp-ficha", search: { id: c.id } as any })}>
-                            <Eye className="h-4 w-4" /> Ver ficha
-                          </Button>
-                          <Button size="sm" variant="ghost" disabled={cargandoFila} onClick={() => abrir(c, "requisitos")}>
-                            {cargandoFila ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileStack className="h-4 w-4" />} Abrir
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={!elegible || !reqOK || cargandoFila}
-                            title={!elegible ? "Requiere pre-dictamen URRJ positivo" : !reqOK ? "Faltan requisitos de entrada" : ""}
-                            onClick={() => abrir(c, "juridico")}>
-                            <Scale className="h-4 w-4" /> Jurídico
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={!elegible || !reqOK || cargandoFila}
-                            title={!elegible ? "Requiere pre-dictamen URRJ positivo" : !reqOK ? "Faltan requisitos de entrada" : ""}
-                            onClick={() => abrir(c, "rppc")}>
-                            <Landmark className="h-4 w-4" /> RPPC
-                          </Button>
+                        <div className="flex items-center justify-end">
+                          <div className="relative" data-menu-ucp>
+                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenuUCP(menuUCP?.id === c.id ? null : { id: c.id, x: r.right, y: r.bottom }); }}>
+                              {cargandoFila ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -474,6 +476,40 @@ function UCP() {
           </div>
         </div>
       )}
+
+      {/* menú flotante de acciones (3 puntitos) */}
+      {menuUCP && (() => {
+        const c = casos.find((x) => x.id === menuUCP.id);
+        if (!c) return null;
+        const elegible = !!(c.id && predPorCaso[c.id]);
+        const d = dictPorCaso[c.id];
+        const reqOK = !!d && reqCompletos(reqDe(c.id));
+        const puedeDict = elegible && reqOK;
+        const cerrar = () => setMenuUCP(null);
+        const Item = ({ icon: Ic, children, onClick, disabled, title, danger }: any) => (
+          <button onClick={onClick} disabled={disabled} title={title}
+            className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent ${danger ? "text-red-600" : ""}`}>
+            <Ic className="h-4 w-4" /> {children}
+          </button>
+        );
+        return (
+          <div data-menu-ucp onClick={(e) => e.stopPropagation()} className="fixed z-50 w-60 rounded-lg border border-border bg-card p-1.5 shadow-xl"
+            style={{ top: menuUCP.y + 4, left: Math.max(8, menuUCP.x - 240) }}>
+            <Item icon={Eye} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Ver ficha</Item>
+            <Item icon={FileStack} onClick={() => { cerrar(); abrir(c, "requisitos"); }}>Abrir requisitos</Item>
+            <div className="my-1 border-t border-border" />
+            <Item icon={Scale} disabled={!puedeDict} title={!elegible ? "Requiere pre-dictamen URRJ positivo" : !reqOK ? "Faltan requisitos" : ""} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Dictaminar jurídico</Item>
+            <Item icon={Landmark} disabled={!puedeDict} title={!elegible ? "Requiere pre-dictamen URRJ positivo" : !reqOK ? "Faltan requisitos" : ""} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Dictaminar registral (RPPC)</Item>
+            <Item icon={RefreshCw} disabled={!d} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Re-dictaminar</Item>
+            <div className="my-1 border-t border-border" />
+            <Item icon={UserCheck} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Asignar abogado</Item>
+            <Item icon={Upload} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Subir actuaciones</Item>
+            <Item icon={FileText} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Escoger boletín judicial</Item>
+            <div className="my-1 border-t border-border" />
+            <Item icon={CheckCircle2} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Dar por terminado</Item>
+          </div>
+        );
+      })()}
     </div>
   );
 }
