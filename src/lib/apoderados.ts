@@ -127,3 +127,64 @@ export function valoresApoderado(a: Apoderado): Record<string, string> {
 export function getApoderado(id: string, lista: Apoderado[] = apoderadosSeed) {
   return lista.find((a) => a.id === id);
 }
+
+// ----------------------------------------------------------------------------
+//  Conexión a Supabase (tabla `apoderado`)
+//  La tabla se crea con el SQL de la Fase 5. Mientras no haya filas, el editor
+//  usa la lista de prueba (apoderadosSeed) como respaldo.
+// ----------------------------------------------------------------------------
+import { sbSelect } from "./supabase";
+
+/** Fila tal como viene de Supabase (nombres con guion_bajo). */
+export interface ApoderadoRow {
+  id: string;
+  nombre: string;
+  cargo: string | null;
+  empresa: string | null;
+  tipo_poder: string | null;
+  escritura_numero: string | null;
+  volumen: string | null;
+  libro: string | null;
+  fecha_poder: string | null;
+  notario: string | null;
+  numero_notaria: string | null;
+  estado_notaria: string | null;
+  rfc: string | null;
+  curp: string | null;
+  activo: boolean | null;
+}
+
+/** Convierte una fila de Supabase al formato que usa la app. */
+export function filaAApoderado(r: ApoderadoRow): Apoderado {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    cargo: r.cargo ?? "",
+    empresa: r.empresa ?? EMPRESA_DIIPA,
+    tipoPoder: r.tipo_poder ?? "",
+    escrituraNumero: r.escritura_numero ?? "",
+    volumen: r.volumen ?? "",
+    libro: r.libro ?? "",
+    fechaPoder: r.fecha_poder ?? "",
+    notario: r.notario ?? "",
+    numeroNotaria: r.numero_notaria ?? "",
+    estadoNotaria: r.estado_notaria ?? "",
+    rfc: r.rfc ?? "",
+    curp: r.curp ?? "",
+    activo: r.activo ?? true,
+  };
+}
+
+/**
+ * Trae los apoderados desde Supabase. Si la tabla está vacía o falla la
+ * lectura, devuelve la lista de prueba para que el editor no se quede sin nada.
+ */
+export async function cargarApoderados(): Promise<Apoderado[]> {
+  try {
+    const filas = await sbSelect<ApoderadoRow>("apoderado", "select=*&order=nombre.asc");
+    if (!filas.length) return apoderadosSeed;
+    return filas.map(filaAApoderado);
+  } catch {
+    return apoderadosSeed;
+  }
+}
