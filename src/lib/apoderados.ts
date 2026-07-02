@@ -44,6 +44,17 @@ export interface Apoderado {
 
 export const EMPRESA_DIIPA = "Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V. (Inmuebles Accesibles)";
 
+/** Tipos de poder que existen (Art. 2554 del Código Civil). Se pueden combinar
+ *  o escribir uno especial a mano. */
+export const TIPOS_PODER = [
+  "General para pleitos y cobranzas",
+  "General para actos de administración",
+  "General para actos de dominio",
+  "General para pleitos y cobranzas y actos de administración",
+  "General amplísimo (pleitos y cobranzas, administración y dominio)",
+  "Especial (para actos determinados)",
+];
+
 // ----------------------------------------------------------------------------
 //  Lista de apoderados (2 de prueba)
 //  NOTA: los números de escritura del poder son de ejemplo — Paola los corrige.
