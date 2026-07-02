@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine } from "lucide-react";
+import { ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 
@@ -32,6 +32,28 @@ function UCPFicha() {
       .finally(() => setCargando(false));
   }, [id]);
 
+  // arma y descarga el PDF del dictamen usando la función que ya existe
+  const descargarPDF = async () => {
+    if (!c) return;
+    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
+    const firmasArr: { titulo: string; firma: any }[] = [];
+    const fj = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.juridico || dict.firmas.juridico_firma) : null;
+    const fr = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.registral || dict.firmas.registral_firma) : null;
+    if (fj) firmasArr.push({ titulo: "Dictamen jurídico", firma: typeof fj === "string" ? { nombre: fj } : fj });
+    if (fr) firmasArr.push({ titulo: "Dictamen registral (RPPC)", firma: typeof fr === "string" ? { nombre: fr } : fr });
+    await descargarDictamenFinalPDF({
+      expediente: c.expediente || undefined,
+      juzgado: c.juzgado || undefined,
+      garantia: c.direccion_garantia || (c as any).gar_id || undefined,
+      cliente: c.cliente_nombre || undefined,
+      entidad: c.entidad || undefined,
+      veredictoJuridico: dict?.juridico?.veredicto || undefined,
+      veredictoRegistral: (typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : undefined),
+      veredictoFinal: dict?.veredicto || undefined,
+      firmas: firmasArr,
+    });
+  };
+
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
   if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucp" })} className="underline">Volver a UCP</button></div>;
 
@@ -41,6 +63,9 @@ function UCPFicha() {
       <div className="flex items-center gap-2">
         <button onClick={() => navigate({ to: "/ucp" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UCP</button>
         <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: AZUL }}>UCP</span>
+        <button onClick={descargarPDF} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+          <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF
+        </button>
       </div>
 
       {/* encabezado */}
