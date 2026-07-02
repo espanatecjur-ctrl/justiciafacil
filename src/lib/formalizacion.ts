@@ -4,7 +4,16 @@
 // Lee/guarda el registro de formalizaciones (tabla 'formalizacion').
 // Las cotizaciones las maneja Contabilidad; aquí solo se guarda el enlace.
 // ============================================================
-import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
+
+/** Trae los casos de UCM/UCP para poder vincular una formalización. */
+export async function listarCasosVinculables(): Promise<CasoJuridico[]> {
+  try {
+    return await sbSelect<CasoJuridico>("caso_juridico", "select=*&order=expediente.asc");
+  } catch {
+    return [];
+  }
+}
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
