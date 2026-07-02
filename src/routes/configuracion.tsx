@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { ROLES, MODULOS, TODOS_MODULOS, rolVeTodo, type ModuloClave } from "@/lib/roles";
 import { ColaboradoresConfig } from "@/components/colaboradores-config";
+import { ApoderadosConfig } from "@/components/apoderados-config";
 import { AreasConfig } from "@/components/areas-config";
 import { PapeleraConfig } from "@/components/papelera-config";
 import { PermisosURRJConfig } from "@/components/permisos-urrj-config";
-import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale } from "lucide-react";
+import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale, ScrollText } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
   validateSearch: (s: Record<string, unknown>) => ({ tab: typeof s.tab === "string" ? s.tab : undefined }),
@@ -28,6 +29,7 @@ const headers = {
 const TABS = [
   { key: "roles", label: "Roles y Permisos", icon: ShieldCheck },
   { key: "colaboradores", label: "Colaboradores", icon: Users },
+  { key: "apoderados", label: "Apoderados", icon: ScrollText },
   { key: "conectores", label: "Conectores de Juzgados", icon: Network },
   { key: "folios", label: "Folios", icon: Bookmark },
   { key: "areas", label: "Áreas y Equipo", icon: Scale },
@@ -60,6 +62,7 @@ function ConfiguracionPage() {
       {activa === "roles" && <RolesPermisos />}
       {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><PermisosURRJConfig /></div>}
       {activa === "colaboradores" && <ColaboradoresConfig />}
+      {activa === "apoderados" && <ApoderadosConfig />}
       {activa === "areas" && <AreasConfig />}
       {activa === "papelera" && <PapeleraConfig />}
       {activa !== "roles" && activa !== "colaboradores" && activa !== "areas" && activa !== "papelera" && <Proximamente nombre={TABS.find((t) => t.key === activa)?.label || ""} />}
