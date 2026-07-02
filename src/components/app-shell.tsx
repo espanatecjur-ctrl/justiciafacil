@@ -12,11 +12,11 @@ const NAVY = "#0B1E3A";
 
 // Qué módulo corresponde a cada ruta del menú
 const MOD_RUTA: Record<string, string> = {
-  "/": "inicio", "/expedientes": "expedientes", "/ucm": "ucm", "/udp": "udp", "/ufc": "ucm", "/ufc-ficha": "ucm",
+  "/": "inicio", "/expedientes": "expedientes", "/ucm": "ucm", "/udp": "udp",
   "/boletines": "boletines", "/exhortos": "exhortos",
   "/amparos": "amparos", "/recursos": "recursos", "/dictamen-ia": "dictamen_ia",
   "/contratos": "contratos", "/contratos/editor": "contratos", "/tramites": "tramites",
-  "/ucp": "ucp", "/urrj": "urrj", "/conectores": "conectores",
+  "/ucp": "ucp", "/ucp-ficha": "ucp", "/urrj": "urrj", "/conectores": "conectores",
 };
 
 // Los 4 accesos fijos de la barra inferior del celular (Inicio va al centro)
