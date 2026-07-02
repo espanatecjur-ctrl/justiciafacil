@@ -5,6 +5,7 @@ import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload
 import type { Semaforo } from "@/lib/urrj-motores";
 import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
+import { EscogerJuicioModal, type JuicioElegido } from "@/components/escoger-juicio";
 import { ReasignarModal } from "@/components/reasignar-abogado";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -58,15 +59,22 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   };
   // Ver el pre-dictamen (la vista de ficha de la garantía con el dictamen)
   const [verPre, setVerPre] = useState<Fila | null>(null);
+  // Escoger juicio antes de pre-dictaminar
+  const [escogerJuicio, setEscogerJuicio] = useState<Fila | null>(null);
 
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&en_papelera=eq.false&vigente=eq.true&order=created_at.desc&limit=500`, { headers })
       .then((r) => (r.ok ? r.json() : [])).then(setFilas).catch(() => {}).finally(() => setCargando(false));
   }, []);
   useEffect(() => {
-    const fn = () => setMenu(null);
-    document.addEventListener("click", fn);
-    return () => document.removeEventListener("click", fn);
+    const fn = (e: MouseEvent) => {
+      // no cerrar si el clic fue dentro del menú (deja que la acción del item corra)
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-menu-predictamen]")) return;
+      setMenu(null);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
   }, []);
 
   const filtradas = useMemo(() => {
@@ -135,7 +143,7 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
                 <td className="px-3 py-2 text-[12px]">{f.dictamen_final || "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{fecha(f.created_at)}</td>
                 <td className="relative px-2 py-2 text-right">
-                  <button onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu(menu?.id === f.id ? null : { id: f.id, x: r.right, y: r.bottom }); }} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
+                  <button data-menu-predictamen onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu(menu?.id === f.id ? null : { id: f.id, x: r.right, y: r.bottom }); }} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                 </td>
               </tr>
             ))}
@@ -146,11 +154,12 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
         const f = filtradas.find((x) => x.id === menu.id);
         if (!f) return null;
         return (
-          <div onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
+          <div data-menu-predictamen onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
             <Item icon={FolderOpen} onClick={() => { setMenu(null); abrirFicha(f); }}>Abrir ficha</Item>
             <Item icon={FileText} onClick={() => { setMenu(null); setVerPre(f); }}>Ver pre-dictamen</Item>
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
+            <Item icon={Search} onClick={() => { setMenu(null); setEscogerJuicio(f); }}>Escoger juicio del boletín</Item>
             {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Mandar a re-pre-dictaminar</Item>}
             {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
               setMenu(null);
@@ -175,6 +184,15 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
         );
       })()}
       {subirDoc && <SubirDocModal predictamenId={subirDoc.id} folio={subirDoc.folio} onClose={() => setSubirDoc(null)} />}
+      {escogerJuicio && <EscogerJuicioModal onClose={() => setEscogerJuicio(null)} onElegido={async (j: JuicioElegido) => {
+        // guarda el juicio elegido en el pre-dictamen (expediente + juzgado)
+        try {
+          const body: any = { expediente: j.expediente, ...(j.sinJuicio ? { nota_sin_juicio: j.motivoSinJuicio } : {}) };
+          await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${escogerJuicio.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          setFilas((prev) => prev.map((x) => x.id === escogerJuicio.id ? { ...x, expediente: j.expediente || x.expediente } : x));
+        } catch { /* silencioso */ }
+        setEscogerJuicio(null);
+      }} />}
       {reasignar && <ReasignarModal predictamenId={reasignar.id} materia={reasignar.tipo_juicio} actual={reasignar.abogado_nombre} onClose={() => setReasignar(null)} onAsignado={(nombre) => setFilas((prev) => prev.map((x) => x.id === reasignar.id ? { ...x, abogado_nombre: nombre } : x))} />}
     </div>
   );
