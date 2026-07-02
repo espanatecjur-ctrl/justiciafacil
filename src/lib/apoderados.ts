@@ -193,9 +193,8 @@ export function filaAApoderado(r: ApoderadoRow): Apoderado {
 export async function cargarApoderados(): Promise<Apoderado[]> {
   try {
     const filas = await sbSelect<ApoderadoRow>("apoderado", "select=*&order=nombre.asc");
-    if (!filas.length) return apoderadosSeed;
     return filas.map(filaAApoderado);
   } catch {
-    return apoderadosSeed;
+    return [];
   }
 }
