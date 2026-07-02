@@ -13,7 +13,7 @@ import { Download, FileText, Eye, PenLine, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
-import { apoderadosSeed, valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
+import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -69,7 +69,7 @@ function EditorContratos() {
   const [valores, setValores] = useState<Record<string, unknown>>({});
   const [apoderadoId, setApoderadoId] = useState<string>("");
   // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
-  const [apoderados, setApoderados] = useState<Apoderado[]>(apoderadosSeed);
+  const [apoderados, setApoderados] = useState<Apoderado[]>([]);
   useEffect(() => { cargarApoderados().then(setApoderados); }, []);
   const [modo, setModo] = useState<"preview" | "word">("preview");
   // "Semilla" = el contrato ya llenado que se carga al editor Word.
