@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download } from "lucide-react";
+import { ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 
@@ -54,6 +54,28 @@ function UCPFicha() {
     });
   };
 
+  // ver el PDF en pestaña (ojo de vista) — usa la misma función en modo "ver"
+  const verDictamenPDF = async (_cual: "juridico" | "registral") => {
+    if (!c) return;
+    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
+    const firmasArr: { titulo: string; firma: any }[] = [];
+    const fj = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.juridico || dict.firmas.juridico_firma) : null;
+    const fr = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.registral || dict.firmas.registral_firma) : null;
+    if (fj) firmasArr.push({ titulo: "Dictamen jurídico", firma: typeof fj === "string" ? { nombre: fj } : fj });
+    if (fr) firmasArr.push({ titulo: "Dictamen registral (RPPC)", firma: typeof fr === "string" ? { nombre: fr } : fr });
+    await descargarDictamenFinalPDF({
+      expediente: c.expediente || undefined,
+      juzgado: c.juzgado || undefined,
+      garantia: c.direccion_garantia || (c as any).gar_id || undefined,
+      cliente: c.cliente_nombre || undefined,
+      entidad: c.entidad || undefined,
+      veredictoJuridico: dict?.juridico?.veredicto || undefined,
+      veredictoRegistral: (typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : undefined),
+      veredictoFinal: dict?.veredicto || undefined,
+      firmas: firmasArr,
+    }, "ver");
+  };
+
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
   if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucp" })} className="underline">Volver a UCP</button></div>;
 
@@ -85,6 +107,8 @@ function UCPFicha() {
           firmas={dict?.firmas}
           claveFirma="juridico"
           onAbrir={() => navigate({ to: "/ucp" })}
+          onVer={() => verDictamenPDF("juridico")}
+          onDescargar={() => descargarPDF()}
         />
         <BloqueDictamen
           titulo="Dictamen registral (RPPC)"
@@ -93,6 +117,8 @@ function UCPFicha() {
           firmas={dict?.firmas}
           claveFirma="registral"
           onAbrir={() => navigate({ to: "/ucp" })}
+          onVer={() => verDictamenPDF("registral")}
+          onDescargar={() => descargarPDF()}
         />
       </div>
 
@@ -102,10 +128,10 @@ function UCPFicha() {
   );
 }
 
-// Bloque resumen de un dictamen (jurídico o registral) con su veredicto y firma.
-function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir }: {
+// Bloque resumen de un dictamen (jurídico o registral) con su veredicto, firma y PDF.
+function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir, onVer, onDescargar }: {
   titulo: string; icon: React.ReactNode; veredicto: string | null;
-  firmas: any; claveFirma: string; onAbrir: () => void;
+  firmas: any; claveFirma: string; onAbrir: () => void; onVer: () => void; onDescargar: () => void;
 }) {
   // color del veredicto
   const v = (veredicto || "").toLowerCase();
@@ -137,6 +163,12 @@ function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir }
         {firmado
           ? <span className="text-[color:var(--teal)]">Firmado{typeof firma === "string" ? `: ${firma}` : (firma?.nombre ? `: ${firma.nombre}` : "")}</span>
           : <span className="text-muted-foreground">Sin firma</span>}
+      </div>
+
+      {/* PDF: ver (ojo) + descargar */}
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
+        <button onClick={onVer} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] hover:bg-muted"><Eye className="h-3.5 w-3.5" /> Ver PDF</button>
+        <button onClick={onDescargar} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] hover:bg-muted" style={{ borderColor: "#C2A24C", color: "#8a7326" }}><Download className="h-3.5 w-3.5" /> Descargar</button>
       </div>
     </div>
   );
