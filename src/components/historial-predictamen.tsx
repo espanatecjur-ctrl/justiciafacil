@@ -59,7 +59,6 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   };
   // Ver el pre-dictamen (la vista de ficha de la garantía con el dictamen)
   const [verPre, setVerPre] = useState<Fila | null>(null);
-  // Escoger juicio antes de pre-dictaminar
   const [escogerJuicio, setEscogerJuicio] = useState<Fila | null>(null);
 
   useEffect(() => {
@@ -68,7 +67,6 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
   }, []);
   useEffect(() => {
     const fn = (e: MouseEvent) => {
-      // no cerrar si el clic fue dentro del menú (deja que la acción del item corra)
       const t = e.target as HTMLElement;
       if (t.closest("[data-menu-predictamen]")) return;
       setMenu(null);
@@ -185,7 +183,6 @@ export function HistorialPredictamen({ onReDictaminar }: { onReDictaminar?: (f: 
       })()}
       {subirDoc && <SubirDocModal predictamenId={subirDoc.id} folio={subirDoc.folio} onClose={() => setSubirDoc(null)} />}
       {escogerJuicio && <EscogerJuicioModal onClose={() => setEscogerJuicio(null)} onElegido={async (j: JuicioElegido) => {
-        // guarda el juicio elegido en el pre-dictamen (expediente + juzgado)
         try {
           const body: any = { expediente: j.expediente, ...(j.sinJuicio ? { nota_sin_juicio: j.motivoSinJuicio } : {}) };
           await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${escogerJuicio.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
