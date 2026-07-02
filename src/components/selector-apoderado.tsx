@@ -6,9 +6,10 @@
 //  enseña un resumen de la escritura de su poder para verificar.
 // ============================================================
 import { Card } from "@/components/ui/card";
+import { Link } from "@tanstack/react-router";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { UserCheck, ScrollText } from "lucide-react";
+import { UserCheck, ScrollText, Pencil } from "lucide-react";
 import type { Apoderado } from "@/lib/apoderados";
 
 export function SelectorApoderado({
@@ -25,11 +26,20 @@ export function SelectorApoderado({
 
   return (
     <Card className="legal-card p-4">
-      <div className="flex items-center gap-2">
-        <UserCheck className="h-4 w-4 text-[color:var(--teal)]" />
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-          Firma por la empresa (Apoderado)
-        </Label>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-[color:var(--teal)]" />
+          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Firma por la empresa (Apoderado)
+          </Label>
+        </div>
+        <Link
+          to="/configuracion"
+          search={{ tab: "apoderados" }}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-[color:var(--teal)] hover:underline"
+        >
+          <Pencil className="h-3 w-3" /> Editar apoderados
+        </Link>
       </div>
 
       <select
