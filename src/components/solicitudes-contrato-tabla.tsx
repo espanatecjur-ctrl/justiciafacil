@@ -7,9 +7,10 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Loader2, ClipboardList, AlertTriangle } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Loader2, ClipboardList, AlertTriangle, PenLine } from "lucide-react";
 import {
-  listarSolicitudes, actualizarEstadoSolicitud, ESTADOS_SOLICITUD,
+  listarSolicitudes, actualizarEstadoSolicitud, ESTADOS_SOLICITUD, MAPA_TIPO_PLANTILLA,
   type SolicitudContrato,
 } from "@/lib/solicitud-contrato";
 
@@ -78,6 +79,7 @@ export function SolicitudesContratoTabla() {
                   <th className="px-4 py-2.5 text-left">Fecha</th>
                   <th className="px-4 py-2.5 text-left">Límite (24 h)</th>
                   <th className="px-4 py-2.5 text-left">Estado</th>
+                  <th className="px-4 py-2.5 text-left">Elaborar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -103,6 +105,20 @@ export function SolicitudesContratoTabla() {
                         >
                           {ESTADOS_SOLICITUD.map((es) => <option key={es} value={es}>{es}</option>)}
                         </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const tipo = s.tipo_documento ? MAPA_TIPO_PLANTILLA[s.tipo_documento] : undefined;
+                          return (
+                            <Link
+                              to="/contratos/editor"
+                              search={tipo ? { tipo } : {}}
+                              className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"
+                            >
+                              <PenLine className="h-3.5 w-3.5" /> Elaborar
+                            </Link>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
