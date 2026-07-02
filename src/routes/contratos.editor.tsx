@@ -95,16 +95,16 @@ function EditorContratos() {
 
   const cuerpo = renderContrato(plantilla, valores);
 
-  // Entrar al editor Word: congela el contrato actual como punto de partida.
+  // Entrar al editor: congela el contrato actual como punto de partida.
   function entrarWord() {
-    setSemillaWord(textoPlanoAHtml(`${plantilla.nombre}\n\n${cuerpo}`));
+    setSemillaWord(textoPlanoAHtml(cuerpo));
     setClaveWord((k) => k + 1);
     setModo("word");
   }
   // Regenerar: vuelve a cargar desde los datos (descarta cambios manuales).
   function regenerarWord() {
     if (!window.confirm("Esto vuelve a armar el documento desde los datos y se perderán los cambios que hiciste a mano. ¿Continuar?")) return;
-    setSemillaWord(textoPlanoAHtml(`${plantilla.nombre}\n\n${cuerpo}`));
+    setSemillaWord(textoPlanoAHtml(cuerpo));
     setClaveWord((k) => k + 1);
   }
 
@@ -218,7 +218,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
                   onClick={entrarWord}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${modo === "word" ? "bg-[color:var(--teal)] text-white" : "bg-background text-foreground/70 hover:bg-muted"}`}
                 >
-                  <PenLine className="h-3.5 w-3.5" /> Editar como Word
+                  <PenLine className="h-3.5 w-3.5" /> Editar
                 </button>
               </div>
               {modo === "word" && (
