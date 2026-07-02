@@ -113,6 +113,7 @@ export function SolicitudesContratoTabla() {
                             <Link
                               to="/contratos/editor"
                               search={tipo ? { tipo } : {}}
+                              onClick={() => { if (s.id && s.estado === "Pendiente") cambiarEstado(s.id, "En proceso"); }}
                               className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"
                             >
                               <PenLine className="h-3.5 w-3.5" /> Elaborar
