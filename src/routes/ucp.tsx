@@ -481,10 +481,6 @@ function UCP() {
       {menuUCP && (() => {
         const c = casos.find((x) => x.id === menuUCP.id);
         if (!c) return null;
-        const elegible = !!(c.id && predPorCaso[c.id]);
-        const d = dictPorCaso[c.id];
-        const reqOK = !!d && reqCompletos(reqDe(c.id));
-        const puedeDict = elegible && reqOK;
         const cerrar = () => setMenuUCP(null);
         const Item = ({ icon: Ic, children, onClick, disabled, title, danger }: any) => (
           <button onClick={onClick} disabled={disabled} title={title}
@@ -498,9 +494,10 @@ function UCP() {
             <Item icon={Eye} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Ver ficha</Item>
             <Item icon={FileStack} onClick={() => { cerrar(); abrir(c, "requisitos"); }}>Abrir requisitos</Item>
             <div className="my-1 border-t border-border" />
-            <Item icon={Scale} disabled={!puedeDict} title={!elegible ? "Requiere pre-dictamen URRJ positivo" : !reqOK ? "Faltan requisitos" : ""} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Dictaminar jurídico</Item>
-            <Item icon={Landmark} disabled={!puedeDict} title={!elegible ? "Requiere pre-dictamen URRJ positivo" : !reqOK ? "Faltan requisitos" : ""} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Dictaminar registral (RPPC)</Item>
-            <Item icon={RefreshCw} disabled={!d} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Re-dictaminar</Item>
+            <Item icon={Scale} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Dictaminar jurídico</Item>
+            <Item icon={Landmark} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Dictaminar registral (RPPC)</Item>
+            <Item icon={RefreshCw} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Re-dictaminar jurídico</Item>
+            <Item icon={RefreshCw} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Re-dictaminar registral</Item>
             <div className="my-1 border-t border-border" />
             <Item icon={UserCheck} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Asignar abogado</Item>
             <Item icon={Upload} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Subir actuaciones</Item>
