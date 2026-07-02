@@ -15,6 +15,7 @@ import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 import { guardarContrato, listarCartasCambio, type ContratoGenerado } from "@/lib/contrato-generado";
+import { enviarCorreo, textoABase64 } from "@/lib/enviar-correo";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -177,6 +178,42 @@ function EditorContratos() {
   const [asuntoMail, setAsuntoMail] = useState("");
   const [mensajeMail, setMensajeMail] = useState("");
   const [copiado, setCopiado] = useState(false);
+  const [ccMail, setCcMail] = useState("");
+  const [ccoMail, setCcoMail] = useState("");
+  const [enviandoSistema, setEnviandoSistema] = useState(false);
+  const [resultadoEnvio, setResultadoEnvio] = useState("");
+
+  // Arma el documento como archivo Word (.doc) en base64, para adjuntarlo.
+  function construirAdjunto(folio: string | null) {
+    const enc = folio ? `Folio: ${folio}` : "BORRADOR — sin folio registrado";
+    const html =
+      `\ufeff<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>` +
+      `<head><meta charset='utf-8'><title>${plantilla.nombre}</title>` +
+      `<style>@page{size:21.59cm 27.94cm;margin:2.5cm}body{font-family:'Georgia',serif;font-size:12pt;line-height:1.5;color:#000}</style></head>` +
+      `<body><p style="text-align:right;font-size:9pt;color:#555">${enc}</p>` +
+      `<h2 style="text-align:center;text-transform:uppercase">${plantilla.nombre}</h2>` +
+      `<pre style="white-space:pre-wrap;font-family:Georgia,serif;font-size:12pt">${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, base64: textoABase64(html) };
+  }
+
+  async function enviarDesdeSistema() {
+    if (!correoPara.trim()) { setResultadoEnvio("Escribe al menos un correo en 'Para'."); return; }
+    setEnviandoSistema(true);
+    setResultadoEnvio("");
+    const folio = await obtenerFolio();
+    const adj = construirAdjunto(folio);
+    const r = await enviarCorreo({
+      para: correoPara,
+      cc: ccMail,
+      cco: ccoMail,
+      asunto: asuntoMail,
+      mensaje: mensajeMail,
+      adjuntoNombre: adj.nombre,
+      adjuntoBase64: adj.base64,
+    });
+    setEnviandoSistema(false);
+    setResultadoEnvio(r.ok ? "Enviado ✓ (con el documento adjunto)" : `No se pudo enviar: ${r.error || "revisa la configuración de Resend en Netlify"}`);
+  }
 
   async function abrirEnviar() {
     const folio = await obtenerFolio(); // registra y asegura folio
@@ -327,6 +364,18 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
                   className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
               </div>
             </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground">Copia (CC)</label>
+                <input value={ccMail} onChange={(e) => setCcMail(e.target.value)} placeholder="opcional, separa con comas"
+                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground">Copia oculta (CCO / escondidos)</label>
+                <input value={ccoMail} onChange={(e) => setCcoMail(e.target.value)} placeholder="opcional, separa con comas"
+                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+            </div>
             <div>
               <label className="text-[11px] font-medium text-muted-foreground">Mensaje</label>
               <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={5}
@@ -335,16 +384,25 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
           </div>
 
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Escoge por dónde mandarlo. Se abre <b>tu</b> correo con todo listo; <b>adjunta</b> el archivo descargado, revísalo y lo envías tú. El sistema nunca envía solo.
+            <b>Enviar desde el sistema</b> manda el correo de verdad, con el documento <b>adjunto</b>, a Para / CC / CCO. Tú lo revisas aquí antes de mandarlo.
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button onClick={enviarDesdeSistema} disabled={enviandoSistema} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+              <Mail className="h-4 w-4 mr-1.5" /> {enviandoSistema ? "Enviando…" : "Enviar desde el sistema"}
+            </Button>
+            {resultadoEnvio && (
+              <span className={`text-xs font-medium ${resultadoEnvio.startsWith("Enviado") ? "text-emerald-700" : "text-red-700"}`}>{resultadoEnvio}</span>
+            )}
+          </div>
+
+          <p className="mt-3 text-[11px] text-muted-foreground">O ábrelo en tu correo (sin adjuntar automático):</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> Descargar</Button>
-            <span className="mx-1 h-5 w-px bg-border" />
-            <Button onClick={() => window.open(linkGmail(), "_blank")} className="bg-[#0B1E3A] hover:bg-[#0B1E3A]/90 text-white"><Mail className="h-4 w-4 mr-1.5" /> Gmail</Button>
-            <Button onClick={() => window.open(linkOutlook(), "_blank")} variant="outline"><Mail className="h-4 w-4 mr-1.5" /> Outlook</Button>
-            <Button onClick={() => { window.location.href = linkMailto(); }} variant="outline"><Mail className="h-4 w-4 mr-1.5" /> Correo predet.</Button>
-            <Button onClick={copiarMensaje} variant="outline">{copiado ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <>Copiar mensaje</>}</Button>
+            <Button variant="outline" onClick={() => window.open(linkGmail(), "_blank")}><Mail className="h-4 w-4 mr-1.5" /> Gmail</Button>
+            <Button variant="outline" onClick={() => window.open(linkOutlook(), "_blank")}><Mail className="h-4 w-4 mr-1.5" /> Outlook</Button>
+            <Button variant="outline" onClick={() => { window.location.href = linkMailto(); }}><Mail className="h-4 w-4 mr-1.5" /> Correo predet.</Button>
+            <Button variant="outline" onClick={copiarMensaje}>{copiado ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <>Copiar mensaje</>}</Button>
           </div>
         </div>
       )}
