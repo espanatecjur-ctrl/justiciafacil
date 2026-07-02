@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { MisTareas } from "@/components/panel-seguimiento";
+import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
   Gavel, Newspaper, FileSearch, AlertTriangle, CalendarClock,
   ChevronRight, ShieldCheck, Bookmark, FileText, BadgeCheck,
@@ -152,6 +153,8 @@ function Inicio() {
               ))}
             </div>
           </Card>
+
+          <SolicitudesPendientesHome />
         </div>
 
         {/* ——— Derecha ——— */}
