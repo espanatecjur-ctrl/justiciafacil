@@ -146,6 +146,7 @@ export interface Contrato {
 }
 
 export type ContratoTipo =
+  | "carta_cambio"
   | "prestacion_servicios"
   | "compraventa"
   | "arrendamiento"
