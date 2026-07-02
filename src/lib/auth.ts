@@ -15,3 +15,43 @@ export async function getAuth() {
   _client = mod.createClient(AUTH_URL, AUTH_KEY);
   return _client;
 }
+
+// ————————————————————————————————————————————————
+//  Identidad del usuario actual (correo + rol de colaboradores).
+//  Así se identifica a las personas en validaciones y solicitudes:
+//  SIEMPRE por su correo y el rol ligado a ese correo.
+// ————————————————————————————————————————————————
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+const _sbHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+
+/** Correo del usuario que tiene la sesión abierta (o null). */
+export async function correoActual(): Promise<string | null> {
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    return data?.session?.user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Rol ligado a ese correo (según la tabla colaboradores). */
+export async function rolActual(): Promise<string> {
+  try {
+    const correo = await correoActual();
+    if (!correo) return "";
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers: _sbHeaders });
+    const d = r.ok ? await r.json() : [];
+    return d?.[0]?.rol || "";
+  } catch {
+    return "";
+  }
+}
+
+/** Etiqueta "ROL · correo" del usuario actual (para solicitante/validador). */
+export async function usuarioActualEtiqueta(): Promise<string> {
+  const correo = await correoActual();
+  if (!correo) return "SIN-SESIÓN";
+  const rol = await rolActual();
+  return rol ? `${rol} · ${correo}` : correo;
+}
