@@ -184,7 +184,7 @@ function EditorContratos() {
   const [resultadoEnvio, setResultadoEnvio] = useState("");
 
   // Arma el documento como archivo Word (.doc) en base64, para adjuntarlo.
-  function construirAdjunto(folio: string | null) {
+  function construirAdjuntoWord(folio: string | null) {
     const enc = folio ? `Folio: ${folio}` : "BORRADOR — sin folio registrado";
     const html =
       `\ufeff<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>` +
@@ -196,12 +196,41 @@ function EditorContratos() {
     return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, base64: textoABase64(html) };
   }
 
+  // Arma el documento como PDF real (jsPDF se carga solo al enviar).
+  async function construirAdjuntoPdf(folio: string | null) {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
+    const margen = 56;
+    const ancho = doc.internal.pageSize.getWidth() - margen * 2;
+    const altoPag = doc.internal.pageSize.getHeight();
+    let y = margen;
+    // Folio
+    doc.setFont("times", "italic"); doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(folio ? `Folio: ${folio}` : "BORRADOR — sin folio registrado", doc.internal.pageSize.getWidth() - margen, y, { align: "right" });
+    y += 20;
+    // Título
+    doc.setFont("times", "bold"); doc.setFontSize(13); doc.setTextColor(0);
+    doc.text(plantilla.nombre.toUpperCase(), doc.internal.pageSize.getWidth() / 2, y, { align: "center", maxWidth: ancho });
+    y += 26;
+    // Cuerpo
+    doc.setFont("times", "normal"); doc.setFontSize(11);
+    const lineas = doc.splitTextToSize(cuerpo, ancho);
+    for (const linea of lineas) {
+      if (y > altoPag - margen) { doc.addPage(); y = margen; }
+      doc.text(linea, margen, y);
+      y += 15;
+    }
+    const base64 = doc.output("datauristring").split(",")[1];
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, base64 };
+  }
+
   async function enviarDesdeSistema() {
     if (!correoPara.trim()) { setResultadoEnvio("Escribe al menos un correo en 'Para'."); return; }
     setEnviandoSistema(true);
     setResultadoEnvio("");
     const folio = await obtenerFolio();
-    const adj = construirAdjunto(folio);
+    const word = construirAdjuntoWord(folio);
+    const pdf = await construirAdjuntoPdf(folio);
     const r = await enviarCorreo({
       para: correoPara,
       cc: ccMail,
@@ -209,11 +238,10 @@ function EditorContratos() {
       asunto: asuntoMail,
       mensaje: mensajeMail,
       folio: folio,
-      adjuntoNombre: adj.nombre,
-      adjuntoBase64: adj.base64,
+      adjuntos: [word, pdf],
     });
     setEnviandoSistema(false);
-    setResultadoEnvio(r.ok ? "Enviado ✓ (con el documento adjunto)" : `No se pudo enviar: ${r.error || "revisa la configuración de Resend en Netlify"}`);
+    setResultadoEnvio(r.ok ? "Enviado ✓ (con Word y PDF adjuntos)" : `No se pudo enviar: ${r.error || "revisa la configuración de Resend en Netlify"}`);
   }
 
   async function abrirEnviar() {
@@ -344,66 +372,74 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
       />
 
       {mostrarEnviar && (
-        <div className="rounded-lg border border-[#C2A24C]/60 bg-[#C2A24C]/10 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="flex items-center gap-2 text-sm font-semibold text-[#0B1E3A]">
-              <Mail className="h-4 w-4" /> Enviar por correo
-            </p>
-            <button onClick={() => setMostrarEnviar(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => !enviandoSistema && setMostrarEnviar(false)}>
+          <div className="my-6 w-full max-w-4xl rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="flex items-center gap-2 text-base font-bold text-[#0B1E3A]">
+                <Mail className="h-5 w-5" /> Enviar por correo
+              </p>
+              <button onClick={() => setMostrarEnviar(false)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+            </div>
 
-          <div className="grid gap-2">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground">Para (correo)</label>
-                <input type="email" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} placeholder="correo@cliente.com"
-                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Columna izquierda: formulario */}
+              <div className="grid content-start gap-2">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Para (correo)</label>
+                  <input type="email" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} placeholder="correo@cliente.com"
+                    className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
+                  <input value={asuntoMail} onChange={(e) => setAsuntoMail(e.target.value)}
+                    className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-medium text-muted-foreground">Copia (CC)</label>
+                    <input value={ccMail} onChange={(e) => setCcMail(e.target.value)} placeholder="opcional"
+                      className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-muted-foreground">Copia oculta (CCO)</label>
+                    <input value={ccoMail} onChange={(e) => setCcoMail(e.target.value)} placeholder="escondidos"
+                      className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Mensaje</label>
+                  <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={6}
+                    className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
               </div>
+
+              {/* Columna derecha: vista previa del documento */}
               <div>
-                <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
-                <input value={asuntoMail} onChange={(e) => setAsuntoMail(e.target.value)}
-                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                <label className="text-[11px] font-medium text-muted-foreground">Vista previa del documento que se enviará</label>
+                <div className="mt-0.5 h-[300px] overflow-y-auto rounded-md border border-border bg-[oklch(0.99_0.005_85)] p-4">
+                  <p className="mb-1 text-right text-[10px] text-muted-foreground">{folioGuardado ? `Folio: ${folioGuardado}` : "Se registrará al enviar"}</p>
+                  <p className="mb-2 text-center text-xs font-bold uppercase">{plantilla.nombre}</p>
+                  <pre className="whitespace-pre-wrap font-display text-[11px] leading-relaxed text-foreground">{cuerpo}</pre>
+                </div>
+                <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
+                  <Check className="h-3.5 w-3.5" /> Se adjuntan automáticamente <b>Word</b> y <b>PDF</b>.
+                </p>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground">Copia (CC)</label>
-                <input value={ccMail} onChange={(e) => setCcMail(e.target.value)} placeholder="opcional, separa con comas"
-                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground">Copia oculta (CCO / escondidos)</label>
-                <input value={ccoMail} onChange={(e) => setCcoMail(e.target.value)} placeholder="opcional, separa con comas"
-                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
-              </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <Button onClick={enviarDesdeSistema} disabled={enviandoSistema} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+                <Mail className="h-4 w-4 mr-1.5" /> {enviandoSistema ? "Enviando…" : "Enviar desde el sistema"}
+              </Button>
+              {resultadoEnvio && (
+                <span className={`text-xs font-medium ${resultadoEnvio.startsWith("Enviado") ? "text-emerald-700" : "text-red-700"}`}>{resultadoEnvio}</span>
+              )}
+              <span className="flex-1" />
+              <span className="text-[11px] text-muted-foreground">o abrir en:</span>
+              <Button variant="outline" size="sm" onClick={() => window.open(linkGmail(), "_blank")}>Gmail</Button>
+              <Button variant="outline" size="sm" onClick={() => window.open(linkOutlook(), "_blank")}>Outlook</Button>
+              <Button variant="outline" size="sm" onClick={copiarMensaje}>{copiado ? "Copiado ✓" : "Copiar"}</Button>
             </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Mensaje</label>
-              <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={5}
-                className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-            </div>
-          </div>
-
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            <b>Enviar desde el sistema</b> manda el correo de verdad, con el documento <b>adjunto</b>, a Para / CC / CCO. Tú lo revisas aquí antes de mandarlo.
-          </p>
-
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Button onClick={enviarDesdeSistema} disabled={enviandoSistema} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
-              <Mail className="h-4 w-4 mr-1.5" /> {enviandoSistema ? "Enviando…" : "Enviar desde el sistema"}
-            </Button>
-            {resultadoEnvio && (
-              <span className={`text-xs font-medium ${resultadoEnvio.startsWith("Enviado") ? "text-emerald-700" : "text-red-700"}`}>{resultadoEnvio}</span>
-            )}
-          </div>
-
-          <p className="mt-3 text-[11px] text-muted-foreground">O ábrelo en tu correo (sin adjuntar automático):</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> Descargar</Button>
-            <Button variant="outline" onClick={() => window.open(linkGmail(), "_blank")}><Mail className="h-4 w-4 mr-1.5" /> Gmail</Button>
-            <Button variant="outline" onClick={() => window.open(linkOutlook(), "_blank")}><Mail className="h-4 w-4 mr-1.5" /> Outlook</Button>
-            <Button variant="outline" onClick={() => { window.location.href = linkMailto(); }}><Mail className="h-4 w-4 mr-1.5" /> Correo predet.</Button>
-            <Button variant="outline" onClick={copiarMensaje}>{copiado ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <>Copiar mensaje</>}</Button>
           </div>
         </div>
       )}
