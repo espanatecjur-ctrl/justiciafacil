@@ -1,4 +1,5 @@
 import type { ContratoTipo } from "./legal-types";
+import { plantillasDiipa } from "./contract-templates-diipa";
 
 export interface PlantillaCampo {
   id: string;
@@ -461,8 +462,8 @@ export const plantillas: PlantillaContrato[] = [
   },
   {
     tipo: "prestacion_servicios",
-    nombre: "Prestación de Servicios Profesionales",
-    descripcion: "Contrato base para servicios jurídicos, contables o de consultoría — uso interno del despacho.",
+    nombre: "Prestación de Servicios (base genérica interna)",
+    descripcion: "Contrato base para servicios jurídicos, contables o de consultoría — uso interno del despacho. (Para el contrato de cliente DIIPA usa 'Prestación de Servicios Profesionales (DIIPA)'.)",
     campos: [
       ...campoPartesBase,
       { id: "objeto", label: "Objeto del servicio (descripción detallada)", tipo: "textarea", requerido: true },
@@ -609,6 +610,7 @@ export const plantillas: PlantillaContrato[] = [
     ],
     cuerpo: "CONTRATO INDIVIDUAL DE TRABAJO entre {{nombreParteA}} (\"PATRÓN\") y {{nombreParteB}} (\"TRABAJADOR\").\n\nPRIMERA. PUESTO. {{puesto}}.\nSEGUNDA. SALARIO. $ {{salario}} MXN diarios integrados.\nTERCERA. JORNADA {{jornada}}.\nCUARTA. DURACIÓN: {{duracion}}.\nFirmado en {{lugarFirma}}, a {{fechaFirma}}.",
   },
+  ...plantillasDiipa,
 ];
 
 export function getPlantilla(tipo: ContratoTipo) {
@@ -622,9 +624,18 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
   // helper: es casado
   const esCasado = valores.estadoCivilB === "casado(a)";
 
+  // helper: modalidad de cierre del Acta de Finiquito (A / B / C)
+  const modalidad = String(valores.modalidadCierre ?? "");
+  const esModA = modalidad.startsWith("A");
+  const esModB = modalidad.startsWith("B");
+  const esModC = modalidad.startsWith("C");
+
   // Bloques condicionales {{#campo}}...{{/campo}}
   texto = texto.replace(/\{\{#([a-zA-Z]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_m, key, block) => {
     if (key === "esCasado") return esCasado ? block : "";
+    if (key === "esModA") return esModA ? block : "";
+    if (key === "esModB") return esModB ? block : "";
+    if (key === "esModC") return esModC ? block : "";
     const v = valores[key];
     if (v === true) return block;
     if (typeof v === "string" && v.length > 0) return block;
