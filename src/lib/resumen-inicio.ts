@@ -153,3 +153,33 @@ export async function contarContratosPendientes(): Promise<number> {
     return 0;
   }
 }
+
+/** Audiencias/citas de HOY: actuaciones con fecha de hoy + citas del calendario. */
+export async function contarAudienciasHoy(): Promise<number> {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const [actR, citaR] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=id,en_papelera&tipo=eq.actuacion&fecha_proxima=eq.${hoy}`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/evento_agenda?select=id&tipo=eq.cita&fecha=eq.${hoy}`, { headers }),
+    ]);
+    const act: Array<{ en_papelera?: boolean }> = actR.ok ? await actR.json() : [];
+    const citas: unknown[] = citaR.ok ? await citaR.json() : [];
+    return act.filter((a) => a.en_papelera !== true).length + citas.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Pre-dictámenes activos (vigentes, no en papelera). */
+export async function contarPredictamenes(): Promise<number> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/predictamen?select=id&vigente=eq.true&en_papelera=eq.false`,
+      { headers },
+    );
+    const d: unknown[] = r.ok ? await r.json() : [];
+    return d.length;
+  } catch {
+    return 0;
+  }
+}
