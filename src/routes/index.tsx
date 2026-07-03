@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, type Atrasada, type Cita } from "@/lib/resumen-inicio";
+import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, contarAudienciasHoy, contarPredictamenes, type Atrasada, type Cita } from "@/lib/resumen-inicio";
 import { listarProximos, ESTILO_EVENTO, type Evento } from "@/lib/evento-agenda";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
@@ -88,6 +88,8 @@ function Inicio() {
 
   const [atrasadas, setAtrasadas] = useState<Atrasada[]>([]);
   const [acuerdosHoy, setAcuerdosHoy] = useState(0);
+  const [audienciasHoy, setAudienciasHoy] = useState(0);
+  const [predictamenes, setPredictamenes] = useState(0);
   const [conteos, setConteos] = useState({ exhorto: 0, amparo: 0, recurso: 0 });
   const [unidades, setUnidades] = useState({ URRJ: 0, UCP: 0, UCM: 0, UDP: 0 });
   const [contratosPend, setContratosPend] = useState(0);
@@ -98,6 +100,8 @@ function Inicio() {
     listarAgenda().then(setAgenda);
     listarProximos(6).then(setProximos);
     contarAcuerdosHoy().then(setAcuerdosHoy);
+    contarAudienciasHoy().then(setAudienciasHoy);
+    contarPredictamenes().then(setPredictamenes);
     Promise.all([contarCasos("exhorto"), contarCasos("amparo"), contarCasos("recurso")])
       .then(([exhorto, amparo, recurso]) => setConteos({ exhorto, amparo, recurso }));
     Promise.all([contarPorUnidad("URRJ"), contarPorUnidad("UCP"), contarPorUnidad("UCM"), contarPorUnidad("UDP")])
@@ -150,9 +154,9 @@ function Inicio() {
 
       {/* ——— KPIs ——— */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <Kpi icon={Gavel} n="2" l="Audiencias hoy" tone="bg-[#0B1E3A]/10 text-[#0B1E3A]" />
+        <Kpi icon={Gavel} n={String(audienciasHoy)} l="Audiencias hoy" tone="bg-[#0B1E3A]/10 text-[#0B1E3A]" />
         <Kpi icon={Newspaper} n={String(acuerdosHoy)} l="Acuerdos nuevos" tone="bg-emerald-100 text-emerald-700" />
-        <Kpi icon={FileSearch} n="5" l="Pre-dictámenes" tone="bg-[#C2A24C]/20 text-[#8A6E22]" />
+        <Kpi icon={FileSearch} n={String(predictamenes)} l="Pre-dictámenes" tone="bg-[#C2A24C]/20 text-[#8A6E22]" />
         <Kpi icon={AlertTriangle} n={String(atrasadas.length)} l="Actuaciones atrasadas" tone="bg-red-100 text-red-700" />
       </div>
 
