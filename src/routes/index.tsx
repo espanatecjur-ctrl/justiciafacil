@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
-import { listarAtrasadas, contarAcuerdosHoy, contarCasos, type Atrasada } from "@/lib/resumen-inicio";
+import { listarAtrasadas, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, type Atrasada } from "@/lib/resumen-inicio";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
@@ -75,11 +75,16 @@ function Inicio() {
   const [atrasadas, setAtrasadas] = useState<Atrasada[]>([]);
   const [acuerdosHoy, setAcuerdosHoy] = useState(0);
   const [conteos, setConteos] = useState({ exhorto: 0, amparo: 0, recurso: 0 });
+  const [unidades, setUnidades] = useState({ URRJ: 0, UCP: 0, UCM: 0, UDP: 0 });
+  const [contratosPend, setContratosPend] = useState(0);
   useEffect(() => {
     listarAtrasadas().then(setAtrasadas);
     contarAcuerdosHoy().then(setAcuerdosHoy);
     Promise.all([contarCasos("exhorto"), contarCasos("amparo"), contarCasos("recurso")])
       .then(([exhorto, amparo, recurso]) => setConteos({ exhorto, amparo, recurso }));
+    Promise.all([contarPorUnidad("URRJ"), contarPorUnidad("UCP"), contarPorUnidad("UCM"), contarPorUnidad("UDP")])
+      .then(([URRJ, UCP, UCM, UDP]) => setUnidades({ URRJ, UCP, UCM, UDP }));
+    contarContratosPendientes().then(setContratosPend);
   }, []);
   return (
     <div className="space-y-6">
@@ -150,6 +155,41 @@ function Inicio() {
           <div><p className="font-display text-xl font-bold leading-none">{conteos.recurso}</p><p className="mt-0.5 text-xs text-muted-foreground">Recursos</p></div>
           <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
         </Link>
+      </div>
+
+      {/* ——— Pendientes por unidad + Contratos ——— */}
+      <div>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="h-4 w-1 rounded" style={{ background: GOLD }} />
+          <h3 className="font-display text-base font-semibold">Pendientes por unidad</h3>
+        </div>
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+          <Link to="/urrj" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">URRJ</p>
+            <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.URRJ}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+          </Link>
+          <Link to="/ucp" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">UCP</p>
+            <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.UCP}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+          </Link>
+          <Link to="/ucm" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">UCM</p>
+            <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.UCM}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+          </Link>
+          <Link to="/udp" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">UDP</p>
+            <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.UDP}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+          </Link>
+          <Link to="/contratos" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
+            <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#8A6E22]"><FileText className="h-3 w-3" /> Contratos</p>
+            <p className="mt-1 font-display text-2xl font-bold leading-none">{contratosPend}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">pendientes</p>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
