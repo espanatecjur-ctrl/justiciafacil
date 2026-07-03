@@ -1,5 +1,6 @@
 import type { ContratoTipo } from "./legal-types";
 import { plantillasDiipa } from "./contract-templates-diipa";
+import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos } from "./contract-campos-cliente";
 
 export interface PlantillaCampo {
   id: string;
@@ -62,6 +63,9 @@ const cartaCambioCampos: PlantillaCampo[] = [
   { id: "fechaContratoAnterior", label: "Fecha del contrato anterior", tipo: "text", ayuda: "Ej. 08 DE AGOSTO DE 2022" },
   { id: "garantiaCambio", label: "Garantía objeto del cambio (dirección completa)", tipo: "textarea", requerido: true },
   { id: "valorOperacion", label: "Valor estimado de la nueva operación (MXN)", tipo: "text", requerido: true, ayuda: "Ej. 2,000,000.00" },
+  ...clienteContactoCampos,
+  ...clienteEstadoCivilCampos,
+  ...clienteApoderadoCampos,
 ];
 
 const cartaCambioCuerpo = `CARTA DE INTENCIÓN DE CAMBIO
@@ -69,7 +73,9 @@ Prestación de Servicios Profesionales para Procedimiento de Garantía Hipotecar
 
 Folio de la presente Carta: {{folioCarta}}
 Fecha de emisión: {{fechaEmision}}
-Cliente Cesionario: {{nombreCliente}}
+Cliente Cesionario: {{nombreCliente}}{{#clienteComparecePorApoderado}}, representado(a) por su apoderado el (la) C. {{nombreApoderadoCliente}} ({{poderApoderadoCliente}}){{/clienteComparecePorApoderado}}
+Contacto del Cliente: Tel. {{telefonoCliente}} · Correo {{correoCliente}}
+Estado civil del Cliente: {{estadoCivilCliente}}{{#esCasadoCliente}} · Régimen {{regimenCliente}} · Cónyuge: {{conyugeCliente}}{{/esCasadoCliente}}
 Prestador de Servicios: INMUEBLES ACCESIBLES — DIIPA, S.A. DE C.V.
 Folio del contrato anterior: {{folioContratoAnterior}}
 Fecha contrato anterior: {{fechaContratoAnterior}}
@@ -211,6 +217,9 @@ const contratoCambioCampos: PlantillaCampo[] = [
   { id: "curpCliente", label: "CURP del Cliente", tipo: "text" },
   { id: "rfcCliente", label: "RFC del Cliente", tipo: "text" },
   { id: "domicilioCliente", label: "Domicilio del Cliente", tipo: "textarea" },
+  ...clienteContactoCampos,
+  ...clienteEstadoCivilCampos,
+  ...clienteApoderadoCampos,
   { id: "garantiaAnterior", label: "Garantía anterior (dirección completa)", tipo: "textarea", requerido: true },
   { id: "valorGarantiaAnterior", label: "Valor de referencia de la garantía anterior (MXN)", tipo: "text", ayuda: "Ej. 1,500,000.00" },
   { id: "garantiaNueva", label: "Nueva garantía (dirección completa)", tipo: "textarea", requerido: true },
@@ -232,7 +241,7 @@ CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES E INTERMEDIACIÓN PARA LA REG
 MODALIDAD DE CAMBIO O SUSTITUCIÓN DE GARANTÍA
 (Cesión de derechos de crédito, litigiosos y adjudicatarios — operación de carácter estrictamente civil)
 
-Convenido por una parte por Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V., conocida comercialmente como "Inmuebles Accesibles" (siendo ambas denominaciones una sola y misma persona moral), representada legalmente por el (la) C. {{apoderadoNombre}}, a quien en lo sucesivo se le denominará el "Prestador de Servicios"; y por la otra parte, el (la) C. {{nombreCliente}}, a quien en lo sucesivo se le denominará el "Cliente". Ambas partes se sujetan al tenor de las siguientes declaraciones y cláusulas. Los términos con mayúscula inicial empleados en este instrumento se definen en el GLOSARIO que obra al final del presente contrato y que forma parte integrante del mismo.
+Convenido por una parte por Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V., conocida comercialmente como "Inmuebles Accesibles" (siendo ambas denominaciones una sola y misma persona moral), representada legalmente por el (la) C. {{apoderadoNombre}}, a quien en lo sucesivo se le denominará el "Prestador de Servicios"; y por la otra parte, el (la) C. {{nombreCliente}}{{#clienteComparecePorApoderado}}, representado(a) en este acto por su apoderado el (la) C. {{nombreApoderadoCliente}}, según consta en {{poderApoderadoCliente}}{{/clienteComparecePorApoderado}}, a quien en lo sucesivo se le denominará el "Cliente". Ambas partes se sujetan al tenor de las siguientes declaraciones y cláusulas. Los términos con mayúscula inicial empleados en este instrumento se definen en el GLOSARIO que obra al final del presente contrato y que forma parte integrante del mismo.
 
 DECLARACIONES
 
@@ -244,7 +253,8 @@ Que los derechos litigiosos y adjudicatarios objeto de su mediación provienen d
 Que opera bajo un esquema estrictamente civil de recuperación de activos y regularización de garantías con contingencia, por lo que las garantías objeto de su servicio se encuentran en proceso de regularización jurídica, situación que el Cliente reconoce y acepta plenamente.
 
 II. Declara el "Cliente":
-Ser persona física de nacionalidad mexicana, identificada con CURP: {{curpCliente}}, RFC: {{rfcCliente}}, con domicilio en: {{domicilioCliente}}.
+Ser persona física de nacionalidad mexicana, identificada con CURP: {{curpCliente}}, RFC: {{rfcCliente}}, con domicilio en: {{domicilioCliente}}, teléfono {{telefonoCliente}} y correo electrónico {{correoCliente}}.
+Que su estado civil es {{estadoCivilCliente}}{{#esCasadoCliente}}, bajo el régimen de {{regimenCliente}}, casado(a) con {{conyugeCliente}}{{#consentimientoConyugalCliente}}, manifestando contar con el consentimiento conyugal por escrito para este acto{{/consentimientoConyugalCliente}}{{/esCasadoCliente}}.
 Que previamente contrató los servicios del Prestador respecto de una garantía con contingencia (la "garantía anterior"), ubicada en {{garantiaAnterior}}, con un valor de referencia de $ {{valorGarantiaAnterior}} M.N.
 Que, habiendo sido informado de manera clara, completa y suficiente sobre los dictámenes técnicos y jurídicos correspondientes, manifiesta su libre voluntad de sustituir la garantía anterior por una nueva garantía con contingencia, en los términos del presente contrato.
 Que dispone de la capacidad económica y jurídica para obligarse en los términos de este instrumento y que conoce la situación legal y procesal de la nueva garantía objeto del servicio.
@@ -623,6 +633,8 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
 
   // helper: es casado
   const esCasado = valores.estadoCivilB === "casado(a)";
+  // helper: el CLIENTE es casado (Parte 2)
+  const esCasadoCliente = valores.estadoCivilCliente === "casado(a)";
 
   // helper: modalidad de cierre del Acta de Finiquito (A / B / C)
   const modalidad = String(valores.modalidadCierre ?? "");
@@ -633,6 +645,7 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
   // Bloques condicionales {{#campo}}...{{/campo}}
   texto = texto.replace(/\{\{#([a-zA-Z]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_m, key, block) => {
     if (key === "esCasado") return esCasado ? block : "";
+    if (key === "esCasadoCliente") return esCasadoCliente ? block : "";
     if (key === "esModA") return esModA ? block : "";
     if (key === "esModB") return esModB ? block : "";
     if (key === "esModC") return esModC ? block : "";
