@@ -14,7 +14,7 @@ import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
-import { guardarContrato, listarCartasCambio, type ContratoGenerado } from "@/lib/contrato-generado";
+import { guardarContrato, listarCartasCambio, siguienteFolio, marcarEnviado, type ContratoGenerado } from "@/lib/contrato-generado";
 import { enviarCorreo, textoABase64 } from "@/lib/enviar-correo";
 
 const searchSchema = z.object({ tipo: z.string().optional() });
@@ -98,6 +98,8 @@ function EditorContratos() {
   const [semillaWord, setSemillaWord] = useState<string>("");
   const [claveWord, setClaveWord] = useState(0);
 
+  // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
+  // Al quitarlo, se borran esas mismas llaves.
   // Pasa los datos de la Carta de Cambio al Contrato de Cambio (Paquete de Cambio).
   // Conserva el apoderado y mapea los campos que comparten.
   function llenarContrato() {
@@ -113,6 +115,8 @@ function EditorContratos() {
     setTipo("contrato_cambio");
     setModo("preview");
     setFolioGuardado(null);
+    setFechaGenerado(null);
+    setFechaEnviado(null);
   }
 
   function seleccionarApoderado(a: Apoderado | null) {
@@ -135,6 +139,26 @@ function EditorContratos() {
   const [guardando, setGuardando] = useState(false);
   const [folioGuardado, setFolioGuardado] = useState<string | null>(null);
 
+  // ── Parte 1: encabezado (folio en vivo · fechas · quién solicita) ──────────
+  // Folio de vista previa: se calcula al elegir el tipo; el real se fija al guardar.
+  const [folioPreview, setFolioPreview] = useState<string>("");
+  useEffect(() => {
+    let vivo = true;
+    siguienteFolio(tipo).then((f) => { if (vivo) setFolioPreview(f); });
+    return () => { vivo = false; };
+  }, [tipo, folioGuardado]);
+
+  // Fechas que se registran solas.
+  const [fechaGenerado, setFechaGenerado] = useState<string | null>(null);
+  const [fechaEnviado, setFechaEnviado] = useState<string | null>(null);
+
+  // Campos INTERNOS (no se imprimen en el documento): quién solicita y a nombre de quién.
+  const [solicitadoPor, setSolicitadoPor] = useState("");
+  const [aNombreDe, setANombreDe] = useState("");
+
+  const fmtFechaHora = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : null;
+
   // Registra el documento una sola vez y devuelve su folio (o el ya asignado).
   async function obtenerFolio(): Promise<string | null> {
     if (folioGuardado) return folioGuardado;
@@ -142,20 +166,22 @@ function EditorContratos() {
     const apo = apoderados.find((a) => a.id === apoderadoId);
     const cuantiaNum = parseFloat(String(valores.valorOperacion ?? "").replace(/[^0-9.]/g, "")) || null;
     const folioDoc = String(valores.folioCarta ?? valores.numeroOficio ?? "").trim();
+    const ahoraIso = new Date().toISOString();
     const r = await guardarContrato({
       tipo,
       nombre_documento: plantilla.nombre,
       titulo: plantilla.nombre + (folioDoc ? ` — ${folioDoc}` : ""),
       nombre_cliente: String(valores.nombreCliente ?? ""),
       apoderado: apo?.nombre ?? "",
-      valores: valores as Record<string, unknown>,
+      // Los campos internos (quién solicita) viajan dentro de `valores` — no se imprimen.
+      valores: { ...valores, solicitadoPor, aNombreDe } as Record<string, unknown>,
       cuerpo,
       cuantia: cuantiaNum,
       estado: "generado",
-      fecha_generado: new Date().toISOString(),
+      fecha_generado: ahoraIso,
     });
     setGuardando(false);
-    if (r.ok && r.folio) { setFolioGuardado(r.folio); return r.folio; }
+    if (r.ok && r.folio) { setFolioGuardado(r.folio); setFechaGenerado(ahoraIso); return r.folio; }
     return null;
   }
 
@@ -165,9 +191,12 @@ function EditorContratos() {
   }
 
   // Encabezado de folio que se estampa en cada documento exportado/impreso.
+  // Incluye fecha de elaboración y, si ya se mandó, fecha de envío por correo.
   function encabezadoFolio(folio: string | null) {
-    const fecha = new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
-    return folio ? `Folio: ${folio}    ·    Generado: ${fecha}` : "BORRADOR — documento sin folio registrado";
+    if (!folio) return "BORRADOR — documento sin folio registrado";
+    const elab = fmtFechaHora(fechaGenerado) ?? new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+    const env = fmtFechaHora(fechaEnviado);
+    return `Folio: ${folio}    ·    Elaborado: ${elab}${env ? `    ·    Enviado: ${env}` : ""}`;
   }
 
   // Enviar por correo (sin auto-envío): el mensaje se arma en su propio banner.
@@ -183,7 +212,7 @@ function EditorContratos() {
 
   // Arma el documento como archivo Word (.doc) en base64, para adjuntarlo.
   function construirAdjuntoWord(folio: string | null) {
-    const enc = folio ? `Folio: ${folio}` : "BORRADOR — sin folio registrado";
+    const enc = encabezadoFolio(folio);
     const html =
       `\ufeff<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>` +
       `<head><meta charset='utf-8'><title>${plantilla.nombre}</title>` +
@@ -191,7 +220,7 @@ function EditorContratos() {
       `<body><p style="text-align:right;font-size:9pt;color:#555">${enc}</p>` +
       `<h2 style="text-align:center;text-transform:uppercase">${plantilla.nombre}</h2>` +
       `<pre style="white-space:pre-wrap;font-family:Georgia,serif;font-size:12pt">${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
-    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, tipo: "application/msword", base64: textoABase64(html) };
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, base64: textoABase64(html) };
   }
 
   // Arma el documento como PDF real (jsPDF se carga solo al enviar).
@@ -202,9 +231,9 @@ function EditorContratos() {
     const ancho = doc.internal.pageSize.getWidth() - margen * 2;
     const altoPag = doc.internal.pageSize.getHeight();
     let y = margen;
-    // Folio
+    // Folio + fechas (elaborado / enviado)
     doc.setFont("times", "italic"); doc.setFontSize(9); doc.setTextColor(90);
-    doc.text(folio ? `Folio: ${folio}` : "BORRADOR — sin folio registrado", doc.internal.pageSize.getWidth() - margen, y, { align: "right" });
+    doc.text(encabezadoFolio(folio), margen, y, { maxWidth: ancho });
     y += 20;
     // Título
     doc.setFont("times", "bold"); doc.setFontSize(13); doc.setTextColor(0);
@@ -219,7 +248,7 @@ function EditorContratos() {
       y += 15;
     }
     const base64 = doc.output("datauristring").split(",")[1];
-    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, tipo: "application/pdf", base64 };
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, base64 };
   }
 
   async function enviarDesdeSistema() {
@@ -239,7 +268,12 @@ function EditorContratos() {
       adjuntos: [word, pdf],
     });
     setEnviandoSistema(false);
-    setResultadoEnvio(r.ok ? "Enviado ✓ (con Word y PDF adjuntos)" : `No se pudo enviar: ${r.error || "revisa tu permiso de Google e inténtalo de nuevo"}`);
+    if (r.ok) {
+      const iso = new Date().toISOString();
+      setFechaEnviado(iso);
+      if (folio) await marcarEnviado(folio, iso);
+    }
+    setResultadoEnvio(r.ok ? "Enviado ✓ (con Word y PDF adjuntos)" : `No se pudo enviar: ${r.error || "revisa la configuración de Resend en Netlify"}`);
   }
 
   async function abrirEnviar() {
@@ -349,11 +383,15 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         description="Selecciona una plantilla, llena los datos y exporta el documento listo para revisión o firma."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {folioGuardado && (
+            {folioGuardado ? (
               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-900">
                 <Check className="h-3.5 w-3.5" /> Guardado · {folioGuardado}
               </span>
-            )}
+            ) : folioPreview ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900" title="Número tentativo; se fija al generar">
+                Se asignará · {folioPreview}
+              </span>
+            ) : null}
             <Button onClick={guardar} disabled={guardando} className="bg-[#0B1E3A] hover:bg-[#0B1E3A]/90 text-white">
               <Save className="h-4 w-4 mr-1.5" /> {guardando ? "Guardando…" : "Guardar"}
             </Button>
@@ -415,7 +453,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground">Vista previa del documento que se enviará</label>
                 <div className="mt-0.5 h-[62vh] overflow-y-auto rounded-md border border-border bg-[oklch(0.99_0.005_85)] p-5">
-                  <p className="mb-1 text-right text-[11px] text-muted-foreground">{folioGuardado ? `Folio: ${folioGuardado}` : "Se registrará al enviar"}</p>
+                  <p className="mb-1 text-right text-[11px] text-muted-foreground">{folioGuardado ? `Folio: ${folioGuardado}` : folioPreview ? `Se asignará: ${folioPreview}` : "Se registrará al enviar"}</p>
                   <p className="mb-3 text-center text-sm font-bold uppercase">{plantilla.nombre}</p>
                   <pre className="whitespace-pre-wrap font-display text-[13px] leading-relaxed text-foreground">{cuerpo}</pre>
                 </div>
@@ -451,12 +489,42 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
             const a = apoderados.find((x) => x.id === apoderadoId);
             setValores(a ? { ...valoresApoderado(a) } : {});
             setFolioGuardado(null);
+            setFechaGenerado(null);
+            setFechaEnviado(null);
           }}
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           {plantillas.map((p) => <option key={p.tipo} value={p.tipo}>{p.nombre}</option>)}
         </select>
         <p className="mt-2 text-xs text-muted-foreground">{plantilla.descripcion}</p>
+      </Card>
+
+      <Card className="legal-card p-4">
+        <p className="font-display font-bold text-sm mb-3">
+          Encabezado del contrato{" "}
+          <span className="text-[11px] font-normal text-muted-foreground">(uso interno — no se imprime en el documento)</span>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label className="text-xs font-medium">Folio</Label>
+            <div className="mt-1 flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 font-mono text-sm">
+              {folioGuardado ? folioGuardado : folioPreview ? `Se asignará: ${folioPreview}` : "…"}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs font-medium">Solicitado por</Label>
+            <Input className="mt-1" value={solicitadoPor} onChange={(e) => setSolicitadoPor(e.target.value)} placeholder="Quién pide el contrato" />
+          </div>
+          <div>
+            <Label className="text-xs font-medium">A nombre de / para quién</Label>
+            <Input className="mt-1" value={aNombreDe} onChange={(e) => setANombreDe(e.target.value)} placeholder="Nombre (texto libre)" />
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <b>Elaborado</b> y <b>Enviado</b> se registran solos: al generar y al mandar por correo.
+          {fechaGenerado && ` · Elaborado: ${fmtFechaHora(fechaGenerado)}`}
+          {fechaEnviado && ` · Enviado: ${fmtFechaHora(fechaEnviado)}`}
+        </p>
       </Card>
 
       <SelectorApoderado
