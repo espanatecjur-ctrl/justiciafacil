@@ -2,12 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
-import { listarAtrasadas, contarAcuerdosHoy, type Atrasada } from "@/lib/resumen-inicio";
+import { listarAtrasadas, contarAcuerdosHoy, contarCasos, type Atrasada } from "@/lib/resumen-inicio";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
   Gavel, Newspaper, FileSearch, AlertTriangle, CalendarClock,
   ChevronRight, ShieldCheck, Bookmark, FileText, BadgeCheck,
+  Send, Shield, RotateCcw,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -73,9 +74,12 @@ function Inicio() {
 
   const [atrasadas, setAtrasadas] = useState<Atrasada[]>([]);
   const [acuerdosHoy, setAcuerdosHoy] = useState(0);
+  const [conteos, setConteos] = useState({ exhorto: 0, amparo: 0, recurso: 0 });
   useEffect(() => {
     listarAtrasadas().then(setAtrasadas);
     contarAcuerdosHoy().then(setAcuerdosHoy);
+    Promise.all([contarCasos("exhorto"), contarCasos("amparo"), contarCasos("recurso")])
+      .then(([exhorto, amparo, recurso]) => setConteos({ exhorto, amparo, recurso }));
   }, []);
   return (
     <div className="space-y-6">
@@ -127,6 +131,25 @@ function Inicio() {
         <Kpi icon={Newspaper} n={String(acuerdosHoy)} l="Acuerdos nuevos" tone="bg-emerald-100 text-emerald-700" />
         <Kpi icon={FileSearch} n="5" l="Pre-dictámenes" tone="bg-[#C2A24C]/20 text-[#8A6E22]" />
         <Kpi icon={AlertTriangle} n={String(atrasadas.length)} l="Actuaciones atrasadas" tone="bg-red-100 text-red-700" />
+      </div>
+
+      {/* ——— Áreas: Exhortos / Amparos / Recursos ——— */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Link to="/exhortos" className="legal-card flex items-center gap-3 p-4 transition hover:border-[color:var(--teal)]">
+          <div className="grid h-10 w-10 place-items-center rounded-md bg-[#0B1E3A]/10 text-[#0B1E3A]"><Send className="h-5 w-5" /></div>
+          <div><p className="font-display text-xl font-bold leading-none">{conteos.exhorto}</p><p className="mt-0.5 text-xs text-muted-foreground">Exhortos</p></div>
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+        </Link>
+        <Link to="/amparos" className="legal-card flex items-center gap-3 p-4 transition hover:border-[color:var(--teal)]">
+          <div className="grid h-10 w-10 place-items-center rounded-md bg-[#C2A24C]/20 text-[#8A6E22]"><Shield className="h-5 w-5" /></div>
+          <div><p className="font-display text-xl font-bold leading-none">{conteos.amparo}</p><p className="mt-0.5 text-xs text-muted-foreground">Amparos</p></div>
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+        </Link>
+        <Link to="/recursos" className="legal-card flex items-center gap-3 p-4 transition hover:border-[color:var(--teal)]">
+          <div className="grid h-10 w-10 place-items-center rounded-md bg-emerald-100 text-emerald-700"><RotateCcw className="h-5 w-5" /></div>
+          <div><p className="font-display text-xl font-bold leading-none">{conteos.recurso}</p><p className="mt-0.5 text-xs text-muted-foreground">Recursos</p></div>
+          <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
