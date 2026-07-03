@@ -98,8 +98,6 @@ function EditorContratos() {
   const [semillaWord, setSemillaWord] = useState<string>("");
   const [claveWord, setClaveWord] = useState(0);
 
-  // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
-  // Al quitarlo, se borran esas mismas llaves.
   // Pasa los datos de la Carta de Cambio al Contrato de Cambio (Paquete de Cambio).
   // Conserva el apoderado y mapea los campos que comparten.
   function llenarContrato() {
@@ -193,7 +191,7 @@ function EditorContratos() {
       `<body><p style="text-align:right;font-size:9pt;color:#555">${enc}</p>` +
       `<h2 style="text-align:center;text-transform:uppercase">${plantilla.nombre}</h2>` +
       `<pre style="white-space:pre-wrap;font-family:Georgia,serif;font-size:12pt">${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
-    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, base64: textoABase64(html) };
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, tipo: "application/msword", base64: textoABase64(html) };
   }
 
   // Arma el documento como PDF real (jsPDF se carga solo al enviar).
@@ -221,7 +219,7 @@ function EditorContratos() {
       y += 15;
     }
     const base64 = doc.output("datauristring").split(",")[1];
-    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, base64 };
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, tipo: "application/pdf", base64 };
   }
 
   async function enviarDesdeSistema() {
@@ -241,7 +239,7 @@ function EditorContratos() {
       adjuntos: [word, pdf],
     });
     setEnviandoSistema(false);
-    setResultadoEnvio(r.ok ? "Enviado ✓ (con Word y PDF adjuntos)" : `No se pudo enviar: ${r.error || "revisa la configuración de Resend en Netlify"}`);
+    setResultadoEnvio(r.ok ? "Enviado ✓ (con Word y PDF adjuntos)" : `No se pudo enviar: ${r.error || "revisa tu permiso de Google e inténtalo de nuevo"}`);
   }
 
   async function abrirEnviar() {
