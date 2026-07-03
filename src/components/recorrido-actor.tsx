@@ -57,7 +57,7 @@ interface Datos {
   quienPosee: string; inicioPosesion: string; buenaFe: string; demandaDespojo: string;
   interpelacionJV: string; interpelacionJVFecha: string;
   // H5 cargas
-  predial: string; agua: string; condominio: string; fiscales: string; otrosGravamenes: string;
+  predial: string; agua: string; condominio: string; fiscales: string; laborales: string; otrosGravamenes: string;
   // H6 financiero/viabilidad
   capital: string; tasaOrd: string; tasaMor: string; dias: string; aplicarIVA: string; gastos: string; valorUDI: string;
   valorComercial: string; precioCesion: string; costosOperativos: string; margenObjetivo: string;
@@ -75,7 +75,7 @@ const VACIO: Datos = {
   convenioRatificado: "no", convenioFecha: "", plazoPrescManual: "", plazoCaducManual: "",
   quienPosee: "", inicioPosesion: "", buenaFe: "no", demandaDespojo: "no",
   interpelacionJV: "no", interpelacionJVFecha: "",
-  predial: "", agua: "", condominio: "", fiscales: "", otrosGravamenes: "",
+  predial: "", agua: "", condominio: "", fiscales: "", laborales: "", otrosGravamenes: "",
   capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "",
   valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
   firmaElabora: "", firmaValida: "",
@@ -164,7 +164,9 @@ export function RecorridoActor({
     hayInterpelacion: d.interpelacionJV === "si",
   }), [d.inicioPosesion, d.buenaFe, d.demandaDespojo, d.interpelacionJV]);
 
-  const cargas = n(d.predial) + n(d.agua) + n(d.condominio) + n(d.fiscales) + n(d.otrosGravamenes);
+  const cargas = n(d.predial) + n(d.agua) + n(d.condominio) + n(d.fiscales) + n(d.laborales) + n(d.otrosGravamenes);
+  const hayLaboral = n(d.laborales) > 0;
+  const hayFiscal = n(d.fiscales) > 0;
   const fin = useMemo(() => calculoFinanciero({
     capital: n(d.capital), tasaOrdinariaAnual: n(d.tasaOrd), tasaMoratoriaAnual: n(d.tasaMor),
     dias: n(d.dias), aplicarIVA: d.aplicarIVA === "si", gastos: n(d.gastos), valorUDI: n(d.valorUDI) || undefined,
@@ -193,11 +195,13 @@ export function RecorridoActor({
     if (anotacionesRiesgo) sems.push("amarillo");
     if (enAmparo || suspendido) sems.push("naranja");
     if (etapaTemprana) sems.push("amarillo");
+    if (hayLaboral) sems.push("rojo");
+    if (hayFiscal) sems.push("naranja");
     if (sems.includes("rojo")) return { txt: "NEGATIVO", color: "bg-red-50 text-red-800 border-red-200" };
     if (sems.includes("naranja") || sems.includes("amarillo")) return { txt: "CONDICIONADO", color: "bg-amber-50 text-amber-800 border-amber-200" };
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
-  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo, enAmparo, suspendido, etapaTemprana]);
+  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo, enAmparo, suspendido, etapaTemprana, hayLaboral, hayFiscal]);
 
   // avisa los resultados de motor hacia afuera (para la ficha UCP)
   useEffect(() => {
@@ -423,9 +427,12 @@ export function RecorridoActor({
               <Campo label="Agua"><input type="number" className={inp} value={d.agua} onChange={(e) => set("agua", e.target.value)} /></Campo>
               <Campo label="Cuotas de condominio"><input type="number" className={inp} value={d.condominio} onChange={(e) => set("condominio", e.target.value)} /></Campo>
               <Campo label="Créditos fiscales"><input type="number" className={inp} value={d.fiscales} onChange={(e) => set("fiscales", e.target.value)} /></Campo>
+              <Campo label="Créditos laborales"><input type="number" className={inp} value={d.laborales} onChange={(e) => set("laborales", e.target.value)} /></Campo>
               <Campo label="Otros gravámenes"><input type="number" className={inp} value={d.otrosGravamenes} onChange={(e) => set("otrosGravamenes", e.target.value)} /></Campo>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">Total de cargas ocultas: <b>{fmt(cargas)}</b></div>
+            {hayLaboral && <Aviso r={{ semaforo: "rojo", etiqueta: "Crédito laboral (kill switch)", detalle: "Los créditos laborales tienen preferencia sobre la hipoteca y el fisco (Art. 113 LFT). Pueden vaciar la garantía aunque ganes el juicio." }} />}
+            {hayFiscal && <Aviso r={{ semaforo: "naranja", etiqueta: "Crédito fiscal", detalle: "El crédito fiscal tiene preferencia (Art. 149 CFF): puede cobrarse antes que la hipoteca." }} />}
           </div>
         )}
 
@@ -466,6 +473,8 @@ export function RecorridoActor({
               {anotacionesRiesgo && <Aviso r={{ semaforo: "amarillo", etiqueta: "Anotaciones / gravámenes", detalle: "Hay embargos, anotaciones o fideicomisos registrados." }} />}
               {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede revertir lo ganado." }} />}
               {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido." }} />}
+              {hayLaboral && <Aviso r={{ semaforo: "rojo", etiqueta: "Crédito laboral", detalle: "Preferencia sobre la hipoteca (Art. 113 LFT). Kill switch." }} />}
+              {hayFiscal && <Aviso r={{ semaforo: "naranja", etiqueta: "Crédito fiscal", detalle: "Preferencia (Art. 149 CFF)." }} />}
             </div>
             <div className={`rounded-lg border p-4 ${dictamen.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Pre-dictamen del sistema (sugerido): {dictamen.txt}</p>
