@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, type Atrasada, type Cita } from "@/lib/resumen-inicio";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
@@ -40,7 +41,8 @@ function iniciales(nombre: string) {
   return nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "·";
 }
 
-/** Carga el usuario real de la sesión de Google (nombre, foto) + su rol. */
+/** Carga el usuario real: nombre/foto de la FICHA del colaborador; si no,
+ *  el nombre/foto de Google; y de última, sus iniciales. */
 function useUsuario() {
   const [u, setU] = useState<{ nombre: string; foto: string; rol: string }>({ nombre: "", foto: "", rol: "" });
   useEffect(() => {
@@ -50,10 +52,27 @@ function useUsuario() {
         const { data } = await auth.auth.getSession();
         const meta = (data.session?.user?.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string };
         const correo = data.session?.user?.email ?? "";
-        const nombre = meta.full_name || meta.name || correo || "Usuario";
-        const foto = meta.avatar_url || meta.picture || "";
-        const rol = await rolActual();
-        setU({ nombre, foto, rol });
+        const nombreGoogle = meta.full_name || meta.name || correo || "Usuario";
+        const fotoGoogle = meta.avatar_url || meta.picture || "";
+
+        // Ficha del colaborador (foto subida + nombre + rol).
+        let fotoFicha = "", nombreFicha = "", rol = "";
+        if (correo) {
+          const r = await fetch(
+            `${SUPABASE_URL}/rest/v1/colaboradores?select=nombre,rol,foto_url&correo=eq.${encodeURIComponent(correo)}&limit=1`,
+            { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
+          );
+          const filas = r.ok ? await r.json() : [];
+          const c = filas?.[0];
+          fotoFicha = c?.foto_url || "";
+          nombreFicha = c?.nombre || "";
+          rol = c?.rol || "";
+        }
+        setU({
+          nombre: nombreFicha || nombreGoogle,
+          foto: fotoFicha || fotoGoogle,   // la ficha manda; si no hay, la de Google
+          rol: rol || (await rolActual()),
+        });
       } catch { /* nada */ }
     })();
   }, []);
@@ -87,16 +106,16 @@ function Inicio() {
       {/* ——— Ficha del colaborador (cabecera profesional) ——— */}
       <Card className="border-0 p-0 overflow-hidden shadow-sm">
         <div
-          className="relative flex flex-wrap items-center justify-between gap-4 p-6 text-white"
+          className="relative flex flex-wrap items-center justify-between gap-4 px-8 py-9 text-white"
           style={{ background: `linear-gradient(120deg, ${NAVY} 0%, #103A3A 55%, #0C5C46 100%)` }}
         >
           {/* línea dorada superior */}
           <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: GOLD }} />
-          <div className="flex items-center gap-4">
-            {/* Foto de Google (si no existe, se ven las iniciales) */}
+          <div className="flex items-center gap-5">
+            {/* Foto redonda grande (ficha del colaborador; si no, iniciales) */}
             <div
-              className="relative grid h-16 w-16 place-items-center rounded-2xl bg-white/15 font-display text-2xl font-bold shadow overflow-hidden"
-              style={{ boxShadow: `0 0 0 2px ${GOLD}` }}
+              className="relative grid h-24 w-24 shrink-0 place-items-center rounded-full bg-white/15 font-display text-3xl font-bold shadow overflow-hidden"
+              style={{ boxShadow: `0 0 0 3px ${GOLD}` }}
             >
               {iniciales(nombre)}
               {usuario.foto && (
@@ -105,13 +124,13 @@ function Inicio() {
                   alt=""
                   referrerPolicy="no-referrer"
                   onError={(e) => e.currentTarget.remove()}
-                  className="absolute inset-0 h-full w-full rounded-2xl object-cover"
+                  className="absolute inset-0 h-full w-full rounded-full object-cover"
                 />
               )}
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: GOLD }}>JusticiaFácil · Despacho</p>
-              <h1 className="font-display text-2xl font-bold leading-tight">Buen día, {nombre}</h1>
+              <h1 className="font-display text-3xl font-bold leading-tight">Buen día, {nombre}</h1>
               <p className="text-sm text-white/80">Este es tu resumen del día.</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {(usuario.rol ? [usuario.rol] : []).map((r) => (
@@ -121,7 +140,7 @@ function Inicio() {
             </div>
           </div>
           <div className="text-right text-sm text-white/75 capitalize">
-            Hoy<br /><b className="font-display text-lg text-white capitalize">{hoy}</b><br />{mesAnio}
+            Hoy<br /><b className="font-display text-xl text-white capitalize">{hoy}</b><br />{mesAnio}
           </div>
         </div>
       </Card>
