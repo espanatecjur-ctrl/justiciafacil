@@ -1,15 +1,19 @@
 import type { ContratoTipo } from "./legal-types";
 import { plantillasDiipa } from "./contract-templates-diipa";
-import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos } from "./contract-campos-cliente";
+import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos, testigosCampo, beneficiariosCampos } from "./contract-campos-cliente";
 
 export interface PlantillaCampo {
   id: string;
   label: string;
-  tipo: "text" | "textarea" | "number" | "date" | "select" | "checkbox";
+  tipo: "text" | "textarea" | "number" | "date" | "select" | "checkbox" | "lista";
   opciones?: string[];
   requerido?: boolean;
   dependeDe?: { campo: string; valor: string | boolean };
   ayuda?: string;
+  /** Solo para tipo "lista": campos de cada renglón. */
+  subcampos?: PlantillaCampo[];
+  /** Valor inicial sugerido (p. ej. una cláusula editable). */
+  valorInicial?: string;
 }
 
 export interface PlantillaContrato {
@@ -66,6 +70,8 @@ const cartaCambioCampos: PlantillaCampo[] = [
   ...clienteContactoCampos,
   ...clienteEstadoCivilCampos,
   ...clienteApoderadoCampos,
+  ...testigosCampo,
+  ...beneficiariosCampos,
 ];
 
 const cartaCambioCuerpo = `CARTA DE INTENCIÓN DE CAMBIO
@@ -194,6 +200,12 @@ Sin otro particular, las partes manifiestan su confirmación y firma de la prese
 Las partes declaran haber leído íntegramente el contenido de la presente Carta, comprender sus alcances y firmar por su libre voluntad, sin que medie dolo, error o vicio del consentimiento.
 Atentamente.
 
+{{#hayBeneficiarios}}
+BENEFICIARIOS DESIGNADOS
+{{#each beneficiarios}}{{item.n}}. {{item.nombre}} — Parentesco/relación: {{item.parentesco}} — Tel. {{item.telefono}} — Participación: {{item.participacion}}%
+{{/each beneficiarios}}
+{{clausulaParticipacion}}
+{{/hayBeneficiarios}}
 
 _________________________________
 CLIENTE CESIONARIO
@@ -205,7 +217,11 @@ _________________________________
 REPRESENTANTE LEGAL
 {{apoderadoNombre}}
 {{apoderadoCargo}} — DIIPA, S.A. de C.V. (Inmuebles Accesibles)
-Fecha: {{fechaEmision}}`;
+Fecha: {{fechaEmision}}
+{{#hayTestigos}}
+Testigos:
+{{#each testigos}}{{item.n}}. ______________________  {{item.nombre}}   {{item.identificacion}}
+{{/each testigos}}{{/hayTestigos}}`;
 
 // ============================================================================
 //  PAQUETE DE CAMBIO — Documento 2: Contrato de Cambio de Garantía
@@ -232,6 +248,8 @@ const contratoCambioCampos: PlantillaCampo[] = [
   { id: "montoReciboLetra", label: "RECIBO · Cantidad con letra", tipo: "text", ayuda: "Ej. SETECIENTOS MIL" },
   { id: "formaPagoRecibo", label: "RECIBO · Forma de pago", tipo: "select", opciones: ["transferencia", "efectivo"] },
   { id: "porcentajeEtapaA", label: "RECIBO · Porcentaje de Etapa A pagado (%)", tipo: "text", ayuda: "Ej. 35" },
+  ...testigosCampo,
+  ...beneficiariosCampos,
 ];
 
 const contratoCambioCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
@@ -352,6 +370,12 @@ VIGÉSIMA QUINTA. Domicilios y notificaciones. Mientras las partes no notifiquen
 
 VIGÉSIMA SEXTA. Aceptación y firma. Enteradas las partes de la naturaleza jurídica, alcances, derechos y obligaciones de este instrumento, y no existiendo vicio alguno del consentimiento, manifiestan su total conformidad y lo firman por duplicado en la ciudad de {{ciudadFirma}}, {{estadoFirma}}, el día {{fechaFirma}}. Las partes declaran haber leído íntegramente su contenido, comprender sus alcances y firmarlo por su libre voluntad.
 
+{{#hayBeneficiarios}}
+BENEFICIARIOS DESIGNADOS
+{{#each beneficiarios}}{{item.n}}. {{item.nombre}} — Parentesco/relación: {{item.parentesco}} — Tel. {{item.telefono}} — Participación: {{item.participacion}}%
+{{/each beneficiarios}}
+{{clausulaParticipacion}}
+{{/hayBeneficiarios}}
 
 ______________________________________________________________
 C. {{apoderadoNombre}}
@@ -362,6 +386,10 @@ ______________________________________________________________
 C. {{nombreCliente}}
 Cliente
 
+{{#hayTestigos}}
+Testigos:
+{{#each testigos}}{{item.n}}. ______________________  {{item.nombre}}   {{item.identificacion}}
+{{/each testigos}}{{/hayTestigos}}
 
 ================================================================
 RECIBO DE PAGO DE HONORARIOS Y GESTIÓN
@@ -627,6 +655,13 @@ export function getPlantilla(tipo: ContratoTipo) {
   return plantillas.find((p) => p.tipo === tipo);
 }
 
+/** Valores por defecto sugeridos (p. ej. la cláusula de participación editable). */
+export function valoresIniciales(plantilla: PlantillaContrato): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const c of plantilla.campos) if (c.valorInicial !== undefined) out[c.id] = c.valorInicial;
+  return out;
+}
+
 /** Renderiza el cuerpo del contrato con valores y secciones condicionales. */
 export function renderContrato(plantilla: PlantillaContrato, valores: Record<string, unknown>) {
   let texto = plantilla.cuerpo;
@@ -642,6 +677,27 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
   const esModB = modalidad.startsWith("B");
   const esModC = modalidad.startsWith("C");
 
+  // helpers de listas (Parte 3)
+  const hayTestigos = Array.isArray(valores.testigos) && valores.testigos.length > 0;
+  const hayBeneficiarios = Array.isArray(valores.beneficiarios) && valores.beneficiarios.length > 0;
+
+  // Listas repetibles: {{#each NOMBRE}}...{{item.campo}}...{{/each NOMBRE}}
+  // ({{item.n}} = número de renglón 1,2,3…). Se expanden ANTES que los bloques.
+  texto = texto.replace(/\{\{#each ([a-zA-Z]+)\}\}([\s\S]*?)\{\{\/each \1\}\}/g, (_m, nombre, tpl) => {
+    const arr = valores[nombre];
+    if (!Array.isArray(arr) || arr.length === 0) return "";
+    return arr
+      .map((item, i) => {
+        const it = (item ?? {}) as Record<string, unknown>;
+        return tpl.replace(/\{\{item\.([a-zA-Z]+)\}\}/g, (_mm: string, campo: string) => {
+          if (campo === "n") return String(i + 1);
+          const v = it[campo];
+          return v === undefined || v === null || v === "" ? "" : String(v);
+        });
+      })
+      .join("");
+  });
+
   // Bloques condicionales {{#campo}}...{{/campo}}
   texto = texto.replace(/\{\{#([a-zA-Z]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_m, key, block) => {
     if (key === "esCasado") return esCasado ? block : "";
@@ -649,6 +705,8 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
     if (key === "esModA") return esModA ? block : "";
     if (key === "esModB") return esModB ? block : "";
     if (key === "esModC") return esModC ? block : "";
+    if (key === "hayTestigos") return hayTestigos ? block : "";
+    if (key === "hayBeneficiarios") return hayBeneficiarios ? block : "";
     const v = valores[key];
     if (v === true) return block;
     if (typeof v === "string" && v.length > 0) return block;
