@@ -83,3 +83,17 @@ export async function contarAcuerdosHoy(): Promise<number> {
     return 0;
   }
 }
+
+/** Cuenta expedientes por tipo de registro (exhorto / amparo / recurso / juicio). */
+export async function contarCasos(tipoRegistro: string): Promise<number> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/caso_juridico?select=id&tipo_registro=eq.${encodeURIComponent(tipoRegistro)}`,
+      { headers },
+    );
+    const d: unknown[] = r.ok ? await r.json() : [];
+    return d.length;
+  } catch {
+    return 0;
+  }
+}
