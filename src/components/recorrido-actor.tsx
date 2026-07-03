@@ -170,6 +170,12 @@ export function RecorridoActor({
   const cargas = n(d.predial) + n(d.agua) + n(d.condominio) + n(d.fiscales) + n(d.laborales) + n(d.otrosGravamenes);
   const hayLaboral = n(d.laborales) > 0;
   const hayFiscal = n(d.fiscales) > 0;
+  const avisoJV: ResultadoMotor | null = d.interpelacionJV === "si" ? {
+    semaforo: "verde",
+    etiqueta: "Interpelación (jurisdicción voluntaria)",
+    dato: d.interpelacionExpediente ? `exp. ${d.interpelacionExpediente}` : undefined,
+    detalle: `${d.interpelacionTipo || "Interpelación judicial"}${d.interpelacionJVFecha ? ` notificada el ${d.interpelacionJVFecha}` : ""}. Interrumpe la prescripción y la usucapión (Art. 1168 CCF).`,
+  } : null;
   const fin = useMemo(() => calculoFinanciero({
     capital: n(d.capital), tasaOrdinariaAnual: n(d.tasaOrd), tasaMoratoriaAnual: n(d.tasaMor),
     dias: n(d.dias), aplicarIVA: d.aplicarIVA === "si", gastos: n(d.gastos), valorUDI: n(d.valorUDI) || undefined,
@@ -241,6 +247,7 @@ export function RecorridoActor({
       { nombre: "Prescripción", r: rPresc },
       { nombre: "Caducidad", r: rCaduc },
       ...(usaUsucapion ? [{ nombre: "Usucapión", r: rUsuc }] : []),
+      ...(avisoJV ? [{ nombre: "Interpelación (JV)", r: avisoJV }] : []),
     ];
     try {
       await descargarPredictamenPDF({
@@ -412,7 +419,6 @@ export function RecorridoActor({
                     </select>
                   </Campo>
                   <Campo label="Expediente de la JV"><input className={inp} value={d.interpelacionExpediente} onChange={(e) => set("interpelacionExpediente", e.target.value)} placeholder="Ej. 512/2024" /></Campo>
-                  <Campo label="Juzgado de la JV"><input className={inp} value={d.interpelacionJuzgado} onChange={(e) => set("interpelacionJuzgado", e.target.value)} /></Campo>
                 </div>
                 <div>
                   <button
@@ -507,6 +513,7 @@ export function RecorridoActor({
             <H titulo="7 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
               <Aviso r={rPresc} /><Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
+              {avisoJV && <Aviso r={avisoJV} />}
               {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Registral", detalle: "Hipoteca no inscrita/vigente." }} />}
               {prelacionRiesgo && <Aviso r={{ semaforo: "naranja", etiqueta: "Prelación", detalle: "Hay acreedores anteriores (no primer lugar)." }} />}
               {anotacionesRiesgo && <Aviso r={{ semaforo: "amarillo", etiqueta: "Anotaciones / gravámenes", detalle: "Hay embargos, anotaciones o fideicomisos registrados." }} />}
