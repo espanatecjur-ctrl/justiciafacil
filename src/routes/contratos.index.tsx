@@ -128,6 +128,9 @@ function ContratosExistentes() {
                         }
                         return <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">Enviado</span>;
                       })()}
+                      {c.fecha_enviado && (
+                        <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">Enviado: {fmtFecha(c.fecha_enviado)}</div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right"><MenuAcciones c={c} onCambio={recargar} /></td>
                   </tr>
