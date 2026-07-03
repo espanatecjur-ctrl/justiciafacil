@@ -6,6 +6,7 @@ import { rolActual } from "@/lib/auth";
 import { DireccionDocumentos } from "@/components/direccion-documentos";
 import { DireccionAbogados } from "@/components/direccion-abogados";
 import { DireccionValidaciones } from "@/components/direccion-validaciones";
+import { DireccionFaseB } from "@/components/direccion-faseb";
 import type { Validacion } from "@/lib/direccion-validaciones";
 import { Briefcase, Upload, Users, BadgeCheck, Wallet, Lock, Loader2 } from "lucide-react";
 
@@ -84,17 +85,7 @@ function Direccion() {
       {tab === "documentos" && <DireccionDocumentos />}
       {tab === "abogados" && <DireccionAbogados />}
       {tab === "validaciones" && <DireccionValidaciones onPasarFaseB={(v) => { setSelFaseB(v); setTab("faseb"); }} />}
-      {tab === "faseb" && (
-        <div className="space-y-3">
-          {selFaseB && (
-            <Card className="legal-card border-emerald-200 p-4">
-              <p className="text-sm"><span className="font-semibold">Preparando Fase B</span> · Exp. {selFaseB.expediente || "—"}{selFaseB.cliente ? ` · ${selFaseB.cliente}` : ""}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{selFaseB.resumen}</p>
-            </Card>
-          )}
-          <PanelPlaceholder titulo="Fase B — cuentas y carta" desc="Solicitar por correo, llenar lo recibido y enviar a contabilidad para el pre-cobro." icon={Wallet} />
-        </div>
-      )}
+      {tab === "faseb" && <DireccionFaseB sel={selFaseB} />}
     </div>
   );
 }
