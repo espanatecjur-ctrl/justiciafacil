@@ -8,7 +8,7 @@
 //  imprimir SOLO la modalidad de cierre elegida.
 // ============================================================================
 import type { PlantillaCampo, PlantillaContrato } from "./contract-templates";
-import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos } from "./contract-campos-cliente";
+import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos, testigosCampo, beneficiariosCampos } from "./contract-campos-cliente";
 
 // ----------------------------------------------------------------------------
 //  1 · CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES (DIIPA — contrato de origen)
@@ -30,6 +30,8 @@ const prestacionDiipaCampos: PlantillaCampo[] = [
   { id: "montoReciboLetra", label: "RECIBO · Cantidad con letra", tipo: "text", ayuda: "Ej. SETECIENTOS MIL" },
   { id: "formaPagoRecibo", label: "RECIBO · Forma de pago", tipo: "select", opciones: ["transferencia", "efectivo"] },
   { id: "porcentajeEtapaA", label: "RECIBO · Porcentaje de Etapa A pagado (%)", tipo: "text", ayuda: "Ej. 35" },
+  ...testigosCampo,
+  ...beneficiariosCampos,
 ];
 
 const prestacionDiipaCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
@@ -146,11 +148,21 @@ VIGÉSIMA CUARTA. Domicilios y notificaciones. Mientras las partes no notifiquen
 
 VIGÉSIMA QUINTA. Aceptación y firma. Enteradas las partes de la naturaleza jurídica, alcances, derechos y obligaciones de este instrumento, y no existiendo vicio alguno del consentimiento, manifiestan su total conformidad y lo firman por duplicado en la ciudad de {{ciudadFirma}}, {{estadoFirma}}, el {{fechaFirma}}. Las partes declaran haber leído íntegramente su contenido, comprender sus alcances y firmarlo por su libre voluntad.
 
+{{#hayBeneficiarios}}
+BENEFICIARIOS DESIGNADOS
+{{#each beneficiarios}}{{item.n}}. {{item.nombre}} — Parentesco/relación: {{item.parentesco}} — Tel. {{item.telefono}} — Participación: {{item.participacion}}%
+{{/each beneficiarios}}
+{{clausulaParticipacion}}
+{{/hayBeneficiarios}}
 
 _______________________________          _______________________________
 C. {{apoderadoNombre}}                    C. {{nombreCliente}}
 {{apoderadoCargo}} — DIIPA, S.A. de C.V.  Cliente
 (Inmuebles Accesibles)
+{{#hayTestigos}}
+Testigos:
+{{#each testigos}}{{item.n}}. ______________________  {{item.nombre}}   {{item.identificacion}}
+{{/each testigos}}{{/hayTestigos}}
 
 
 GLOSARIO
@@ -328,6 +340,8 @@ const actaFiniquitoCampos: PlantillaCampo[] = [
   },
   { id: "habilitacionBasica", label: "Se realizó la habilitación básica", tipo: "checkbox" },
   { id: "remodelacionOpcional", label: "Se realizó la remodelación opcional (contratada por escrito)", tipo: "checkbox" },
+  ...testigosCampo,
+  ...beneficiariosCampos,
 ];
 
 const actaFiniquitoCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
@@ -367,13 +381,21 @@ OCTAVA. Obligaciones que subsisten. No obstante el finiquito, subsisten: (a) las
 
 NOVENA. Conformidad. Leída la presente acta y enteradas las partes de su contenido y alcances, la firman de conformidad por duplicado, sin que medie dolo, error, violencia ni vicio alguno del consentimiento.
 
+{{#hayBeneficiarios}}
+BENEFICIARIOS DESIGNADOS
+{{#each beneficiarios}}{{item.n}}. {{item.nombre}} — Parentesco/relación: {{item.parentesco}} — Tel. {{item.telefono}} — Participación: {{item.participacion}}%
+{{/each beneficiarios}}
+{{clausulaParticipacion}}
+{{/hayBeneficiarios}}
 
 _______________________________          _______________________________
 C. {{apoderadoNombre}}                    C. {{nombreCliente}}
 Por el Prestador — DIIPA                  Cliente
 (Inmuebles Accesibles)
 
-Testigos (opcional)
+Testigos{{#hayTestigos}} designados:
+{{#each testigos}}{{item.n}}. {{item.nombre}}   {{item.identificacion}}
+{{/each testigos}}{{/hayTestigos}}
 
 _______________________________          _______________________________
 Testigo                                   Testigo`;
