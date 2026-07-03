@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
-import { plantillas, renderContrato, type PlantillaCampo } from "@/lib/contract-templates";
+import { plantillas, renderContrato, valoresIniciales, type PlantillaCampo } from "@/lib/contract-templates";
 import type { ContratoTipo } from "@/lib/legal-types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,52 @@ function CampoControl({
       return <Input type="number" value={(valor as number) ?? ""} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : "")} />;
     case "date":
       return <Input type="date" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+    case "lista": {
+      const filas = Array.isArray(valor) ? (valor as Record<string, unknown>[]) : [];
+      const sub = campo.subcampos ?? [];
+      const setFilas = (nuevo: Record<string, unknown>[]) => onChange(nuevo);
+      return (
+        <div className="space-y-2">
+          {filas.map((fila, i) => (
+            <div key={i} className="rounded-md border border-border bg-muted/20 p-2.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-muted-foreground">#{i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => setFilas(filas.filter((_, j) => j !== i))}
+                  className="text-[11px] font-medium text-red-600 hover:underline"
+                >
+                  Quitar
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {sub.map((sc) => (
+                  <div key={sc.id}>
+                    <label className="text-[11px] text-muted-foreground">{sc.label}</label>
+                    <CampoControl
+                      campo={sc}
+                      valor={fila[sc.id]}
+                      onChange={(v) => {
+                        const copia = filas.map((f) => ({ ...f }));
+                        copia[i] = { ...copia[i], [sc.id]: v };
+                        setFilas(copia);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setFilas([...filas, {}])}
+            className="rounded-md border border-dashed border-input px-3 py-1.5 text-xs font-medium text-foreground/70 hover:bg-muted"
+          >
+            + Agregar {campo.label.toLowerCase()}
+          </button>
+        </div>
+      );
+    }
     default:
       return <Input value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
   }
@@ -132,6 +178,17 @@ function EditorContratos() {
     if (!c.dependeDe) return true;
     return valores[c.dependeDe.campo] === c.dependeDe.valor;
   });
+
+  // Siembra valores por defecto (p. ej. la cláusula de participación editable)
+  // sin pisar lo que ya haya escrito la persona.
+  useEffect(() => {
+    const defs = valoresIniciales(plantilla);
+    setValores((v) => {
+      const merged = { ...v };
+      for (const k in defs) if (merged[k] === undefined) merged[k] = defs[k];
+      return merged;
+    });
+  }, [plantilla]);
 
   const cuerpo = renderContrato(plantilla, valores);
 
