@@ -351,7 +351,17 @@ export function RecorridoActor({
                     <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
                       Busca el expediente en el boletín para ver si <b>asoma el amparo</b> (oficios del Juzgado de Distrito, suspensión recibida). El robot lee el boletín <b>estatal</b>, no el federal.
                     </p>
-                    <BuscadorBoletin expedienteInicial={d.expediente} estadoInicial={estadoRobot} />
+                    <BuscadorBoletin
+                      expedienteInicial={d.expediente}
+                      estadoInicial={estadoRobot}
+                      resaltarAmparo
+                      onHallazgoAmparo={(nota) => setD((p) => {
+                        const marca = nota.split("\n")[0];
+                        if (p.anotacionesHumanas.includes(marca)) return p; // no duplicar el mismo expediente
+                        const sep = p.anotacionesHumanas.trim() ? "\n\n" : "";
+                        return { ...p, anotacionesHumanas: p.anotacionesHumanas + sep + nota };
+                      })}
+                    />
                   </div>
                 )}
               </div>
