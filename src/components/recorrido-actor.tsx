@@ -56,6 +56,7 @@ interface Datos {
   // H4 posesión
   quienPosee: string; inicioPosesion: string; buenaFe: string; demandaDespojo: string;
   interpelacionJV: string; interpelacionJVFecha: string;
+  interpelacionTipo: string; interpelacionExpediente: string; interpelacionJuzgado: string;
   // H5 cargas
   predial: string; agua: string; condominio: string; fiscales: string; laborales: string; otrosGravamenes: string;
   // H6 financiero/viabilidad
@@ -75,6 +76,7 @@ const VACIO: Datos = {
   convenioRatificado: "no", convenioFecha: "", plazoPrescManual: "", plazoCaducManual: "",
   quienPosee: "", inicioPosesion: "", buenaFe: "no", demandaDespojo: "no",
   interpelacionJV: "no", interpelacionJVFecha: "",
+  interpelacionTipo: "", interpelacionExpediente: "", interpelacionJuzgado: "",
   predial: "", agua: "", condominio: "", fiscales: "", laborales: "", otrosGravamenes: "",
   capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "",
   valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
@@ -133,6 +135,7 @@ export function RecorridoActor({
 }) {
   const [paso, setPaso] = useState(0);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
+  const [mostrarBoletinJV, setMostrarBoletinJV] = useState(false);
   const [d, setD] = useState<Datos>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
@@ -394,6 +397,42 @@ export function RecorridoActor({
               <Campo label="¿Interpelación / diligencia de jurisdicción voluntaria notificada?"><SiNo v={d.interpelacionJV} on={(x) => set("interpelacionJV", x)} /></Campo>
               {d.interpelacionJV === "si" && <Campo label="Fecha de la interpelación (jurisdicción voluntaria)"><input type="date" className={inp} value={d.interpelacionJVFecha} onChange={(e) => set("interpelacionJVFecha", e.target.value)} /></Campo>}
             </div>
+            {d.interpelacionJV === "si" && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <p className="text-xs font-semibold text-muted-foreground">Datos de la interpelación (jurisdicción voluntaria) — para ubicarla</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Campo label="Tipo de interpelación">
+                    <select className={inp} value={d.interpelacionTipo} onChange={(e) => set("interpelacionTipo", e.target.value)}>
+                      <option value="">—</option>
+                      <option>Requerimiento / interpelación de pago</option>
+                      <option>Diligencias preparatorias</option>
+                      <option>Notificación por jurisdicción voluntaria</option>
+                      <option>Consignación de pago</option>
+                      <option>Otra</option>
+                    </select>
+                  </Campo>
+                  <Campo label="Expediente de la JV"><input className={inp} value={d.interpelacionExpediente} onChange={(e) => set("interpelacionExpediente", e.target.value)} placeholder="Ej. 512/2024" /></Campo>
+                  <Campo label="Juzgado de la JV"><input className={inp} value={d.interpelacionJuzgado} onChange={(e) => set("interpelacionJuzgado", e.target.value)} /></Campo>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarBoletinJV((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+                  >
+                    <Search className="h-3.5 w-3.5" /> {mostrarBoletinJV ? "Ocultar búsqueda de la JV" : "Buscar la JV en el boletín (robot)"}
+                  </button>
+                  {mostrarBoletinJV && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+                        Las jurisdicciones voluntarias <b>sí aparecen</b> en el boletín estatal. Busca el expediente de la JV para confirmar la interpelación y su fecha.
+                      </p>
+                      <BuscadorBoletin expedienteInicial={d.interpelacionExpediente} estadoInicial={estadoRobot} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">Ajustar plazos a mano (opcional)</summary>
               <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
