@@ -34,7 +34,9 @@ const fmt = (s?: string) => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 };
 
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco" } = {}) {
+const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
+
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean } = {}) {
   const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
@@ -85,6 +87,8 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial }: { exp
 
   const acuerdos = res?.acuerdos || [];
   const party = acuerdos[0];
+  const esAmparo = (a: Acuerdo) => resaltarAmparo && RE_AMPARO.test(`${a.acuerdo || ""} ${a.etapa || ""} ${a.notificacion || ""}`);
+  const acuerdosAmparo = resaltarAmparo ? acuerdos.filter(esAmparo) : [];
 
   return (
     <div className="space-y-4">
@@ -188,17 +192,33 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial }: { exp
                   <p className="text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
                 )}
               </div>
+              {resaltarAmparo && acuerdosAmparo.length > 0 && (
+                <div className="mb-2 rounded-lg border border-orange-300 bg-orange-50 p-2.5 text-xs text-orange-800">
+                  <b>{acuerdosAmparo.length}</b> acuerdo(s) mencionan <b>amparo / suspensión / Distrito</b>. Revísalos: pueden afectar la compra de la cesión.
+                </div>
+              )}
+              {resaltarAmparo && acuerdos.length > 0 && acuerdosAmparo.length === 0 && (
+                <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                  No se detectaron acuerdos que mencionen amparo en el expediente local (recuerda que el amparo federal puede no reflejarse aquí).
+                </div>
+              )}
               <div className="space-y-2">
-                {acuerdos.map((a, i) => (
-                  <div key={i} className="rounded-lg border border-border p-3">
+                {acuerdos.map((a, i) => {
+                  const amp = esAmparo(a);
+                  return (
+                  <div key={i} className={`rounded-lg border p-3 ${amp ? "border-orange-300 bg-orange-50" : "border-border"}`}>
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      {a.etapa ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{a.etapa}</span> : <span />}
+                      <div className="flex items-center gap-1.5">
+                        {a.etapa ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{a.etapa}</span> : <span />}
+                        {amp && <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-900">AMPARO</span>}
+                      </div>
                       <span className="text-xs text-muted-foreground">{fmt(a.fecha)}</span>
                     </div>
                     <p className="text-sm">{a.acuerdo}</p>
                     {a.notificacion && <p className="mt-0.5 text-[11px] text-muted-foreground">Notificación: {a.notificacion}</p>}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
