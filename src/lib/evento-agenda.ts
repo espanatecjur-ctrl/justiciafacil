@@ -46,6 +46,19 @@ export async function listarEventosMes(anio: number, mes: number): Promise<Event
   }
 }
 
+/** Próximos eventos de HOY en adelante (para el resumen del inicio). */
+export async function listarProximos(limite = 6): Promise<Evento[]> {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10);
+    return await sbSelect<Evento>(
+      "evento_agenda",
+      `select=*&fecha=gte.${hoy}&order=fecha.asc,hora.asc&limit=${limite}`,
+    );
+  } catch {
+    return [];
+  }
+}
+
 export async function crearEvento(e: Omit<Evento, "id" | "created_at">): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/evento_agenda`, {
