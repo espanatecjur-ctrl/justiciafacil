@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, type Atrasada, type Cita } from "@/lib/resumen-inicio";
+import { listarProximos, ESTILO_EVENTO, type Evento } from "@/lib/evento-agenda";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
@@ -91,9 +92,11 @@ function Inicio() {
   const [unidades, setUnidades] = useState({ URRJ: 0, UCP: 0, UCM: 0, UDP: 0 });
   const [contratosPend, setContratosPend] = useState(0);
   const [agenda, setAgenda] = useState<Cita[]>([]);
+  const [proximos, setProximos] = useState<Evento[]>([]);
   useEffect(() => {
     listarAtrasadas().then(setAtrasadas);
     listarAgenda().then(setAgenda);
+    listarProximos(6).then(setProximos);
     contarAcuerdosHoy().then(setAcuerdosHoy);
     Promise.all([contarCasos("exhorto"), contarCasos("amparo"), contarCasos("recurso")])
       .then(([exhorto, amparo, recurso]) => setConteos({ exhorto, amparo, recurso }));
@@ -153,7 +156,11 @@ function Inicio() {
         <Kpi icon={AlertTriangle} n={String(atrasadas.length)} l="Actuaciones atrasadas" tone="bg-red-100 text-red-700" />
       </div>
 
-      {/* ——— Áreas: Exhortos / Amparos / Recursos ——— */}
+      {/* ——— Áreas ——— */}
+      <div className="flex items-center gap-2">
+        <span className="h-4 w-1 rounded" style={{ background: GOLD }} />
+        <h3 className="font-display text-base font-semibold">Áreas</h3>
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Link to="/exhortos" className="legal-card flex items-center gap-3 p-4 transition hover:border-[color:var(--teal)]">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-[#0B1E3A]/10 text-[#0B1E3A]"><Send className="h-5 w-5" /></div>
@@ -290,45 +297,45 @@ function Inicio() {
 
         {/* ——— Derecha ——— */}
         <div className="space-y-6">
+          {/* Próximo en tu calendario */}
+          <Card className="legal-card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4" style={{ color: GOLD }} />
+                <h3 className="font-display text-base font-semibold">Próximo en tu calendario</h3>
+              </div>
+              <Link to="/calendario" className="text-xs font-medium text-[color:var(--teal)] hover:underline">Ver todo</Link>
+            </div>
+            {proximos.length === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">No tienes eventos próximos. <Link to="/calendario" className="text-[color:var(--teal)] hover:underline">Agenda uno</Link>.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {proximos.map((e) => {
+                  const st = ESTILO_EVENTO[e.tipo || "evento"] ?? ESTILO_EVENTO.evento;
+                  const f = e.fecha ? new Date(e.fecha) : null;
+                  const dia = f ? String(f.getUTCDate()).padStart(2, "0") : "—";
+                  const mes = f ? f.toLocaleDateString("es-MX", { month: "short", timeZone: "UTC" }) : "";
+                  return (
+                    <Link key={e.id} to="/calendario" className="flex items-center gap-3 py-2.5 hover:bg-muted/40 -mx-1 px-1 rounded-md">
+                      <div className="w-11 text-center">
+                        <p className="font-display text-lg font-bold leading-none">{dia}</p>
+                        <p className="text-[10px] uppercase text-muted-foreground">{mes}</p>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{e.titulo || "(sin título)"}</p>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${st.bg} ${st.text}`}>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: st.dot }} /> {st.label}{e.hora ? ` · ${e.hora}` : ""}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
           {/* Mis tareas (asignadas a mí) */}
           <MisTareas />
-
-          {/* Validaciones pendientes */}
-          <Card className="legal-card p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <BadgeCheck className="h-4 w-4" style={{ color: GOLD }} />
-              <h3 className="font-display text-base font-semibold">Validaciones pendientes</h3>
-            </div>
-            <div className="divide-y divide-border">
-              {VALIDACIONES.map((v) => (
-                <Link key={v.t} to={v.to} className="flex items-center gap-3 py-2.5 hover:bg-muted/40 rounded-md px-1 -mx-1">
-                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#C2A24C]/15 text-[#8A6E22]"><v.icon className="h-4 w-4" /></div>
-                  <p className="flex-1 text-sm">{v.t}</p>
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{v.n}</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </Link>
-              ))}
-            </div>
-          </Card>
-
-          {/* Próximo vencimiento */}
-          <Card className="legal-card p-5">
-            <div className="mb-2 flex items-center gap-2">
-              <CalendarClock className="h-4 w-4" style={{ color: NAVY }} />
-              <h3 className="font-display text-base font-semibold">Próximo vencimiento</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">El <b>26 de junio</b> vence un término de contestación. Si pasa la fecha sin acuerdo, el aviso escala a <b>DIL</b> y <b>DGE</b>.</p>
-          </Card>
-
-          {/* Áreas */}
-          <Card className="legal-card p-5">
-            <h3 className="font-display text-base font-semibold mb-3">Áreas que cubro</h3>
-            <div className="flex flex-wrap gap-2">
-              {["Jurídico", "URRJ · Pre-dictamen", "Demandas y litigios", "Amparos", "Exhortos"].map((a) => (
-                <span key={a} className="rounded-full border px-3 py-1 text-xs font-medium" style={{ borderColor: `${GOLD}66`, color: NAVY, background: `${GOLD}10` }}>{a}</span>
-              ))}
-            </div>
-          </Card>
         </div>
       </div>
     </div>
