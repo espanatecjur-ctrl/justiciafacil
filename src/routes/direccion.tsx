@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { rolActual } from "@/lib/auth";
 import { DireccionDocumentos } from "@/components/direccion-documentos";
+import { DireccionAbogados } from "@/components/direccion-abogados";
 import { Briefcase, Upload, Users, BadgeCheck, Wallet, Lock, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/direccion")({
@@ -78,7 +79,7 @@ function Direccion() {
 
       {/* Contenido de la pestaña (se conecta en las siguientes partes) */}
       {tab === "documentos" && <DireccionDocumentos />}
-      {tab === "abogados" && <PanelPlaceholder titulo="Abogados — asignar y avances" desc="Asignar abogados y ver el semáforo de avance (verde · ámbar 7 días · rojo 14 días)." icon={Users} />}
+      {tab === "abogados" && <DireccionAbogados />}
       {tab === "validaciones" && <PanelPlaceholder titulo="Validaciones positivas" desc="Dictámenes positivos de UCP con ficha, resumen y el porqué, listos para compra." icon={BadgeCheck} />}
       {tab === "faseb" && <PanelPlaceholder titulo="Fase B — cuentas y carta" desc="Solicitar por correo, llenar lo recibido y enviar a contabilidad para el pre-cobro." icon={Wallet} />}
     </div>
