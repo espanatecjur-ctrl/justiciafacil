@@ -97,3 +97,28 @@ export async function contarCasos(tipoRegistro: string): Promise<number> {
     return 0;
   }
 }
+
+/** Cuenta expedientes por unidad (URRJ / UCP / UCM / UDP). */
+export async function contarPorUnidad(unidad: string): Promise<number> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/caso_juridico?select=id&unidad=eq.${encodeURIComponent(unidad)}`,
+      { headers },
+    );
+    const d: unknown[] = r.ok ? await r.json() : [];
+    return d.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Solicitudes de contrato que aún NO se han entregado. */
+export async function contarContratosPendientes(): Promise<number> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_contrato?select=estado`, { headers });
+    const d: Array<{ estado: string | null }> = r.ok ? await r.json() : [];
+    return d.filter((s) => String(s.estado || "").toLowerCase() !== "entregada").length;
+  } catch {
+    return 0;
+  }
+}
