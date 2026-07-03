@@ -69,3 +69,21 @@ export const beneficiariosCampos: PlantillaCampo[] = [
     valorInicial: CLAUSULA_PARTICIPACION_DEFAULT,
   },
 ];
+
+/** Vínculos a clientes (JurisConecta) y garantías (caso_juridico), con opción manual. */
+export const vinculosCampos: PlantillaCampo[] = [
+  {
+    id: "clientesVinculados",
+    label: "Clientes vinculados",
+    tipo: "vinculo",
+    fuente: "clientes",
+    ayuda: "Busca en JurisConecta o agrega manual. Puedes vincular varios.",
+  },
+  {
+    id: "garantiasVinculadas",
+    label: "Garantías vinculadas",
+    tipo: "vinculo",
+    fuente: "garantias",
+    ayuda: "Busca las garantías registradas o agrega manual; marca el área (URRJ/UCP/UCM/UFC). Puedes vincular varias.",
+  },
+];
