@@ -36,7 +36,7 @@ const fmt = (s?: string) => {
 
 const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
 
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean } = {}) {
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void } = {}) {
   const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
@@ -48,6 +48,7 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
   const [cargando, setCargando] = useState(false);
   const [res, setRes] = useState<Resp | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [agregado, setAgregado] = useState(false);
 
   useEffect(() => {
     sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000")
@@ -89,6 +90,10 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
   const party = acuerdos[0];
   const esAmparo = (a: Acuerdo) => resaltarAmparo && RE_AMPARO.test(`${a.acuerdo || ""} ${a.etapa || ""} ${a.notificacion || ""}`);
   const acuerdosAmparo = resaltarAmparo ? acuerdos.filter(esAmparo) : [];
+  const notaAmparo = () => {
+    const lineas = acuerdosAmparo.map((a) => `- ${fmt(a.fecha)} · ${a.acuerdo || ""}`).join("\n");
+    return `Amparo detectado en boletín (exp. ${party?.expediente || exp}):\n${lineas}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -195,6 +200,16 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
               {resaltarAmparo && acuerdosAmparo.length > 0 && (
                 <div className="mb-2 rounded-lg border border-orange-300 bg-orange-50 p-2.5 text-xs text-orange-800">
                   <b>{acuerdosAmparo.length}</b> acuerdo(s) mencionan <b>amparo / suspensión / Distrito</b>. Revísalos: pueden afectar la compra de la cesión.
+                  {onHallazgoAmparo && (
+                    <button
+                      type="button"
+                      disabled={agregado}
+                      onClick={() => { onHallazgoAmparo(notaAmparo()); setAgregado(true); }}
+                      className="mt-2 block rounded-md bg-orange-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-60"
+                    >
+                      {agregado ? "Agregado al dictamen" : "Agregar hallazgo al dictamen"}
+                    </button>
+                  )}
                 </div>
               )}
               {resaltarAmparo && acuerdos.length > 0 && acuerdosAmparo.length === 0 && (
