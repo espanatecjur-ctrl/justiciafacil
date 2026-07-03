@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, contarAudienciasHoy, contarPredictamenes, type Atrasada, type Cita } from "@/lib/resumen-inicio";
+import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, contarAudienciasHoy, contarPredictamenes, mapaUnidadPorCaso, type Atrasada, type Cita } from "@/lib/resumen-inicio";
 import { listarProximos, ESTILO_EVENTO, type Evento } from "@/lib/evento-agenda";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
@@ -95,10 +95,12 @@ function Inicio() {
   const [contratosPend, setContratosPend] = useState(0);
   const [agenda, setAgenda] = useState<Cita[]>([]);
   const [proximos, setProximos] = useState<Evento[]>([]);
+  const [mapaU, setMapaU] = useState<Record<string, string>>({});
   useEffect(() => {
     listarAtrasadas().then(setAtrasadas);
     listarAgenda().then(setAgenda);
     listarProximos(6).then(setProximos);
+    mapaUnidadPorCaso().then(setMapaU);
     contarAcuerdosHoy().then(setAcuerdosHoy);
     contarAudienciasHoy().then(setAudienciasHoy);
     contarPredictamenes().then(setPredictamenes);
@@ -108,6 +110,14 @@ function Inicio() {
       .then(([URRJ, UCP, UCM, UDP]) => setUnidades({ URRJ, UCP, UCM, UDP }));
     contarContratosPendientes().then(setContratosPend);
   }, []);
+
+  // Cuántos atrasados tiene cada unidad (cruzando el expediente con su unidad).
+  const atrasoUnidad: Record<string, number> = {};
+  for (const a of atrasadas) {
+    const u = a.caso_id ? mapaU[a.caso_id] : "";
+    if (u) atrasoUnidad[u] = (atrasoUnidad[u] || 0) + 1;
+  }
+
   return (
     <div className="space-y-6">
       {/* ——— Ficha del colaborador (cabecera profesional) ——— */}
@@ -194,21 +204,25 @@ function Inicio() {
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">URRJ</p>
             <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.URRJ}</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+            {atrasoUnidad.URRJ > 0 && <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">{atrasoUnidad.URRJ} atrasado{atrasoUnidad.URRJ === 1 ? "" : "s"}</span>}
           </Link>
           <Link to="/ucp" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">UCP</p>
             <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.UCP}</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+            {atrasoUnidad.UCP > 0 && <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">{atrasoUnidad.UCP} atrasado{atrasoUnidad.UCP === 1 ? "" : "s"}</span>}
           </Link>
           <Link to="/ucm" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">UCM</p>
             <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.UCM}</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+            {atrasoUnidad.UCM > 0 && <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">{atrasoUnidad.UCM} atrasado{atrasoUnidad.UCM === 1 ? "" : "s"}</span>}
           </Link>
           <Link to="/udp" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0B1E3A]">UDP</p>
             <p className="mt-1 font-display text-2xl font-bold leading-none">{unidades.UDP}</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">expedientes</p>
+            {atrasoUnidad.UDP > 0 && <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">{atrasoUnidad.UDP} atrasado{atrasoUnidad.UDP === 1 ? "" : "s"}</span>}
           </Link>
           <Link to="/contratos" className="legal-card p-4 transition hover:border-[color:var(--teal)]">
             <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#8A6E22]"><FileText className="h-3 w-3" /> Contratos</p>
