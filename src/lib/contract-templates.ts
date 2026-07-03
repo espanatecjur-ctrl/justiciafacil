@@ -1,17 +1,19 @@
 import type { ContratoTipo } from "./legal-types";
 import { plantillasDiipa } from "./contract-templates-diipa";
-import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos, testigosCampo, beneficiariosCampos } from "./contract-campos-cliente";
+import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos, testigosCampo, beneficiariosCampos, vinculosCampos } from "./contract-campos-cliente";
 
 export interface PlantillaCampo {
   id: string;
   label: string;
-  tipo: "text" | "textarea" | "number" | "date" | "select" | "checkbox" | "lista";
+  tipo: "text" | "textarea" | "number" | "date" | "select" | "checkbox" | "lista" | "vinculo";
   opciones?: string[];
   requerido?: boolean;
   dependeDe?: { campo: string; valor: string | boolean };
   ayuda?: string;
   /** Solo para tipo "lista": campos de cada renglón. */
   subcampos?: PlantillaCampo[];
+  /** Solo para tipo "vinculo": de dónde se buscan los registros. */
+  fuente?: "clientes" | "garantias";
   /** Valor inicial sugerido (p. ej. una cláusula editable). */
   valorInicial?: string;
 }
@@ -72,6 +74,7 @@ const cartaCambioCampos: PlantillaCampo[] = [
   ...clienteApoderadoCampos,
   ...testigosCampo,
   ...beneficiariosCampos,
+  ...vinculosCampos,
 ];
 
 const cartaCambioCuerpo = `CARTA DE INTENCIÓN DE CAMBIO
@@ -200,6 +203,14 @@ Sin otro particular, las partes manifiestan su confirmación y firma de la prese
 Las partes declaran haber leído íntegramente el contenido de la presente Carta, comprender sus alcances y firmar por su libre voluntad, sin que medie dolo, error o vicio del consentimiento.
 Atentamente.
 
+{{#hayGarantiasVinculadas}}
+GARANTÍAS VINCULADAS A ESTE CONTRATO
+{{#each garantiasVinculadas}}{{item.n}}. Exp. {{item.expediente}} · {{item.direccion}} · Área: {{item.area}}
+{{/each garantiasVinculadas}}{{/hayGarantiasVinculadas}}
+{{#hayClientesVinculados}}
+CLIENTES VINCULADOS A ESTE CONTRATO
+{{#each clientesVinculados}}{{item.n}}. {{item.nombre}} · Folio: {{item.folio}}
+{{/each clientesVinculados}}{{/hayClientesVinculados}}
 {{#hayBeneficiarios}}
 BENEFICIARIOS DESIGNADOS
 {{#each beneficiarios}}{{item.n}}. {{item.nombre}} — Parentesco/relación: {{item.parentesco}} — Tel. {{item.telefono}} — Participación: {{item.participacion}}%
@@ -250,6 +261,7 @@ const contratoCambioCampos: PlantillaCampo[] = [
   { id: "porcentajeEtapaA", label: "RECIBO · Porcentaje de Etapa A pagado (%)", tipo: "text", ayuda: "Ej. 35" },
   ...testigosCampo,
   ...beneficiariosCampos,
+  ...vinculosCampos,
 ];
 
 const contratoCambioCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
@@ -370,6 +382,14 @@ VIGÉSIMA QUINTA. Domicilios y notificaciones. Mientras las partes no notifiquen
 
 VIGÉSIMA SEXTA. Aceptación y firma. Enteradas las partes de la naturaleza jurídica, alcances, derechos y obligaciones de este instrumento, y no existiendo vicio alguno del consentimiento, manifiestan su total conformidad y lo firman por duplicado en la ciudad de {{ciudadFirma}}, {{estadoFirma}}, el día {{fechaFirma}}. Las partes declaran haber leído íntegramente su contenido, comprender sus alcances y firmarlo por su libre voluntad.
 
+{{#hayGarantiasVinculadas}}
+GARANTÍAS VINCULADAS A ESTE CONTRATO
+{{#each garantiasVinculadas}}{{item.n}}. Exp. {{item.expediente}} · {{item.direccion}} · Área: {{item.area}}
+{{/each garantiasVinculadas}}{{/hayGarantiasVinculadas}}
+{{#hayClientesVinculados}}
+CLIENTES VINCULADOS A ESTE CONTRATO
+{{#each clientesVinculados}}{{item.n}}. {{item.nombre}} · Folio: {{item.folio}}
+{{/each clientesVinculados}}{{/hayClientesVinculados}}
 {{#hayBeneficiarios}}
 BENEFICIARIOS DESIGNADOS
 {{#each beneficiarios}}{{item.n}}. {{item.nombre}} — Parentesco/relación: {{item.parentesco}} — Tel. {{item.telefono}} — Participación: {{item.participacion}}%
@@ -680,6 +700,9 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
   // helpers de listas (Parte 3)
   const hayTestigos = Array.isArray(valores.testigos) && valores.testigos.length > 0;
   const hayBeneficiarios = Array.isArray(valores.beneficiarios) && valores.beneficiarios.length > 0;
+  // helpers de vínculos (Parte 4)
+  const hayClientesVinculados = Array.isArray(valores.clientesVinculados) && valores.clientesVinculados.length > 0;
+  const hayGarantiasVinculadas = Array.isArray(valores.garantiasVinculadas) && valores.garantiasVinculadas.length > 0;
 
   // Listas repetibles: {{#each NOMBRE}}...{{item.campo}}...{{/each NOMBRE}}
   // ({{item.n}} = número de renglón 1,2,3…). Se expanden ANTES que los bloques.
@@ -707,6 +730,8 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
     if (key === "esModC") return esModC ? block : "";
     if (key === "hayTestigos") return hayTestigos ? block : "";
     if (key === "hayBeneficiarios") return hayBeneficiarios ? block : "";
+    if (key === "hayClientesVinculados") return hayClientesVinculados ? block : "";
+    if (key === "hayGarantiasVinculadas") return hayGarantiasVinculadas ? block : "";
     const v = valores[key];
     if (v === true) return block;
     if (typeof v === "string" && v.length > 0) return block;
