@@ -34,15 +34,15 @@ const fmt = (s?: string) => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 };
 
-export function BuscadorBoletin() {
-  const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">("sinaloa");
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco" } = {}) {
+  const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
   const [juzgado, setJuzgado] = useState("");
   const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS[1]); // Segundo Civil por defecto
   const [jalJudges, setJalJudges] = useState<JuzgadoJAL[]>([]);
   const [jalCode, setJalCode] = useState("");
-  const [exp, setExp] = useState("");
+  const [exp, setExp] = useState(expedienteInicial);
   const [cargando, setCargando] = useState(false);
   const [res, setRes] = useState<Resp | null>(null);
   const [err, setErr] = useState<string | null>(null);
