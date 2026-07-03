@@ -55,6 +55,7 @@ interface Datos {
   convenioRatificado: string; convenioFecha: string; plazoPrescManual: string; plazoCaducManual: string;
   // H4 posesión
   quienPosee: string; inicioPosesion: string; buenaFe: string; demandaDespojo: string;
+  interpelacionJV: string; interpelacionJVFecha: string;
   // H5 cargas
   predial: string; agua: string; condominio: string; fiscales: string; otrosGravamenes: string;
   // H6 financiero/viabilidad
@@ -73,6 +74,7 @@ const VACIO: Datos = {
   ultimoPago: "", emplazado: "no", fechaEmplazamiento: "", tipoAccion: "hipotecaria",
   convenioRatificado: "no", convenioFecha: "", plazoPrescManual: "", plazoCaducManual: "",
   quienPosee: "", inicioPosesion: "", buenaFe: "no", demandaDespojo: "no",
+  interpelacionJV: "no", interpelacionJVFecha: "",
   predial: "", agua: "", condominio: "", fiscales: "", otrosGravamenes: "",
   capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "",
   valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
@@ -149,7 +151,8 @@ export function RecorridoActor({
     ultimoPago: d.ultimoPago, emplazado: d.emplazado === "si", fechaEmplazamiento: d.fechaEmplazamiento,
     tipoAccion: d.tipoAccion, convenioRatificadoFecha: d.convenioRatificado === "si" ? d.convenioFecha : undefined,
     plazoManualAnios: d.plazoPrescManual ? n(d.plazoPrescManual) : undefined,
-  }), [d.ultimoPago, d.emplazado, d.fechaEmplazamiento, d.tipoAccion, d.convenioRatificado, d.convenioFecha, d.plazoPrescManual]);
+    interpelacionFecha: d.interpelacionJV === "si" ? (d.interpelacionJVFecha || undefined) : undefined,
+  }), [d.ultimoPago, d.emplazado, d.fechaEmplazamiento, d.tipoAccion, d.convenioRatificado, d.convenioFecha, d.plazoPrescManual, d.interpelacionJV, d.interpelacionJVFecha]);
 
   const rCaduc = useMemo(() => motorCaducidad({
     ultimaActuacion: d.ultimaActuacion, estado: d.estado,
@@ -158,7 +161,8 @@ export function RecorridoActor({
 
   const rUsuc = useMemo(() => motorUsucapion({
     inicioPosesion: d.inicioPosesion, buenaFe: d.buenaFe === "si", hayDemandaDespojo: d.demandaDespojo === "si",
-  }), [d.inicioPosesion, d.buenaFe, d.demandaDespojo]);
+    hayInterpelacion: d.interpelacionJV === "si",
+  }), [d.inicioPosesion, d.buenaFe, d.demandaDespojo, d.interpelacionJV]);
 
   const cargas = n(d.predial) + n(d.agua) + n(d.condominio) + n(d.fiscales) + n(d.otrosGravamenes);
   const fin = useMemo(() => calculoFinanciero({
@@ -364,6 +368,10 @@ export function RecorridoActor({
                     />
                   </div>
                 )}
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Búsqueda de amparo <b>federal</b> directa:{" "}
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">en construcción</span>. Por ahora se revisa el reflejo en el boletín estatal.
+                </p>
               </div>
             )}
           </div>
@@ -400,6 +408,8 @@ export function RecorridoActor({
               <Campo label="Posesión desde (fecha)"><input type="date" className={inp} value={d.inicioPosesion} onChange={(e) => set("inicioPosesion", e.target.value)} /></Campo>
               <Campo label="¿Tiene título aparente (buena fe)?"><SiNo v={d.buenaFe} on={(x) => set("buenaFe", x)} /></Campo>
               <Campo label="¿Hay demanda de despojo?"><SiNo v={d.demandaDespojo} on={(x) => set("demandaDespojo", x)} /></Campo>
+              <Campo label="¿Interpelación / diligencia de jurisdicción voluntaria notificada al poseedor?"><SiNo v={d.interpelacionJV} on={(x) => set("interpelacionJV", x)} /></Campo>
+              {d.interpelacionJV === "si" && <Campo label="Fecha de la interpelación (jurisdicción voluntaria)"><input type="date" className={inp} value={d.interpelacionJVFecha} onChange={(e) => set("interpelacionJVFecha", e.target.value)} /></Campo>}
             </div>
             {usaUsucapion ? <Aviso r={rUsuc} /> : <p className="text-xs text-muted-foreground">El motor de usucapión se activa cuando hay un tercero poseyendo o la posición es Sucesorio.</p>}
           </div>
