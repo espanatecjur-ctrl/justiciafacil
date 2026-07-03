@@ -168,6 +168,8 @@ export function RecorridoActor({
     [d.valorComercial, adeudoTotal, cargas, d.costosOperativos, d.precioCesion, d.margenObjetivo]);
 
   const registralRojo = d.hipotecaInscrita === "no";
+  const prelacionRiesgo = d.prelacion === "Hay acreedores anteriores";
+  const anotacionesRiesgo = d.anotaciones.trim() !== "";
   const fmt = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
   // ---- dictamen sugerido SOLO por lo jurídico (la viabilidad económica es de Administración) ----
@@ -175,11 +177,13 @@ export function RecorridoActor({
     const sems: Semaforo[] = [rPresc.semaforo, rCaduc.semaforo];
     if (usaUsucapion) sems.push(rUsuc.semaforo);
     if (registralRojo) sems.push("rojo");
+    if (prelacionRiesgo) sems.push("naranja");
+    if (anotacionesRiesgo) sems.push("amarillo");
     if (sems.includes("rojo")) return { txt: "NEGATIVO", color: "bg-red-50 text-red-800 border-red-200" };
     if (sems.includes("naranja") || sems.includes("amarillo")) return { txt: "CONDICIONADO", color: "bg-amber-50 text-amber-800 border-amber-200" };
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
-  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo]);
+  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo]);
 
   // avisa los resultados de motor hacia afuera (para la ficha UCP)
   useEffect(() => {
@@ -304,6 +308,8 @@ export function RecorridoActor({
               <Campo label="Anotaciones / embargos / fideicomisos"><input className={inp} value={d.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} /></Campo>
             </div>
             {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Riesgo grave", detalle: "La hipoteca no está inscrita/vigente. Sin inscripción, la cesión es muy riesgosa (normalmente sería PARO)." }} />}
+            {prelacionRiesgo && <Aviso r={{ semaforo: "naranja", etiqueta: "Prelación", detalle: "Hay acreedores anteriores: la hipoteca no está en primer lugar. Riesgo alto sobre la recuperación de la garantía." }} />}
+            {anotacionesRiesgo && <Aviso r={{ semaforo: "amarillo", etiqueta: "Anotaciones / gravámenes", detalle: "Hay embargos, anotaciones o fideicomisos registrados. Revisar su alcance antes de avanzar." }} />}
           </div>
         )}
 
@@ -403,6 +409,8 @@ export function RecorridoActor({
             <div className="space-y-2">
               <Aviso r={rPresc} /><Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
               {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Registral", detalle: "Hipoteca no inscrita/vigente." }} />}
+              {prelacionRiesgo && <Aviso r={{ semaforo: "naranja", etiqueta: "Prelación", detalle: "Hay acreedores anteriores (no primer lugar)." }} />}
+              {anotacionesRiesgo && <Aviso r={{ semaforo: "amarillo", etiqueta: "Anotaciones / gravámenes", detalle: "Hay embargos, anotaciones o fideicomisos registrados." }} />}
             </div>
             <div className={`rounded-lg border p-4 ${dictamen.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Pre-dictamen del sistema (sugerido): {dictamen.txt}</p>
