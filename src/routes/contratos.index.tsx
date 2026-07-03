@@ -5,7 +5,8 @@ import { plantillas } from "@/lib/contract-templates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2 } from "lucide-react";
+import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, Eye } from "lucide-react";
+import { FichaContrato } from "@/components/ficha-contrato";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
 import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
 import { listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
@@ -146,6 +147,7 @@ function ContratosExistentes() {
 
 function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => void }) {
   const [abierto, setAbierto] = useState(false);
+  const [verFicha, setVerFicha] = useState(false);
   const navigate = useNavigate();
 
   const reelaborar = () => {
@@ -171,6 +173,9 @@ function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => vo
         <>
           <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
           <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+            <button onClick={() => { setAbierto(false); setVerFicha(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+              <Eye className="h-3.5 w-3.5" /> Ver ficha
+            </button>
             <button onClick={reelaborar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
               <PenLine className="h-3.5 w-3.5" /> Reelaborar
             </button>
@@ -182,6 +187,13 @@ function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => vo
             </button>
           </div>
         </>
+      )}
+      {verFicha && (
+        <FichaContrato
+          c={c}
+          onClose={() => setVerFicha(false)}
+          onReelaborar={() => { setVerFicha(false); reelaborar(); }}
+        />
       )}
     </div>
   );
