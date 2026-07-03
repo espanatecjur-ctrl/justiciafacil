@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
-import { listarAtrasadas, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, type Atrasada } from "@/lib/resumen-inicio";
+import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, type Atrasada, type Cita } from "@/lib/resumen-inicio";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
@@ -26,12 +26,6 @@ const VALIDACIONES = [
   { t: "Contratos en revisión", n: 2, icon: FileText, to: "/expedientes" },
   { t: "Dictámenes URRJ pendientes", n: 2, icon: ShieldCheck, to: "/urrj" },
 ];
-const AGENDA = [
-  { d: "24", m: "jun", t: "Audiencia de pruebas", sub: "Juzgado 2º Civil Culiacán · Exp. 412/2024", hr: "10:00" },
-  { d: "26", m: "jun", t: "Vence término de contestación", sub: "Juzgado 1º Civil Mazatlán · Exp. 145/2025", hr: "15:00" },
-  { d: "08", m: "jul", t: "Audiencia señalada", sub: "Juzgado 5º Civil Mazatlán · Exp. 1057/2023", hr: "11:00" },
-];
-
 function Kpi({ icon: Icon, n, l, tone }: { icon: any; n: string; l: string; tone: string }) {
   return (
     <Card className="legal-card p-4">
@@ -77,8 +71,10 @@ function Inicio() {
   const [conteos, setConteos] = useState({ exhorto: 0, amparo: 0, recurso: 0 });
   const [unidades, setUnidades] = useState({ URRJ: 0, UCP: 0, UCM: 0, UDP: 0 });
   const [contratosPend, setContratosPend] = useState(0);
+  const [agenda, setAgenda] = useState<Cita[]>([]);
   useEffect(() => {
     listarAtrasadas().then(setAtrasadas);
+    listarAgenda().then(setAgenda);
     contarAcuerdosHoy().then(setAcuerdosHoy);
     Promise.all([contarCasos("exhorto"), contarCasos("amparo"), contarCasos("recurso")])
       .then(([exhorto, amparo, recurso]) => setConteos({ exhorto, amparo, recurso }));
@@ -246,19 +242,27 @@ function Inicio() {
               </div>
             </div>
             <div className="divide-y divide-border">
-              {AGENDA.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 py-3">
-                  <div className="w-12 text-center">
-                    <p className="font-display text-xl font-bold leading-none">{a.d}</p>
-                    <p className="text-[10px] uppercase text-muted-foreground">{a.m}</p>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{a.t}</p>
-                    <p className="text-xs text-muted-foreground">{a.sub}</p>
-                  </div>
-                  <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs">{a.hr}</span>
-                </div>
-              ))}
+              {agenda.length === 0 ? (
+                <p className="py-4 text-sm text-muted-foreground">No hay próximas actuaciones agendadas.</p>
+              ) : (
+                agenda.slice(0, 8).map((a, i) => {
+                  const f = a.fecha_proxima ? new Date(a.fecha_proxima) : null;
+                  const dia = f ? String(f.getUTCDate()).padStart(2, "0") : "—";
+                  const mes = f ? f.toLocaleDateString("es-MX", { month: "short", timeZone: "UTC" }) : "";
+                  return (
+                    <div key={i} className="flex items-center gap-3 py-3">
+                      <div className="w-12 text-center">
+                        <p className="font-display text-xl font-bold leading-none">{dia}</p>
+                        <p className="text-[10px] uppercase text-muted-foreground">{mes}</p>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold">{a.proxima_actuacion || "Próxima actuación"}</p>
+                        <p className="text-xs text-muted-foreground">Exp. {a.expediente || "—"}{a.asignado_a ? ` · ${a.asignado_a}` : ""}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </Card>
 
