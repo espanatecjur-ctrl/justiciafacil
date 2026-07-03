@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, Send, Upload, Loader2, Check, X, Plus, Paperclip, Mail } from "lucide-react";
-import { enviarCorreo, listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
+import { enviarCorreo, listarEnvios, revisarRespuestas, type EnvioRegistro } from "@/lib/enviar-correo";
 import {
   archivoABase64, urlABase64, subirCarta, obtenerFaseB, guardarDatosFaseB, marcarEnviadoContabilidad,
   listarCorreosContabilidad, agregarCorreoContabilidad, eliminarCorreoContabilidad,
@@ -55,6 +55,17 @@ function PasoSolicitar({ expediente }: { expediente: string }) {
   const recargar = () => listarEnvios().then((all) => setEnviadas(all.filter((e) => e.folio === folio)));
   useEffect(() => { recargar(); }, [folio]); // eslint-disable-line
 
+  const [revisando, setRevisando] = useState(false);
+  const revisar = async () => {
+    setRevisando(true);
+    const lista = enviadas
+      .filter((e) => e.token && e.para && e.enviado_at)
+      .map((e) => ({ token: e.token as string, para: e.para as string, enviado_at: e.enviado_at as string }));
+    if (lista.length) await revisarRespuestas(lista);
+    await recargar();
+    setRevisando(false);
+  };
+
   const enviar = async () => {
     if (!para.trim()) { setMsg("Escribe el correo del proveedor."); return; }
     setEnviando(true); setMsg(null);
@@ -93,14 +104,23 @@ function PasoSolicitar({ expediente }: { expediente: string }) {
 
       {enviadas.length > 0 && (
         <div className="mt-3 border-t border-border pt-3">
-          <p className="mb-1 text-xs text-muted-foreground">Solicitudes enviadas</p>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Solicitudes enviadas</p>
+            <Button variant="outline" size="sm" onClick={revisar} disabled={revisando}>
+              {revisando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Revisar respuestas</>}
+            </Button>
+          </div>
           {enviadas.map((e, i) => (
             <div key={i} className="flex items-center justify-between py-1 text-sm">
               <span><Mail className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground" />{e.enviado_at ? new Date(e.enviado_at).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${e.estado === "abierto" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"}`}>{e.estado === "abierto" ? "Abierto" : "Enviado"}</span>
+              {e.respondido ? (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">Respondido</span>
+              ) : (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${e.estado === "abierto" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>{e.estado === "abierto" ? "Abierto" : "Enviado"}</span>
+              )}
             </div>
           ))}
-          <p className="mt-1 text-[11px] text-muted-foreground">El “Respondido” automático lo conectamos en la Parte 6.</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">“Revisar respuestas” busca en tu bandeja si el proveedor ya contestó.</p>
         </div>
       )}
     </Card>
