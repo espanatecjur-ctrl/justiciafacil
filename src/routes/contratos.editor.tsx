@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Download, FileText, Eye, PenLine, RefreshCw, Save, Check, Mail, X } from "lucide-react";
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
+import { VinculoRegistros } from "@/components/vinculo-registros";
 import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 import { guardarContrato, listarCartasCambio, siguienteFolio, marcarEnviado, type ContratoGenerado } from "@/lib/contrato-generado";
@@ -105,6 +106,8 @@ function CampoControl({
         </div>
       );
     }
+    case "vinculo":
+      return <VinculoRegistros fuente={campo.fuente ?? "clientes"} valor={valor} onChange={(v) => onChange(v)} />;
     default:
       return <Input value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
   }
