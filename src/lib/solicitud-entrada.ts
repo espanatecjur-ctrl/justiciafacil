@@ -90,3 +90,29 @@ export async function resolverSolicitudEntrada(
     return false;
   }
 }
+
+/**
+ * Aprueba una solicitud: da de alta a la persona en `colaboradores` con el rol
+ * asignado y marca la solicitud como aprobada. Con eso, esa persona ya entra.
+ */
+export async function aprobarEntrada(
+  sol: SolicitudEntrada,
+  rol: string,
+  revisadoPor: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    if (!sol.id) return { ok: false, error: "Solicitud sin id" };
+    // 1) Alta en colaboradores (esto es lo que le da acceso y rol).
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores`, {
+      method: "POST",
+      headers: { ...headers, Prefer: "return=minimal" },
+      body: JSON.stringify({ nombre: sol.nombre, correo: sol.correo, rol }),
+    });
+    if (!res.ok) return { ok: false, error: `colaboradores ${res.status}` };
+    // 2) Marca la solicitud como aprobada.
+    const ok = await resolverSolicitudEntrada(sol.id, "aprobado", { rol_asignado: rol, revisado_por: revisadoPor });
+    return { ok };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e) };
+  }
+}
