@@ -28,3 +28,44 @@ export const clienteApoderadoCampos: PlantillaCampo[] = [
   { id: "nombreApoderadoCliente", label: "Nombre del apoderado del Cliente", tipo: "text", dependeDe: { campo: "clienteComparecePorApoderado", valor: true } },
   { id: "poderApoderadoCliente", label: "Datos del poder (No. de escritura, notario y plaza)", tipo: "textarea", dependeDe: { campo: "clienteComparecePorApoderado", valor: true } },
 ];
+
+/** Lista de testigos (repetidor sin límite). Se imprimen en el bloque de firmas. */
+export const testigosCampo: PlantillaCampo[] = [
+  {
+    id: "testigos",
+    label: "Testigos",
+    tipo: "lista",
+    ayuda: "Agrega los testigos que necesites; se imprimen en las firmas. (Si no agregas ninguno, no se imprime nada.)",
+    subcampos: [
+      { id: "nombre", label: "Nombre del testigo", tipo: "text" },
+      { id: "identificacion", label: "Identificación (opcional)", tipo: "text" },
+    ],
+  },
+];
+
+/** Texto propuesto y editable de la cláusula de participación de beneficiarios. */
+const CLAUSULA_PARTICIPACION_DEFAULT =
+  "CLÁUSULA DE PARTICIPACIÓN DE BENEFICIARIOS. El Cliente designa como beneficiarios del presente contrato a las personas señaladas, en los porcentajes de participación indicados. En caso de fallecimiento o imposibilidad del Cliente, los beneficiarios recibirán los derechos y prestaciones derivados de este instrumento en la proporción establecida, debiendo la suma de los porcentajes ser del 100% (cien por ciento). Esta designación podrá ser modificada o revocada por el Cliente en cualquier momento mediante aviso por escrito al Prestador. En lo no previsto, se estará a las disposiciones del Código Civil aplicable en materia de sucesiones y designación de beneficiarios.";
+
+/** Lista de beneficiarios (con % de participación) + cláusula editable. */
+export const beneficiariosCampos: PlantillaCampo[] = [
+  {
+    id: "beneficiarios",
+    label: "Beneficiarios del contrato",
+    tipo: "lista",
+    ayuda: "Agrega beneficiarios con su porcentaje. Se imprimen solo si agregas al menos uno.",
+    subcampos: [
+      { id: "nombre", label: "Nombre completo", tipo: "text" },
+      { id: "parentesco", label: "Parentesco / relación", tipo: "text" },
+      { id: "telefono", label: "Teléfono", tipo: "text" },
+      { id: "participacion", label: "% de participación", tipo: "number" },
+    ],
+  },
+  {
+    id: "clausulaParticipacion",
+    label: "Cláusula de participación (editable)",
+    tipo: "textarea",
+    ayuda: "Propuesta editable. Solo se imprime si hay beneficiarios.",
+    valorInicial: CLAUSULA_PARTICIPACION_DEFAULT,
+  },
+];
