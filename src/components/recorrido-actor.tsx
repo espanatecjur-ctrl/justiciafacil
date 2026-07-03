@@ -18,6 +18,7 @@ import {
   Check, X, ClipboardCheck, Lock, Calculator, Download,
 } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 
 const NAVY = "#0B1E3A";
@@ -129,6 +130,7 @@ export function RecorridoActor({
   modoFicha?: boolean;
 }) {
   const [paso, setPaso] = useState(0);
+  const [mostrarBoletin, setMostrarBoletin] = useState(false);
   const [d, setD] = useState<Datos>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
@@ -170,6 +172,12 @@ export function RecorridoActor({
   const registralRojo = d.hipotecaInscrita === "no";
   const prelacionRiesgo = d.prelacion === "Hay acreedores anteriores";
   const anotacionesRiesgo = d.anotaciones.trim() !== "";
+  const enAmparo = d.situacion === "En amparo";
+  const suspendido = d.situacion === "Suspendido";
+  const etapaAvanzada = ["Sentencia", "Ejecución", "Remate"].includes(d.etapa);
+  const etapaTemprana = ["Admisión", "Emplazamiento"].includes(d.etapa);
+  const estadoRobot: "sinaloa" | "bcs" | "jalisco" =
+    d.estado === "Jalisco" ? "jalisco" : d.estado === "Baja California Sur" ? "bcs" : "sinaloa";
   const fmt = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
   // ---- dictamen sugerido SOLO por lo jurídico (la viabilidad económica es de Administración) ----
@@ -179,11 +187,13 @@ export function RecorridoActor({
     if (registralRojo) sems.push("rojo");
     if (prelacionRiesgo) sems.push("naranja");
     if (anotacionesRiesgo) sems.push("amarillo");
+    if (enAmparo || suspendido) sems.push("naranja");
+    if (etapaTemprana) sems.push("amarillo");
     if (sems.includes("rojo")) return { txt: "NEGATIVO", color: "bg-red-50 text-red-800 border-red-200" };
     if (sems.includes("naranja") || sems.includes("amarillo")) return { txt: "CONDICIONADO", color: "bg-amber-50 text-amber-800 border-amber-200" };
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
-  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo]);
+  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo, enAmparo, suspendido, etapaTemprana]);
 
   // avisa los resultados de motor hacia afuera (para la ficha UCP)
   useEffect(() => {
@@ -323,6 +333,29 @@ export function RecorridoActor({
               <Campo label="Fecha de última actuación procesal"><input type="date" className={inp} value={d.ultimaActuacion} onChange={(e) => set("ultimaActuacion", e.target.value)} /></Campo>
             </div>
             {d.sentenciaFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Sentencia firme a favor", detalle: "Sube mucho el valor de la cesión." }} />}
+            {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede suspenderse o revertirse lo ganado. Riesgo alto para comprar la cesión." }} />}
+            {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido; no avanza hasta que se levante la suspensión." }} />}
+            {etapaAvanzada && <Aviso r={{ semaforo: "verde", etiqueta: "Etapa avanzada", detalle: `El juicio está en ${d.etapa}: cerca de la recuperación.` }} />}
+            {etapaTemprana && <Aviso r={{ semaforo: "amarillo", etiqueta: "Etapa temprana", detalle: `El juicio está en ${d.etapa}: falta camino procesal (más tiempo y riesgo).` }} />}
+            {enAmparo && (
+              <div className="rounded-lg border border-border p-3">
+                <button
+                  type="button"
+                  onClick={() => setMostrarBoletin((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+                >
+                  <Search className="h-3.5 w-3.5" /> {mostrarBoletin ? "Ocultar búsqueda del boletín" : "Buscar en el boletín (robot)"}
+                </button>
+                {mostrarBoletin && (
+                  <div className="mt-3">
+                    <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+                      Busca el expediente en el boletín para ver si <b>asoma el amparo</b> (oficios del Juzgado de Distrito, suspensión recibida). El robot lee el boletín <b>estatal</b>, no el federal.
+                    </p>
+                    <BuscadorBoletin expedienteInicial={d.expediente} estadoInicial={estadoRobot} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -411,6 +444,8 @@ export function RecorridoActor({
               {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Registral", detalle: "Hipoteca no inscrita/vigente." }} />}
               {prelacionRiesgo && <Aviso r={{ semaforo: "naranja", etiqueta: "Prelación", detalle: "Hay acreedores anteriores (no primer lugar)." }} />}
               {anotacionesRiesgo && <Aviso r={{ semaforo: "amarillo", etiqueta: "Anotaciones / gravámenes", detalle: "Hay embargos, anotaciones o fideicomisos registrados." }} />}
+              {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede revertir lo ganado." }} />}
+              {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido." }} />}
             </div>
             <div className={`rounded-lg border p-4 ${dictamen.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Pre-dictamen del sistema (sugerido): {dictamen.txt}</p>
