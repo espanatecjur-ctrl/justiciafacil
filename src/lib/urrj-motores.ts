@@ -97,6 +97,7 @@ export interface EntradaPrescripcion {
   tipoAccion: string;            // clave de TIPOS_ACCION
   convenioRatificadoFecha?: string; // si hay convenio ratificado
   plazoManualAnios?: number;     // opción: el abogado sobrescribe el plazo
+  interpelacionFecha?: string;   // interpelación por jurisdicción voluntaria — interrumpe (Art. 1168 CCF)
 }
 
 export function motorPrescripcion(e: EntradaPrescripcion): ResultadoMotor {
@@ -107,21 +108,29 @@ export function motorPrescripcion(e: EntradaPrescripcion): ResultadoMotor {
   const inicio = e.convenioRatificadoFecha || e.ultimoPago;
   if (!inicio) return { semaforo: "gris", etiqueta: "Falta dato", detalle: "Captura la fecha del último pago.", };
 
-  const fin = e.emplazado && e.fechaEmplazamiento ? e.fechaEmplazamiento : hoyISO();
+  // Interrupciones (Art. 1168 CCF): el emplazamiento de la demanda y la interpelación
+  // judicial por jurisdicción voluntaria. La prescripción se detiene en la MÁS TEMPRANA.
+  const cortes: { fecha: string; label: string }[] = [];
+  if (e.emplazado && e.fechaEmplazamiento) cortes.push({ fecha: e.fechaEmplazamiento, label: "emplazamiento" });
+  if (e.interpelacionFecha) cortes.push({ fecha: e.interpelacionFecha, label: "interpelación (jurisdicción voluntaria)" });
+  cortes.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const corteEvento = cortes[0];
+
+  const fin = corteEvento ? corteEvento.fecha : hoyISO();
   const dias = diasNaturales(inicio, fin);
   const anios = dias / 365.25;
   const pct = anios / plazo;
   const sem = semaforoPorcentaje(pct);
 
   const base = e.convenioRatificadoFecha ? "convenio ratificado" : "último pago";
-  const corte = e.emplazado ? "emplazamiento" : "hoy";
+  const corte = corteEvento ? corteEvento.label : "hoy";
   const etiqueta = sem === "rojo" ? "Prescrita" : sem === "naranja" ? "Crítica" : sem === "amarillo" ? "Media" : "Vigente";
 
   return {
     semaforo: sem,
     etiqueta,
     dato: `${anios.toFixed(1)} de ${plazo} años`,
-    detalle: `${tipo.nombre}: ${plazo} años (${tipo.fundamento}). Del ${base} al ${corte} van ${anios.toFixed(1)} años${e.emplazado ? " (interrumpida con la demanda)" : ""}.${e.convenioRatificadoFecha ? " El convenio ratificado reinició el conteo." : ""}`,
+    detalle: `${tipo.nombre}: ${plazo} años (${tipo.fundamento}). Del ${base} al ${corte} van ${anios.toFixed(1)} años${corteEvento ? ` (interrumpida por ${corteEvento.label})` : ""}.${e.convenioRatificadoFecha ? " El convenio ratificado reinició el conteo." : ""}`,
   };
 }
 
@@ -172,6 +181,7 @@ export interface EntradaUsucapion {
   inicioPosesion: string;     // desde cuándo posee
   buenaFe: boolean;           // con justo título = buena fe
   hayDemandaDespojo: boolean; // interrumpe
+  hayInterpelacion?: boolean; // interpelación por jurisdicción voluntaria — también interrumpe (Art. 1168 CCF)
 }
 
 export function motorUsucapion(e: EntradaUsucapion): ResultadoMotor {
@@ -180,9 +190,12 @@ export function motorUsucapion(e: EntradaUsucapion): ResultadoMotor {
   const anios = diasNaturales(e.inicioPosesion, hoyISO()) / 365.25;
   const cumplePlazo = anios >= requeridos;
 
-  if (e.hayDemandaDespojo) {
-    return { semaforo: "amarillo", etiqueta: "Interrumpida", dato: `${anios.toFixed(1)} años`,
-      detalle: `Hay demanda de despojo: la posesión está interrumpida, no corre usucapión a favor del tercero.` };
+  if (e.hayDemandaDespojo || e.hayInterpelacion) {
+    const via = e.hayDemandaDespojo && e.hayInterpelacion
+      ? "demanda de despojo e interpelación por jurisdicción voluntaria"
+      : e.hayDemandaDespojo ? "demanda de despojo" : "interpelación judicial por jurisdicción voluntaria";
+    return { semaforo: "verde", etiqueta: "Interrumpida", dato: `${anios.toFixed(1)} años`,
+      detalle: `La usucapión está interrumpida por ${via} (Art. 1168 CCF): no corre a favor del tercero. Buena señal para comprar la cesión.` };
   }
   if (cumplePlazo) {
     return { semaforo: "rojo", etiqueta: "Riesgo de usucapión", dato: `${anios.toFixed(1)} de ${requeridos} años`,
