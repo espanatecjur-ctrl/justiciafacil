@@ -8,6 +8,7 @@
 //  imprimir SOLO la modalidad de cierre elegida.
 // ============================================================================
 import type { PlantillaCampo, PlantillaContrato } from "./contract-templates";
+import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos } from "./contract-campos-cliente";
 
 // ----------------------------------------------------------------------------
 //  1 · CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES (DIIPA — contrato de origen)
@@ -17,6 +18,9 @@ const prestacionDiipaCampos: PlantillaCampo[] = [
   { id: "curpCliente", label: "CURP del Cliente", tipo: "text" },
   { id: "rfcCliente", label: "RFC del Cliente", tipo: "text" },
   { id: "domicilioCliente", label: "Domicilio del Cliente", tipo: "textarea" },
+  ...clienteContactoCampos,
+  ...clienteEstadoCivilCampos,
+  ...clienteApoderadoCampos,
   { id: "direccionGarantia", label: "Garantía objeto del servicio (dirección completa)", tipo: "textarea", requerido: true, ayuda: "Se repite en varias cláusulas; se captura una sola vez." },
   { id: "valorOperacion", label: "Valor de referencia de la operación (MXN)", tipo: "text", requerido: true, ayuda: "Ej. 2,000,000.00 · sujeto a validación de Contabilidad" },
   { id: "ciudadFirma", label: "Ciudad de firma", tipo: "text", requerido: true },
@@ -34,7 +38,7 @@ const prestacionDiipaCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDAD
 CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES E INTERMEDIACIÓN PARA LA REGULARIZACIÓN Y ENTREGA DE GARANTÍAS CON CONTINGENCIA
 (Cesión de derechos de crédito, litigiosos y adjudicatarios — operación de carácter estrictamente civil)
 
-Convenido por una parte por Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V., conocida comercialmente como "Inmuebles Accesibles" (siendo ambas denominaciones una sola y misma persona moral), representada legalmente por el (la) C. {{apoderadoNombre}}, a quien en lo sucesivo se le denominará el "Prestador de Servicios"; y por la otra parte, el (la) C. {{nombreCliente}}, a quien en lo sucesivo se le denominará el "Cliente". Ambas partes se sujetan al tenor de las siguientes declaraciones y cláusulas. Los términos con mayúscula inicial se definen en el GLOSARIO que obra al final del presente contrato y forma parte integrante del mismo.
+Convenido por una parte por Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V., conocida comercialmente como "Inmuebles Accesibles" (siendo ambas denominaciones una sola y misma persona moral), representada legalmente por el (la) C. {{apoderadoNombre}}, a quien en lo sucesivo se le denominará el "Prestador de Servicios"; y por la otra parte, el (la) C. {{nombreCliente}}{{#clienteComparecePorApoderado}}, representado(a) en este acto por su apoderado el (la) C. {{nombreApoderadoCliente}}, según consta en {{poderApoderadoCliente}}{{/clienteComparecePorApoderado}}, a quien en lo sucesivo se le denominará el "Cliente". Ambas partes se sujetan al tenor de las siguientes declaraciones y cláusulas. Los términos con mayúscula inicial se definen en el GLOSARIO que obra al final del presente contrato y forma parte integrante del mismo.
 
 DECLARACIONES
 
@@ -46,7 +50,8 @@ I. Declara el "Prestador de Servicios":
 - Que opera bajo un esquema estrictamente civil de recuperación de activos y regularización de garantías con contingencia, situación que el Cliente reconoce y acepta plenamente.
 
 II. Declara el "Cliente":
-- Ser persona física de nacionalidad mexicana, identificada con CURP: {{curpCliente}}, RFC: {{rfcCliente}}, con domicilio en: {{domicilioCliente}}.
+- Ser persona física de nacionalidad mexicana, identificada con CURP: {{curpCliente}}, RFC: {{rfcCliente}}, con domicilio en: {{domicilioCliente}}, teléfono {{telefonoCliente}} y correo electrónico {{correoCliente}}.
+- Que su estado civil es {{estadoCivilCliente}}{{#esCasadoCliente}}, bajo el régimen de {{regimenCliente}}, casado(a) con {{conyugeCliente}}{{#consentimientoConyugalCliente}}, manifestando contar con el consentimiento conyugal por escrito para este acto{{/consentimientoConyugalCliente}}{{/esCasadoCliente}}.
 - Que ha sido informado de manera clara, completa y suficiente sobre la naturaleza, alcances y riesgos del servicio, y que conoce la situación legal y procesal de la garantía con contingencia objeto del presente contrato, ubicada en {{direccionGarantia}}.
 - Que manifiesta su libre voluntad de contratar los servicios profesionales del Prestador respecto de dicha garantía, y que dispone de la capacidad económica y jurídica para obligarse en los términos de este instrumento.
 
@@ -304,6 +309,8 @@ y Propiedades Accesibles, S.A. de C.V.
 const actaFiniquitoCampos: PlantillaCampo[] = [
   { id: "folioGarantia", label: "Folio de la garantía", tipo: "text", requerido: true, ayuda: "Ej. GAR-0123" },
   { id: "nombreCliente", label: "Nombre completo del Cliente", tipo: "text", requerido: true },
+  ...clienteContactoCampos,
+  ...clienteApoderadoCampos,
   { id: "contratoOrigen", label: "Contrato de origen", tipo: "select", opciones: ["Prestación de Servicios", "Cambio de Garantía"], requerido: true },
   { id: "fechaContratoOrigen", label: "Fecha del contrato de origen", tipo: "text", ayuda: "Ej. 08 de agosto de 2025" },
   { id: "direccionGarantia", label: "Garantía (dirección completa)", tipo: "textarea", requerido: true },
@@ -337,7 +344,7 @@ Garantía (inmueble): {{direccionGarantia}}
 Valor de la operación: $ {{valorOperacion}} M.N.
 Lugar y fecha del acta: {{ciudadActa}}, {{estadoActa}}, a {{fechaActa}}
 
-En el lugar y fecha señalados, comparecen por una parte Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V. ("Inmuebles Accesibles"), representada por su apoderado el (la) C. {{apoderadoNombre}} (el "Prestador"); y por la otra, el (la) C. {{nombreCliente}} (el "Cliente"), con el objeto de hacer constar la entrega-recepción y el finiquito del servicio prestado respecto de la garantía señalada, al tenor de las siguientes cláusulas:
+En el lugar y fecha señalados, comparecen por una parte Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V. ("Inmuebles Accesibles"), representada por su apoderado el (la) C. {{apoderadoNombre}} (el "Prestador"); y por la otra, el (la) C. {{nombreCliente}}{{#clienteComparecePorApoderado}}, representado(a) por su apoderado el (la) C. {{nombreApoderadoCliente}} ({{poderApoderadoCliente}}){{/clienteComparecePorApoderado}} (el "Cliente"), con teléfono {{telefonoCliente}} y correo {{correoCliente}}, con el objeto de hacer constar la entrega-recepción y el finiquito del servicio prestado respecto de la garantía señalada, al tenor de las siguientes cláusulas:
 
 CLÁUSULAS
 
