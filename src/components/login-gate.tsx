@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getAuth, correoPermitido } from "@/lib/auth";
+import { OnboardingGate } from "@/components/onboarding-gate";
 
 const NAVY = "#0B1E3A";
 
@@ -76,5 +77,5 @@ export function LoginGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return <OnboardingGate email={email}>{children}</OnboardingGate>;
 }
