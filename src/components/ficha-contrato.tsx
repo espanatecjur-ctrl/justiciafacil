@@ -59,9 +59,9 @@ export function FichaContrato({
   const nombreCliente = t(v.nombreCliente) ?? t(c.nombre_cliente);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-2 sm:p-4" onClick={onClose}>
       <div
-        className="w-full max-w-5xl rounded-lg border border-border bg-white shadow-xl"
+        className="flex max-h-[94vh] w-full max-w-[95vw] flex-col rounded-lg border border-border bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Encabezado */}
@@ -81,7 +81,7 @@ export function FichaContrato({
           </button>
         </div>
 
-        <div className="max-h-[82vh] space-y-3 overflow-y-auto p-4">
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {/* Encabezado administrativo */}
           <div className="space-y-0.5">
             <Dato etiqueta="Elaborado" valor={fmtFecha(c.fecha_generado)} />
@@ -182,7 +182,7 @@ export function FichaContrato({
           {/* Documento completo */}
           {t(c.cuerpo) && (
             <Seccion titulo="Documento generado">
-              <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-sans text-sm leading-relaxed">
+              <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-4 font-sans text-sm leading-relaxed">
                 {c.cuerpo}
               </pre>
             </Seccion>
