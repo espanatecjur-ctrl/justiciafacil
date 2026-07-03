@@ -28,7 +28,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
     const auth = await getAuth();
     await auth.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "https://www.googleapis.com/auth/gmail.send",
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
     });
   };
 
