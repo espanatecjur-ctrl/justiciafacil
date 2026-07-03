@@ -30,7 +30,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
       provider: "google",
       options: {
         redirectTo: window.location.origin,
-        scopes: "https://www.googleapis.com/auth/gmail.send",
+        scopes: "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",
         queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
