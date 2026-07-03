@@ -12,7 +12,7 @@ const NAVY = "#0B1E3A";
 
 // Qué módulo corresponde a cada ruta del menú
 const MOD_RUTA: Record<string, string> = {
-  "/": "inicio", "/expedientes": "expedientes", "/ucm": "ucm", "/udp": "udp", "/ufc": "ucm", "/ufc-ficha": "ucm",
+  "/": "inicio", "/calendario": "inicio", "/expedientes": "expedientes", "/ucm": "ucm", "/udp": "udp", "/ufc": "ucm", "/ufc-ficha": "ucm",
   "/boletines": "boletines", "/exhortos": "exhortos",
   "/amparos": "amparos", "/recursos": "recursos", "/dictamen-ia": "dictamen_ia",
   "/contratos": "contratos", "/contratos/editor": "contratos", "/tramites": "tramites",
