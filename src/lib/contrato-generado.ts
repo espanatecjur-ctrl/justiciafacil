@@ -36,6 +36,7 @@ export interface ContratoGenerado {
   cuantia?: number | null;
   estado?: string | null;
   fecha_generado?: string | null;
+  fecha_enviado?: string | null;
   created_at?: string | null;
 }
 
@@ -100,6 +101,23 @@ export async function listarCartasCambio(): Promise<ContratoGenerado[]> {
     );
   } catch {
     return [];
+  }
+}
+
+/** Marca la fecha de envío por correo de un documento, buscándolo por folio. */
+export async function marcarEnviado(folio: string, fecha?: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/contrato_generado?folio=eq.${encodeURIComponent(folio)}`,
+      {
+        method: "PATCH",
+        headers: { ...headers, Prefer: "return=minimal" },
+        body: JSON.stringify({ fecha_enviado: fecha ?? new Date().toISOString() }),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
