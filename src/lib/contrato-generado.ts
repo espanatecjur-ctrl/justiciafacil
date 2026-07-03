@@ -18,6 +18,9 @@ export const PREFIJO_FOLIO: Record<string, string> = {
   contrato_cambio: "CT",
   oficio_notarial: "OF",
   prestacion_servicios: "PS",
+  prestacion_diipa: "PSP",
+  comision_mercantil: "CM",
+  acta_finiquito: "AF",
 };
 
 export interface ContratoGenerado {
