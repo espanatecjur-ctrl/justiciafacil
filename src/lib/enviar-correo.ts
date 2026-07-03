@@ -30,6 +30,8 @@ export interface EnvioRegistro {
   estado?: string | null;      // enviado / abierto
   enviado_at?: string | null;
   abierto_at?: string | null;
+  respondido?: boolean | null;
+  respondido_at?: string | null;
 }
 
 export async function enviarCorreo(d: EnvioCorreo): Promise<{ ok: boolean; error?: string }> {
@@ -90,5 +92,32 @@ export async function listarEnvios(): Promise<EnvioRegistro[]> {
     return await sbSelect<EnvioRegistro>("envio_correo", "select=*&order=enviado_at.desc");
   } catch {
     return [];
+  }
+}
+
+/**
+ * Revisa en Gmail si el proveedor respondió los envíos indicados y los marca
+ * como "respondido". Requiere el permiso gmail.readonly del asesor.
+ */
+export async function revisarRespuestas(
+  envios: { token: string; para: string; enviado_at: string }[],
+): Promise<{ ok: boolean; respondidos?: string[]; error?: string }> {
+  let token: string | undefined;
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    token = data.session?.provider_token ?? undefined;
+  } catch { /* nada */ }
+  if (!token) return { ok: false, error: "Vuelve a entrar con Google (permiso de lectura) y reintenta." };
+  try {
+    const res = await fetch("/.netlify/functions/revisar-respuestas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accessToken: token, envios }),
+    });
+    const out = await res.json().catch(() => ({}));
+    return { ok: !!out.ok, respondidos: out.respondidos, error: out.error };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e) };
   }
 }
