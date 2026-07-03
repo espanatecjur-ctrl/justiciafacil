@@ -183,3 +183,16 @@ export async function contarPredictamenes(): Promise<number> {
     return 0;
   }
 }
+
+/** Mapa caso_id -> unidad (para saber a qué unidad pertenece cada expediente). */
+export async function mapaUnidadPorCaso(): Promise<Record<string, string>> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,unidad`, { headers });
+    const d: Array<{ id: string | null; unidad: string | null }> = r.ok ? await r.json() : [];
+    const m: Record<string, string> = {};
+    for (const c of d) if (c.id) m[c.id] = c.unidad || "";
+    return m;
+  } catch {
+    return {};
+  }
+}
