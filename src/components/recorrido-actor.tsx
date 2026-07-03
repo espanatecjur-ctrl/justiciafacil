@@ -387,6 +387,8 @@ export function RecorridoActor({
               {d.emplazado === "si" && <Campo label="Fecha de emplazamiento"><input type="date" className={inp} value={d.fechaEmplazamiento} onChange={(e) => set("fechaEmplazamiento", e.target.value)} /></Campo>}
               <Campo label="¿Convenio ratificado ante juez/notario?"><SiNo v={d.convenioRatificado} on={(x) => set("convenioRatificado", x)} /></Campo>
               {d.convenioRatificado === "si" && <Campo label="Fecha del convenio ratificado"><input type="date" className={inp} value={d.convenioFecha} onChange={(e) => set("convenioFecha", e.target.value)} /></Campo>}
+              <Campo label="¿Interpelación / diligencia de jurisdicción voluntaria notificada?"><SiNo v={d.interpelacionJV} on={(x) => set("interpelacionJV", x)} /></Campo>
+              {d.interpelacionJV === "si" && <Campo label="Fecha de la interpelación (jurisdicción voluntaria)"><input type="date" className={inp} value={d.interpelacionJVFecha} onChange={(e) => set("interpelacionJVFecha", e.target.value)} /></Campo>}
             </div>
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">Ajustar plazos a mano (opcional)</summary>
@@ -408,8 +410,6 @@ export function RecorridoActor({
               <Campo label="Posesión desde (fecha)"><input type="date" className={inp} value={d.inicioPosesion} onChange={(e) => set("inicioPosesion", e.target.value)} /></Campo>
               <Campo label="¿Tiene título aparente (buena fe)?"><SiNo v={d.buenaFe} on={(x) => set("buenaFe", x)} /></Campo>
               <Campo label="¿Hay demanda de despojo?"><SiNo v={d.demandaDespojo} on={(x) => set("demandaDespojo", x)} /></Campo>
-              <Campo label="¿Interpelación / diligencia de jurisdicción voluntaria notificada al poseedor?"><SiNo v={d.interpelacionJV} on={(x) => set("interpelacionJV", x)} /></Campo>
-              {d.interpelacionJV === "si" && <Campo label="Fecha de la interpelación (jurisdicción voluntaria)"><input type="date" className={inp} value={d.interpelacionJVFecha} onChange={(e) => set("interpelacionJVFecha", e.target.value)} /></Campo>}
             </div>
             {usaUsucapion ? <Aviso r={rUsuc} /> : <p className="text-xs text-muted-foreground">El motor de usucapión se activa cuando hay un tercero poseyendo o la posición es Sucesorio.</p>}
           </div>
