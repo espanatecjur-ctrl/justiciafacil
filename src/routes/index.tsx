@@ -1,5 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { getAuth, rolActual } from "@/lib/auth";
+import { listarAtrasadas, contarAcuerdosHoy, type Atrasada } from "@/lib/resumen-inicio";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
@@ -16,21 +19,11 @@ export const Route = createFileRoute("/")({
 const NAVY = "#0B1E3A";
 const GOLD = "#C2A24C";
 
-// ——— Datos de ejemplo (se conectan con el login después) ———
-const COLAB = {
-  nombre: "Lic. Milton",
-  roles: ["DIL · Director Jurídico", "Rol URRJ", "Guadalajara"],
-  iniciales: "MC",
-};
+// ——— Datos de ejemplo (se conectan con los módulos después) ———
 const VALIDACIONES = [
   { t: "Apartados por revisar", n: 1, icon: Bookmark, to: "/expedientes" },
   { t: "Contratos en revisión", n: 2, icon: FileText, to: "/expedientes" },
   { t: "Dictámenes URRJ pendientes", n: 2, icon: ShieldCheck, to: "/urrj" },
-];
-const BOLETIN = [
-  { exp: "412/2024", juzgado: "Juzgado 2º Civil · Culiacán", nota: "Admisión de pruebas — pasó la fecha sin acuerdo", urgente: true, tag: "Vencida" },
-  { exp: "1057/2023", juzgado: "Juzgado 5º Civil · Mazatlán", nota: "Se señala audiencia para el 8 de julio", urgente: false, tag: "Nuevo" },
-  { exp: "233/2025", juzgado: "Juzgado 1º Civil · La Paz", nota: "Se tiene por presentada la contestación", urgente: false, tag: "Nuevo" },
 ];
 const AGENDA = [
   { d: "24", m: "jun", t: "Audiencia de pruebas", sub: "Juzgado 2º Civil Culiacán · Exp. 412/2024", hr: "10:00" },
@@ -48,7 +41,42 @@ function Kpi({ icon: Icon, n, l, tone }: { icon: any; n: string; l: string; tone
   );
 }
 
+function iniciales(nombre: string) {
+  return nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "·";
+}
+
+/** Carga el usuario real de la sesión de Google (nombre, foto) + su rol. */
+function useUsuario() {
+  const [u, setU] = useState<{ nombre: string; foto: string; rol: string }>({ nombre: "", foto: "", rol: "" });
+  useEffect(() => {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        const meta = (data.session?.user?.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string };
+        const correo = data.session?.user?.email ?? "";
+        const nombre = meta.full_name || meta.name || correo || "Usuario";
+        const foto = meta.avatar_url || meta.picture || "";
+        const rol = await rolActual();
+        setU({ nombre, foto, rol });
+      } catch { /* nada */ }
+    })();
+  }, []);
+  return u;
+}
+
 function Inicio() {
+  const usuario = useUsuario();
+  const nombre = usuario.nombre || "…";
+  const hoy = new Date().toLocaleDateString("es-MX", { weekday: "long", day: "2-digit", month: "short" });
+  const mesAnio = new Date().toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+
+  const [atrasadas, setAtrasadas] = useState<Atrasada[]>([]);
+  const [acuerdosHoy, setAcuerdosHoy] = useState(0);
+  useEffect(() => {
+    listarAtrasadas().then(setAtrasadas);
+    contarAcuerdosHoy().then(setAcuerdosHoy);
+  }, []);
   return (
     <div className="space-y-6">
       {/* ——— Ficha del colaborador (cabecera profesional) ——— */}
@@ -60,32 +88,35 @@ function Inicio() {
           {/* línea dorada superior */}
           <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: GOLD }} />
           <div className="flex items-center gap-4">
-            {/* Foto (si no existe, se ven las iniciales) */}
+            {/* Foto de Google (si no existe, se ven las iniciales) */}
             <div
-              className="relative grid h-16 w-16 place-items-center rounded-2xl bg-white/15 font-display text-2xl font-bold shadow"
+              className="relative grid h-16 w-16 place-items-center rounded-2xl bg-white/15 font-display text-2xl font-bold shadow overflow-hidden"
               style={{ boxShadow: `0 0 0 2px ${GOLD}` }}
             >
-              {COLAB.iniciales}
-              <img
-                src="/colaborador.jpg"
-                alt=""
-                onError={(e) => e.currentTarget.remove()}
-                className="absolute inset-0 h-full w-full rounded-2xl object-cover"
-              />
+              {iniciales(nombre)}
+              {usuario.foto && (
+                <img
+                  src={usuario.foto}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  onError={(e) => e.currentTarget.remove()}
+                  className="absolute inset-0 h-full w-full rounded-2xl object-cover"
+                />
+              )}
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: GOLD }}>JusticiaFácil · Despacho</p>
-              <h1 className="font-display text-2xl font-bold leading-tight">Buen día, {COLAB.nombre}</h1>
-              <p className="text-sm text-white/80">Hoy tienes 2 audiencias, 3 acuerdos nuevos del robot y 1 actuación por vencer.</p>
+              <h1 className="font-display text-2xl font-bold leading-tight">Buen día, {nombre}</h1>
+              <p className="text-sm text-white/80">Este es tu resumen del día.</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {COLAB.roles.map((r) => (
+                {(usuario.rol ? [usuario.rol] : []).map((r) => (
                   <span key={r} className="rounded-full px-2.5 py-0.5 text-[11px] border" style={{ borderColor: `${GOLD}66`, color: "#fff", background: "rgba(255,255,255,.06)" }}>{r}</span>
                 ))}
               </div>
             </div>
           </div>
-          <div className="text-right text-sm text-white/75">
-            Hoy<br /><b className="font-display text-lg text-white">Miércoles 24 jun</b><br />Junio 2026
+          <div className="text-right text-sm text-white/75 capitalize">
+            Hoy<br /><b className="font-display text-lg text-white capitalize">{hoy}</b><br />{mesAnio}
           </div>
         </div>
       </Card>
@@ -93,40 +124,54 @@ function Inicio() {
       {/* ——— KPIs ——— */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Kpi icon={Gavel} n="2" l="Audiencias hoy" tone="bg-[#0B1E3A]/10 text-[#0B1E3A]" />
-        <Kpi icon={Newspaper} n="3" l="Acuerdos nuevos" tone="bg-emerald-100 text-emerald-700" />
+        <Kpi icon={Newspaper} n={String(acuerdosHoy)} l="Acuerdos nuevos" tone="bg-emerald-100 text-emerald-700" />
         <Kpi icon={FileSearch} n="5" l="Pre-dictámenes" tone="bg-[#C2A24C]/20 text-[#8A6E22]" />
-        <Kpi icon={AlertTriangle} n="1" l="Actuación por vencer" tone="bg-red-100 text-red-700" />
+        <Kpi icon={AlertTriangle} n={String(atrasadas.length)} l="Actuaciones atrasadas" tone="bg-red-100 text-red-700" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         {/* ——— Izquierda ——— */}
         <div className="space-y-6">
-          {/* Boletines de nuestros juicios */}
+          {/* Juicios atrasados (real) */}
           <Card className="legal-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1 rounded" style={{ background: GOLD }} />
-                <h3 className="font-display text-lg font-semibold">Boletines de nuestros juicios</h3>
+                <h3 className="font-display text-lg font-semibold">Juicios atrasados</h3>
               </div>
-              <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] text-emerald-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> 3 nuevos · hoy
-              </span>
+              {atrasadas.length > 0 && (
+                <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> {atrasadas.length} atrasado{atrasadas.length === 1 ? "" : "s"}
+                </span>
+              )}
             </div>
-            <div className="divide-y divide-border">
-              {BOLETIN.map((h) => (
-                <div key={h.exp} className="flex gap-3 py-3">
-                  <span className={`w-1 rounded ${h.urgente ? "bg-red-500" : "bg-emerald-500"}`} />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${h.urgente ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>{h.tag}</span>
-                      <span className="font-mono text-xs">Exp. {h.exp}</span>
+            {atrasadas.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">Sin actuaciones atrasadas. Todo al día. 🎉</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {atrasadas.slice(0, 8).map((a, i) => (
+                  <Link
+                    key={i}
+                    to="/expedientes/$id"
+                    params={{ id: a.caso_id || "" }}
+                    className="flex gap-3 py-3 hover:bg-muted/30 -mx-2 px-2 rounded"
+                  >
+                    <span className="w-1 rounded bg-red-500" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                          Vencida hace {a.diasAtraso} día{a.diasAtraso === 1 ? "" : "s"}
+                        </span>
+                        <span className="font-mono text-xs">Exp. {a.expediente || "—"}</span>
+                      </div>
+                      <p className="text-sm font-semibold">{a.proxima_actuacion || "Actuación pendiente"}</p>
+                      <p className="text-xs text-muted-foreground">Vencía el {a.fecha_proxima}{a.asignado_a ? ` · ${a.asignado_a}` : ""}</p>
                     </div>
-                    <p className="text-sm font-semibold">{h.juzgado}</p>
-                    <p className="text-xs text-muted-foreground">{h.nota}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                    <ChevronRight className="h-4 w-4 self-center text-muted-foreground" />
+                  </Link>
+                ))}
+              </div>
+            )}
           </Card>
 
           {/* Agenda */}
