@@ -122,6 +122,7 @@ function PanelPlantillas() {
   const [asig, setAsig] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<string | null>(null);
   const [nuevoPaq, setNuevoPaq] = useState(false);
+  const [elaborar, setElaborar] = useState<Grupo | null>(null);
 
   const recargar = () => {
     listarEstadosPlantilla().then(setEstados);
@@ -182,7 +183,10 @@ function PanelPlantillas() {
                 </div>
                 {g.descripcion && <p className="mt-0.5 text-xs text-muted-foreground">{g.descripcion}</p>}
               </div>
-              <button onClick={() => borrarGrupo(g.id)} className="text-xs text-red-600 hover:underline">Eliminar paquete</button>
+              <div className="flex items-center gap-3">
+                {items.length > 0 && <button onClick={() => setElaborar(g)} className="inline-flex items-center gap-1 rounded-md bg-[color:var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[color:var(--teal)]/90"><PenLine className="h-3.5 w-3.5" /> Elaborar paquete</button>}
+                <button onClick={() => borrarGrupo(g.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
+              </div>
             </div>
             {items.length === 0 ? (
               <p className="text-xs text-muted-foreground">Sin plantillas. Usa el ⋮ de una tarjeta → “Mover a paquete”.</p>
@@ -203,6 +207,15 @@ function PanelPlantillas() {
 
       {nuevoPaq && <ModalNuevoPaquete onCerrar={() => setNuevoPaq(false)} onCreado={() => { setNuevoPaq(false); recargar(); }} />}
 
+      {elaborar && (
+        <ModalElaborarPaquete
+          grupo={elaborar}
+          items={activas.filter((p) => asig[p.tipo] === elaborar.id)}
+          onCerrar={() => setElaborar(null)}
+          onElaborar={(tipo) => navigate({ to: "/contratos/editor", search: { tipo } })}
+        />
+      )}
+
       {(() => {
         const ocultas = todas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
         if (!ocultas.length) return null;
@@ -220,6 +233,32 @@ function PanelPlantillas() {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+function ModalElaborarPaquete({ grupo, items, onCerrar, onElaborar }: { grupo: Grupo; items: PlantillaContrato[]; onCerrar: () => void; onElaborar: (tipo: string) => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
+      <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="font-display text-base font-bold text-[#0B1E3A]">Elaborar paquete · {grupo.nombre}</p>
+          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">Se elaboran en este orden. Al abrir uno, llénalo y guárdalo; luego regresa y sigue con el siguiente.</p>
+        <div className="space-y-2">
+          {items.map((p, i) => (
+            <div key={p.tipo} className="flex items-center gap-3 rounded-lg border border-border p-3">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color:var(--teal)]/15 text-xs font-semibold text-[color:var(--teal)]">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-tight">{p.nombre}</p>
+                <p className="line-clamp-1 text-xs text-muted-foreground">{p.descripcion}</p>
+              </div>
+              <Button size="sm" onClick={() => onElaborar(p.tipo)} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white"><PenLine className="mr-1 h-3.5 w-3.5" /> Elaborar</Button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
