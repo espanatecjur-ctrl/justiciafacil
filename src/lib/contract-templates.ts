@@ -1,5 +1,6 @@
 import type { ContratoTipo } from "./legal-types";
 import { plantillasDiipa } from "./contract-templates-diipa";
+import { cesionReestructura } from "./plantilla-cesion";
 import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos, testigosCampo, beneficiariosCampos, vinculosCampos } from "./contract-campos-cliente";
 
 export interface PlantillaCampo {
@@ -669,6 +670,7 @@ export const plantillas: PlantillaContrato[] = [
     cuerpo: "CONTRATO INDIVIDUAL DE TRABAJO entre {{nombreParteA}} (\"PATRÓN\") y {{nombreParteB}} (\"TRABAJADOR\").\n\nPRIMERA. PUESTO. {{puesto}}.\nSEGUNDA. SALARIO. $ {{salario}} MXN diarios integrados.\nTERCERA. JORNADA {{jornada}}.\nCUARTA. DURACIÓN: {{duracion}}.\nFirmado en {{lugarFirma}}, a {{fechaFirma}}.",
   },
   ...plantillasDiipa,
+  cesionReestructura,
 ];
 
 export function getPlantilla(tipo: ContratoTipo) {
