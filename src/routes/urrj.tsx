@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, MoreVertical, ScrollText } from "lucide-react";
+import { Scale, ScrollText } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SelectorGarantia } from "@/components/selector-garantia";
@@ -30,7 +30,7 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
-  const [menu, setMenu] = useState(false);
+  const [verSolic, setVerSolic] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -109,23 +109,6 @@ function URRJ() {
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
-          {!solicitudActiva && (
-            <div className="relative flex justify-end">
-              <button onClick={() => setMenu((v) => !v)} title="Más acciones"
-                className="inline-flex items-center gap-1 rounded-md border border-input px-2.5 py-2 text-sm font-medium hover:bg-muted">
-                <MoreVertical className="h-4 w-4" />
-              </button>
-              {menu && (
-                <div className="absolute right-0 top-11 z-20 w-56 rounded-md border border-border bg-white py-1 shadow-lg">
-                  <button onClick={() => { setMenu(false); setSolicitudActiva({ tipo_dictamen: "Registral" } as any); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-                    <ScrollText className="h-4 w-4" /> Dictamen Registral
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {!solicitudActiva && <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />}
           <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
         </>
       ) : null}
@@ -143,6 +126,22 @@ function URRJ() {
           puedeAdmin={puedeAdmin}
           pantallaElegir={soloRegistro ? <HistorialPredictamen onReDictaminar={reDictaminar} /> : undefined}
         />
+      )}
+
+      {vista === "elegir" && !soloRegistro && !solicitudActiva && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+              <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
+            </button>
+            <button onClick={() => setVerSolic((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+              {verSolic ? "Ocultar solicitudes" : "Solicitudes pendientes"}
+            </button>
+          </div>
+          {verSolic && <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />}
+        </div>
       )}
     </div>
   );
