@@ -98,6 +98,7 @@ export interface EntradaHito4 {
   poderIrrevocable: string;    // si/no
   vendedorAceptaPoder: string; // si/no
   dineroYaEntregado: string;   // si/no
+  ratificadoNotario?: string;  // si/no — indicador (no candado): sin ratificar, el poder es revocable
 }
 export function veredictoHito4(e: EntradaHito4): ResultadoMotor {
   if (e.vendedorAceptaPoder === "no")
@@ -107,7 +108,11 @@ export function veredictoHito4(e: EntradaHito4): ResultadoMotor {
   const candados = [e.promesaSuspensiva === "si", e.escrow === "si", e.poderIrrevocable === "si"].filter(Boolean).length;
   if (e.promesaSuspensiva === "no")
     return { semaforo: sem("ABORTAR"), etiqueta: "ABORTAR (aviso)", detalle: "Promesa sin cláusula suspensiva (Art. 1938 CCF): no se blinda el control." };
-  if (candados === 3) return { semaforo: sem("COMPLETO"), etiqueta: "CERRADO · control absoluto 🔒", detalle: "Los 3 candados están cerrados: promesa suspensiva + escrow + poder irrevocable." };
+  if (candados === 3) {
+    if (e.ratificadoNotario === "si")
+      return { semaforo: sem("COMPLETO"), etiqueta: "CERRADO · control absoluto 🔒", detalle: "Los 3 candados cerrados y ratificados ante notario: promesa suspensiva + escrow + poder irrevocable." };
+    return { semaforo: "amarillo", etiqueta: "Candados sin ratificar", detalle: "Los 3 candados están, pero SIN ratificar ante notario: el poder irrevocable es fácil de revocar en la práctica. Ratifica ante fedatario para tener control absoluto." };
+  }
   if (candados >= 1) return { semaforo: sem("PARCIAL"), etiqueta: "PARCIAL", detalle: `${candados} de 3 candados cerrados. Faltan los demás antes de soltar dinero.` };
   return { semaforo: sem("PENDIENTE"), etiqueta: "PENDIENTE", detalle: "Aún no se cierra ningún candado." };
 }
