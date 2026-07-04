@@ -1,18 +1,12 @@
 // ============================================================================
 //  Liquidación de Intereses
 //  --------------------------------------------------------------------------
-//  FASE 1 — Método FLAT (verificado al centavo con la tabla de la DGE):
-//    interés simple sobre la suerte principal, año 360, sin anatocismo.
-//  FASE 2 — Método REAL (amortización francesa):
-//    interés ordinario sobre el saldo insoluto que baja con cada pago, y
-//    moratorio por cada mensualidad vencida desde su fecha de vencimiento
-//    (como en el estado de cuenta certificado de banco). El moratorio se
-//    calcula como (tasa ordinaria × factor); Santander usa factor 1.5.
-//  El estado de cuenta certificado sigue siendo la prueba en juicio
-//  (Art. 68 Ley de Instituciones de Crédito).
+//  FASE 1 — Método FLAT: interés simple sobre la suerte principal, año 360.
+//  FASE 2 — Método REAL: amortización francesa, interés sobre saldo insoluto
+//    y moratorio por mensualidad vencida (como el estado de cuenta certificado).
 // ============================================================================
 import { useEffect, useMemo, useState } from "react";
-import { Printer, ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw } from "lucide-react";
+import { ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw, Sheet, FileDown } from "lucide-react";
 import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, subirArchivoEC, type EstadoCuenta } from "@/lib/estado-cuenta";
 import { usuarioActualEtiqueta } from "@/lib/auth";
 import { casosParaSelector, type CasoOpcion } from "@/lib/solicitud-predictamen";
@@ -73,7 +67,7 @@ function Flat({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
   }, [suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte]);
 
   useEffect(() => {
-    onDatos?.({ metodo: "flat", suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, deudaTotal: r.deudaTotal });
+    onDatos?.({ metodo: "flat", suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, dias: r.dias, meses: r.meses, anios: r.anios, ordTotal: r.ordTotal, morTotal: r.morTotal, deudaTotal: r.deudaTotal });
   }, [suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, r]); // eslint-disable-line
 
   const S = parseFloat(suerte) || 0;
@@ -150,15 +144,13 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
     const seg = parseFloat(seguro) || 0;
     const com = parseFloat(comision) || 0;
 
-    // cuota francesa (capital + interés)
     const cuota = rMens > 0 ? (P * rMens) / (1 - Math.pow(1 + rMens, -n)) : P / n;
     const pagoMensualTotal = cuota + seg + com;
 
-    // genera la tabla
     type Ren = { k: number; vence: string; interes: number; capital: number; saldo: number; vencida: boolean; mora: number };
     const tabla: Ren[] = [];
     let saldo = P;
-    let capitalInsoluto = P; // saldo tras las pagadas
+    let capitalInsoluto = P;
     let vencidas = 0;
     let moratorios = 0;
     const corteIso = fechaCorte;
@@ -169,7 +161,6 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
         const capital = Math.min(cuota - interes, saldo);
         const venceD = sumaMeses(fechaPrimerPago, k - 1);
         const venceIso = isoDe(venceD);
-        // ¿pagada? -> vence antes de la mora
         const pagada = fechaMora ? venceIso < fechaMora : false;
         const esVencidaNoPagada = fechaMora && corteIso ? venceIso >= fechaMora && venceIso <= corteIso : false;
         let moraRen = 0;
@@ -195,7 +186,7 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
   }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte]);
 
   useEffect(() => {
-    onDatos?.({ metodo: "real", monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, deudaTotal: r.totalAdeudo });
+    onDatos?.({ metodo: "real", monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, cuota: r.cuota, capitalInsoluto: r.capitalInsoluto, vencidas: r.vencidas, mensualidadesIncumplidas: r.mensualidadesIncumplidas, moratorios: r.moratorios, tabla: r.tabla, deudaTotal: r.totalAdeudo });
   }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, r]); // eslint-disable-line
 
   return (
@@ -272,7 +263,6 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
         <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
           Método real: amortización francesa, interés ordinario sobre el saldo insoluto, moratorio por mensualidad vencida (año 360).
           El adeudo se arma como <b>capital insoluto + mensualidades incumplidas + moratorios</b>, igual que el estado de cuenta certificado.
-          Valida contra el certificado con Contabilidad: cada contrato puede tener seguros/comisiones distintos.
         </p>
       </div>
     </div>
@@ -356,6 +346,60 @@ export function LiquidacionIntereses() {
     });
     setGuardando(false);
     setMsg(r.ok ? "Guardado en el registro ✓" : "No se pudo guardar (¿corriste el SQL de estado_cuenta?)");
+  };
+
+  const exportarExcel = () => {
+    const q = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const filas: (string | number)[][] = [];
+    filas.push(["DIIPA — Liquidación de Intereses / Estado de cuenta"]);
+    filas.push(["Expediente", expediente || ""]);
+    filas.push(["Acreditado", acreditado || ""]);
+    filas.push(["Perito que firma", peritoNombre || ""]);
+    filas.push(["Fecha de elaboración", hoy]);
+    filas.push([]);
+
+    if ((metodo === "flat" || metodo === "ambas") && datosFlat) {
+      const f = datosFlat as Record<string, unknown>;
+      filas.push(["MÉTODO FLAT (estimado)"]);
+      filas.push(["Suerte principal", Number(f.suerte) || 0]);
+      filas.push(["Tasa ordinaria (%)", Number(f.tasaOrd) || 0]);
+      filas.push(["Tasa moratoria (%)", Number(f.tasaMor) || 0]);
+      filas.push(["Fecha de inicio", String(f.fechaInicio ?? "")]);
+      filas.push(["Fecha de corte", String(f.fechaCorte ?? "")]);
+      filas.push(["Días de atraso", Number(f.dias) || 0]);
+      filas.push(["Total intereses ordinarios", Number(f.ordTotal)?.toFixed(2) as unknown as number]);
+      filas.push(["Total intereses moratorios", Number(f.morTotal)?.toFixed(2) as unknown as number]);
+      filas.push(["DEUDA TOTAL", Number(f.deudaTotal)?.toFixed(2) as unknown as number]);
+      filas.push([]);
+    }
+
+    if ((metodo === "real" || metodo === "ambas") && datosReal) {
+      const rr = datosReal as Record<string, unknown>;
+      filas.push(["MÉTODO REAL (amortización)"]);
+      filas.push(["Monto del crédito", Number(rr.monto) || 0]);
+      filas.push(["Tasa ordinaria (%)", Number(rr.tasaOrd) || 0]);
+      filas.push(["Factor moratorio", Number(rr.factorMor) || 0]);
+      filas.push(["Fecha de corte", String(rr.fechaCorte ?? "")]);
+      filas.push(["Cuota (capital + interés)", Number(rr.cuota)?.toFixed(2) as unknown as number]);
+      filas.push(["Capital insoluto", Number(rr.capitalInsoluto)?.toFixed(2) as unknown as number]);
+      filas.push(["Mensualidades vencidas", Number(rr.vencidas) || 0]);
+      filas.push(["Mensualidades incumplidas", Number(rr.mensualidadesIncumplidas)?.toFixed(2) as unknown as number]);
+      filas.push(["Intereses moratorios", Number(rr.moratorios)?.toFixed(2) as unknown as number]);
+      filas.push(["TOTAL DE ADEUDO", Number(rr.deudaTotal)?.toFixed(2) as unknown as number]);
+      filas.push([]);
+      filas.push(["#", "Vence", "Interés", "Capital", "Saldo", "Mora"]);
+      const tabla = (rr.tabla as { k: number; vence: string; interes: number; capital: number; saldo: number; mora: number }[]) || [];
+      tabla.forEach((t) => filas.push([t.k, t.vence, t.interes.toFixed(2), t.capital.toFixed(2), t.saldo.toFixed(2), (t.mora || 0).toFixed(2)]));
+    }
+
+    const csv = "\uFEFF" + filas.map((row) => row.map(q).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `EstadoCuenta_${(expediente || "liquidacion").replace(/\W+/g, "_")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -473,8 +517,11 @@ export function LiquidacionIntereses() {
         <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">
           {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar
         </button>
+        <button onClick={exportarExcel} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
+          <Sheet className="h-4 w-4" /> Excel
+        </button>
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background">
-          <Printer className="h-4 w-4" /> Imprimir estado de cuenta
+          <FileDown className="h-4 w-4" /> PDF / Imprimir
         </button>
       </div>
       </div>)}
