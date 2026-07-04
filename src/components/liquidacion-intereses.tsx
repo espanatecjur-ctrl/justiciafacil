@@ -13,7 +13,7 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from "react";
 import { Printer, ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw } from "lucide-react";
-import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, type EstadoCuenta } from "@/lib/estado-cuenta";
+import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, subirArchivoEC, type EstadoCuenta } from "@/lib/estado-cuenta";
 import { usuarioActualEtiqueta } from "@/lib/auth";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -296,8 +296,22 @@ export function LiquidacionIntereses() {
   const [tab, setTab] = useState<"calc" | "registro">("calc");
   const [datosFlat, setDatosFlat] = useState<Record<string, unknown> | null>(null);
   const [datosReal, setDatosReal] = useState<Record<string, unknown> | null>(null);
+  const [peritoNombre, setPeritoNombre] = useState("");
+  const [cedula, setCedula] = useState<{ url: string; nombre: string } | null>(null);
+  const [docPerito, setDocPerito] = useState<{ url: string; nombre: string } | null>(null);
+  const [subiendo, setSubiendo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const subir = async (file: File | undefined, cual: "cedula" | "doc") => {
+    if (!file) return;
+    setSubiendo(cual);
+    try {
+      const r = await subirArchivoEC(file, cual === "cedula" ? "cedula" : "docperito");
+      if (cual === "cedula") setCedula(r); else setDocPerito(r);
+    } catch (e) { setMsg(String((e as Error)?.message || e)); }
+    setSubiendo(null);
+  };
 
   const guardar = async () => {
     const activo = metodo === "real" ? datosReal : metodo === "flat" ? datosFlat : (datosReal || datosFlat);
@@ -310,6 +324,9 @@ export function LiquidacionIntereses() {
       deuda_total: Number(activo?.deudaTotal) || null,
       fecha_corte: (activo?.fechaCorte as string) || null,
       datos: { flat: datosFlat, real: datosReal, contador, apoderado },
+      perito_nombre: peritoNombre || null,
+      perito_cedula_url: cedula?.url || null,
+      perito_doc_url: docPerito?.url || null,
       creado_por: quien,
     });
     setGuardando(false);
@@ -351,6 +368,31 @@ export function LiquidacionIntereses() {
         </div>
       </div>
 
+      {/* Perito que firma */}
+      <div className="rounded-lg border border-border p-4 print:hidden">
+        <p className="mb-3 font-display text-sm font-bold">Perito que firma</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label className="block text-xs font-medium sm:col-span-3">Nombre del perito
+            <input className={inp} value={peritoNombre} onChange={(e) => setPeritoNombre(e.target.value)} placeholder="Nombre completo del perito valuador/contable" /></label>
+          <div>
+            <p className="mb-1 text-xs font-medium">Cédula profesional</p>
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40">
+              {subiendo === "cedula" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {cedula ? cedula.nombre : "Subir cédula"}
+              <input type="file" className="hidden" onChange={(e) => subir(e.target.files?.[0], "cedula")} />
+            </label>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium">Documento (opcional)</p>
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40">
+              {subiendo === "doc" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {docPerito ? docPerito.nombre : "Subir documento"}
+              <input type="file" className="hidden" onChange={(e) => subir(e.target.files?.[0], "doc")} />
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div id="liq-impreso" className="space-y-4">
         {/* Encabezado formal (solo al imprimir) */}
         <div className="mb-2 hidden border-b border-black pb-3 text-center print:block">
@@ -377,7 +419,7 @@ export function LiquidacionIntereses() {
         )}
 
         {/* Firmas (solo al imprimir) */}
-        <div className="mt-10 hidden grid-cols-2 gap-10 text-center text-sm print:grid">
+        <div className="mt-10 hidden grid-cols-3 gap-8 text-center text-sm print:grid">
           <div>
             <div className="mb-1 border-t border-black pt-1">{contador || "\u00A0"}</div>
             <p className="text-xs">Aprobación del Contador</p>
@@ -385,6 +427,10 @@ export function LiquidacionIntereses() {
           <div>
             <div className="mb-1 border-t border-black pt-1">{apoderado || "\u00A0"}</div>
             <p className="text-xs">Firma del Apoderado Legal</p>
+          </div>
+          <div>
+            <div className="mb-1 border-t border-black pt-1">{peritoNombre || "\u00A0"}</div>
+            <p className="text-xs">Perito{cedula ? " · con cédula" : ""}</p>
           </div>
         </div>
       </div>
@@ -486,6 +532,8 @@ function FichaEstado({ e, onCerrar }: { e: EstadoCuenta; onCerrar: () => void })
           <p><b>Deuda total:</b> {fmtN(e.deuda_total)}</p>
           <p><b>Fecha de corte:</b> {e.fecha_corte || "—"}</p>
           {e.perito_nombre && <p><b>Firma (perito):</b> {e.perito_nombre}</p>}
+          {e.perito_cedula_url && <p><b>Cédula:</b> <a href={e.perito_cedula_url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] underline">ver archivo</a></p>}
+          {e.perito_doc_url && <p><b>Documento:</b> <a href={e.perito_doc_url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] underline">ver archivo</a></p>}
           <p className="text-xs text-muted-foreground">Guardado {e.created_at ? new Date(e.created_at).toLocaleString("es-MX") : ""}{e.creado_por ? ` · por ${e.creado_por}` : ""}</p>
         </div>
       </div>
