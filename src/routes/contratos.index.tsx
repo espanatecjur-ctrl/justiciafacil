@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { plantillas, renderContrato, valoresIniciales } from "@/lib/contract-templates";
 import { listarEstadosPlantilla, setEstadoPlantilla } from "@/lib/plantilla-estado";
+import { listarPlantillasCustom } from "@/lib/plantilla-custom";
+import type { PlantillaContrato } from "@/lib/contract-templates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,10 +44,12 @@ function ContratosIndex() {
   const [solPend, setSolPend] = useState(0);
   const [nGen, setNGen] = useState(0);
   const [nArch, setNArch] = useState(0);
+  const [nPlant, setNPlant] = useState(plantillas.length);
 
   useEffect(() => {
     contarContratosPendientes().then(setSolPend);
     listarContratos("generado").then((l) => setNGen(l.length));
+    listarPlantillasCustom().then((c) => setNPlant(plantillas.length + c.length));
     Promise.all([listarContratos("archivado"), listarContratos("papelera")])
       .then(([a, p]) => setNArch(a.length + p.length));
   }, []);
@@ -57,17 +61,22 @@ function ContratosIndex() {
         title="Contratos"
         description="Plantillas auto-llenables, solicitudes y contratos generados."
         actions={
-          <Link to="/contratos/editor">
-            <Button className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
-              <Plus className="h-4 w-4 mr-1.5" /> Nuevo contrato
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link to="/contratos/nueva">
+              <Button variant="outline"><LayoutGrid className="h-4 w-4 mr-1.5" /> Nueva plantilla</Button>
+            </Link>
+            <Link to="/contratos/editor">
+              <Button className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+                <Plus className="h-4 w-4 mr-1.5" /> Nuevo contrato
+              </Button>
+            </Link>
+          </div>
         }
       />
 
       {/* Indicadores que llevan a su pestaña */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicador n={String(plantillas.length)} l="Plantillas" activo={tab === "plantillas"} onClick={() => setTab("plantillas")} tono="text-[#0B1E3A]" />
+        <Indicador n={String(nPlant)} l="Plantillas" activo={tab === "plantillas"} onClick={() => setTab("plantillas")} tono="text-[#0B1E3A]" />
         <Indicador n={String(solPend)} l="Solicitudes pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
         <Indicador n={String(nGen)} l="Contratos generados" activo={tab === "generados"} onClick={() => setTab("generados")} tono="text-emerald-600" />
         <Indicador n={String(nArch)} l="Archivados / papelera" activo={tab === "archivo"} onClick={() => setTab("archivo")} tono="text-slate-600" />
@@ -107,17 +116,19 @@ function Indicador({ n, l, activo, onClick, tono }: { n: string; l: string; acti
 function PanelPlantillas() {
   const navigate = useNavigate();
   const [estados, setEstados] = useState<Record<string, string>>({});
+  const [customs, setCustoms] = useState<PlantillaContrato[]>([]);
   const [preview, setPreview] = useState<string | null>(null); // tipo en vista previa
   const recargar = () => listarEstadosPlantilla().then(setEstados);
-  useEffect(() => { recargar(); }, []);
+  useEffect(() => { recargar(); listarPlantillasCustom().then(setCustoms); }, []);
 
   const cambiar = async (tipo: string, estado: string) => {
     await setEstadoPlantilla(tipo, estado);
     recargar();
   };
 
-  const activas = plantillas.filter((p) => (estados[p.tipo] || "activa") === "activa");
-  const plantillaPreview = plantillas.find((p) => p.tipo === preview) || null;
+  const todas = [...plantillas, ...customs];
+  const activas = todas.filter((p) => (estados[p.tipo] || "activa") === "activa");
+  const plantillaPreview = todas.find((p) => p.tipo === preview) || null;
 
   return (
     <div>
@@ -147,7 +158,7 @@ function PanelPlantillas() {
       {plantillaPreview && <PreviewPlantilla plantilla={plantillaPreview} onCerrar={() => setPreview(null)} onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: plantillaPreview.tipo } })} />}
 
       {(() => {
-        const ocultas = plantillas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
+        const ocultas = todas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
         if (!ocultas.length) return null;
         return (
           <div className="mt-6 rounded-lg border border-dashed border-border p-3">
