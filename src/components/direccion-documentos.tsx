@@ -11,6 +11,8 @@ import {
 export function DireccionDocumentos() {
   const [casos, setCasos] = useState<CasoOpcion[]>([]);
   const [casoId, setCasoId] = useState("");
+  const [area, setArea] = useState("URRJ");
+  const [tipoDictamen, setTipoDictamen] = useState("Jurídico");
   const [nota, setNota] = useState("");
   const [docs, setDocs] = useState<DocRef[]>([]);
   const [subiendo, setSubiendo] = useState(false);
@@ -42,15 +44,19 @@ export function DireccionDocumentos() {
 
   const enviar = async () => {
     if (!casoId) { setMsg("Escoge la garantía / expediente."); return; }
+    if (!area) { setMsg("Escoge el área a la que van los documentos."); return; }
     if (!docs.length) { setMsg("Sube al menos un documento."); return; }
     setEnviando(true);
     setMsg(null);
     const quien = await usuarioActualEtiqueta();
+    const usaTipo = area === "URRJ" || area === "UCP";
     const r = await crearSolicitudPredictamen({
       caso_id: casoId,
       expediente: caso?.expediente ?? null,
       cliente: caso?.cliente_nombre ?? null,
       juzgado: caso?.juzgado ?? null,
+      area,
+      tipo_dictamen: usaTipo ? tipoDictamen : null,
       nota: nota || null,
       documentos: docs,
       solicitado_por: quien,
@@ -93,6 +99,29 @@ export function DireccionDocumentos() {
               {caso.cliente_nombre ? <>Cliente: <b>{caso.cliente_nombre}</b> · </> : null}{caso.juzgado || "Sin juzgado"}
             </p>
           )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">Área a la que van</label>
+              <select value={area} onChange={(e) => setArea(e.target.value)}
+                className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="URRJ">URRJ · Resolución Jurídica</option>
+                <option value="UCP">UCP · Consolidación Patrimonial</option>
+                <option value="UFC">UFC · Formalizaciones</option>
+                <option value="UDP">UDP · Defensa y Protección</option>
+              </select>
+            </div>
+            {(area === "URRJ" || area === "UCP") && (
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground">Tipo de dictamen</label>
+                <select value={tipoDictamen} onChange={(e) => setTipoDictamen(e.target.value)}
+                  className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="Jurídico">Jurídico (¿es litigable?)</option>
+                  <option value="Registral">Registral (RPPC)</option>
+                </select>
+              </div>
+            )}
+          </div>
 
           <div>
             <label className="text-[11px] font-medium text-muted-foreground">Nota para el dictaminador (opcional)</label>
@@ -143,6 +172,10 @@ export function DireccionDocumentos() {
                   <p className="text-xs text-muted-foreground">
                     <Paperclip className="mr-1 inline h-3 w-3" />{s.documentos?.length || 0} documento(s){s.created_at ? ` · ${new Date(s.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}` : ""}
                   </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {s.area && <span className="rounded-full bg-[color:var(--teal)]/10 px-2 py-0.5 text-[10px] font-semibold text-[color:var(--teal)]">{s.area}</span>}
+                    {s.tipo_dictamen && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Dictamen {s.tipo_dictamen}</span>}
+                  </div>
                 </div>
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
                   <Check className="h-3 w-3" /> En pre-dictamen
