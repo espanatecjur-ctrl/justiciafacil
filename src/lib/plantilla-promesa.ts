@@ -5,6 +5,9 @@ const campos: PlantillaCampo[] = [
   { id: "nombreCompradora", label: "Nombre completo de LA PROMITENTE COMPRADORA", tipo: "text", requerido: true },
   { id: "curpCompradora", label: "CURP / RFC de LA COMPRADORA", tipo: "text" },
   { id: "domicilioCompradora", label: "Domicilio de LA COMPRADORA", tipo: "textarea" },
+  { id: "compradoraPorApoderado", label: "¿LA COMPRADORA comparece por apoderado?", tipo: "checkbox" },
+  { id: "nombreApoderadoCompradora", label: "Nombre del apoderado de LA COMPRADORA", tipo: "text", dependeDe: { campo: "compradoraPorApoderado", valor: true } },
+  { id: "poderApoderadoCompradora", label: "Instrumento del poder (No., Notario, Plaza)", tipo: "text", dependeDe: { campo: "compradoraPorApoderado", valor: true } },
 
   // — Vendedora (DIIPA) —
   { id: "nombreApoderado", label: "Apoderado(a) de LA VENDEDORA que firma", tipo: "text", requerido: true, ayuda: "Ej. Erika Paola España Méndez" },
@@ -47,7 +50,7 @@ const campos: PlantillaCampo[] = [
 
 const cuerpo = `CONTRATO DE PRESTACIÓN DE SERVICIOS Y PROMESA DE COMPRAVENTA SOBRE GARANTÍAS HIPOTECARIAS
 
-En la ciudad de {{lugarFirma}}, comparecen a la celebración del presente contrato: por una parte, DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V., por conducto de su apoderado(a) legal el (la) C. {{nombreApoderado}}, a quien se denominará «LA PROMITENTE VENDEDORA»; y por la otra, {{nombreCompradora}}, a quien se denominará «LA PROMITENTE COMPRADORA», al tenor de las siguientes declaraciones, estipulaciones y cláusulas:
+En la ciudad de {{lugarFirma}}, comparecen a la celebración del presente contrato: por una parte, DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V., por conducto de su apoderado(a) legal el (la) C. {{nombreApoderado}}, a quien se denominará «LA PROMITENTE VENDEDORA»; y por la otra, {{nombreCompradora}}{{#compradoraPorApoderado}}, representada en este acto por su apoderado(a) el (la) C. {{nombreApoderadoCompradora}}, según consta en {{poderApoderadoCompradora}}{{/compradoraPorApoderado}}, a quien se denominará «LA PROMITENTE COMPRADORA», al tenor de las siguientes declaraciones, estipulaciones y cláusulas:
 
 DECLARACIONES
 
