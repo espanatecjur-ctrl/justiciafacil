@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Printer, ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw } from "lucide-react";
 import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, subirArchivoEC, type EstadoCuenta } from "@/lib/estado-cuenta";
 import { usuarioActualEtiqueta } from "@/lib/auth";
+import { casosParaSelector, type CasoOpcion } from "@/lib/solicitud-predictamen";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const fmt = (v: number) =>
@@ -48,12 +49,12 @@ function Fila({ label, valor, fuerte }: { label: string; valor: string; fuerte?:
 // ---------------------------------------------------------------------------
 //  MÉTODO FLAT
 // ---------------------------------------------------------------------------
-function Flat({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
-  const [suerte, setSuerte] = useState("");
-  const [tasaOrd, setTasaOrd] = useState("");
-  const [tasaMor, setTasaMor] = useState("");
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaCorte, setFechaCorte] = useState("");
+function Flat({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => void; inicial?: Record<string, string> }) {
+  const [suerte, setSuerte] = useState(inicial?.suerte ?? "");
+  const [tasaOrd, setTasaOrd] = useState(inicial?.tasaOrd ?? "");
+  const [tasaMor, setTasaMor] = useState(inicial?.tasaMor ?? "");
+  const [fechaInicio, setFechaInicio] = useState(inicial?.fechaInicio ?? "");
+  const [fechaCorte, setFechaCorte] = useState(inicial?.fechaCorte ?? "");
 
   const r = useMemo(() => {
     const S = parseFloat(suerte) || 0;
@@ -127,16 +128,16 @@ function Flat({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
 // ---------------------------------------------------------------------------
 //  MÉTODO REAL (amortización francesa)
 // ---------------------------------------------------------------------------
-function Real({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
-  const [monto, setMonto] = useState("");
-  const [tasaOrd, setTasaOrd] = useState("");
-  const [factorMor, setFactorMor] = useState("1.5");
-  const [plazo, setPlazo] = useState("240");
-  const [seguro, setSeguro] = useState("");
-  const [comision, setComision] = useState("");
-  const [fechaPrimerPago, setFechaPrimerPago] = useState("");
-  const [fechaMora, setFechaMora] = useState("");
-  const [fechaCorte, setFechaCorte] = useState("");
+function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => void; inicial?: Record<string, string> }) {
+  const [monto, setMonto] = useState(inicial?.monto ?? "");
+  const [tasaOrd, setTasaOrd] = useState(inicial?.tasaOrd ?? "");
+  const [factorMor, setFactorMor] = useState(inicial?.factorMor ?? "1.5");
+  const [plazo, setPlazo] = useState(inicial?.plazo ?? "240");
+  const [seguro, setSeguro] = useState(inicial?.seguro ?? "");
+  const [comision, setComision] = useState(inicial?.comision ?? "");
+  const [fechaPrimerPago, setFechaPrimerPago] = useState(inicial?.fechaPrimerPago ?? "");
+  const [fechaMora, setFechaMora] = useState(inicial?.fechaMora ?? "");
+  const [fechaCorte, setFechaCorte] = useState(inicial?.fechaCorte ?? "");
   const [verTabla, setVerTabla] = useState(false);
 
   const r = useMemo(() => {
@@ -302,6 +303,30 @@ export function LiquidacionIntereses() {
   const [subiendo, setSubiendo] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [precarga, setPrecarga] = useState<{ flat?: Record<string, string>; real?: Record<string, string> } | null>(null);
+  const [recargaId, setRecargaId] = useState(0);
+  const [casos, setCasos] = useState<CasoOpcion[]>([]);
+  const [asunto, setAsunto] = useState("");
+  useEffect(() => { casosParaSelector().then(setCasos); }, []);
+
+  const elegirAsunto = (id: string) => {
+    setAsunto(id);
+    const c = casos.find((x) => x.id === id);
+    if (c) { setExpediente(c.expediente || ""); setAcreditado(c.cliente_nombre || ""); }
+  };
+
+  const reelaborar = (e: EstadoCuenta) => {
+    const d = (e.datos || {}) as { flat?: Record<string, string>; real?: Record<string, string>; contador?: string; apoderado?: string };
+    setMetodo((e.metodo as "flat" | "real" | "ambas") || "flat");
+    setExpediente(e.expediente || "");
+    setAcreditado(e.acreditado || "");
+    setContador(d.contador || "");
+    setApoderado(d.apoderado || "");
+    setPeritoNombre(e.perito_nombre || "");
+    setPrecarga({ flat: d.flat, real: d.real });
+    setRecargaId((n) => n + 1);
+    setTab("calc");
+  };
 
   const subir = async (file: File | undefined, cual: "cedula" | "doc") => {
     if (!file) return;
@@ -343,7 +368,7 @@ export function LiquidacionIntereses() {
         <button onClick={() => setTab("registro")} className={`border-b-2 px-3 py-2 text-sm transition ${tab === "registro" ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Registro</button>
       </div>
 
-      {tab === "registro" && <RegistroEstados />}
+      {tab === "registro" && <RegistroEstados onReelaborar={reelaborar} />}
 
       {tab === "calc" && (<div className="space-y-4">
       {/* Selector de método */}
@@ -356,6 +381,14 @@ export function LiquidacionIntereses() {
       {/* Datos del caso */}
       <div className="rounded-lg border border-border p-4 print:hidden">
         <p className="mb-3 font-display text-sm font-bold">Datos del caso (para el estado de cuenta)</p>
+        <div className="mb-3">
+          <label className="block text-xs font-medium">Autollenar desde un asunto
+            <select className={inp} value={asunto} onChange={(e) => elegirAsunto(e.target.value)}>
+              <option value="">— Escoge un expediente —</option>
+              {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente || "s/exp"}{c.cliente_nombre ? ` · ${c.cliente_nombre}` : ""}</option>)}
+            </select>
+          </label>
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block text-xs font-medium">Expediente
             <input className={inp} value={expediente} onChange={(e) => setExpediente(e.target.value)} placeholder="Ej. 123/2024-C" /></label>
@@ -408,13 +441,13 @@ export function LiquidacionIntereses() {
         {(metodo === "flat" || metodo === "ambas") && (
           <div>
             {metodo === "ambas" && <p className="mb-2 font-display text-sm font-bold text-[color:var(--teal)]">Método flat (estimado)</p>}
-            <Flat onDatos={setDatosFlat} />
+            <Flat key={`flat-${recargaId}`} inicial={precarga?.flat} onDatos={setDatosFlat} />
           </div>
         )}
         {(metodo === "real" || metodo === "ambas") && (
           <div>
             {metodo === "ambas" && <p className="mb-2 mt-4 font-display text-sm font-bold text-[color:var(--teal)]">Método real (amortización)</p>}
-            <Real onDatos={setDatosReal} />
+            <Real key={`real-${recargaId}`} inicial={precarga?.real} onDatos={setDatosReal} />
           </div>
         )}
 
@@ -451,7 +484,7 @@ export function LiquidacionIntereses() {
 
 const fmtN = (v?: number | null) => (v != null && isFinite(v) ? v.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—");
 
-function RegistroEstados() {
+function RegistroEstados({ onReelaborar }: { onReelaborar: (e: EstadoCuenta) => void }) {
   const [lista, setLista] = useState<EstadoCuenta[]>([]);
   const [archivo, setArchivo] = useState<EstadoCuenta[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -482,6 +515,7 @@ function RegistroEstados() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenu(null)} />
               <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+                <button onClick={() => { setMenu(null); onReelaborar(e); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><RotateCcw className="h-3.5 w-3.5" /> Reelaborar / editar</button>
                 {e.estado === "archivado"
                   ? <button onClick={() => cambiar(e.id!, "guardado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button>
                   : <button onClick={() => cambiar(e.id!, "archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-3.5 w-3.5" /> Archivar</button>}
