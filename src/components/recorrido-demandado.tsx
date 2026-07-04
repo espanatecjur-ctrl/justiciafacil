@@ -59,7 +59,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     remateEjecutado: "", adjudicacion: "", adjudicacionFirme: "", adjudicacionAFavor: "", amparoRemate: "", escrituradoPosesion: "",
     estadoCarta: "", fechaCaducidad: "", otrosAcreedores: "", quitaSinCondiciones: "",
     suertePrincipal: "", interesMoratorio: "", gastosCostas: "", montoQuita: "", valorComercial: "", mesesDesenredo: "", margenPct: "30",
-    promesaSuspensiva: "", escrow: "", poderIrrevocable: "", vendedorAceptaPoder: "", dineroYaEntregado: "",
+    promesaSuspensiva: "", escrow: "", poderIrrevocable: "", vendedorAceptaPoder: "", dineroYaEntregado: "", ratificadoNotario: "",
     anotaciones: "",
   });
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
@@ -71,7 +71,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     descripcionCoincide: x.descripcionCoincide, tercosFiscalLaboral: x.tercosFiscalLaboral, almonedaConvocada: x.almonedaConvocada, sospechaUsura: x.sospechaUsura,
   }), [x.emplazamiento, x.sentenciaEjecutoriada, x.copropietarios, x.descripcionCoincide, x.tercosFiscalLaboral, x.almonedaConvocada, x.sospechaUsura]);
   const r3 = useMemo(() => veredictoHito3({ estadoCarta: x.estadoCarta, fechaCaducidad: x.fechaCaducidad, otrosAcreedores: x.otrosAcreedores, quitaSinCondiciones: x.quitaSinCondiciones }), [x.estadoCarta, x.fechaCaducidad, x.otrosAcreedores, x.quitaSinCondiciones]);
-  const r4 = useMemo(() => veredictoHito4({ promesaSuspensiva: x.promesaSuspensiva, escrow: x.escrow, poderIrrevocable: x.poderIrrevocable, vendedorAceptaPoder: x.vendedorAceptaPoder, dineroYaEntregado: x.dineroYaEntregado }), [x.promesaSuspensiva, x.escrow, x.poderIrrevocable, x.vendedorAceptaPoder, x.dineroYaEntregado]);
+  const r4 = useMemo(() => veredictoHito4({ promesaSuspensiva: x.promesaSuspensiva, escrow: x.escrow, poderIrrevocable: x.poderIrrevocable, vendedorAceptaPoder: x.vendedorAceptaPoder, dineroYaEntregado: x.dineroYaEntregado, ratificadoNotario: x.ratificadoNotario }), [x.promesaSuspensiva, x.escrow, x.poderIrrevocable, x.vendedorAceptaPoder, x.dineroYaEntregado, x.ratificadoNotario]);
   const vaae = useMemo(() => calcularVAAE({
     suertePrincipal: n(x.suertePrincipal), interesMoratorio: n(x.interesMoratorio), gastosCostas: n(x.gastosCostas),
     quita: x.quitaSinCondiciones === "si" ? n(x.montoQuita) : 0,
@@ -134,6 +134,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
       riesgos: [
         { nombre: "Extracción del expediente", r: r1 },
         { nombre: "Legalidad procesal", r: r2 },
+        ...(avisoAdj ? [{ nombre: "Remate / adjudicación", r: avisoAdj }] : []),
         { nombre: "Carta saldo", r: r3 },
         { nombre: "Bloqueo legal", r: r4 },
         { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No viable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
@@ -258,6 +259,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               <Campo label="¿Escrow (cuenta de custodia)?"><SiNo v={x.escrow} on={(v) => set("escrow", v)} /></Campo>
               <Campo label="¿Poder General Irrevocable (Art. 2596)?"><SiNo v={x.poderIrrevocable} on={(v) => set("poderIrrevocable", v)} /></Campo>
               <Campo label="¿El dinero ya se entregó al vendedor?"><SiNo v={x.dineroYaEntregado} on={(v) => set("dineroYaEntregado", v)} /></Campo>
+              <Campo label="¿El poder irrevocable y la promesa están ratificados ante notario?"><SiNo v={x.ratificadoNotario} on={(v) => set("ratificadoNotario", v)} /></Campo>
             </div>
             <Aviso r={r4} />
           </div>
