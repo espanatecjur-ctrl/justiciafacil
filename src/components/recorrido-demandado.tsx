@@ -268,7 +268,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 5 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">5 · Dictamen y firmas</p>
-            <div className="space-y-2"><Aviso r={r1} /><Aviso r={r2} /><Aviso r={r3} /><Aviso r={r4} /></div>
+            <div className="space-y-2"><Aviso r={r1} /><Aviso r={r2} />{avisoAdj && <Aviso r={avisoAdj} />}<Aviso r={r3} /><Aviso r={r4} /></div>
             <div className={`rounded-lg border p-4 ${dictamen.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Pre-dictamen del sistema (sugerido): {dictamen.txt}</p>
               <p className="mt-1 text-xs opacity-80">El sistema solo sugiere. La decisión final es humana.</p>
