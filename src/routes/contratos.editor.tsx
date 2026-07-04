@@ -116,7 +116,15 @@ function CampoControl({
 function EditorContratos() {
   const { tipo: tipoQuery } = Route.useSearch();
   const [tipo, setTipo] = useState<ContratoTipo>((tipoQuery as ContratoTipo) || "prestacion_servicios");
-  const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? plantillas[0], [tipo]);
+  const [custom, setCustom] = useState<import("@/lib/contract-templates").PlantillaContrato | null>(null);
+  useEffect(() => {
+    if (!plantillas.find((p) => p.tipo === tipo)) {
+      import("@/lib/plantilla-custom").then((m) => m.obtenerPlantillaCustom(tipo).then(setCustom));
+    } else {
+      setCustom(null);
+    }
+  }, [tipo]);
+  const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? custom ?? plantillas[0], [tipo, custom]);
   const [valores, setValores] = useState<Record<string, unknown>>({});
   const [apoderadoId, setApoderadoId] = useState<string>("");
   // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
@@ -280,7 +288,7 @@ function EditorContratos() {
       `<body><p style="text-align:right;font-size:9pt;color:#555">${enc}</p>` +
       `<h2 style="text-align:center;text-transform:uppercase">${plantilla.nombre}</h2>` +
       `<pre style="white-space:pre-wrap;font-family:Georgia,serif;font-size:12pt">${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
-    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, base64: textoABase64(html) };
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, tipo: "application/msword", base64: textoABase64(html) };
   }
 
   // Arma el documento como PDF real (jsPDF se carga solo al enviar).
@@ -308,7 +316,7 @@ function EditorContratos() {
       y += 15;
     }
     const base64 = doc.output("datauristring").split(",")[1];
-    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, base64 };
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, tipo: "application/pdf", base64 };
   }
 
   async function enviarDesdeSistema() {
