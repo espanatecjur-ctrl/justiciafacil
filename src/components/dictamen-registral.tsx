@@ -1,15 +1,15 @@
 // ============================================================
-//  Dictamen Registral (RPPC) — Fase 1: formulario
+//  Dictamen Registral (RPPC)
 // ------------------------------------------------------------
-//  Reproduce el formato "DATOS NECESARIOS PARA RPPC" de la DGE:
-//  encabezado + PROPIEDAD (tracto) + GRAVAMEN + gravamen
+//  Encabezado + PROPIEDAD (tracto) + GRAVAMEN + gravamen
 //  adicional (si aplica) + anotaciones + conclusión + RESULTADO
 //  POSITIVO/NEGATIVO, con firmas de Elabora y Valida.
-//  (Guardar en Supabase + PDF llegan en la Fase 2.)
+//  Guarda en Supabase (tabla dictamen_registral) e imprime.
 // ============================================================
 import { useState } from "react";
-import { ArrowLeft, ScrollText, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
@@ -49,18 +49,13 @@ export interface PrecargaRegistral {
 }
 
 const VACIO = {
-  // encabezado
   fechaVerificacion: "", numeroCredito: "", acreditado: "", abogadoSeguimiento: "", distritoRegistral: "",
-  // propiedad
   p_direccion: "", p_fechaInscripcion: "", p_noEscritura: "", p_fechaEscritura: "", p_acto: "",
   p_titularRegistral: "", p_enajenante: "", p_notario: "", p_montoOperacion: "", p_superficie: "", p_liberacion: "",
-  // gravamen
   g_direccion: "", g_fechaInscripcion: "", g_noEscritura: "", g_fechaEscritura: "", g_acto: "",
   g_acreedor: "", g_deudor: "", g_notario: "", g_montoOperacion: "", g_equivalente: "",
-  // gravamen adicional
   ga_direccion: "", ga_fechaInscripcion: "", ga_noEscritura: "", ga_fechaEscritura: "", ga_acto: "",
   ga_acreedor: "", ga_deudor: "", ga_notario: "", ga_montoOperacion: "", ga_equivalente: "",
-  // cierre
   anotaciones: "", conclusion: "", resultado: "",
 };
 
@@ -84,17 +79,48 @@ export function DictamenRegistral({
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
   const set = (k: keyof typeof VACIO, v: string) => setD((p) => ({ ...p, [k]: v }));
 
+  const [guardando, setGuardando] = useState(false);
+  const [guardado, setGuardado] = useState<string | null>(null);
+
+  const guardar = async () => {
+    if (!d.resultado) { setGuardado("Falta elegir el RESULTADO (POSITIVO/NEGATIVO)."); return; }
+    setGuardando(true); setGuardado(null);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({
+          expediente: d.numeroCredito || null,
+          acreditado: d.acreditado || null,
+          resultado: d.resultado,
+          hay_adicional: hayAdicional,
+          datos: d,
+          firma_elabora: firmaElabora,
+          firma_valida: firmaValida,
+        }),
+      });
+      if (res.ok) setGuardado("Dictamen registral guardado ✓");
+      else setGuardado("No se pudo guardar (¿corriste el SQL de dictamen_registral?).");
+    } catch (e: any) {
+      setGuardado("Error: " + (e?.message || ""));
+    } finally { setGuardando(false); }
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <div id="dr-impreso" className="space-y-4">
+      <style>{`@media print { body * { visibility: hidden; } #dr-impreso, #dr-impreso * { visibility: visible; } #dr-impreso { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; } .no-print { display: none !important; } }`}</style>
+      <div className="flex items-center gap-2 no-print">
         <button onClick={onVolver} className="inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Volver</button>
         <div className="flex items-center gap-2">
           <ScrollText className="h-5 w-5 text-[color:var(--teal)]" />
           <h2 className="font-display text-lg font-bold">Dictamen Registral (RPPC)</h2>
         </div>
       </div>
+      <div className="hidden text-center print:block">
+        <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
+        <p className="font-display text-lg font-bold">DICTAMEN REGISTRAL (RPPC)</p>
+      </div>
 
-      {/* Encabezado */}
       <Bloque titulo="Verificación registral">
         <Campo label="Fecha de verificación"><input type="date" className={inp} value={d.fechaVerificacion} onChange={(e) => set("fechaVerificacion", e.target.value)} /></Campo>
         <Campo label="Número de crédito"><input className={inp} value={d.numeroCredito} onChange={(e) => set("numeroCredito", e.target.value)} /></Campo>
@@ -103,7 +129,6 @@ export function DictamenRegistral({
         <Campo label="Distrito registral"><input className={inp} value={d.distritoRegistral} onChange={(e) => set("distritoRegistral", e.target.value)} /></Campo>
       </Bloque>
 
-      {/* Propiedad */}
       <Bloque titulo="Propiedad (tracto)">
         <Campo label="Dirección"><input className={inp} value={d.p_direccion} onChange={(e) => set("p_direccion", e.target.value)} /></Campo>
         <Campo label="Acto"><input className={inp} value={d.p_acto} onChange={(e) => set("p_acto", e.target.value)} placeholder="Compraventa…" /></Campo>
@@ -118,7 +143,6 @@ export function DictamenRegistral({
         <Campo label="¿Existe liberación de gravamen?"><SiNo v={d.p_liberacion} on={(x) => set("p_liberacion", x)} /></Campo>
       </Bloque>
 
-      {/* Gravamen */}
       <Bloque titulo="Gravamen (hipoteca)">
         <Campo label="Dirección"><input className={inp} value={d.g_direccion} onChange={(e) => set("g_direccion", e.target.value)} /></Campo>
         <Campo label="Acto"><input className={inp} value={d.g_acto} onChange={(e) => set("g_acto", e.target.value)} placeholder="Hipoteca…" /></Campo>
@@ -132,9 +156,8 @@ export function DictamenRegistral({
         <Campo label="Equivalente"><input className={inp} value={d.g_equivalente} onChange={(e) => set("g_equivalente", e.target.value)} /></Campo>
       </Bloque>
 
-      {/* Gravamen adicional (solo si aplica) */}
       {!hayAdicional ? (
-        <button onClick={() => setHayAdicional(true)} className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-input px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+        <button onClick={() => setHayAdicional(true)} className="no-print inline-flex items-center gap-1.5 rounded-md border border-dashed border-input px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
           <Plus className="h-4 w-4" /> Agregar gravamen adicional (solo si aplica)
         </button>
       ) : (
@@ -157,13 +180,11 @@ export function DictamenRegistral({
         </div>
       )}
 
-      {/* Anotaciones y conclusión */}
       <div className="rounded-lg border border-border p-4 space-y-3">
         <Campo label="Anotaciones adicionales"><textarea rows={2} className={inp} value={d.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} /></Campo>
         <Campo label="Conclusión"><textarea rows={3} className={inp} value={d.conclusion} onChange={(e) => set("conclusion", e.target.value)} /></Campo>
       </div>
 
-      {/* Resultado */}
       <div className="rounded-lg border border-border p-4">
         <p className="mb-2 text-sm font-medium">Resultado del dictamen registral</p>
         <div className="flex flex-wrap gap-2">
@@ -179,13 +200,20 @@ export function DictamenRegistral({
         </div>
       </div>
 
-      {/* Firmas */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
         <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
       </div>
 
-      <p className="text-[11px] text-muted-foreground">Fase 1: captura y resultado. Guardar en el expediente y el PDF del dictamen registral llegan en la Fase 2.</p>
+      <div className="no-print flex flex-wrap items-center gap-2">
+        <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">
+          {guardado?.includes("✓") ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar dictamen registral"}
+        </button>
+        <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-semibold hover:bg-muted">
+          <Printer className="h-4 w-4" /> Imprimir
+        </button>
+        {guardado && <span className={`text-sm ${guardado.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{guardado}</span>}
+      </div>
     </div>
   );
 }
