@@ -1,542 +1,70 @@
-// ============================================================================
-//  Liquidación de Intereses
-//  --------------------------------------------------------------------------
-//  FASE 1 — Método FLAT (verificado al centavo con la tabla de la DGE):
-//    interés simple sobre la suerte principal, año 360, sin anatocismo.
-//  FASE 2 — Método REAL (amortización francesa):
-//    interés ordinario sobre el saldo insoluto que baja con cada pago, y
-//    moratorio por cada mensualidad vencida desde su fecha de vencimiento
-//    (como en el estado de cuenta certificado de banco). El moratorio se
-//    calcula como (tasa ordinaria × factor); Santander usa factor 1.5.
-//  El estado de cuenta certificado sigue siendo la prueba en juicio
-//  (Art. 68 Ley de Instituciones de Crédito).
-// ============================================================================
-import { useEffect, useMemo, useState } from "react";
-import { Printer, ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw } from "lucide-react";
-import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, subirArchivoEC, type EstadoCuenta } from "@/lib/estado-cuenta";
-import { usuarioActualEtiqueta } from "@/lib/auth";
+// ============================================================
+//  Registro de estados de cuenta (Liquidación de Intereses)
+//  Requiere la tabla `estado_cuenta` y el bucket `predictamen-docs`.
+// ============================================================
+import { SUPABASE_URL, SUPABASE_KEY, sbSelect } from "@/lib/supabase";
 
-const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
-const fmt = (v: number) =>
-  isFinite(v) ? v.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }) : "—";
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-function diasEntre(a: string, b: string): number {
-  if (!a || !b) return 0;
-  const d1 = new Date(a + "T00:00:00");
-  const d2 = new Date(b + "T00:00:00");
-  const ms = d2.getTime() - d1.getTime();
-  return ms > 0 ? Math.round(ms / 86400000) : 0;
-}
-function sumaMeses(iso: string, k: number): Date {
-  const d = new Date(iso + "T00:00:00");
-  d.setMonth(d.getMonth() + k);
-  return d;
-}
-function isoDe(d: Date): string {
-  return d.toISOString().slice(0, 10);
+export interface EstadoCuenta {
+  id?: string;
+  folio?: string | null;
+  expediente?: string | null;
+  acreditado?: string | null;
+  metodo?: string | null;
+  deuda_total?: number | null;
+  fecha_corte?: string | null;
+  datos?: Record<string, unknown> | null;
+  perito_nombre?: string | null;
+  perito_cedula_url?: string | null;
+  perito_doc_url?: string | null;
+  estado?: string | null;
+  creado_por?: string | null;
+  created_at?: string | null;
 }
 
-function Fila({ label, valor, fuerte }: { label: string; valor: string; fuerte?: boolean }) {
-  return (
-    <div className={`flex items-center justify-between gap-2 py-1 ${fuerte ? "text-base font-bold" : "text-sm"}`}>
-      <span className={fuerte ? "" : "text-muted-foreground"}>{label}</span>
-      <span className="tabular-nums">{valor}</span>
-    </div>
-  );
+/** Sube un archivo (cédula o documento) y devuelve su URL pública. */
+export async function subirArchivoEC(file: File, prefijo = "ec"): Promise<{ url: string; nombre: string }> {
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+  const path = `${prefijo}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/predictamen-docs/${path}`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`No se pudo subir (${res.status}).`);
+  return { url: `${SUPABASE_URL}/storage/v1/object/public/predictamen-docs/${path}`, nombre: file.name };
 }
 
-// ---------------------------------------------------------------------------
-//  MÉTODO FLAT
-// ---------------------------------------------------------------------------
-function Flat({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
-  const [suerte, setSuerte] = useState("");
-  const [tasaOrd, setTasaOrd] = useState("");
-  const [tasaMor, setTasaMor] = useState("");
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaCorte, setFechaCorte] = useState("");
-
-  const r = useMemo(() => {
-    const S = parseFloat(suerte) || 0;
-    const io = (parseFloat(tasaOrd) || 0) / 100;
-    const im = (parseFloat(tasaMor) || 0) / 100;
-    const dias = diasEntre(fechaInicio, fechaCorte);
-    const f = dias / 360;
-    const ordAnual = S * io, morAnual = S * im;
-    const ordTotal = ordAnual * f, morTotal = morAnual * f;
-    return {
-      dias, meses: Math.round(dias / 30), anios: Math.round((dias / 360) * 100) / 100,
-      ordAnual, ordMensual: ordAnual / 12, ordTotal,
-      morAnual, morMensual: morAnual / 12, morTotal,
-      deudaTotal: S + ordTotal + morTotal,
-    };
-  }, [suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte]);
-
-  useEffect(() => {
-    onDatos?.({ metodo: "flat", suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, deudaTotal: r.deudaTotal });
-  }, [suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, r]); // eslint-disable-line
-
-  const S = parseFloat(suerte) || 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-border p-4">
-        <p className="mb-3 font-display text-sm font-bold">Datos del cálculo</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="block text-xs font-medium">Suerte principal
-            <input type="number" className={inp} value={suerte} onChange={(e) => setSuerte(e.target.value)} placeholder="435000" /></label>
-          <label className="block text-xs font-medium">Tasa ordinaria anual (%)
-            <input type="number" className={inp} value={tasaOrd} onChange={(e) => setTasaOrd(e.target.value)} placeholder="9" /></label>
-          <label className="block text-xs font-medium">Tasa moratoria anual (%)
-            <input type="number" className={inp} value={tasaMor} onChange={(e) => setTasaMor(e.target.value)} placeholder="13.5" /></label>
-          <label className="block text-xs font-medium">Fecha de inicio
-            <input type="date" className={inp} value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} /></label>
-          <label className="block text-xs font-medium">Fecha de corte
-            <input type="date" className={inp} value={fechaCorte} onChange={(e) => setFechaCorte(e.target.value)} /></label>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-md bg-muted/40 p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atraso</p>
-            <Fila label="Días" valor={String(r.dias)} /><Fila label="Meses" valor={String(r.meses)} /><Fila label="Años" valor={String(r.anios)} />
-          </div>
-          <div className="rounded-md bg-muted/40 p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Intereses ordinarios</p>
-            <Fila label="Anual (1 año)" valor={fmt(r.ordAnual)} /><Fila label="Mensual" valor={fmt(r.ordMensual)} /><Fila label="Total del período" valor={fmt(r.ordTotal)} />
-          </div>
-          <div className="rounded-md bg-muted/40 p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Intereses moratorios</p>
-            <Fila label="Anual (1 año)" valor={fmt(r.morAnual)} /><Fila label="Mensual" valor={fmt(r.morMensual)} /><Fila label="Total del período" valor={fmt(r.morTotal)} />
-          </div>
-        </div>
-        <div className="mt-4 space-y-1 border-t border-border pt-3">
-          <Fila label="Suerte principal" valor={fmt(S)} />
-          <Fila label="+ Total intereses ordinarios" valor={fmt(r.ordTotal)} />
-          <Fila label="+ Total intereses moratorios" valor={fmt(r.morTotal)} />
-          <div className="mt-1 rounded-md bg-[color:var(--teal)]/10 px-3 py-2"><Fila label="DEUDA TOTAL A LA FECHA" valor={fmt(r.deudaTotal)} fuerte /></div>
-        </div>
-        <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-          Método flat: interés simple sobre la suerte principal, año 360, sin anatocismo. Es un <b>estimado</b> (da más alto que el real).
-        </p>
-      </div>
-    </div>
-  );
+export async function listarEstadosCuenta(estado = "guardado"): Promise<EstadoCuenta[]> {
+  try {
+    return await sbSelect<EstadoCuenta>("estado_cuenta", `select=*&estado=eq.${estado}&order=created_at.desc`);
+  } catch {
+    return [];
+  }
 }
 
-// ---------------------------------------------------------------------------
-//  MÉTODO REAL (amortización francesa)
-// ---------------------------------------------------------------------------
-function Real({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
-  const [monto, setMonto] = useState("");
-  const [tasaOrd, setTasaOrd] = useState("");
-  const [factorMor, setFactorMor] = useState("1.5");
-  const [plazo, setPlazo] = useState("240");
-  const [seguro, setSeguro] = useState("");
-  const [comision, setComision] = useState("");
-  const [fechaPrimerPago, setFechaPrimerPago] = useState("");
-  const [fechaMora, setFechaMora] = useState("");
-  const [fechaCorte, setFechaCorte] = useState("");
-  const [verTabla, setVerTabla] = useState(false);
-
-  const r = useMemo(() => {
-    const P = parseFloat(monto) || 0;
-    const iAnual = (parseFloat(tasaOrd) || 0) / 100;
-    const rMens = iAnual / 12;
-    const n = Math.max(1, Math.round(parseFloat(plazo) || 0));
-    const fMor = parseFloat(factorMor) || 0;
-    const tasaMorAnual = iAnual * fMor;
-    const seg = parseFloat(seguro) || 0;
-    const com = parseFloat(comision) || 0;
-
-    // cuota francesa (capital + interés)
-    const cuota = rMens > 0 ? (P * rMens) / (1 - Math.pow(1 + rMens, -n)) : P / n;
-    const pagoMensualTotal = cuota + seg + com;
-
-    // genera la tabla
-    type Ren = { k: number; vence: string; interes: number; capital: number; saldo: number; vencida: boolean; mora: number };
-    const tabla: Ren[] = [];
-    let saldo = P;
-    let capitalInsoluto = P; // saldo tras las pagadas
-    let vencidas = 0;
-    let moratorios = 0;
-    const corteIso = fechaCorte;
-
-    if (P > 0 && fechaPrimerPago) {
-      for (let k = 1; k <= n; k++) {
-        const interes = saldo * rMens;
-        const capital = Math.min(cuota - interes, saldo);
-        const venceD = sumaMeses(fechaPrimerPago, k - 1);
-        const venceIso = isoDe(venceD);
-        // ¿pagada? -> vence antes de la mora
-        const pagada = fechaMora ? venceIso < fechaMora : false;
-        const esVencidaNoPagada = fechaMora && corteIso ? venceIso >= fechaMora && venceIso <= corteIso : false;
-        let moraRen = 0;
-        if (pagada) {
-          capitalInsoluto -= capital;
-        }
-        if (esVencidaNoPagada) {
-          vencidas++;
-          const dm = diasEntre(venceIso, corteIso);
-          moraRen = capital * tasaMorAnual * (dm / 360);
-          moratorios += moraRen;
-        }
-        tabla.push({ k, vence: venceIso, interes, capital, saldo: saldo - capital, vencida: !!esVencidaNoPagada, mora: moraRen });
-        saldo -= capital;
-        if (saldo <= 0.005) break;
-      }
-    }
-
-    const mensualidadesIncumplidas = vencidas * pagoMensualTotal;
-    const totalAdeudo = capitalInsoluto + mensualidadesIncumplidas + moratorios;
-
-    return { cuota, pagoMensualTotal, tasaMorAnual, capitalInsoluto, vencidas, mensualidadesIncumplidas, moratorios, totalAdeudo, tabla };
-  }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte]);
-
-  useEffect(() => {
-    onDatos?.({ metodo: "real", monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, deudaTotal: r.totalAdeudo });
-  }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, r]); // eslint-disable-line
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-border p-4">
-        <p className="mb-3 font-display text-sm font-bold">Datos del crédito</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="block text-xs font-medium">Monto del crédito
-            <input type="number" className={inp} value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="333290.57" /></label>
-          <label className="block text-xs font-medium">Tasa ordinaria anual (%)
-            <input type="number" className={inp} value={tasaOrd} onChange={(e) => setTasaOrd(e.target.value)} placeholder="10.52" /></label>
-          <label className="block text-xs font-medium">Factor moratorio (× ordinaria)
-            <input type="number" className={inp} value={factorMor} onChange={(e) => setFactorMor(e.target.value)} placeholder="1.5" /></label>
-          <label className="block text-xs font-medium">Plazo (número de pagos)
-            <input type="number" className={inp} value={plazo} onChange={(e) => setPlazo(e.target.value)} placeholder="240" /></label>
-          <label className="block text-xs font-medium">Prima de seguro mensual (opc.)
-            <input type="number" className={inp} value={seguro} onChange={(e) => setSeguro(e.target.value)} placeholder="0" /></label>
-          <label className="block text-xs font-medium">Comisión admin. mensual (opc.)
-            <input type="number" className={inp} value={comision} onChange={(e) => setComision(e.target.value)} placeholder="0" /></label>
-          <label className="block text-xs font-medium">Fecha del primer pago
-            <input type="date" className={inp} value={fechaPrimerPago} onChange={(e) => setFechaPrimerPago(e.target.value)} /></label>
-          <label className="block text-xs font-medium">Fecha del primer pago NO cubierto
-            <input type="date" className={inp} value={fechaMora} onChange={(e) => setFechaMora(e.target.value)} /></label>
-          <label className="block text-xs font-medium">Fecha de corte
-            <input type="date" className={inp} value={fechaCorte} onChange={(e) => setFechaCorte(e.target.value)} /></label>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-md bg-muted/40 p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pago mensual</p>
-            <Fila label="Cuota (capital + interés)" valor={fmt(r.cuota)} />
-            <Fila label="Pago mensual total" valor={fmt(r.pagoMensualTotal)} />
-            <Fila label="Tasa moratoria resultante" valor={`${(r.tasaMorAnual * 100).toFixed(2)}%`} />
-          </div>
-          <div className="rounded-md bg-muted/40 p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Estado</p>
-            <Fila label="Mensualidades vencidas" valor={String(r.vencidas)} />
-            <Fila label="Capital insoluto" valor={fmt(r.capitalInsoluto)} />
-          </div>
-        </div>
-        <div className="mt-4 space-y-1 border-t border-border pt-3">
-          <Fila label="Capital insoluto" valor={fmt(r.capitalInsoluto)} />
-          <Fila label="+ Mensualidades incumplidas" valor={fmt(r.mensualidadesIncumplidas)} />
-          <Fila label="+ Intereses moratorios" valor={fmt(r.moratorios)} />
-          <div className="mt-1 rounded-md bg-[color:var(--teal)]/10 px-3 py-2"><Fila label="TOTAL DE ADEUDO" valor={fmt(r.totalAdeudo)} fuerte /></div>
-        </div>
-
-        <button onClick={() => setVerTabla((v) => !v)} className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[color:var(--teal)] print:hidden">
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${verTabla ? "rotate-180" : ""}`} /> {verTabla ? "Ocultar" : "Ver"} tabla de amortización
-        </button>
-        {verTabla && r.tabla.length > 0 && (
-          <div className="mt-2 max-h-72 overflow-auto rounded-md border border-border">
-            <table className="w-full text-[11px]">
-              <thead className="sticky top-0 bg-muted">
-                <tr className="text-left"><th className="p-1.5">#</th><th className="p-1.5">Vence</th><th className="p-1.5 text-right">Interés</th><th className="p-1.5 text-right">Capital</th><th className="p-1.5 text-right">Saldo</th><th className="p-1.5 text-right">Mora</th></tr>
-              </thead>
-              <tbody>
-                {r.tabla.map((f) => (
-                  <tr key={f.k} className={f.vencida ? "bg-orange-50" : ""}>
-                    <td className="p-1.5">{f.k}</td><td className="p-1.5">{f.vence}</td>
-                    <td className="p-1.5 text-right tabular-nums">{fmt(f.interes)}</td>
-                    <td className="p-1.5 text-right tabular-nums">{fmt(f.capital)}</td>
-                    <td className="p-1.5 text-right tabular-nums">{fmt(f.saldo)}</td>
-                    <td className="p-1.5 text-right tabular-nums">{f.mora ? fmt(f.mora) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-          Método real: amortización francesa, interés ordinario sobre el saldo insoluto, moratorio por mensualidad vencida (año 360).
-          El adeudo se arma como <b>capital insoluto + mensualidades incumplidas + moratorios</b>, igual que el estado de cuenta certificado.
-          Valida contra el certificado con Contabilidad: cada contrato puede tener seguros/comisiones distintos.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-//  Contenedor con selector de método
-// ---------------------------------------------------------------------------
-export function LiquidacionIntereses() {
-  const [metodo, setMetodo] = useState<"flat" | "real" | "ambas">("flat");
-  const [expediente, setExpediente] = useState("");
-  const [acreditado, setAcreditado] = useState("");
-  const [contador, setContador] = useState("");
-  const [apoderado, setApoderado] = useState("");
-
-  const hoy = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
-  const btn = (m: "flat" | "real" | "ambas", txt: string) => (
-    <button onClick={() => setMetodo(m)} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${metodo === m ? "bg-foreground text-background" : "border border-input hover:bg-muted"}`}>{txt}</button>
-  );
-
-  const [tab, setTab] = useState<"calc" | "registro">("calc");
-  const [datosFlat, setDatosFlat] = useState<Record<string, unknown> | null>(null);
-  const [datosReal, setDatosReal] = useState<Record<string, unknown> | null>(null);
-  const [peritoNombre, setPeritoNombre] = useState("");
-  const [cedula, setCedula] = useState<{ url: string; nombre: string } | null>(null);
-  const [docPerito, setDocPerito] = useState<{ url: string; nombre: string } | null>(null);
-  const [subiendo, setSubiendo] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const subir = async (file: File | undefined, cual: "cedula" | "doc") => {
-    if (!file) return;
-    setSubiendo(cual);
-    try {
-      const r = await subirArchivoEC(file, cual === "cedula" ? "cedula" : "docperito");
-      if (cual === "cedula") setCedula(r); else setDocPerito(r);
-    } catch (e) { setMsg(String((e as Error)?.message || e)); }
-    setSubiendo(null);
-  };
-
-  const guardar = async () => {
-    const activo = metodo === "real" ? datosReal : metodo === "flat" ? datosFlat : (datosReal || datosFlat);
-    setGuardando(true); setMsg(null);
-    const quien = await usuarioActualEtiqueta();
-    const r = await crearEstadoCuenta({
-      expediente: expediente || null,
-      acreditado: acreditado || null,
-      metodo,
-      deuda_total: Number(activo?.deudaTotal) || null,
-      fecha_corte: (activo?.fechaCorte as string) || null,
-      datos: { flat: datosFlat, real: datosReal, contador, apoderado },
-      perito_nombre: peritoNombre || null,
-      perito_cedula_url: cedula?.url || null,
-      perito_doc_url: docPerito?.url || null,
-      creado_por: quien,
+export async function crearEstadoCuenta(d: Omit<EstadoCuenta, "id" | "created_at">): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const folio = d.folio || `EC-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/estado_cuenta`, {
+      method: "POST",
+      headers: { ...headers, Prefer: "return=minimal" },
+      body: JSON.stringify({ ...d, folio, estado: "guardado" }),
     });
-    setGuardando(false);
-    setMsg(r.ok ? "Guardado en el registro ✓" : "No se pudo guardar (¿corriste el SQL de estado_cuenta?)");
-  };
-
-  return (
-    <div className="space-y-5">
-      {/* Aísla el impreso: al imprimir solo sale el estado de cuenta, sin el menú de la app */}
-      <style>{`@media print { body * { visibility: hidden; } #liq-impreso, #liq-impreso * { visibility: visible; } #liq-impreso { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; } }`}</style>
-
-      <div className="flex flex-wrap gap-1 border-b border-border print:hidden">
-        <button onClick={() => setTab("calc")} className={`border-b-2 px-3 py-2 text-sm transition ${tab === "calc" ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Calculadora</button>
-        <button onClick={() => setTab("registro")} className={`border-b-2 px-3 py-2 text-sm transition ${tab === "registro" ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Registro</button>
-      </div>
-
-      {tab === "registro" && <RegistroEstados />}
-
-      {tab === "calc" && (<div className="space-y-4">
-      {/* Selector de método */}
-      <div className="flex flex-wrap gap-2 print:hidden">
-        {btn("flat", "Método flat (rápido)")}
-        {btn("real", "Método real (amortización)")}
-        {btn("ambas", "Ambas")}
-      </div>
-
-      {/* Datos del caso */}
-      <div className="rounded-lg border border-border p-4 print:hidden">
-        <p className="mb-3 font-display text-sm font-bold">Datos del caso (para el estado de cuenta)</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="block text-xs font-medium">Expediente
-            <input className={inp} value={expediente} onChange={(e) => setExpediente(e.target.value)} placeholder="Ej. 123/2024-C" /></label>
-          <label className="block text-xs font-medium">Acreditado
-            <input className={inp} value={acreditado} onChange={(e) => setAcreditado(e.target.value)} placeholder="Nombre del deudor" /></label>
-          <label className="block text-xs font-medium">Aprobó · Contador
-            <input className={inp} value={contador} onChange={(e) => setContador(e.target.value)} placeholder="Nombre del contador" /></label>
-          <label className="block text-xs font-medium">Firma · Apoderado legal
-            <input className={inp} value={apoderado} onChange={(e) => setApoderado(e.target.value)} placeholder="Nombre del apoderado" /></label>
-        </div>
-      </div>
-
-      {/* Perito que firma */}
-      <div className="rounded-lg border border-border p-4 print:hidden">
-        <p className="mb-3 font-display text-sm font-bold">Perito que firma</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <label className="block text-xs font-medium sm:col-span-3">Nombre del perito
-            <input className={inp} value={peritoNombre} onChange={(e) => setPeritoNombre(e.target.value)} placeholder="Nombre completo del perito valuador/contable" /></label>
-          <div>
-            <p className="mb-1 text-xs font-medium">Cédula profesional</p>
-            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40">
-              {subiendo === "cedula" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              {cedula ? cedula.nombre : "Subir cédula"}
-              <input type="file" className="hidden" onChange={(e) => subir(e.target.files?.[0], "cedula")} />
-            </label>
-          </div>
-          <div>
-            <p className="mb-1 text-xs font-medium">Documento (opcional)</p>
-            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40">
-              {subiendo === "doc" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              {docPerito ? docPerito.nombre : "Subir documento"}
-              <input type="file" className="hidden" onChange={(e) => subir(e.target.files?.[0], "doc")} />
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div id="liq-impreso" className="space-y-4">
-        {/* Encabezado formal (solo al imprimir) */}
-        <div className="mb-2 hidden border-b border-black pb-3 text-center print:block">
-          <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
-          <p className="text-sm">(Inmuebles Accesibles)</p>
-          <p className="mt-2 font-display text-lg font-bold">LIQUIDACIÓN DE INTERESES — ESTADO DE CUENTA</p>
-        </div>
-        <div className="mb-2 hidden text-sm print:block">
-          <p><b>Expediente:</b> {expediente || "—"} &nbsp;·&nbsp; <b>Acreditado:</b> {acreditado || "—"}</p>
-          <p><b>Fecha de elaboración:</b> {hoy} &nbsp;·&nbsp; <b>Método:</b> {metodo === "ambas" ? "flat y real" : metodo}</p>
-        </div>
-
-        {(metodo === "flat" || metodo === "ambas") && (
-          <div>
-            {metodo === "ambas" && <p className="mb-2 font-display text-sm font-bold text-[color:var(--teal)]">Método flat (estimado)</p>}
-            <Flat onDatos={setDatosFlat} />
-          </div>
-        )}
-        {(metodo === "real" || metodo === "ambas") && (
-          <div>
-            {metodo === "ambas" && <p className="mb-2 mt-4 font-display text-sm font-bold text-[color:var(--teal)]">Método real (amortización)</p>}
-            <Real onDatos={setDatosReal} />
-          </div>
-        )}
-
-        {/* Firmas (solo al imprimir) */}
-        <div className="mt-10 hidden grid-cols-3 gap-8 text-center text-sm print:grid">
-          <div>
-            <div className="mb-1 border-t border-black pt-1">{contador || "\u00A0"}</div>
-            <p className="text-xs">Aprobación del Contador</p>
-          </div>
-          <div>
-            <div className="mb-1 border-t border-black pt-1">{apoderado || "\u00A0"}</div>
-            <p className="text-xs">Firma del Apoderado Legal</p>
-          </div>
-          <div>
-            <div className="mb-1 border-t border-black pt-1">{peritoNombre || "\u00A0"}</div>
-            <p className="text-xs">Perito{cedula ? " · con cédula" : ""}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
-        {msg && <span className={`text-xs font-medium ${msg.startsWith("Guardado") ? "text-emerald-700" : "text-red-700"}`}>{msg}</span>}
-        <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">
-          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar
-        </button>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background">
-          <Printer className="h-4 w-4" /> Imprimir estado de cuenta
-        </button>
-      </div>
-      </div>)}
-    </div>
-  );
+    return { ok: res.ok, error: res.ok ? undefined : `Supabase ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e) };
+  }
 }
 
-const fmtN = (v?: number | null) => (v != null && isFinite(v) ? v.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—");
-
-function RegistroEstados() {
-  const [lista, setLista] = useState<EstadoCuenta[]>([]);
-  const [archivo, setArchivo] = useState<EstadoCuenta[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [verFicha, setVerFicha] = useState<EstadoCuenta | null>(null);
-  const [menu, setMenu] = useState<string | null>(null);
-
-  const recargar = () => {
-    setCargando(true);
-    Promise.all([listarEstadosCuenta("guardado"), listarEstadosCuenta("archivado")])
-      .then(([g, a]) => { setLista(g); setArchivo(a); })
-      .finally(() => setCargando(false));
-  };
-  useEffect(() => { recargar(); }, []);
-
-  const cambiar = async (id: string, estado: string) => { setMenu(null); await actualizarEstadoCuenta(id, { estado }); recargar(); };
-
-  const fila = (e: EstadoCuenta) => (
-    <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-3 last:border-0">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold"><span className="font-mono text-xs text-muted-foreground">{e.folio}</span> · Exp. {e.expediente || "—"} {e.acreditado ? <span className="font-normal text-muted-foreground">· {e.acreditado}</span> : null}</p>
-        <p className="text-xs text-muted-foreground">Método {e.metodo} · {fmtN(e.deuda_total)}{e.fecha_corte ? ` · corte ${e.fecha_corte}` : ""}{e.created_at ? ` · ${new Date(e.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}` : ""}</p>
-      </div>
-      <div className="flex items-center gap-1">
-        <button onClick={() => setVerFicha(e)} title="Vista previa" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-4 w-4" /></button>
-        <div className="relative">
-          <button onClick={() => setMenu(menu === e.id ? null : (e.id || null))} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"><FileText className="h-4 w-4" /></button>
-          {menu === e.id && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenu(null)} />
-              <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
-                {e.estado === "archivado"
-                  ? <button onClick={() => cambiar(e.id!, "guardado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button>
-                  : <button onClick={() => cambiar(e.id!, "archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-3.5 w-3.5" /> Archivar</button>}
-                <button onClick={() => cambiar(e.id!, "papelera")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /> Mover a papelera</button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-border p-4">
-        <h3 className="font-display text-base font-semibold">Estados de cuenta guardados</h3>
-        {cargando ? (
-          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
-        ) : lista.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">Aún no hay estados de cuenta. En la Calculadora, calcula y pícale “Guardar”.</p>
-        ) : <div className="mt-2">{lista.map(fila)}</div>}
-      </div>
-
-      {archivo.length > 0 && (
-        <div className="rounded-lg border border-dashed border-border p-4">
-          <h3 className="text-sm font-semibold text-muted-foreground">Archivados</h3>
-          <div className="mt-2">{archivo.map(fila)}</div>
-        </div>
-      )}
-
-      {verFicha && <FichaEstado e={verFicha} onCerrar={() => setVerFicha(null)} />}
-    </div>
-  );
-}
-
-function FichaEstado({ e, onCerrar }: { e: EstadoCuenta; onCerrar: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="max-h-[82vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-5 shadow-2xl" onClick={(ev) => ev.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-[#0B1E3A]">Ficha · {e.folio}</p>
-          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="space-y-1.5 text-sm">
-          <p><b>Expediente:</b> {e.expediente || "—"}</p>
-          <p><b>Acreditado:</b> {e.acreditado || "—"}</p>
-          <p><b>Método:</b> {e.metodo}</p>
-          <p><b>Deuda total:</b> {fmtN(e.deuda_total)}</p>
-          <p><b>Fecha de corte:</b> {e.fecha_corte || "—"}</p>
-          {e.perito_nombre && <p><b>Firma (perito):</b> {e.perito_nombre}</p>}
-          {e.perito_cedula_url && <p><b>Cédula:</b> <a href={e.perito_cedula_url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] underline">ver archivo</a></p>}
-          {e.perito_doc_url && <p><b>Documento:</b> <a href={e.perito_doc_url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] underline">ver archivo</a></p>}
-          <p className="text-xs text-muted-foreground">Guardado {e.created_at ? new Date(e.created_at).toLocaleString("es-MX") : ""}{e.creado_por ? ` · por ${e.creado_por}` : ""}</p>
-        </div>
-      </div>
-    </div>
-  );
+export async function actualizarEstadoCuenta(id: string, cambios: Partial<EstadoCuenta>): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/estado_cuenta?id=eq.${id}`, {
+      method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify(cambios),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
