@@ -117,6 +117,7 @@ export interface EntradaVAAE {
   suertePrincipal: number;
   interesMoratorio: number;
   gastosCostas: number;     // si 0, asume 10% del capital
+  quita?: number;           // descuento del acreedor: baja el costo de liquidar
   valorComercial: number;
   mesesDesenredo: number;
   margenPct: number;        // default 30
@@ -126,7 +127,7 @@ export interface ResultadoVAAE {
 }
 export function calcularVAAE(e: EntradaVAAE): ResultadoVAAE {
   const gastos = e.gastosCostas > 0 ? e.gastosCostas : e.suertePrincipal * 0.10;
-  const cLiq = e.suertePrincipal + e.interesMoratorio + gastos;
+  const cLiq = Math.max(0, e.suertePrincipal + e.interesMoratorio + gastos - (e.quita || 0));
   const cLit = e.mesesDesenredo * 0.01 * e.valorComercial;
   const margen = (e.margenPct > 0 ? e.margenPct : 30) / 100;
   const mR = margen * e.valorComercial;
