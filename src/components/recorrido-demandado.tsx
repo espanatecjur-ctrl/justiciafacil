@@ -56,6 +56,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     acreedor: "", tipoAcreedor: "", materia: "", tipoJuicio: "Hipotecario", copropietarios: "",
     descripcionCoincide: "", fuenteRevisada: "", fechaUltimoAuto: "", etapa: "",
     emplazamiento: "", sentenciaEjecutoriada: "", tercosFiscalLaboral: "", almonedaConvocada: "", sospechaUsura: "",
+    remateEjecutado: "", adjudicacion: "", adjudicacionFirme: "", adjudicacionAFavor: "", amparoRemate: "", escrituradoPosesion: "",
     estadoCarta: "", fechaCaducidad: "", otrosAcreedores: "", quitaSinCondiciones: "",
     suertePrincipal: "", interesMoratorio: "", gastosCostas: "", valorComercial: "", mesesDesenredo: "", margenPct: "30",
     promesaSuspensiva: "", escrow: "", poderIrrevocable: "", vendedorAceptaPoder: "", dineroYaEntregado: "",
@@ -76,15 +77,37 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     valorComercial: n(x.valorComercial), mesesDesenredo: n(x.mesesDesenredo), margenPct: n(x.margenPct),
   }), [x.suertePrincipal, x.interesMoratorio, x.gastosCostas, x.valorComercial, x.mesesDesenredo, x.margenPct]);
 
+  // Adjudicación / remate (Art. 1410-1414 CCom · vía de apremio CNPCF · Ley de Amparo).
+  // La adjudicación firme NO es un abort automático: depende de a favor de quién quedó,
+  // si hay amparo que la pueda revertir, y si ya se escrituró/entregó posesión.
+  const avisoAdj = useMemo<ResultadoMotor | null>(() => {
+    if (x.adjudicacion !== "si") return null;
+    const firme = x.adjudicacionFirme === "si";
+    const amparo = x.amparoRemate === "si";
+    const escriturado = x.escrituradoPosesion === "si";
+    if (x.adjudicacionAFavor === "propietario")
+      return { semaforo: "amarillo", etiqueta: "El propietario conservó la garantía", detalle: "El propietario pagó/redimió o conservó la garantía: sigue con él y puede haber operación. Revisar el resto del recorrido." };
+    if (x.adjudicacionAFavor === "actor" || x.adjudicacionAFavor === "tercero") {
+      const quien = x.adjudicacionAFavor === "tercero" ? "un tercero postor" : "el actor/acreedor";
+      if (firme && escriturado && !amparo)
+        return { semaforo: "rojo", etiqueta: "Adjudicación consumada", detalle: `Adjudicación firme a favor de ${quien}, ya escriturada y con posesión, sin amparo: el demandado perdió la garantía y es casi irreversible. ABORTAR.` };
+      if (amparo)
+        return { semaforo: "naranja", etiqueta: "Adjudicación con amparo", detalle: `Adjudicación a favor de ${quien}, pero hay amparo pendiente o promovible: existe ventana para suspenderla o revertirla. Litigable con riesgo alto.` };
+      return { semaforo: "naranja", etiqueta: "Adjudicación en curso", detalle: `Adjudicación a favor de ${quien} aún no consumada (no firme o sin escriturar/posesión): ventana corta y riesgo alto.` };
+    }
+    return { semaforo: "amarillo", etiqueta: "Adjudicación", detalle: "Hay adjudicación; captura a favor de quién quedó y si hay amparo para valorar el riesgo." };
+  }, [x.adjudicacion, x.adjudicacionFirme, x.adjudicacionAFavor, x.amparoRemate, x.escrituradoPosesion]);
+
   const fmt = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
   const dictamen = useMemo(() => {
     const sems: Semaforo[] = [r1.semaforo, r2.semaforo, r3.semaforo, r4.semaforo, vaae.viable ? "verde" : "rojo"];
+    if (avisoAdj) sems.push(avisoAdj.semaforo);
     if (sems.includes("rojo")) return { txt: "NEGATIVO", color: "bg-red-50 text-red-800 border-red-200" };
     if (sems.includes("naranja") || sems.includes("amarillo")) return { txt: "CONDICIONADO", color: "bg-amber-50 text-amber-800 border-amber-200" };
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
-  }, [r1, r2, r3, r4, vaae]);
+  }, [r1, r2, r3, r4, vaae, avisoAdj]);
 
   const guardar = async (decision: string) => {
     const payload = {
@@ -186,9 +209,24 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               <Campo label="¿Sentencia ya ejecutoriada?"><SiNo v={x.sentenciaEjecutoriada} on={(v) => set("sentenciaEjecutoriada", v)} /></Campo>
               <Campo label="¿Embargo de tercería (SAT/IMSS/INFONAVIT/laboral)?"><SiNo v={x.tercosFiscalLaboral} on={(v) => set("tercosFiscalLaboral", v)} /></Campo>
               <Campo label="¿La almoneda/subasta ya está convocada?"><SiNo v={x.almonedaConvocada} on={(v) => set("almonedaConvocada", v)} /></Campo>
+              <Campo label="¿El remate ya se ejecutó (se celebró la almoneda)?"><SiNo v={x.remateEjecutado} on={(v) => set("remateEjecutado", v)} /></Campo>
+              <Campo label="¿Hay adjudicación a favor del acreedor?"><SiNo v={x.adjudicacion} on={(v) => set("adjudicacion", v)} /></Campo>
+              {x.adjudicacion === "si" && <Campo label="¿La adjudicación quedó firme?"><SiNo v={x.adjudicacionFirme} on={(v) => set("adjudicacionFirme", v)} /></Campo>}
+              {x.adjudicacion === "si" && <Campo label="¿A favor de quién quedó?">
+                <select className={inp} value={x.adjudicacionAFavor} onChange={(e) => set("adjudicacionAFavor", e.target.value)}>
+                  <option value="">—</option>
+                  <option value="actor">Actor / acreedor</option>
+                  <option value="propietario">El propietario lo conservó / redimió</option>
+                  <option value="tercero">Tercero postor</option>
+                </select>
+              </Campo>}
+              {x.adjudicacion === "si" && <Campo label="¿Hay amparo pendiente o promovible contra el remate/adjudicación?"><SiNo v={x.amparoRemate} on={(v) => set("amparoRemate", v)} /></Campo>}
+              {x.adjudicacion === "si" && <Campo label="¿Ya se escrituró y entregó posesión (lanzamiento)?"><SiNo v={x.escrituradoPosesion} on={(v) => set("escrituradoPosesion", v)} /></Campo>}
               <Campo label="¿Sospecha de anatocismo/usura?"><SiNo v={x.sospechaUsura} on={(v) => set("sospechaUsura", v)} /></Campo>
             </div>
             <Aviso r={r2} />
+            {avisoAdj && <Aviso r={avisoAdj} />}
+            {x.remateEjecutado === "si" && x.adjudicacion !== "si" && <Aviso r={{ semaforo: "naranja", etiqueta: "Remate ejecutado", detalle: "El remate ya se celebró; la ventana para operar con el demandado es muy corta y el riesgo es alto." }} />}
           </div>
         )}
 
