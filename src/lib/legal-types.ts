@@ -162,6 +162,7 @@ export type ContratoTipo =
   | "donacion"
   | "confidencialidad"
   | "cesion_reestructura"
+  | "prestacion_promesa"
   | "laboral";
 
 export interface DictamenIA {
