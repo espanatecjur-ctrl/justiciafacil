@@ -1,6 +1,7 @@
 import type { ContratoTipo } from "./legal-types";
 import { plantillasDiipa } from "./contract-templates-diipa";
 import { cesionReestructura } from "./plantilla-cesion";
+import { prestacionPromesa } from "./plantilla-promesa";
 import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos, testigosCampo, beneficiariosCampos, vinculosCampos } from "./contract-campos-cliente";
 
 export interface PlantillaCampo {
@@ -671,6 +672,7 @@ export const plantillas: PlantillaContrato[] = [
   },
   ...plantillasDiipa,
   cesionReestructura,
+  prestacionPromesa,
 ];
 
 export function getPlantilla(tipo: ContratoTipo) {
