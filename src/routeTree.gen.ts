@@ -10,16 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UrrjRouteImport } from './routes/urrj'
+import { Route as UfcFichaRouteImport } from './routes/ufc-ficha'
+import { Route as UfcRouteImport } from './routes/ufc'
 import { Route as UdpRouteImport } from './routes/udp'
+import { Route as UcpFichaRouteImport } from './routes/ucp-ficha'
 import { Route as UcpRouteImport } from './routes/ucp'
 import { Route as UcmRouteImport } from './routes/ucm'
 import { Route as TramitesRouteImport } from './routes/tramites'
 import { Route as RecursosRouteImport } from './routes/recursos'
+import { Route as LiquidacionRouteImport } from './routes/liquidacion'
 import { Route as ExpedienteRouteImport } from './routes/expediente'
 import { Route as ExhortosRouteImport } from './routes/exhortos'
 import { Route as DictamenIaRouteImport } from './routes/dictamen-ia'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as ConectoresRouteImport } from './routes/conectores'
+import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as BoletinesRouteImport } from './routes/boletines'
 import { Route as AmparosRouteImport } from './routes/amparos'
 import { Route as IndexRouteImport } from './routes/index'
@@ -33,9 +38,24 @@ const UrrjRoute = UrrjRouteImport.update({
   path: '/urrj',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UfcFichaRoute = UfcFichaRouteImport.update({
+  id: '/ufc-ficha',
+  path: '/ufc-ficha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UfcRoute = UfcRouteImport.update({
+  id: '/ufc',
+  path: '/ufc',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UdpRoute = UdpRouteImport.update({
   id: '/udp',
   path: '/udp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UcpFichaRoute = UcpFichaRouteImport.update({
+  id: '/ucp-ficha',
+  path: '/ucp-ficha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UcpRoute = UcpRouteImport.update({
@@ -56,6 +76,11 @@ const TramitesRoute = TramitesRouteImport.update({
 const RecursosRoute = RecursosRouteImport.update({
   id: '/recursos',
   path: '/recursos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LiquidacionRoute = LiquidacionRouteImport.update({
+  id: '/liquidacion',
+  path: '/liquidacion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExpedienteRoute = ExpedienteRouteImport.update({
@@ -81,6 +106,11 @@ const ConfiguracionRoute = ConfiguracionRouteImport.update({
 const ConectoresRoute = ConectoresRouteImport.update({
   id: '/conectores',
   path: '/conectores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarioRoute = CalendarioRouteImport.update({
+  id: '/calendario',
+  path: '/calendario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BoletinesRoute = BoletinesRouteImport.update({
@@ -123,16 +153,21 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
+  '/calendario': typeof CalendarioRoute
   '/conectores': typeof ConectoresRoute
   '/configuracion': typeof ConfiguracionRoute
   '/dictamen-ia': typeof DictamenIaRoute
   '/exhortos': typeof ExhortosRoute
   '/expediente': typeof ExpedienteRoute
+  '/liquidacion': typeof LiquidacionRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
   '/ucm': typeof UcmRoute
   '/ucp': typeof UcpRoute
+  '/ucp-ficha': typeof UcpFichaRoute
   '/udp': typeof UdpRoute
+  '/ufc': typeof UfcRoute
+  '/ufc-ficha': typeof UfcFichaRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
@@ -143,16 +178,21 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
+  '/calendario': typeof CalendarioRoute
   '/conectores': typeof ConectoresRoute
   '/configuracion': typeof ConfiguracionRoute
   '/dictamen-ia': typeof DictamenIaRoute
   '/exhortos': typeof ExhortosRoute
   '/expediente': typeof ExpedienteRoute
+  '/liquidacion': typeof LiquidacionRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
   '/ucm': typeof UcmRoute
   '/ucp': typeof UcpRoute
+  '/ucp-ficha': typeof UcpFichaRoute
   '/udp': typeof UdpRoute
+  '/ufc': typeof UfcRoute
+  '/ufc-ficha': typeof UfcFichaRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
@@ -164,16 +204,21 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
+  '/calendario': typeof CalendarioRoute
   '/conectores': typeof ConectoresRoute
   '/configuracion': typeof ConfiguracionRoute
   '/dictamen-ia': typeof DictamenIaRoute
   '/exhortos': typeof ExhortosRoute
   '/expediente': typeof ExpedienteRoute
+  '/liquidacion': typeof LiquidacionRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
   '/ucm': typeof UcmRoute
   '/ucp': typeof UcpRoute
+  '/ucp-ficha': typeof UcpFichaRoute
   '/udp': typeof UdpRoute
+  '/ufc': typeof UfcRoute
+  '/ufc-ficha': typeof UfcFichaRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
@@ -186,16 +231,21 @@ export interface FileRouteTypes {
     | '/'
     | '/amparos'
     | '/boletines'
+    | '/calendario'
     | '/conectores'
     | '/configuracion'
     | '/dictamen-ia'
     | '/exhortos'
     | '/expediente'
+    | '/liquidacion'
     | '/recursos'
     | '/tramites'
     | '/ucm'
     | '/ucp'
+    | '/ucp-ficha'
     | '/udp'
+    | '/ufc'
+    | '/ufc-ficha'
     | '/urrj'
     | '/contratos/editor'
     | '/expedientes/$id'
@@ -206,16 +256,21 @@ export interface FileRouteTypes {
     | '/'
     | '/amparos'
     | '/boletines'
+    | '/calendario'
     | '/conectores'
     | '/configuracion'
     | '/dictamen-ia'
     | '/exhortos'
     | '/expediente'
+    | '/liquidacion'
     | '/recursos'
     | '/tramites'
     | '/ucm'
     | '/ucp'
+    | '/ucp-ficha'
     | '/udp'
+    | '/ufc'
+    | '/ufc-ficha'
     | '/urrj'
     | '/contratos/editor'
     | '/expedientes/$id'
@@ -226,16 +281,21 @@ export interface FileRouteTypes {
     | '/'
     | '/amparos'
     | '/boletines'
+    | '/calendario'
     | '/conectores'
     | '/configuracion'
     | '/dictamen-ia'
     | '/exhortos'
     | '/expediente'
+    | '/liquidacion'
     | '/recursos'
     | '/tramites'
     | '/ucm'
     | '/ucp'
+    | '/ucp-ficha'
     | '/udp'
+    | '/ufc'
+    | '/ufc-ficha'
     | '/urrj'
     | '/contratos/editor'
     | '/expedientes/$id'
@@ -247,16 +307,21 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AmparosRoute: typeof AmparosRoute
   BoletinesRoute: typeof BoletinesRoute
+  CalendarioRoute: typeof CalendarioRoute
   ConectoresRoute: typeof ConectoresRoute
   ConfiguracionRoute: typeof ConfiguracionRoute
   DictamenIaRoute: typeof DictamenIaRoute
   ExhortosRoute: typeof ExhortosRoute
   ExpedienteRoute: typeof ExpedienteRoute
+  LiquidacionRoute: typeof LiquidacionRoute
   RecursosRoute: typeof RecursosRoute
   TramitesRoute: typeof TramitesRoute
   UcmRoute: typeof UcmRoute
   UcpRoute: typeof UcpRoute
+  UcpFichaRoute: typeof UcpFichaRoute
   UdpRoute: typeof UdpRoute
+  UfcRoute: typeof UfcRoute
+  UfcFichaRoute: typeof UfcFichaRoute
   UrrjRoute: typeof UrrjRoute
   ContratosEditorRoute: typeof ContratosEditorRoute
   ExpedientesIdRoute: typeof ExpedientesIdRoute
@@ -273,11 +338,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UrrjRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ufc-ficha': {
+      id: '/ufc-ficha'
+      path: '/ufc-ficha'
+      fullPath: '/ufc-ficha'
+      preLoaderRoute: typeof UfcFichaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ufc': {
+      id: '/ufc'
+      path: '/ufc'
+      fullPath: '/ufc'
+      preLoaderRoute: typeof UfcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/udp': {
       id: '/udp'
       path: '/udp'
       fullPath: '/udp'
       preLoaderRoute: typeof UdpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ucp-ficha': {
+      id: '/ucp-ficha'
+      path: '/ucp-ficha'
+      fullPath: '/ucp-ficha'
+      preLoaderRoute: typeof UcpFichaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ucp': {
@@ -306,6 +392,13 @@ declare module '@tanstack/react-router' {
       path: '/recursos'
       fullPath: '/recursos'
       preLoaderRoute: typeof RecursosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/liquidacion': {
+      id: '/liquidacion'
+      path: '/liquidacion'
+      fullPath: '/liquidacion'
+      preLoaderRoute: typeof LiquidacionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/expediente': {
@@ -341,6 +434,13 @@ declare module '@tanstack/react-router' {
       path: '/conectores'
       fullPath: '/conectores'
       preLoaderRoute: typeof ConectoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendario': {
+      id: '/calendario'
+      path: '/calendario'
+      fullPath: '/calendario'
+      preLoaderRoute: typeof CalendarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/boletines': {
@@ -399,16 +499,21 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AmparosRoute: AmparosRoute,
   BoletinesRoute: BoletinesRoute,
+  CalendarioRoute: CalendarioRoute,
   ConectoresRoute: ConectoresRoute,
   ConfiguracionRoute: ConfiguracionRoute,
   DictamenIaRoute: DictamenIaRoute,
   ExhortosRoute: ExhortosRoute,
   ExpedienteRoute: ExpedienteRoute,
+  LiquidacionRoute: LiquidacionRoute,
   RecursosRoute: RecursosRoute,
   TramitesRoute: TramitesRoute,
   UcmRoute: UcmRoute,
   UcpRoute: UcpRoute,
+  UcpFichaRoute: UcpFichaRoute,
   UdpRoute: UdpRoute,
+  UfcRoute: UfcRoute,
+  UfcFichaRoute: UfcFichaRoute,
   UrrjRoute: UrrjRoute,
   ContratosEditorRoute: ContratosEditorRoute,
   ExpedientesIdRoute: ExpedientesIdRoute,
