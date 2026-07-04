@@ -8,6 +8,9 @@ const campos: PlantillaCampo[] = [
   { id: "domicilioCesionaria", label: "Domicilio de LA CESIONARIA", tipo: "textarea" },
   { id: "identificacionCesionaria", label: "Identificación de LA CESIONARIA (INE/pasaporte y folio)", tipo: "text" },
   { id: "estadoCivilCesionaria", label: "Estado civil de LA CESIONARIA", tipo: "select", opciones: ["soltero(a)", "casado(a)", "divorciado(a)", "viudo(a)"] },
+  { id: "cesionariaPorApoderado", label: "¿LA CESIONARIA comparece por apoderado?", tipo: "checkbox" },
+  { id: "nombreApoderadoCesionaria", label: "Nombre del apoderado de LA CESIONARIA", tipo: "text", dependeDe: { campo: "cesionariaPorApoderado", valor: true } },
+  { id: "poderApoderadoCesionaria", label: "Instrumento del poder (No., Notario, Plaza)", tipo: "text", dependeDe: { campo: "cesionariaPorApoderado", valor: true } },
 
   // — Cedente (DIIPA) —
   { id: "nombreApoderado", label: "Apoderado(a) de LA CEDENTE que firma", tipo: "text", requerido: true, ayuda: "Apoderado General para Pleitos y Cobranzas" },
@@ -24,7 +27,14 @@ const campos: PlantillaCampo[] = [
   { id: "juzgadoOrigen", label: "Juzgado de origen (donde se obtuvo la adjudicación)", tipo: "textarea", requerido: true, ayuda: "Ej. Juzgado Octavo de Jurisdicción Concurrente… Nuevo León" },
   { id: "numeroExhorto", label: "Número de exhorto", tipo: "text", ayuda: "Ej. 82/2026" },
   { id: "juzgadoExhorto", label: "Juzgado del exhorto (ejecución / desalojo)", tipo: "text", ayuda: "Ej. Juzgado Primero de lo Civil de Tlajomulco" },
-  { id: "ubicacionGarantia", label: "Ubicación / identificación de la garantía", tipo: "textarea", requerido: true, ayuda: "Lotes o dirección de la garantía hipotecaria" },
+  { id: "ubicacionGarantia", label: "Ubicación / identificación (si es una sola garantía)", tipo: "textarea", ayuda: "Opcional si usas la lista de abajo" },
+  {
+    id: "garantias", label: "Garantía(s) de la operación", tipo: "lista", ayuda: "Agrega una o varias garantías (descripción y valor).",
+    subcampos: [
+      { id: "descripcion", label: "Descripción / ubicación", tipo: "text" },
+      { id: "valor", label: "Valor (MXN)", tipo: "text" },
+    ],
+  },
   { id: "estadoProcesal", label: "Estado procesal actual", tipo: "textarea", ayuda: "Ej. aceptados los honorarios del perito valuador…" },
 
   // — Operación y pagos —
@@ -44,7 +54,7 @@ const campos: PlantillaCampo[] = [
 
 const cuerpo = `CONTRATO DE {{#esReestructura}}REESTRUCTURACIÓN DE {{/esReestructura}}CESIÓN DE DERECHOS LITIGIOSOS Y ADJUDICATARIOS SOBRE GARANTÍA HIPOTECARIA
 
-En la ciudad de {{lugarFirma}}, comparecen a la celebración del presente contrato: por una parte, DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V., por conducto de su apoderado(a) legal el (la) C. {{nombreApoderado}}, a quien se denominará «LA CEDENTE»; y por la otra, {{nombreCesionaria}}, a quien se denominará «LA CESIONARIA», al tenor de las siguientes declaraciones, estipulaciones y cláusulas:
+En la ciudad de {{lugarFirma}}, comparecen a la celebración del presente contrato: por una parte, DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V., por conducto de su apoderado(a) legal el (la) C. {{nombreApoderado}}, a quien se denominará «LA CEDENTE»; y por la otra, {{nombreCesionaria}}{{#cesionariaPorApoderado}}, representada en este acto por su apoderado(a) el (la) C. {{nombreApoderadoCesionaria}}, según consta en {{poderApoderadoCesionaria}}{{/cesionariaPorApoderado}}, a quien se denominará «LA CESIONARIA», al tenor de las siguientes declaraciones, estipulaciones y cláusulas:
 
 DECLARACIONES
 
@@ -67,7 +77,9 @@ III. Declaran AMBAS PARTES:
 b) Que en su celebración no media error, dolo, violencia, lesión ni mala fe, reconociéndose recíprocamente la personalidad con que comparecen.
 
 ESTIPULACIONES (FORMA DE PAGO)
-El valor de la operación es de $ {{valorOperacion}} MXN. El calendario de pagos es el siguiente; el apartado se entiende como garantía de intención ya cubierta:
+{{#ubicacionGarantia}}Garantía objeto de la operación: {{ubicacionGarantia}}.
+{{/ubicacionGarantia}}{{#each garantias}}{{item.n}}. {{item.descripcion}} — $ {{item.valor}} MXN
+{{/each garantias}}El valor de la operación es de $ {{valorOperacion}} MXN. El calendario de pagos es el siguiente; el apartado se entiende como garantía de intención ya cubierta:
 {{#each pagos}}{{item.n}}. {{item.concepto}} — $ {{item.monto}} MXN — {{item.fecha}}
 {{/each pagos}}
 
@@ -77,7 +89,7 @@ PRIMERA. LA CEDENTE cede a LA CESIONARIA los derechos litigiosos y adjudicatario
 Identificación del expediente y estado actual:
 • Juicio: número {{numeroJuicio}}, radicado ante {{juzgadoOrigen}}.
 {{#numeroExhorto}}• Exhorto: número {{numeroExhorto}}, turnado a {{juzgadoExhorto}}, para la ejecución y la toma de posesión material y jurídica.{{/numeroExhorto}}
-• Garantía: {{ubicacionGarantia}}.
+• Garantía(s): {{#ubicacionGarantia}}{{ubicacionGarantia}}. {{/ubicacionGarantia}}{{#each garantias}}{{item.descripcion}} ($ {{item.valor}}); {{/each garantias}}
 • Apoderado: el Juzgado reconoció el carácter de Apoderado General para Pleitos y Cobranzas de LA CEDENTE, facultado para suscribir las cesiones.
 {{#estadoProcesal}}• Actuación actual: {{estadoProcesal}}.{{/estadoProcesal}}
 
