@@ -5,11 +5,11 @@ import { plantillas } from "@/lib/contract-templates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, Eye } from "lucide-react";
-import { FichaContrato } from "@/components/ficha-contrato";
+import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, LayoutGrid, Inbox, FileCheck2, Archive as ArchiveIcon } from "lucide-react";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
 import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
 import { listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
+import { contarContratosPendientes } from "@/lib/resumen-inicio";
 
 export const Route = createFileRoute("/contratos/")({
   head: () => ({ meta: [{ title: "Contratos — SIGA-DIIPA" }] }),
@@ -27,13 +27,34 @@ function fmtFecha(iso?: string | null) {
   return new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+type TabKey = "plantillas" | "solicitudes" | "generados" | "archivo";
+
+const TABS: { key: TabKey; label: string; icon: typeof LayoutGrid }[] = [
+  { key: "plantillas", label: "Plantillas", icon: LayoutGrid },
+  { key: "solicitudes", label: "Solicitudes", icon: Inbox },
+  { key: "generados", label: "Generados", icon: FileCheck2 },
+  { key: "archivo", label: "Archivo", icon: ArchiveIcon },
+];
+
 function ContratosIndex() {
+  const [tab, setTab] = useState<TabKey>("plantillas");
+  const [solPend, setSolPend] = useState(0);
+  const [nGen, setNGen] = useState(0);
+  const [nArch, setNArch] = useState(0);
+
+  useEffect(() => {
+    contarContratosPendientes().then(setSolPend);
+    listarContratos("generado").then((l) => setNGen(l.length));
+    Promise.all([listarContratos("archivado"), listarContratos("papelera")])
+      .then(([a, p]) => setNArch(a.length + p.length));
+  }, []);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Documentos"
         title="Contratos"
-        description="Repositorio de contratos generados, guardados y plantillas auto-llenables."
+        description="Plantillas auto-llenables, solicitudes y contratos generados."
         actions={
           <Link to="/contratos/editor">
             <Button className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
@@ -43,115 +64,147 @@ function ContratosIndex() {
         }
       />
 
-      <div>
-        <h2 className="font-display text-lg font-bold mb-3">Plantillas disponibles</h2>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-          {plantillas.map((p) => (
-            <Link
-              key={p.tipo}
-              to="/contratos/editor"
-              search={{ tipo: p.tipo }}
-              className="legal-card group p-4 transition hover:border-[color:var(--teal)] hover:shadow-md"
-            >
-              <FileText className="h-6 w-6 text-[color:var(--teal)] mb-2" />
-              <p className="font-display font-bold text-sm leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
-              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.descripcion}</p>
-            </Link>
-          ))}
-        </div>
+      {/* Indicadores que llevan a su pestaña */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Indicador n={String(plantillas.length)} l="Plantillas" activo={tab === "plantillas"} onClick={() => setTab("plantillas")} tono="text-[#0B1E3A]" />
+        <Indicador n={String(solPend)} l="Solicitudes pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
+        <Indicador n={String(nGen)} l="Contratos generados" activo={tab === "generados"} onClick={() => setTab("generados")} tono="text-emerald-600" />
+        <Indicador n={String(nArch)} l="Archivados / papelera" activo={tab === "archivo"} onClick={() => setTab("archivo")} tono="text-slate-600" />
       </div>
 
-      <SolicitudesContratoTabla />
+      {/* Pestañas */}
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const on = tab === t.key;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition ${on ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              <Icon className="h-4 w-4" /> {t.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <ContratosExistentes />
+      {tab === "plantillas" && <PanelPlantillas />}
+      {tab === "solicitudes" && <SolicitudesContratoTabla />}
+      {tab === "generados" && <ContratosExistentes estados={["generado"]} vacio="Aún no hay contratos guardados. Genera uno en el Editor y pícale “Guardar”." />}
+      {tab === "archivo" && <ContratosExistentes estados={["archivado", "papelera"]} vacio="No hay contratos archivados ni en papelera." />}
     </div>
   );
 }
 
-function ContratosExistentes() {
+function Indicador({ n, l, activo, onClick, tono }: { n: string; l: string; activo: boolean; onClick: () => void; tono: string }) {
+  return (
+    <button onClick={onClick} className={`legal-card p-4 text-left transition hover:border-[color:var(--teal)] ${activo ? "border-[color:var(--teal)] ring-1 ring-[color:var(--teal)]/30" : ""}`}>
+      <p className="text-xs text-muted-foreground">{l}</p>
+      <p className={`mt-1 font-display text-2xl font-bold leading-none ${tono}`}>{n}</p>
+    </button>
+  );
+}
+
+function PanelPlantillas() {
+  return (
+    <div>
+      <p className="mb-3 text-sm text-muted-foreground">Escoge una plantilla para elaborar un contrato.</p>
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+        {plantillas.map((p) => (
+          <Link
+            key={p.tipo}
+            to="/contratos/editor"
+            search={{ tipo: p.tipo }}
+            className="legal-card group p-4 transition hover:border-[color:var(--teal)] hover:shadow-md"
+          >
+            <FileText className="h-6 w-6 text-[color:var(--teal)] mb-2" />
+            <p className="font-display font-bold text-sm leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.descripcion}</p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContratosExistentes({ estados, vacio }: { estados: string[]; vacio: string }) {
   const [lista, setLista] = useState<ContratoGenerado[]>([]);
   const [envios, setEnvios] = useState<Record<string, EnvioRegistro>>({});
   const [cargando, setCargando] = useState(true);
 
   const recargar = () => {
     setCargando(true);
-    listarContratos("generado").then(setLista).finally(() => setCargando(false));
+    Promise.all(estados.map((e) => listarContratos(e)))
+      .then((arrs) => setLista(arrs.flat().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))))
+      .finally(() => setCargando(false));
     listarEnvios().then((arr) => {
-      // envíos vienen del más reciente al más viejo: el primero por folio es el último envío
       const mapa: Record<string, EnvioRegistro> = {};
       for (const e of arr) if (e.folio && !mapa[e.folio]) mapa[e.folio] = e;
       setEnvios(mapa);
     });
   };
-  useEffect(recargar, []);
+  useEffect(() => { recargar(); }, [estados.join(",")]); // eslint-disable-line
 
   return (
-    <div>
-      <h2 className="font-display text-lg font-bold mb-3">Contratos existentes</h2>
-      <Card className="legal-card overflow-hidden">
-        {cargando ? (
-          <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
-        ) : lista.length === 0 ? (
-          <div className="p-4 text-sm text-muted-foreground">Aún no hay contratos guardados. Genera uno en el Editor y pícale “Guardar”.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="text-left px-4 py-2.5">Folio</th>
-                  <th className="text-left px-4 py-2.5">Documento</th>
-                  <th className="text-left px-4 py-2.5">Cliente</th>
-                  <th className="text-left px-4 py-2.5">Firma (apoderado)</th>
-                  <th className="text-left px-4 py-2.5">Fecha</th>
-                  <th className="text-left px-4 py-2.5">Cuantía</th>
-                  <th className="text-left px-4 py-2.5">Estado</th>
-                  <th className="text-left px-4 py-2.5">Correo</th>
-                  <th className="text-right px-4 py-2.5">Acciones</th>
+    <Card className="legal-card overflow-hidden">
+      {cargando ? (
+        <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
+      ) : lista.length === 0 ? (
+        <div className="p-4 text-sm text-muted-foreground">{vacio}</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="text-left px-4 py-2.5">Folio</th>
+                <th className="text-left px-4 py-2.5">Documento</th>
+                <th className="text-left px-4 py-2.5">Cliente</th>
+                <th className="text-left px-4 py-2.5">Firma (apoderado)</th>
+                <th className="text-left px-4 py-2.5">Fecha</th>
+                <th className="text-left px-4 py-2.5">Cuantía</th>
+                <th className="text-left px-4 py-2.5">Estado</th>
+                <th className="text-left px-4 py-2.5">Correo</th>
+                <th className="text-right px-4 py-2.5">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {lista.map((c) => (
+                <tr key={c.id} className="hover:bg-muted/30">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold">{c.folio || "—"}</td>
+                  <td className="px-4 py-3">{c.nombre_documento || "—"}</td>
+                  <td className="px-4 py-3">{c.nombre_cliente || "—"}</td>
+                  <td className="px-4 py-3 text-xs">{c.apoderado || "—"}</td>
+                  <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
+                  <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
+                  <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado || "generado"] || ""}`}>{c.estado || "generado"}</Badge></td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const e = c.folio ? envios[c.folio] : undefined;
+                      if (!e) return <span className="text-xs text-muted-foreground">—</span>;
+                      if (e.estado === "abierto") {
+                        const t = e.abierto_at ? new Date(e.abierto_at).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+                        return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={`Abierto ${t}`}>Abierto ✓</span>;
+                      }
+                      return <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">Enviado</span>;
+                    })()}
+                    {c.fecha_enviado && (
+                      <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">Enviado: {fmtFecha(c.fecha_enviado)}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right"><MenuAcciones c={c} onCambio={recargar} /></td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {lista.map((c) => (
-                  <tr key={c.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 font-mono text-xs font-semibold">{c.folio || "—"}</td>
-                    <td className="px-4 py-3">{c.nombre_documento || "—"}</td>
-                    <td className="px-4 py-3">{c.nombre_cliente || "—"}</td>
-                    <td className="px-4 py-3 text-xs">{c.apoderado || "—"}</td>
-                    <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
-                    <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
-                    <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado || "generado"] || ""}`}>{c.estado || "generado"}</Badge></td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const e = c.folio ? envios[c.folio] : undefined;
-                        if (!e) return <span className="text-xs text-muted-foreground">—</span>;
-                        if (e.estado === "abierto") {
-                          const t = e.abierto_at ? new Date(e.abierto_at).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-                          return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={`Abierto ${t}`}>Abierto ✓</span>;
-                        }
-                        return <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">Enviado</span>;
-                      })()}
-                      {c.fecha_enviado && (
-                        <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">Enviado: {fmtFecha(c.fecha_enviado)}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right"><MenuAcciones c={c} onCambio={recargar} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-    </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
 
 function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => void }) {
   const [abierto, setAbierto] = useState(false);
-  const [verFicha, setVerFicha] = useState(false);
   const navigate = useNavigate();
 
   const reelaborar = () => {
-    // Guarda los datos para que el Editor los cargue y navega allá.
     sessionStorage.setItem("reelaborar_contrato", JSON.stringify({ tipo: c.tipo, valores: c.valores ?? {} }));
     navigate({ to: "/contratos/editor", search: c.tipo ? { tipo: c.tipo } : {} });
   };
@@ -162,38 +215,32 @@ function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => vo
 
   return (
     <div className="relative inline-block text-left">
-      <button
-        onClick={() => setAbierto((v) => !v)}
-        className="rounded-md p-1.5 hover:bg-muted"
-        title="Acciones"
-      >
+      <button onClick={() => setAbierto((v) => !v)} className="rounded-md p-1.5 hover:bg-muted" title="Acciones">
         <MoreVertical className="h-4 w-4" />
       </button>
       {abierto && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
           <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
-            <button onClick={() => { setAbierto(false); setVerFicha(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-              <Eye className="h-3.5 w-3.5" /> Ver ficha
-            </button>
             <button onClick={reelaborar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
               <PenLine className="h-3.5 w-3.5" /> Reelaborar
             </button>
-            <button onClick={() => cambiarEstado("archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-              <Archive className="h-3.5 w-3.5" /> Archivar
-            </button>
-            <button onClick={() => cambiarEstado("papelera")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
-              <Trash2 className="h-3.5 w-3.5" /> Mover a papelera
-            </button>
+            {c.estado !== "archivado" && (
+              <button onClick={() => cambiarEstado("archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+                <Archive className="h-3.5 w-3.5" /> Archivar
+              </button>
+            )}
+            {c.estado === "papelera" ? (
+              <button onClick={() => cambiarEstado("generado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
+                <PenLine className="h-3.5 w-3.5" /> Restaurar
+              </button>
+            ) : (
+              <button onClick={() => cambiarEstado("papelera")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+                <Trash2 className="h-3.5 w-3.5" /> Mover a papelera
+              </button>
+            )}
           </div>
         </>
-      )}
-      {verFicha && (
-        <FichaContrato
-          c={c}
-          onClose={() => setVerFicha(false)}
-          onReelaborar={() => { setVerFicha(false); reelaborar(); }}
-        />
       )}
     </div>
   );
