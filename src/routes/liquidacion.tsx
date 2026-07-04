@@ -9,11 +9,11 @@ export const Route = createFileRoute("/liquidacion")({
 
 function Pagina() {
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="Inteligencia"
         title="Liquidación de Intereses"
-        description="Calculadora del incidente de liquidación de intereses. Fase 1: método flat (estimado rápido)."
+        description="Calculadora del incidente de liquidación de intereses (método flat y método real)."
       />
       <LiquidacionIntereses />
     </div>
