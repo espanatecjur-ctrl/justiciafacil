@@ -7,6 +7,8 @@ import { Scale } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SelectorGarantia } from "@/components/selector-garantia";
+import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
+import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 
 export const Route = createFileRoute("/urrj")({
@@ -26,10 +28,24 @@ function URRJ() {
   const [vista, setVista] = useState<VistaPosicion>("elegir");
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
+  const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
-  const volver = () => { setPrecargar(null); setVista("elegir"); };
+  const volver = () => { setPrecargar(null); setSolicitudActiva(null); setVista("elegir"); };
+
+  const dictaminarSolicitud = (sol: SolicitudPredictamen) => {
+    setSolicitudActiva(sol);
+    setPrecargar({
+      datos: {
+        caso_id: sol.caso_id || "",
+        expediente: sol.expediente || "",
+        juzgado: sol.juzgado || "",
+        deudor: sol.cliente || "",
+      },
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const reDictaminar = (fila: any) => {
     const map: Record<string, VistaPosicion> = { Actor: "Actor", Demandado: "Demandado", Sucesorio: "Sucesorio", Contingencia: "Contingencia", "Trámite administrativo": "Tramites" };
     const v = map[fila.posicion];
@@ -72,7 +88,24 @@ function URRJ() {
       </div>
 
       {!soloRegistro && vista === "elegir" && (
-        <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
+        <>
+          {solicitudActiva && (
+            <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-4">
+              <p className="text-sm font-semibold text-[color:var(--teal)]">
+                Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "—"}
+                {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
+              </p>
+              {solicitudActiva.tipo_dictamen === "Registral" ? (
+                <p className="mt-1 text-sm text-amber-700">El <b>Dictamen Registral</b> está en construcción — lo armamos enseguida. Por ahora puedes hacer el jurídico eligiendo una posición abajo.</p>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
+              )}
+              <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
+            </div>
+          )}
+          {!solicitudActiva && <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />}
+          <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
+        </>
       )}
 
       <DictaminadorPosicion
