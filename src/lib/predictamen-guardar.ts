@@ -4,6 +4,7 @@
 // crea la versión nueva (vigente) y marca la anterior como
 // antecedente (vigente=false). Devuelve el id nuevo.
 // ============================================================
+import { reflejarDictamen, decisionADictamen } from "@/lib/recorrido";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -57,5 +58,11 @@ export async function guardarPredictamen(payload: any, precargar?: Precarga | nu
       method: "PATCH", headers, body: JSON.stringify({ vigente: false, antecedente_de: nuevoId }),
     });
   }
+  try {
+    if (payload.caso_id && payload.dictamen_final) {
+      await reflejarDictamen({ id: payload.caso_id, expediente: payload.expediente } as any, "URRJ", "juridico", decisionADictamen(payload.dictamen_final), payload.solicitado_por || null);
+    }
+  } catch { /* la línea de vida no debe romper el guardado */ }
+
   return nuevoId;
 }
