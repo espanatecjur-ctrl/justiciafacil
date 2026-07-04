@@ -92,3 +92,21 @@ export async function marcarArea(caso: CasoJuridico, area: string, dicRegistral:
     return false;
   }
 }
+// --- Reflejar el resultado de un dictamen en la línea de vida (automático) ---
+export function decisionADictamen(decision: string): Dictamen {
+  const d = (decision || "").toLowerCase();
+  if (d.includes("no pasa")) return "negativo";
+  if (d.includes("pasa")) return "positivo"; // "sí pasa" o "pasa a ucp"
+  return null;
+}
+
+export async function reflejarDictamen(
+  caso: CasoJuridico, area: string, tipo: "registral" | "juridico", dictamen: Dictamen, quien: string | null,
+): Promise<boolean> {
+  if (!caso?.id || !dictamen) return false;
+  const actual = await obtenerRecorrido(caso);
+  const p = actual[area];
+  const reg = tipo === "registral" ? dictamen : (p?.dic_registral ?? null);
+  const jur = tipo === "juridico" ? dictamen : (p?.dic_juridico ?? null);
+  return marcarArea(caso, area, reg, jur, "Reflejado automáticamente del dictamen", quien);
+}
