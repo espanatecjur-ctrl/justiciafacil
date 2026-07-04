@@ -4,12 +4,14 @@
 //  Encabezado + PROPIEDAD (tracto) + GRAVAMEN + gravamen
 //  adicional (si aplica) + anotaciones + conclusión + RESULTADO
 //  POSITIVO/NEGATIVO, con firmas de Elabora y Valida.
-//  Guarda en Supabase (tabla dictamen_registral) e imprime.
+//  Guarda en Supabase, imprime y refleja el resultado en la
+//  línea de vida (bolita registral de URRJ).
 // ============================================================
 import { useState } from "react";
 import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { reflejarDictamen } from "@/lib/recorrido";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
@@ -60,10 +62,11 @@ const VACIO = {
 };
 
 export function DictamenRegistral({
-  precarga, onVolver, puedeFirmarElabora = true, puedeValidar = true,
+  precarga, onVolver, casoId, puedeFirmarElabora = true, puedeValidar = true,
 }: {
   precarga?: PrecargaRegistral;
   onVolver: () => void;
+  casoId?: string;
   puedeFirmarElabora?: boolean;
   puedeValidar?: boolean;
 }) {
@@ -99,7 +102,14 @@ export function DictamenRegistral({
           firma_valida: firmaValida,
         }),
       });
-      if (res.ok) setGuardado("Dictamen registral guardado ✓");
+      if (res.ok) {
+        setGuardado("Dictamen registral guardado ✓");
+        if (casoId) {
+          try {
+            await reflejarDictamen({ id: casoId, expediente: d.numeroCredito } as any, "URRJ", "registral", d.resultado === "POSITIVO" ? "positivo" : "negativo", firmaValida?.nombre || firmaElabora?.nombre || null);
+          } catch { /* la linea de vida no debe romper el guardado */ }
+        }
+      }
       else setGuardado("No se pudo guardar (¿corriste el SQL de dictamen_registral?).");
     } catch (e: any) {
       setGuardado("Error: " + (e?.message || ""));
