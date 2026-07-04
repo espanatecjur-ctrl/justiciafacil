@@ -148,6 +148,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               <Campo label="Materia / tipo de juicio"><input className={inp} value={x.tipoJuicio} onChange={(e) => set("tipoJuicio", e.target.value)} /></Campo>
               <Campo label="¿Hay copropietarios NO demandados?"><SiNo v={x.copropietarios} on={(v) => set("copropietarios", v)} /></Campo>
             </div>
+            {x.copropietarios === "si" && <Aviso r={{ semaforo: "naranja", etiqueta: "Copropietarios no demandados", detalle: "La sentencia no cubre a los copropietarios no demandados: no se consolida el 100% de la garantía y pueden ampararse. Se marcará como ABORTAR en la Legalidad procesal (Fase 3)." }} />}
             <p className="text-xs text-muted-foreground">Regla: si los datos básicos no cuadran, el algoritmo se detiene aquí (solo avisa).</p>
           </div>
         )}
