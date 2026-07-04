@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { plantillas } from "@/lib/contract-templates";
+import { plantillas, renderContrato, valoresIniciales } from "@/lib/contract-templates";
+import { listarEstadosPlantilla, setEstadoPlantilla } from "@/lib/plantilla-estado";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, LayoutGrid, Inbox, FileCheck2, Archive as ArchiveIcon } from "lucide-react";
+import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, LayoutGrid, Inbox, FileCheck2, Archive as ArchiveIcon, Eye, X, RotateCcw } from "lucide-react";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
 import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
 import { listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
@@ -104,22 +105,105 @@ function Indicador({ n, l, activo, onClick, tono }: { n: string; l: string; acti
 }
 
 function PanelPlantillas() {
+  const navigate = useNavigate();
+  const [estados, setEstados] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<string | null>(null); // tipo en vista previa
+  const recargar = () => listarEstadosPlantilla().then(setEstados);
+  useEffect(() => { recargar(); }, []);
+
+  const cambiar = async (tipo: string, estado: string) => {
+    await setEstadoPlantilla(tipo, estado);
+    recargar();
+  };
+
+  const activas = plantillas.filter((p) => (estados[p.tipo] || "activa") === "activa");
+  const plantillaPreview = plantillas.find((p) => p.tipo === preview) || null;
+
   return (
     <div>
-      <p className="mb-3 text-sm text-muted-foreground">Escoge una plantilla para elaborar un contrato.</p>
+      <p className="mb-3 text-sm text-muted-foreground">Escoge una plantilla para elaborar un contrato. Usa el ojo para ver una vista previa.</p>
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {plantillas.map((p) => (
-          <Link
-            key={p.tipo}
-            to="/contratos/editor"
-            search={{ tipo: p.tipo }}
-            className="legal-card group p-4 transition hover:border-[color:var(--teal)] hover:shadow-md"
-          >
-            <FileText className="h-6 w-6 text-[color:var(--teal)] mb-2" />
-            <p className="font-display font-bold text-sm leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.descripcion}</p>
-          </Link>
+        {activas.map((p) => (
+          <div key={p.tipo} className="legal-card group relative p-4 transition hover:border-[color:var(--teal)] hover:shadow-md">
+            <div className="absolute right-2 top-2 flex gap-0.5">
+              <button onClick={() => setPreview(p.tipo)} title="Vista previa" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <Eye className="h-4 w-4" />
+              </button>
+              <MenuPlantilla
+                onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })}
+                onArchivar={() => cambiar(p.tipo, "archivada")}
+                onPapelera={() => cambiar(p.tipo, "papelera")}
+              />
+            </div>
+            <button onClick={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })} className="block w-full text-left">
+              <FileText className="mb-2 h-6 w-6 text-[color:var(--teal)]" />
+              <p className="pr-12 font-display text-sm font-bold leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.descripcion}</p>
+            </button>
+          </div>
         ))}
+      </div>
+
+      {plantillaPreview && <PreviewPlantilla plantilla={plantillaPreview} onCerrar={() => setPreview(null)} onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: plantillaPreview.tipo } })} />}
+
+      {(() => {
+        const ocultas = plantillas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
+        if (!ocultas.length) return null;
+        return (
+          <div className="mt-6 rounded-lg border border-dashed border-border p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Plantillas ocultas (archivadas / en papelera)</p>
+            <div className="flex flex-wrap gap-2">
+              {ocultas.map((p) => (
+                <span key={p.tipo} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs">
+                  {p.nombre} <span className="text-[10px] uppercase text-muted-foreground">{estados[p.tipo]}</span>
+                  <button onClick={() => cambiar(p.tipo, "activa")} title="Restaurar" className="text-[color:var(--teal)] hover:opacity-70"><RotateCcw className="h-3.5 w-3.5" /></button>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+function MenuPlantilla({ onElaborar, onArchivar, onPapelera }: { onElaborar: () => void; onArchivar: () => void; onPapelera: () => void }) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <div className="relative inline-block text-left">
+      <button onClick={() => setAbierto((v) => !v)} title="Acciones" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
+          <div className="absolute right-0 z-20 mt-1 w-52 rounded-md border border-border bg-white py-1 shadow-lg">
+            <button onClick={() => { setAbierto(false); onElaborar(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><PenLine className="h-3.5 w-3.5" /> Elaborar para un cliente</button>
+            <button onClick={() => { setAbierto(false); onArchivar(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-3.5 w-3.5" /> Archivar</button>
+            <button onClick={() => { setAbierto(false); onPapelera(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /> Mover a papelera</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PreviewPlantilla({ plantilla, onCerrar, onElaborar }: { plantilla: typeof plantillas[number]; onCerrar: () => void; onElaborar: () => void }) {
+  const texto = renderContrato(plantilla, valoresIniciales(plantilla));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
+      <div className="flex max-h-[82vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <p className="font-display text-sm font-bold text-[#0B1E3A]">Vista previa · {plantilla.nombre}</p>
+          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="flex-1 overflow-auto px-6 py-5">
+          <pre className="whitespace-pre-wrap font-serif text-[13px] leading-relaxed text-foreground/90">{texto}</pre>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button variant="outline" size="sm" onClick={onCerrar}>Cerrar</Button>
+          <Button size="sm" onClick={onElaborar} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white"><PenLine className="mr-1.5 h-4 w-4" /> Elaborar</Button>
+        </div>
       </div>
     </div>
   );
