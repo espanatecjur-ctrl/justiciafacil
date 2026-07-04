@@ -8,6 +8,7 @@ import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SelectorGarantia } from "@/components/selector-garantia";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
+import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 
@@ -87,7 +88,14 @@ function URRJ() {
         </div>
       </div>
 
-      {!soloRegistro && vista === "elegir" && (
+      {!soloRegistro && vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
+        <DictamenRegistral
+          precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.expediente || "", direccion: "" }}
+          onVolver={volver}
+          puedeFirmarElabora={puede("firmar_elabora")}
+          puedeValidar={puede("validar")}
+        />
+      ) : !soloRegistro && vista === "elegir" ? (
         <>
           {solicitudActiva && (
             <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-4">
@@ -95,31 +103,29 @@ function URRJ() {
                 Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "—"}
                 {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
               </p>
-              {solicitudActiva.tipo_dictamen === "Registral" ? (
-                <p className="mt-1 text-sm text-amber-700">El <b>Dictamen Registral</b> está en construcción — lo armamos enseguida. Por ahora puedes hacer el jurídico eligiendo una posición abajo.</p>
-              ) : (
-                <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
-              )}
+              <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
           {!solicitudActiva && <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />}
           <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
         </>
-      )}
+      ) : null}
 
-      <DictaminadorPosicion
-        casos={casos}
-        vista={vista}
-        onVista={setVista}
-        precargar={precargar}
-        onVolver={volver}
-        puedeElaborar={puede("elaborar")}
-        puedeFirmarElabora={puede("firmar_elabora")}
-        puedeValidar={puede("validar")}
-        puedeAdmin={puedeAdmin}
-        pantallaElegir={soloRegistro ? <HistorialPredictamen onReDictaminar={reDictaminar} /> : undefined}
-      />
+      {!(vista === "elegir" && !soloRegistro && solicitudActiva?.tipo_dictamen === "Registral") && (
+        <DictaminadorPosicion
+          casos={casos}
+          vista={vista}
+          onVista={setVista}
+          precargar={precargar}
+          onVolver={volver}
+          puedeElaborar={puede("elaborar")}
+          puedeFirmarElabora={puede("firmar_elabora")}
+          puedeValidar={puede("validar")}
+          puedeAdmin={puedeAdmin}
+          pantallaElegir={soloRegistro ? <HistorialPredictamen onReDictaminar={reDictaminar} /> : undefined}
+        />
+      )}
     </div>
   );
 }
