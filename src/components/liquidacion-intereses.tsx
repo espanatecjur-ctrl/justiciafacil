@@ -284,7 +284,7 @@ export function LiquidacionIntereses() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="space-y-4">
       {/* Aísla el impreso: al imprimir solo sale el estado de cuenta, sin el menú de la app */}
       <style>{`@media print { body * { visibility: hidden; } #liq-impreso, #liq-impreso * { visibility: visible; } #liq-impreso { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; } }`}</style>
 
