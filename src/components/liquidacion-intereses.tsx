@@ -11,8 +11,10 @@
 //  El estado de cuenta certificado sigue siendo la prueba en juicio
 //  (Art. 68 Ley de Instituciones de Crédito).
 // ============================================================================
-import { useMemo, useState } from "react";
-import { Printer, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Printer, ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw } from "lucide-react";
+import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, type EstadoCuenta } from "@/lib/estado-cuenta";
+import { usuarioActualEtiqueta } from "@/lib/auth";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const fmt = (v: number) =>
@@ -46,7 +48,7 @@ function Fila({ label, valor, fuerte }: { label: string; valor: string; fuerte?:
 // ---------------------------------------------------------------------------
 //  MÉTODO FLAT
 // ---------------------------------------------------------------------------
-function Flat() {
+function Flat({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
   const [suerte, setSuerte] = useState("");
   const [tasaOrd, setTasaOrd] = useState("");
   const [tasaMor, setTasaMor] = useState("");
@@ -68,6 +70,10 @@ function Flat() {
       deudaTotal: S + ordTotal + morTotal,
     };
   }, [suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte]);
+
+  useEffect(() => {
+    onDatos?.({ metodo: "flat", suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, deudaTotal: r.deudaTotal });
+  }, [suerte, tasaOrd, tasaMor, fechaInicio, fechaCorte, r]); // eslint-disable-line
 
   const S = parseFloat(suerte) || 0;
 
@@ -121,7 +127,7 @@ function Flat() {
 // ---------------------------------------------------------------------------
 //  MÉTODO REAL (amortización francesa)
 // ---------------------------------------------------------------------------
-function Real() {
+function Real({ onDatos }: { onDatos?: (d: Record<string, unknown>) => void }) {
   const [monto, setMonto] = useState("");
   const [tasaOrd, setTasaOrd] = useState("");
   const [factorMor, setFactorMor] = useState("1.5");
@@ -186,6 +192,10 @@ function Real() {
 
     return { cuota, pagoMensualTotal, tasaMorAnual, capitalInsoluto, vencidas, mensualidadesIncumplidas, moratorios, totalAdeudo, tabla };
   }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte]);
+
+  useEffect(() => {
+    onDatos?.({ metodo: "real", monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, deudaTotal: r.totalAdeudo });
+  }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, r]); // eslint-disable-line
 
   return (
     <div className="space-y-4">
@@ -283,11 +293,42 @@ export function LiquidacionIntereses() {
     <button onClick={() => setMetodo(m)} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${metodo === m ? "bg-foreground text-background" : "border border-input hover:bg-muted"}`}>{txt}</button>
   );
 
+  const [tab, setTab] = useState<"calc" | "registro">("calc");
+  const [datosFlat, setDatosFlat] = useState<Record<string, unknown> | null>(null);
+  const [datosReal, setDatosReal] = useState<Record<string, unknown> | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const guardar = async () => {
+    const activo = metodo === "real" ? datosReal : metodo === "flat" ? datosFlat : (datosReal || datosFlat);
+    setGuardando(true); setMsg(null);
+    const quien = await usuarioActualEtiqueta();
+    const r = await crearEstadoCuenta({
+      expediente: expediente || null,
+      acreditado: acreditado || null,
+      metodo,
+      deuda_total: Number(activo?.deudaTotal) || null,
+      fecha_corte: (activo?.fechaCorte as string) || null,
+      datos: { flat: datosFlat, real: datosReal, contador, apoderado },
+      creado_por: quien,
+    });
+    setGuardando(false);
+    setMsg(r.ok ? "Guardado en el registro ✓" : "No se pudo guardar (¿corriste el SQL de estado_cuenta?)");
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Aísla el impreso: al imprimir solo sale el estado de cuenta, sin el menú de la app */}
       <style>{`@media print { body * { visibility: hidden; } #liq-impreso, #liq-impreso * { visibility: visible; } #liq-impreso { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; } }`}</style>
 
+      <div className="flex flex-wrap gap-1 border-b border-border print:hidden">
+        <button onClick={() => setTab("calc")} className={`border-b-2 px-3 py-2 text-sm transition ${tab === "calc" ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Calculadora</button>
+        <button onClick={() => setTab("registro")} className={`border-b-2 px-3 py-2 text-sm transition ${tab === "registro" ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Registro</button>
+      </div>
+
+      {tab === "registro" && <RegistroEstados />}
+
+      {tab === "calc" && (<div className="space-y-4">
       {/* Selector de método */}
       <div className="flex flex-wrap gap-2 print:hidden">
         {btn("flat", "Método flat (rápido)")}
@@ -325,13 +366,13 @@ export function LiquidacionIntereses() {
         {(metodo === "flat" || metodo === "ambas") && (
           <div>
             {metodo === "ambas" && <p className="mb-2 font-display text-sm font-bold text-[color:var(--teal)]">Método flat (estimado)</p>}
-            <Flat />
+            <Flat onDatos={setDatosFlat} />
           </div>
         )}
         {(metodo === "real" || metodo === "ambas") && (
           <div>
             {metodo === "ambas" && <p className="mb-2 mt-4 font-display text-sm font-bold text-[color:var(--teal)]">Método real (amortización)</p>}
-            <Real />
+            <Real onDatos={setDatosReal} />
           </div>
         )}
 
@@ -348,10 +389,105 @@ export function LiquidacionIntereses() {
         </div>
       </div>
 
-      <div className="flex justify-end print:hidden">
+      <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
+        {msg && <span className={`text-xs font-medium ${msg.startsWith("Guardado") ? "text-emerald-700" : "text-red-700"}`}>{msg}</span>}
+        <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">
+          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar
+        </button>
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background">
           <Printer className="h-4 w-4" /> Imprimir estado de cuenta
         </button>
+      </div>
+      </div>)}
+    </div>
+  );
+}
+
+const fmtN = (v?: number | null) => (v != null && isFinite(v) ? v.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—");
+
+function RegistroEstados() {
+  const [lista, setLista] = useState<EstadoCuenta[]>([]);
+  const [archivo, setArchivo] = useState<EstadoCuenta[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [verFicha, setVerFicha] = useState<EstadoCuenta | null>(null);
+  const [menu, setMenu] = useState<string | null>(null);
+
+  const recargar = () => {
+    setCargando(true);
+    Promise.all([listarEstadosCuenta("guardado"), listarEstadosCuenta("archivado")])
+      .then(([g, a]) => { setLista(g); setArchivo(a); })
+      .finally(() => setCargando(false));
+  };
+  useEffect(() => { recargar(); }, []);
+
+  const cambiar = async (id: string, estado: string) => { setMenu(null); await actualizarEstadoCuenta(id, { estado }); recargar(); };
+
+  const fila = (e: EstadoCuenta) => (
+    <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold"><span className="font-mono text-xs text-muted-foreground">{e.folio}</span> · Exp. {e.expediente || "—"} {e.acreditado ? <span className="font-normal text-muted-foreground">· {e.acreditado}</span> : null}</p>
+        <p className="text-xs text-muted-foreground">Método {e.metodo} · {fmtN(e.deuda_total)}{e.fecha_corte ? ` · corte ${e.fecha_corte}` : ""}{e.created_at ? ` · ${new Date(e.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}` : ""}</p>
+      </div>
+      <div className="flex items-center gap-1">
+        <button onClick={() => setVerFicha(e)} title="Vista previa" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-4 w-4" /></button>
+        <div className="relative">
+          <button onClick={() => setMenu(menu === e.id ? null : (e.id || null))} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"><FileText className="h-4 w-4" /></button>
+          {menu === e.id && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenu(null)} />
+              <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+                {e.estado === "archivado"
+                  ? <button onClick={() => cambiar(e.id!, "guardado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button>
+                  : <button onClick={() => cambiar(e.id!, "archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-3.5 w-3.5" /> Archivar</button>}
+                <button onClick={() => cambiar(e.id!, "papelera")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /> Mover a papelera</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border p-4">
+        <h3 className="font-display text-base font-semibold">Estados de cuenta guardados</h3>
+        {cargando ? (
+          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
+        ) : lista.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">Aún no hay estados de cuenta. En la Calculadora, calcula y pícale “Guardar”.</p>
+        ) : <div className="mt-2">{lista.map(fila)}</div>}
+      </div>
+
+      {archivo.length > 0 && (
+        <div className="rounded-lg border border-dashed border-border p-4">
+          <h3 className="text-sm font-semibold text-muted-foreground">Archivados</h3>
+          <div className="mt-2">{archivo.map(fila)}</div>
+        </div>
+      )}
+
+      {verFicha && <FichaEstado e={verFicha} onCerrar={() => setVerFicha(null)} />}
+    </div>
+  );
+}
+
+function FichaEstado({ e, onCerrar }: { e: EstadoCuenta; onCerrar: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
+      <div className="max-h-[82vh] w-full max-w-lg overflow-auto rounded-xl bg-white p-5 shadow-2xl" onClick={(ev) => ev.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="font-display text-base font-bold text-[#0B1E3A]">Ficha · {e.folio}</p>
+          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-1.5 text-sm">
+          <p><b>Expediente:</b> {e.expediente || "—"}</p>
+          <p><b>Acreditado:</b> {e.acreditado || "—"}</p>
+          <p><b>Método:</b> {e.metodo}</p>
+          <p><b>Deuda total:</b> {fmtN(e.deuda_total)}</p>
+          <p><b>Fecha de corte:</b> {e.fecha_corte || "—"}</p>
+          {e.perito_nombre && <p><b>Firma (perito):</b> {e.perito_nombre}</p>}
+          <p className="text-xs text-muted-foreground">Guardado {e.created_at ? new Date(e.created_at).toLocaleString("es-MX") : ""}{e.creado_por ? ` · por ${e.creado_por}` : ""}</p>
+        </div>
       </div>
     </div>
   );
