@@ -91,6 +91,7 @@ function URRJ() {
       {!soloRegistro && vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
         <DictamenRegistral
           precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.expediente || "", direccion: "" }}
+          casoId={solicitudActiva.caso_id || ""}
           onVolver={volver}
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
@@ -105,6 +106,14 @@ function URRJ() {
               </p>
               <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
+            </div>
+          )}
+          {!solicitudActiva && (
+            <div className="flex justify-end">
+              <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
+                Abrir Dictamen Registral (directo)
+              </button>
             </div>
           )}
           {!solicitudActiva && <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />}
