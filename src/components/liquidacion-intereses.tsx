@@ -272,40 +272,85 @@ function Real() {
 //  Contenedor con selector de método
 // ---------------------------------------------------------------------------
 export function LiquidacionIntereses() {
-  const [metodo, setMetodo] = useState<"flat" | "real">("flat");
+  const [metodo, setMetodo] = useState<"flat" | "real" | "ambas">("flat");
   const [expediente, setExpediente] = useState("");
   const [acreditado, setAcreditado] = useState("");
+  const [contador, setContador] = useState("");
+  const [apoderado, setApoderado] = useState("");
+
+  const hoy = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
+  const btn = (m: "flat" | "real" | "ambas", txt: string) => (
+    <button onClick={() => setMetodo(m)} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${metodo === m ? "bg-foreground text-background" : "border border-input hover:bg-muted"}`}>{txt}</button>
+  );
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      {/* Aísla el impreso: al imprimir solo sale el estado de cuenta, sin el menú de la app */}
+      <style>{`@media print { body * { visibility: hidden; } #liq-impreso, #liq-impreso * { visibility: visible; } #liq-impreso { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; } }`}</style>
+
       {/* Selector de método */}
       <div className="flex flex-wrap gap-2 print:hidden">
-        <button onClick={() => setMetodo("flat")} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${metodo === "flat" ? "bg-foreground text-background" : "border border-input hover:bg-muted"}`}>Método flat (rápido)</button>
-        <button onClick={() => setMetodo("real")} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${metodo === "real" ? "bg-foreground text-background" : "border border-input hover:bg-muted"}`}>Método real (amortización)</button>
+        {btn("flat", "Método flat (rápido)")}
+        {btn("real", "Método real (amortización)")}
+        {btn("ambas", "Ambas")}
       </div>
 
       {/* Datos del caso */}
-      <div className="rounded-lg border border-border p-4">
-        <p className="mb-3 font-display text-sm font-bold">Datos del caso (opcional, para el impreso)</p>
+      <div className="rounded-lg border border-border p-4 print:hidden">
+        <p className="mb-3 font-display text-sm font-bold">Datos del caso (para el estado de cuenta)</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block text-xs font-medium">Expediente
             <input className={inp} value={expediente} onChange={(e) => setExpediente(e.target.value)} placeholder="Ej. 123/2024-C" /></label>
           <label className="block text-xs font-medium">Acreditado
             <input className={inp} value={acreditado} onChange={(e) => setAcreditado(e.target.value)} placeholder="Nombre del deudor" /></label>
+          <label className="block text-xs font-medium">Aprobó · Contador
+            <input className={inp} value={contador} onChange={(e) => setContador(e.target.value)} placeholder="Nombre del contador" /></label>
+          <label className="block text-xs font-medium">Firma · Apoderado legal
+            <input className={inp} value={apoderado} onChange={(e) => setApoderado(e.target.value)} placeholder="Nombre del apoderado" /></label>
         </div>
       </div>
 
-      <div id="liq-impreso">
-        <div className="mb-3 hidden print:block">
-          <p className="text-lg font-bold">Liquidación de Intereses — método {metodo === "flat" ? "flat" : "real"}</p>
-          <p className="text-sm">Expediente: {expediente || "—"} · Acreditado: {acreditado || "—"}</p>
+      <div id="liq-impreso" className="space-y-4">
+        {/* Encabezado formal (solo al imprimir) */}
+        <div className="mb-2 hidden border-b border-black pb-3 text-center print:block">
+          <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
+          <p className="text-sm">(Inmuebles Accesibles)</p>
+          <p className="mt-2 font-display text-lg font-bold">LIQUIDACIÓN DE INTERESES — ESTADO DE CUENTA</p>
         </div>
-        {metodo === "flat" ? <Flat /> : <Real />}
+        <div className="mb-2 hidden text-sm print:block">
+          <p><b>Expediente:</b> {expediente || "—"} &nbsp;·&nbsp; <b>Acreditado:</b> {acreditado || "—"}</p>
+          <p><b>Fecha de elaboración:</b> {hoy} &nbsp;·&nbsp; <b>Método:</b> {metodo === "ambas" ? "flat y real" : metodo}</p>
+        </div>
+
+        {(metodo === "flat" || metodo === "ambas") && (
+          <div>
+            {metodo === "ambas" && <p className="mb-2 font-display text-sm font-bold text-[color:var(--teal)]">Método flat (estimado)</p>}
+            <Flat />
+          </div>
+        )}
+        {(metodo === "real" || metodo === "ambas") && (
+          <div>
+            {metodo === "ambas" && <p className="mb-2 mt-4 font-display text-sm font-bold text-[color:var(--teal)]">Método real (amortización)</p>}
+            <Real />
+          </div>
+        )}
+
+        {/* Firmas (solo al imprimir) */}
+        <div className="mt-10 hidden grid-cols-2 gap-10 text-center text-sm print:grid">
+          <div>
+            <div className="mb-1 border-t border-black pt-1">{contador || "\u00A0"}</div>
+            <p className="text-xs">Aprobación del Contador</p>
+          </div>
+          <div>
+            <div className="mb-1 border-t border-black pt-1">{apoderado || "\u00A0"}</div>
+            <p className="text-xs">Firma del Apoderado Legal</p>
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-end print:hidden">
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background">
-          <Printer className="h-4 w-4" /> Imprimir
+          <Printer className="h-4 w-4" /> Imprimir estado de cuenta
         </button>
       </div>
     </div>
