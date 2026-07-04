@@ -5,7 +5,6 @@ import {
   Calculator,
   type LucideIcon,
 } from "lucide-react";
-
 export interface NavItem {
   label: string;
   sub?: string;
@@ -15,31 +14,25 @@ export interface NavItem {
   badge?: string;
   group: "Núcleo" | "Procesal" | "Inteligencia" | "Documentos" | "Trámites" | "Operación";
 }
-
 export const navItems: NavItem[] = [
   { label: "Inicio", to: "/", icon: Home, group: "Núcleo" },
   { label: "Dirección", to: "/direccion", icon: Briefcase, group: "Núcleo" },
   { label: "Calendario", to: "/calendario", icon: CalendarDays, group: "Núcleo" },
   { label: "Expedientes", to: "/expedientes", icon: FolderOpen, group: "Núcleo" },
-
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "UDP · Defensa y Protección", to: "/udp", icon: ShieldHalf, group: "Procesal" },
   { label: "UFC · Formalizaciones", to: "/ufc", icon: FileSignature, group: "Procesal" },
-
   { label: "Boletines Judiciales", to: "/boletines", icon: Newspaper, group: "Procesal" },
   { label: "Exhortos", to: "/exhortos", icon: Send, group: "Procesal" },
   { label: "Amparos", to: "/amparos", icon: Shield, group: "Procesal" },
   { label: "Recursos", to: "/recursos", icon: GitBranch, group: "Procesal" },
-
-  { label: "JUFA", sub: "Pre-dictaminador", to: "/urrj", icon: Bot, group: "Inteligencia" },
-  { label: "URRJ", sub: "Unidad de Resolución Jurídica · registro", to: "/urrj", search: { soloRegistro: true }, icon: Scale, group: "Inteligencia" },
+  { label: "JUFA", sub: "Simulador de dictamen", to: "/jufa", icon: Bot, group: "Inteligencia" },
+  { label: "URRJ", sub: "Unidad de Resolución Jurídica", to: "/urrj", icon: Scale, group: "Inteligencia" },
+  { label: "URRJ · Registro", sub: "Historial de pre-dictámenes", to: "/urrj", search: { soloRegistro: true }, icon: Scale, group: "Inteligencia" },
   { label: "UCP", sub: "Unidad de Consolidación Patrimonial", to: "/ucp", icon: Building2, group: "Inteligencia" },
   { label: "Liquidación de Intereses", sub: "Calculadora e incidente", to: "/liquidacion", icon: Calculator, group: "Inteligencia" },
-
   { label: "Contratos", to: "/contratos", icon: FileSignature, group: "Documentos" },
   { label: "Editor de Contratos", to: "/contratos/editor", icon: FileText, group: "Documentos" },
-
   { label: "Trámites Gob.", to: "/tramites", icon: FileCheck2, group: "Trámites" },
-
   { label: "Conectores Juzgados", to: "/conectores", icon: Network, group: "Operación" },
 ];
