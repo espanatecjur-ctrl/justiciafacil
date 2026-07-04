@@ -30,7 +30,6 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
-  const [verSolic, setVerSolic] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -83,8 +82,8 @@ function URRJ() {
         <div className="flex items-center gap-2">
           <Scale className="h-6 w-6" style={{ color: "#C2A24C" }} />
           <div>
-            <h1 className="text-xl font-bold">{soloRegistro ? "URRJ · Registro" : "JUFA · Pre-dictaminador"}</h1>
-            <p className="text-sm text-white/70">{soloRegistro ? "Unidad de Resolución Jurídica · registro de pre-dictámenes" : "Pre-dictaminador de URRJ · el sistema calcula y avisa, las personas firman y deciden"}</p>
+            <h1 className="text-xl font-bold">{soloRegistro ? "URRJ · Registro" : "URRJ · Dictaminación"}</h1>
+            <p className="text-sm text-white/70">{soloRegistro ? "Unidad de Resolución Jurídica · registro de pre-dictámenes" : "Unidad de Resolución Jurídica · dictaminación de garantías (jurídico y registral)"}</p>
           </div>
         </div>
       </div>
@@ -109,6 +108,17 @@ function URRJ() {
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
+          {!solicitudActiva && (
+            <>
+              <div className="flex justify-end">
+                <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                  <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
+                </button>
+              </div>
+              <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
+            </>
+          )}
           <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
         </>
       ) : null}
@@ -126,22 +136,6 @@ function URRJ() {
           puedeAdmin={puedeAdmin}
           pantallaElegir={soloRegistro ? <HistorialPredictamen onReDictaminar={reDictaminar} /> : undefined}
         />
-      )}
-
-      {vista === "elegir" && !soloRegistro && !solicitudActiva && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
-              <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
-            </button>
-            <button onClick={() => setVerSolic((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
-              {verSolic ? "Ocultar solicitudes" : "Solicitudes pendientes"}
-            </button>
-          </div>
-          {verSolic && <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />}
-        </div>
       )}
     </div>
   );
