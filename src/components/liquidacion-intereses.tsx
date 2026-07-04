@@ -15,6 +15,34 @@ const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-
 const fmt = (v: number) =>
   isFinite(v) ? v.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }) : "—";
 
+const UNI = ["", "UNO", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISÉIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE", "VEINTE"];
+const DEC = ["", "", "VEINTI", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
+const CEN = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS"];
+function centenaLetra(n: number): string {
+  if (n === 100) return "CIEN";
+  let t = "";
+  const c = Math.floor(n / 100), resto = n % 100;
+  if (c) t += CEN[c] + " ";
+  if (resto <= 20) t += UNI[resto];
+  else if (resto < 30) t += "VEINTI" + UNI[resto - 20];
+  else { const d = Math.floor(resto / 10), u = resto % 10; t += DEC[d]; if (u) t += " Y " + UNI[u]; }
+  return t.trim();
+}
+function numeroLetra(num: number): string {
+  if (num === 0) return "CERO";
+  const millones = Math.floor(num / 1000000), miles = Math.floor((num % 1000000) / 1000), cientos = num % 1000;
+  let t = "";
+  if (millones) t += (millones === 1 ? "UN MILLÓN" : centenaLetra(millones) + " MILLONES") + " ";
+  if (miles) t += (miles === 1 ? "MIL" : centenaLetra(miles) + " MIL") + " ";
+  if (cientos) t += centenaLetra(cientos);
+  return t.trim();
+}
+function montoEnLetra(v: number): string {
+  const ent = Math.floor(Math.abs(v));
+  const cent = Math.round((Math.abs(v) - ent) * 100);
+  return `${numeroLetra(ent)} PESOS ${String(cent).padStart(2, "0")}/100 M.N.`;
+}
+
 function diasEntre(a: string, b: string): number {
   if (!a || !b) return 0;
   const d1 = new Date(a + "T00:00:00");
@@ -153,6 +181,7 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
     let capitalInsoluto = P;
     let vencidas = 0;
     let moratorios = 0;
+    let interesesOrdVencidos = 0;
     const corteIso = fechaCorte;
 
     if (P > 0 && fechaPrimerPago) {
@@ -169,6 +198,7 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
         }
         if (esVencidaNoPagada) {
           vencidas++;
+          interesesOrdVencidos += interes;
           const dm = diasEntre(venceIso, corteIso);
           moraRen = capital * tasaMorAnual * (dm / 360);
           moratorios += moraRen;
@@ -179,14 +209,15 @@ function Real({ onDatos, inicial }: { onDatos?: (d: Record<string, unknown>) => 
       }
     }
 
+    const comisionVencida = com * vencidas;
     const mensualidadesIncumplidas = vencidas * pagoMensualTotal;
     const totalAdeudo = capitalInsoluto + mensualidadesIncumplidas + moratorios;
 
-    return { cuota, pagoMensualTotal, tasaMorAnual, capitalInsoluto, vencidas, mensualidadesIncumplidas, moratorios, totalAdeudo, tabla };
+    return { cuota, pagoMensualTotal, tasaMorAnual, capitalInsoluto, vencidas, interesesOrdVencidos, comisionVencida, mensualidadesIncumplidas, moratorios, totalAdeudo, tabla };
   }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte]);
 
   useEffect(() => {
-    onDatos?.({ metodo: "real", monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, cuota: r.cuota, capitalInsoluto: r.capitalInsoluto, vencidas: r.vencidas, mensualidadesIncumplidas: r.mensualidadesIncumplidas, moratorios: r.moratorios, tabla: r.tabla, deudaTotal: r.totalAdeudo });
+    onDatos?.({ metodo: "real", monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, cuota: r.cuota, capitalInsoluto: r.capitalInsoluto, vencidas: r.vencidas, interesesOrdVencidos: r.interesesOrdVencidos, comisionVencida: r.comisionVencida, mensualidadesIncumplidas: r.mensualidadesIncumplidas, moratorios: r.moratorios, tabla: r.tabla, deudaTotal: r.totalAdeudo });
   }, [monto, tasaOrd, factorMor, plazo, seguro, comision, fechaPrimerPago, fechaMora, fechaCorte, r]); // eslint-disable-line
 
   return (
@@ -288,6 +319,12 @@ export function LiquidacionIntereses() {
   const [datosFlat, setDatosFlat] = useState<Record<string, unknown> | null>(null);
   const [datosReal, setDatosReal] = useState<Record<string, unknown> | null>(null);
   const [peritoNombre, setPeritoNombre] = useState("");
+  const [peritoCedula, setPeritoCedula] = useState("");
+  const [tipoContrato, setTipoContrato] = useState("Contrato de Apertura de Crédito Simple con Interés y Garantía Hipotecaria");
+  const [acreedorOriginal, setAcreedorOriginal] = useState("");
+  const [instrumentoPublico, setInstrumentoPublico] = useState("");
+  const [fechaInstrumento, setFechaInstrumento] = useState("");
+  const [notario, setNotario] = useState("");
   const [cedula, setCedula] = useState<{ url: string; nombre: string } | null>(null);
   const [docPerito, setDocPerito] = useState<{ url: string; nombre: string } | null>(null);
   const [subiendo, setSubiendo] = useState<string | null>(null);
@@ -451,6 +488,8 @@ export function LiquidacionIntereses() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="block text-xs font-medium sm:col-span-3">Nombre del perito
             <input className={inp} value={peritoNombre} onChange={(e) => setPeritoNombre(e.target.value)} placeholder="Nombre completo del perito valuador/contable" /></label>
+          <label className="block text-xs font-medium sm:col-span-3">Número de cédula profesional
+            <input className={inp} value={peritoCedula} onChange={(e) => setPeritoCedula(e.target.value)} placeholder="Ej. 3072863" /></label>
           <div>
             <p className="mb-1 text-xs font-medium">Cédula profesional</p>
             <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40">
@@ -470,18 +509,25 @@ export function LiquidacionIntereses() {
         </div>
       </div>
 
-      <div id="liq-impreso" className="space-y-4">
-        {/* Encabezado formal (solo al imprimir) */}
-        <div className="mb-2 hidden border-b border-black pb-3 text-center print:block">
-          <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
-          <p className="text-sm">(Inmuebles Accesibles)</p>
-          <p className="mt-2 font-display text-lg font-bold">LIQUIDACIÓN DE INTERESES — ESTADO DE CUENTA</p>
+      {/* Datos del documento (para el escrito de apertura) */}
+      <div className="rounded-lg border border-border p-4 print:hidden">
+        <p className="mb-3 font-display text-sm font-bold">Datos del documento (para el escrito)</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-medium sm:col-span-2">Tipo de contrato
+            <input className={inp} value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)} /></label>
+          <label className="block text-xs font-medium sm:col-span-2">Acreedor original (quién otorgó el crédito)
+            <input className={inp} value={acreedorOriginal} onChange={(e) => setAcreedorOriginal(e.target.value)} placeholder="Ej. HIPOTECARIA SU CASITA, S.A. de C.V., SOFOL" /></label>
+          <label className="block text-xs font-medium">Instrumento público No.
+            <input className={inp} value={instrumentoPublico} onChange={(e) => setInstrumentoPublico(e.target.value)} placeholder="Ej. 39,088" /></label>
+          <label className="block text-xs font-medium">Fecha del instrumento
+            <input className={inp} value={fechaInstrumento} onChange={(e) => setFechaInstrumento(e.target.value)} placeholder="Ej. 29 de mayo de 2008" /></label>
+          <label className="block text-xs font-medium sm:col-span-2">Notario (nombre, número y plaza)
+            <input className={inp} value={notario} onChange={(e) => setNotario(e.target.value)} placeholder="Ej. Lic. Jorge Leoncio Álvarez Gámez, Notario Público No. 11, La Paz, B.C.S." /></label>
         </div>
-        <div className="mb-2 hidden text-sm print:block">
-          <p><b>Expediente:</b> {expediente || "—"} &nbsp;·&nbsp; <b>Acreditado:</b> {acreditado || "—"}</p>
-          <p><b>Fecha de elaboración:</b> {hoy} &nbsp;·&nbsp; <b>Método:</b> {metodo === "ambas" ? "flat y real" : metodo}</p>
-        </div>
+      </div>
 
+      {/* Calculadora (en pantalla; NO se imprime) */}
+      <div className="print:hidden">
         {(metodo === "flat" || metodo === "ambas") && (
           <div>
             {metodo === "ambas" && <p className="mb-2 font-display text-sm font-bold text-[color:var(--teal)]">Método flat (estimado)</p>}
@@ -489,27 +535,25 @@ export function LiquidacionIntereses() {
           </div>
         )}
         {(metodo === "real" || metodo === "ambas") && (
-          <div>
-            {metodo === "ambas" && <p className="mb-2 mt-4 font-display text-sm font-bold text-[color:var(--teal)]">Método real (amortización)</p>}
+          <div className="mt-4">
+            {metodo === "ambas" && <p className="mb-2 font-display text-sm font-bold text-[color:var(--teal)]">Método real (amortización)</p>}
             <Real key={`real-${recargaId}`} inicial={precarga?.real} onDatos={setDatosReal} />
           </div>
         )}
+      </div>
 
-        {/* Firmas (solo al imprimir) */}
-        <div className="mt-10 hidden grid-cols-3 gap-8 text-center text-sm print:grid">
-          <div>
-            <div className="mb-1 border-t border-black pt-1">{contador || "\u00A0"}</div>
-            <p className="text-xs">Aprobación del Contador</p>
-          </div>
-          <div>
-            <div className="mb-1 border-t border-black pt-1">{apoderado || "\u00A0"}</div>
-            <p className="text-xs">Firma del Apoderado Legal</p>
-          </div>
-          <div>
-            <div className="mb-1 border-t border-black pt-1">{peritoNombre || "\u00A0"}</div>
-            <p className="text-xs">Perito{cedula ? " · con cédula" : ""}</p>
-          </div>
-        </div>
+      {/* Documento formal — esto es lo que se imprime / firma */}
+      <p className="text-xs font-medium text-muted-foreground print:hidden">Vista del documento (así se imprime y firma):</p>
+      <div id="liq-impreso">
+        <EstadoCuentaDoc
+          metodo={metodo}
+          datos={metodo === "flat" ? datosFlat : (datosReal || datosFlat)}
+          expediente={expediente} acreditado={acreditado}
+          contador={contador} apoderado={apoderado}
+          peritoNombre={peritoNombre} peritoCedula={peritoCedula}
+          tipoContrato={tipoContrato} acreedorOriginal={acreedorOriginal}
+          instrumentoPublico={instrumentoPublico} fechaInstrumento={fechaInstrumento} notario={notario}
+        />
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
@@ -530,6 +574,96 @@ export function LiquidacionIntereses() {
 }
 
 const fmtN = (v?: number | null) => (v != null && isFinite(v) ? v.toLocaleString("es-MX", { style: "currency", currency: "MXN" }) : "—");
+
+function Renglon({ romano, concepto, monto }: { romano: string; concepto: string; monto: number }) {
+  return (
+    <tr className="border-b border-gray-300">
+      <td className="py-1 pr-2 align-top font-semibold">{romano}</td>
+      <td className="py-1">{concepto}</td>
+      <td className="py-1 text-right tabular-nums">{fmt(monto)}</td>
+    </tr>
+  );
+}
+
+function EstadoCuentaDoc(props: {
+  metodo: string; datos: Record<string, unknown> | null;
+  expediente: string; acreditado: string; contador: string; apoderado: string;
+  peritoNombre: string; peritoCedula: string; tipoContrato: string; acreedorOriginal: string;
+  instrumentoPublico: string; fechaInstrumento: string; notario: string;
+}) {
+  const { metodo, datos, acreditado, contador, apoderado, peritoNombre, peritoCedula, tipoContrato, acreedorOriginal, instrumentoPublico, fechaInstrumento, notario } = props;
+  const d = (datos || {}) as Record<string, unknown>;
+  const esReal = metodo !== "flat";
+  const capital = Number(esReal ? d.capitalInsoluto : d.suerte) || 0;
+  const ordinarios = Number(esReal ? d.interesesOrdVencidos : d.ordTotal) || 0;
+  const comision = Number(esReal ? d.comisionVencida : 0) || 0;
+  const moratorios = Number(esReal ? d.moratorios : d.morTotal) || 0;
+  const total = capital + ordinarios + comision + moratorios;
+  const corte = String(d.fechaCorte ?? "");
+  const tabla = (d.tabla as { k: number; vence: string; interes: number; capital: number; saldo: number; mora: number }[]) || [];
+
+  return (
+    <div className="mx-auto max-w-3xl rounded-lg border border-border bg-white p-6 text-[13px] leading-relaxed text-black print:max-w-none print:rounded-none print:border-0 print:p-0">
+      <div className="border-b border-black pb-3 text-center">
+        <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
+        <p className="text-xs">(Inmuebles Accesibles)</p>
+        <p className="mt-2 text-lg font-bold">ESTADO DE CUENTA</p>
+      </div>
+
+      <p className="mt-4 text-justify">
+        El que suscribe, <b>{peritoNombre || "___________"}</b>, Contador facultado, con número de cédula profesional <b>{peritoCedula || "___________"}</b>, facultado por la empresa DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. de C.V., hace constar el adeudo a cargo de <b>{acreditado || "___________"}</b>.
+      </p>
+      <p className="mt-2 text-justify">
+        Para la elaboración del presente Estado de Cuenta se tomó en consideración el <b>{tipoContrato}</b>{acreedorOriginal ? <>, celebrado en su origen por <b>{acreedorOriginal}</b></> : null}{instrumentoPublico ? <>, otorgado en el Instrumento Público No. {instrumentoPublico}</> : null}{fechaInstrumento ? <>, de fecha {fechaInstrumento}</> : null}{notario ? <>, ante la fe de {notario}</> : null}; de lo anterior se desprende el siguiente RESUMEN Y CUANTIFICACIÓN de adeudos{corte ? <> a la fecha de corte del <b>{corte}</b></> : null}.
+      </p>
+
+      <p className="mt-5 text-center font-bold">RESUMEN GENERAL{corte ? ` AL ${corte}` : ""}</p>
+      <p className="text-center text-xs">Cantidades Pendientes de Pago</p>
+      <table className="mt-2 w-full border-collapse">
+        <tbody>
+          <Renglon romano="(I)" concepto="ADEUDO DE CAPITAL" monto={capital} />
+          <Renglon romano="(II)" concepto="SALDO DE INTERESES ORDINARIOS VENCIDOS" monto={ordinarios} />
+          {esReal && <Renglon romano="(III)" concepto="SALDO COMISIÓN POR ADMINISTRACIÓN VENCIDA" monto={comision} />}
+          <Renglon romano="(IV)" concepto="SALDO DE LOS INTERESES MORATORIOS" monto={moratorios} />
+          <tr className="border-t-2 border-black font-bold"><td></td><td className="py-1.5">TOTAL</td><td className="py-1.5 text-right tabular-nums">{fmt(total)}</td></tr>
+        </tbody>
+      </table>
+      <p className="mt-2 font-bold">SON: ({montoEnLetra(total)})</p>
+
+      {esReal && tabla.length > 0 && (
+        <>
+          <p className="mt-6 text-center font-bold">ANEXO — DESGLOSE DE CUOTAS</p>
+          <table className="mt-2 w-full border-collapse text-[10px]">
+            <thead>
+              <tr className="border-b border-black">
+                <th className="p-1 text-left">#</th><th className="p-1 text-left">Vence</th>
+                <th className="p-1 text-right">Interés</th><th className="p-1 text-right">Capital</th>
+                <th className="p-1 text-right">Saldo</th><th className="p-1 text-right">Mora</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tabla.map((f) => (
+                <tr key={f.k} className={`border-b border-gray-200 ${f.mora ? "font-semibold" : ""}`}>
+                  <td className="p-1">{f.k}</td><td className="p-1">{f.vence}</td>
+                  <td className="p-1 text-right tabular-nums">{fmt(f.interes)}</td>
+                  <td className="p-1 text-right tabular-nums">{fmt(f.capital)}</td>
+                  <td className="p-1 text-right tabular-nums">{fmt(f.saldo)}</td>
+                  <td className="p-1 text-right tabular-nums">{f.mora ? fmt(f.mora) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <div className="mt-12 grid grid-cols-3 gap-8 text-center text-xs">
+        <div><div className="mb-1 border-t border-black pt-1">{contador || "\u00A0"}</div><p>Aprobación del Contador</p></div>
+        <div><div className="mb-1 border-t border-black pt-1">{apoderado || "\u00A0"}</div><p>Apoderado Legal</p></div>
+        <div><div className="mb-1 border-t border-black pt-1">{peritoNombre || "\u00A0"}</div><p>Perito{peritoCedula ? ` · Céd. ${peritoCedula}` : ""}</p></div>
+      </div>
+    </div>
+  );
+}
 
 function RegistroEstados({ onReelaborar }: { onReelaborar: (e: EstadoCuenta) => void }) {
   const [lista, setLista] = useState<EstadoCuenta[]>([]);
