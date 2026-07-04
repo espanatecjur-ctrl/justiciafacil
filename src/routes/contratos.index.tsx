@@ -4,11 +4,12 @@ import { PageHeader } from "@/components/page-header";
 import { plantillas, renderContrato, valoresIniciales } from "@/lib/contract-templates";
 import { listarEstadosPlantilla, setEstadoPlantilla } from "@/lib/plantilla-estado";
 import { listarPlantillasCustom } from "@/lib/plantilla-custom";
+import { listarGrupos, crearGrupo, eliminarGrupo, listarAsignaciones, asignarPlantillaGrupo, type Grupo } from "@/lib/plantilla-grupo";
 import type { PlantillaContrato } from "@/lib/contract-templates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, LayoutGrid, Inbox, FileCheck2, Archive as ArchiveIcon, Eye, X, RotateCcw } from "lucide-react";
+import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, LayoutGrid, Inbox, FileCheck2, Archive as ArchiveIcon, Eye, X, RotateCcw, FolderPlus, FolderInput, Layers } from "lucide-react";
 import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
 import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
 import { listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
@@ -117,51 +118,96 @@ function PanelPlantillas() {
   const navigate = useNavigate();
   const [estados, setEstados] = useState<Record<string, string>>({});
   const [customs, setCustoms] = useState<PlantillaContrato[]>([]);
-  const [preview, setPreview] = useState<string | null>(null); // tipo en vista previa
-  const recargar = () => listarEstadosPlantilla().then(setEstados);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [asig, setAsig] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<string | null>(null);
+  const [nuevoPaq, setNuevoPaq] = useState(false);
+
+  const recargar = () => {
+    listarEstadosPlantilla().then(setEstados);
+    listarGrupos().then(setGrupos);
+    listarAsignaciones().then(setAsig);
+  };
   useEffect(() => { recargar(); listarPlantillasCustom().then(setCustoms); }, []);
 
-  const cambiar = async (tipo: string, estado: string) => {
-    await setEstadoPlantilla(tipo, estado);
-    recargar();
-  };
+  const cambiar = async (tipo: string, estado: string) => { await setEstadoPlantilla(tipo, estado); recargar(); };
+  const mover = async (tipo: string, grupoId: string | null) => { await asignarPlantillaGrupo(tipo, grupoId); recargar(); };
+  const borrarGrupo = async (id: string) => { if (window.confirm("¿Eliminar este paquete? Las plantillas quedan como individuales.")) { await eliminarGrupo(id); recargar(); } };
 
   const todas = [...plantillas, ...customs];
   const activas = todas.filter((p) => (estados[p.tipo] || "activa") === "activa");
   const plantillaPreview = todas.find((p) => p.tipo === preview) || null;
 
+  const tarjeta = (p: PlantillaContrato) => (
+    <div key={p.tipo} className="legal-card group relative p-4 transition hover:border-[color:var(--teal)] hover:shadow-md">
+      <div className="absolute right-2 top-2 flex gap-0.5">
+        <button onClick={() => setPreview(p.tipo)} title="Vista previa" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-4 w-4" /></button>
+        <MenuPlantilla
+          grupos={grupos}
+          grupoActual={asig[p.tipo] || null}
+          onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })}
+          onMover={(g) => mover(p.tipo, g)}
+          onArchivar={() => cambiar(p.tipo, "archivada")}
+          onPapelera={() => cambiar(p.tipo, "papelera")}
+        />
+      </div>
+      <button onClick={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })} className="block w-full text-left">
+        <FileText className="mb-2 h-6 w-6 text-[color:var(--teal)]" />
+        <p className="pr-12 font-display text-sm font-bold leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
+        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.descripcion}</p>
+      </button>
+    </div>
+  );
+
+  const individuales = activas.filter((p) => !asig[p.tipo] || !grupos.some((g) => g.id === asig[p.tipo]));
+
   return (
-    <div>
-      <p className="mb-3 text-sm text-muted-foreground">Escoge una plantilla para elaborar un contrato. Usa el ojo para ver una vista previa.</p>
-      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {activas.map((p) => (
-          <div key={p.tipo} className="legal-card group relative p-4 transition hover:border-[color:var(--teal)] hover:shadow-md">
-            <div className="absolute right-2 top-2 flex gap-0.5">
-              <button onClick={() => setPreview(p.tipo)} title="Vista previa" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-                <Eye className="h-4 w-4" />
-              </button>
-              <MenuPlantilla
-                onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })}
-                onArchivar={() => cambiar(p.tipo, "archivada")}
-                onPapelera={() => cambiar(p.tipo, "papelera")}
-              />
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Contratos agrupados en paquetes por fase. El ojo muestra la vista previa.</p>
+        <Button variant="outline" size="sm" onClick={() => setNuevoPaq(true)}><FolderPlus className="h-4 w-4 mr-1.5" /> Nuevo paquete</Button>
+      </div>
+
+      {/* Paquetes */}
+      {grupos.map((g) => {
+        const items = activas.filter((p) => asig[p.tipo] === g.id);
+        return (
+          <div key={g.id} className="rounded-xl border border-border bg-muted/20 p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-[color:var(--teal)]" />
+                  <span className="font-display text-base font-semibold">{g.nombre || "Paquete"}</span>
+                  {g.fase && <span className="rounded-full bg-[color:var(--teal)]/15 px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--teal)]">Fase · {g.fase}</span>}
+                </div>
+                {g.descripcion && <p className="mt-0.5 text-xs text-muted-foreground">{g.descripcion}</p>}
+              </div>
+              <button onClick={() => borrarGrupo(g.id)} className="text-xs text-red-600 hover:underline">Eliminar paquete</button>
             </div>
-            <button onClick={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })} className="block w-full text-left">
-              <FileText className="mb-2 h-6 w-6 text-[color:var(--teal)]" />
-              <p className="pr-12 font-display text-sm font-bold leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.descripcion}</p>
-            </button>
+            {items.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Sin plantillas. Usa el ⋮ de una tarjeta → “Mover a paquete”.</p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">{items.map(tarjeta)}</div>
+            )}
           </div>
-        ))}
+        );
+      })}
+
+      {/* Individuales */}
+      <div>
+        <p className="mb-2 font-display text-sm font-semibold text-muted-foreground">{grupos.length ? "Individuales (sin paquete)" : "Plantillas"}</p>
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">{individuales.map(tarjeta)}</div>
       </div>
 
       {plantillaPreview && <PreviewPlantilla plantilla={plantillaPreview} onCerrar={() => setPreview(null)} onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: plantillaPreview.tipo } })} />}
+
+      {nuevoPaq && <ModalNuevoPaquete onCerrar={() => setNuevoPaq(false)} onCreado={() => { setNuevoPaq(false); recargar(); }} />}
 
       {(() => {
         const ocultas = todas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
         if (!ocultas.length) return null;
         return (
-          <div className="mt-6 rounded-lg border border-dashed border-border p-3">
+          <div className="mt-2 rounded-lg border border-dashed border-border p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Plantillas ocultas (archivadas / en papelera)</p>
             <div className="flex flex-wrap gap-2">
               {ocultas.map((p) => (
@@ -178,7 +224,49 @@ function PanelPlantillas() {
   );
 }
 
-function MenuPlantilla({ onElaborar, onArchivar, onPapelera }: { onElaborar: () => void; onArchivar: () => void; onPapelera: () => void }) {
+function ModalNuevoPaquete({ onCerrar, onCreado }: { onCerrar: () => void; onCreado: () => void }) {
+  const [nombre, setNombre] = useState("");
+  const [fase, setFase] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const guardar = async () => {
+    if (!nombre.trim()) return;
+    setOcupado(true);
+    await crearGrupo(nombre.trim(), fase.trim(), descripcion.trim());
+    setOcupado(false);
+    onCreado();
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
+      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="font-display text-base font-bold text-[#0B1E3A]">Nuevo paquete</p>
+          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">Nombre del paquete</label>
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Paquete de Cambio" className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" autoFocus />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">Fase / etapa</label>
+            <input value={fase} onChange={(e) => setFase(e.target.value)} placeholder="Ej. Cambio · Compra · Cierre" className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">¿Para qué son? (breve)</label>
+            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2 border-t border-border pt-3">
+          <Button variant="outline" size="sm" onClick={onCerrar}>Cancelar</Button>
+          <Button size="sm" disabled={ocupado || !nombre.trim()} onClick={guardar} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">{ocupado ? "Guardando…" : "Crear paquete"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MenuPlantilla({ grupos, grupoActual, onElaborar, onMover, onArchivar, onPapelera }: { grupos: Grupo[]; grupoActual: string | null; onElaborar: () => void; onMover: (g: string | null) => void; onArchivar: () => void; onPapelera: () => void }) {
   const [abierto, setAbierto] = useState(false);
   return (
     <div className="relative inline-block text-left">
@@ -188,8 +276,20 @@ function MenuPlantilla({ onElaborar, onArchivar, onPapelera }: { onElaborar: () 
       {abierto && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-52 rounded-md border border-border bg-white py-1 shadow-lg">
+          <div className="absolute right-0 z-20 mt-1 max-h-72 w-56 overflow-auto rounded-md border border-border bg-white py-1 shadow-lg">
             <button onClick={() => { setAbierto(false); onElaborar(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><PenLine className="h-3.5 w-3.5" /> Elaborar para un cliente</button>
+            {grupos.length > 0 && (
+              <>
+                <p className="flex items-center gap-1.5 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase text-muted-foreground"><FolderInput className="h-3 w-3" /> Mover a paquete</p>
+                {grupos.map((g) => (
+                  <button key={g.id} onClick={() => { setAbierto(false); onMover(g.id); }} className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted ${grupoActual === g.id ? "font-semibold text-[color:var(--teal)]" : ""}`}>
+                    <Layers className="h-3.5 w-3.5" /> {g.nombre}
+                  </button>
+                ))}
+                {grupoActual && <button onClick={() => { setAbierto(false); onMover(null); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted"><X className="h-3.5 w-3.5" /> Quitar de paquete</button>}
+              </>
+            )}
+            <div className="my-1 border-t border-border" />
             <button onClick={() => { setAbierto(false); onArchivar(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-3.5 w-3.5" /> Archivar</button>
             <button onClick={() => { setAbierto(false); onPapelera(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /> Mover a papelera</button>
           </div>
