@@ -534,7 +534,7 @@ export function RecorridoActor({
               <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
               <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
-            <p className="text-sm font-medium">Decisión humana · ¿pasa para compra / inversión en garantía?</p>
+            <p className="text-sm font-medium">Decisión humana · ¿pasa para la compra de la cesión de la garantía?</p>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => guardar("Sí pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><Check className="h-4 w-4" /> Sí pasa</button>
               <button onClick={() => guardar("No pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><X className="h-4 w-4" /> No pasa</button>
