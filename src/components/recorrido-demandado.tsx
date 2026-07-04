@@ -6,14 +6,14 @@ import {
 } from "@/lib/urrj-demandado";
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
-import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Scale } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Scale, Lock, Calculator } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const n = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v; };
 
-const FASES = ["Datos básicos", "Extracción del expediente", "Legalidad procesal", "Carta saldo + V_AAE", "Bloqueo legal", "Dictamen y firmas"];
+const FASES = ["Datos básicos", "Extracción del expediente", "Legalidad procesal", "Carta saldo", "Bloqueo legal", "Dictamen y firmas"];
 
 function SemDot({ s }: { s: Semaforo }) {
   const c = s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
@@ -46,7 +46,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean }) {
+export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
@@ -58,7 +58,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     emplazamiento: "", sentenciaEjecutoriada: "", tercosFiscalLaboral: "", almonedaConvocada: "", sospechaUsura: "",
     remateEjecutado: "", adjudicacion: "", adjudicacionFirme: "", adjudicacionAFavor: "", amparoRemate: "", escrituradoPosesion: "",
     estadoCarta: "", fechaCaducidad: "", otrosAcreedores: "", quitaSinCondiciones: "",
-    suertePrincipal: "", interesMoratorio: "", gastosCostas: "", valorComercial: "", mesesDesenredo: "", margenPct: "30",
+    suertePrincipal: "", interesMoratorio: "", gastosCostas: "", montoQuita: "", valorComercial: "", mesesDesenredo: "", margenPct: "30",
     promesaSuspensiva: "", escrow: "", poderIrrevocable: "", vendedorAceptaPoder: "", dineroYaEntregado: "",
     anotaciones: "",
   });
@@ -74,8 +74,9 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
   const r4 = useMemo(() => veredictoHito4({ promesaSuspensiva: x.promesaSuspensiva, escrow: x.escrow, poderIrrevocable: x.poderIrrevocable, vendedorAceptaPoder: x.vendedorAceptaPoder, dineroYaEntregado: x.dineroYaEntregado }), [x.promesaSuspensiva, x.escrow, x.poderIrrevocable, x.vendedorAceptaPoder, x.dineroYaEntregado]);
   const vaae = useMemo(() => calcularVAAE({
     suertePrincipal: n(x.suertePrincipal), interesMoratorio: n(x.interesMoratorio), gastosCostas: n(x.gastosCostas),
+    quita: x.quitaSinCondiciones === "si" ? n(x.montoQuita) : 0,
     valorComercial: n(x.valorComercial), mesesDesenredo: n(x.mesesDesenredo), margenPct: n(x.margenPct),
-  }), [x.suertePrincipal, x.interesMoratorio, x.gastosCostas, x.valorComercial, x.mesesDesenredo, x.margenPct]);
+  }), [x.suertePrincipal, x.interesMoratorio, x.gastosCostas, x.montoQuita, x.quitaSinCondiciones, x.valorComercial, x.mesesDesenredo, x.margenPct]);
 
   // Adjudicación / remate (Art. 1410-1414 CCom · vía de apremio CNPCF · Ley de Amparo).
   // La adjudicación firme NO es un abort automático: depende de a favor de quién quedó,
@@ -232,7 +233,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
 
         {paso === 3 && (
           <div className="space-y-4">
-            <p className="text-base font-semibold">3 · Carta saldo del acreedor + V_AAE</p>
+            <p className="text-base font-semibold">3 · Carta saldo del acreedor</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Estado de la Carta Saldo">
                 <select className={inp} value={x.estadoCarta} onChange={(e) => set("estadoCarta", e.target.value)}>
@@ -244,20 +245,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               <Campo label="¿Quita sin condiciones?"><SiNo v={x.quitaSinCondiciones} on={(v) => set("quitaSinCondiciones", v)} /></Campo>
             </div>
             <Aviso r={r3} />
-            <p className="pt-1 text-xs font-medium text-muted-foreground">Motor financiero V_AAE (lo máximo que puedes pagarle al demandado)</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Campo label="Suerte principal (capital)"><input type="number" className={inp} value={x.suertePrincipal} onChange={(e) => set("suertePrincipal", e.target.value)} /></Campo>
-              <Campo label="Interés moratorio"><input type="number" className={inp} value={x.interesMoratorio} onChange={(e) => set("interesMoratorio", e.target.value)} /></Campo>
-              <Campo label="Gastos y costas (si 0, asume 10%)"><input type="number" className={inp} value={x.gastosCostas} onChange={(e) => set("gastosCostas", e.target.value)} /></Campo>
-              <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={x.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
-              <Campo label="Meses de desenredo"><input type="number" className={inp} value={x.mesesDesenredo} onChange={(e) => set("mesesDesenredo", e.target.value)} /></Campo>
-              <Campo label="Margen reservado (%)"><input type="number" className={inp} value={x.margenPct} onChange={(e) => set("margenPct", e.target.value)} /></Campo>
-            </div>
-            <div className={`rounded-lg border p-3 text-sm ${vaae.viable ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"}`}>
-              <p className="font-semibold">V_AAE = {fmt(vaae.vaae)}</p>
-              <p className="mt-1 text-[13px]">{vaae.detalle}</p>
-              <p className="mt-1 text-[11px] opacity-80">C_LIQ {fmt(vaae.cLiq)} · C_LIT {fmt(vaae.cLit)} · Margen {fmt(vaae.mR)}</p>
-            </div>
+            <p className="text-[11px] text-muted-foreground">El cálculo financiero V_AAE se hace al final, en la sección de Contabilidad.</p>
           </div>
         )}
 
@@ -299,6 +287,37 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
             </div>
             <div><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+
+            {/* ---- Motor financiero V_AAE (solo Contabilidad) ---- */}
+            <div className="mt-2 rounded-xl border border-dashed border-border p-4">
+              <div className="mb-3 flex items-center gap-2">
+                {puedeAdmin ? <Calculator className="h-4 w-4" style={{ color: "#C2A24C" }} /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+                <p className="text-sm font-semibold">V_AAE · lo máximo a pagarle al demandado</p>
+                <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Solo Contabilidad (GAD)</span>
+              </div>
+              {!puedeAdmin ? (
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <Lock className="h-4 w-4" /> Este cálculo lo hace Contabilidad. No tienes permiso para editarlo.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <Campo label="Suerte principal (capital)"><input type="number" className={inp} value={x.suertePrincipal} onChange={(e) => set("suertePrincipal", e.target.value)} /></Campo>
+                    <Campo label="Interés moratorio"><input type="number" className={inp} value={x.interesMoratorio} onChange={(e) => set("interesMoratorio", e.target.value)} /></Campo>
+                    <Campo label="Gastos y costas (si 0, asume 10%)"><input type="number" className={inp} value={x.gastosCostas} onChange={(e) => set("gastosCostas", e.target.value)} /></Campo>
+                    {x.quitaSinCondiciones === "si" && <Campo label="Monto de la quita (descuento del acreedor)"><input type="number" className={inp} value={x.montoQuita} onChange={(e) => set("montoQuita", e.target.value)} /></Campo>}
+                    <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={x.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
+                    <Campo label="Meses de desenredo"><input type="number" className={inp} value={x.mesesDesenredo} onChange={(e) => set("mesesDesenredo", e.target.value)} /></Campo>
+                    <Campo label="Margen reservado (%)"><input type="number" className={inp} value={x.margenPct} onChange={(e) => set("margenPct", e.target.value)} /></Campo>
+                  </div>
+                  <div className={`rounded-lg border p-3 text-sm ${vaae.viable ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"}`}>
+                    <p className="font-semibold">V_AAE = {fmt(vaae.vaae)}</p>
+                    <p className="mt-1 text-[13px]">{vaae.detalle}</p>
+                    <p className="mt-1 text-[11px] opacity-80">C_LIQ {fmt(vaae.cLiq)}{x.quitaSinCondiciones === "si" && n(x.montoQuita) > 0 ? ` (ya con la quita de ${fmt(n(x.montoQuita))})` : ""} · C_LIT {fmt(vaae.cLit)} · Margen {fmt(vaae.mR)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
