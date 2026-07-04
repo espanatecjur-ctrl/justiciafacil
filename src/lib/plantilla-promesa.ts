@@ -45,6 +45,7 @@ const campos: PlantillaCampo[] = [
   },
 
   { id: "lugarFirma", label: "Lugar de firma", tipo: "text", requerido: true },
+  { id: "ciudadCesiones", label: "Ciudad donde se firman las cesiones (en masa)", tipo: "text", ayuda: "Ej. Guadalajara, Jalisco" },
   { id: "fechaFirma", label: "Fecha de firma", tipo: "date", requerido: true },
 ];
 
@@ -98,7 +99,7 @@ TERCERA. Forma de pago. LA PROMITENTE COMPRADORA cubrirá el valor de la operaci
 CUARTA. Procedimiento de la cesión y de la gestión notarial. El perfeccionamiento se desarrollará conforme al siguiente procedimiento, cuyos plazos son aproximados por depender del Juzgado y de las notarías:
 1. A la firma de este contrato y cubierto el 35% de la operación, LA PROMITENTE VENDEDORA registra el pago y gira la instrucción notarial a la notaría que LA PROMITENTE COMPRADORA elija.
 2. La notaría emite la cotización; en un plazo aproximado de ocho (8) días posteriores, LA PROMITENTE COMPRADORA liquida con anticipación el primer acto de cesión.
-3. Liquidado lo anterior, el Apoderado General para Pleitos y Cobranzas suscribe las cesiones en firma conjunta (en masa), en un plazo aproximado de quince (15) días.
+3. Liquidado lo anterior, el Apoderado General para Pleitos y Cobranzas suscribe las cesiones en firma conjunta (en masa), en la ciudad de {{ciudadCesiones}}, en un plazo aproximado de quince (15) días.
 4. El apoderado presenta las minutas y escritos ante el Juzgado y realiza el apersonamiento de LA PROMITENTE COMPRADORA.
 5. Cuando el Juzgado ordene la escrituración, LA PROMITENTE VENDEDORA comunica la liquidación correspondiente, más el porcentaje restante de honorarios y la totalidad de impuestos y derechos (Cláusula Sexta).
 6. LA PROMITENTE COMPRADORA cubre el saldo cuando menos quince (15) días naturales antes de la fecha de desalojo (Cláusula Séptima).
