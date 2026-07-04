@@ -1,7 +1,8 @@
 import {
   Home, FolderOpen, Newspaper, Send, Shield, GitBranch, Bot,
   FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, ShieldHalf, Settings,
-  CalendarDays, Briefcase,
+  CalendarDays,
+  Calculator,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,7 +18,6 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { label: "Inicio", to: "/", icon: Home, group: "Núcleo" },
-  { label: "Dirección", to: "/direccion", icon: Briefcase, group: "Núcleo" },
   { label: "Calendario", to: "/calendario", icon: CalendarDays, group: "Núcleo" },
   { label: "Expedientes", to: "/expedientes", icon: FolderOpen, group: "Núcleo" },
 
@@ -33,6 +33,7 @@ export const navItems: NavItem[] = [
   { label: "JUFA", sub: "Pre-dictaminador", to: "/urrj", icon: Bot, group: "Inteligencia" },
   { label: "URRJ", sub: "Unidad de Resolución Jurídica · registro", to: "/urrj", search: { soloRegistro: true }, icon: Scale, group: "Inteligencia" },
   { label: "UCP", sub: "Unidad de Consolidación Patrimonial", to: "/ucp", icon: Building2, group: "Inteligencia" },
+  { label: "Liquidación de Intereses", sub: "Calculadora e incidente", to: "/liquidacion", icon: Calculator, group: "Inteligencia" },
 
   { label: "Contratos", to: "/contratos", icon: FileSignature, group: "Documentos" },
   { label: "Editor de Contratos", to: "/contratos/editor", icon: FileText, group: "Documentos" },
