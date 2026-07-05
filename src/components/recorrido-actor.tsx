@@ -24,6 +24,7 @@ import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 import { DictamenRegistral, type PrecargaRegistral } from "@/components/dictamen-registral";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { BannerCorreo } from "@/components/banner-correo";
+import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { Mail } from "lucide-react";
 
@@ -641,6 +642,13 @@ export function RecorridoActor({
           </div>
         )}
       </div>
+
+      {/* Cronología del expediente (mismo componente que la ficha) */}
+      {(d.caso_id || d.expediente) && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <CronologiaURRJ casoId={d.caso_id || undefined} expediente={d.expediente || undefined} />
+        </div>
+      )}
 
       {/* Navegación */}
       <div className="flex items-center justify-between">
