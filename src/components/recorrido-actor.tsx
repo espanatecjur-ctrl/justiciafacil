@@ -21,6 +21,7 @@ import {
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
+import { DictamenRegistral, type PrecargaRegistral } from "@/components/dictamen-registral";
 
 const NAVY = "#0B1E3A";
 
@@ -144,6 +145,7 @@ export function RecorridoActor({
   const [mostrarCorreo, setMostrarCorreo] = useState(false);
   const [enviandoCorreo, setEnviandoCorreo] = useState(false);
   const [correoMsg, setCorreoMsg] = useState<string | null>(null);
+  const [verRegistral, setVerRegistral] = useState(false);
 
   const notificarPositivo = () => {
     setCorreoMsg(null);
@@ -277,6 +279,11 @@ export function RecorridoActor({
       setGuardado("No se pudo generar el PDF: " + e.message);
     }
   };
+
+  if (verRegistral) {
+    const precReg: PrecargaRegistral = { acreditado: d.deudor || undefined, numeroCredito: d.expediente || undefined, direccion: d.ubicacion || undefined };
+    return <DictamenRegistral precarga={precReg} casoId={d.caso_id || undefined} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} onVolver={() => setVerRegistral(false)} />;
+  }
 
   return (
     <div className="space-y-5">
@@ -573,6 +580,11 @@ export function RecorridoActor({
                   {correoMsg && <span className={`text-sm ${correoMsg.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{correoMsg}</span>}
                 </div>
               </div>
+            )}
+            {guardado && !/no pasa/i.test(guardado) && (
+              <button onClick={() => setVerRegistral(true)} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white" style={{ background: "#B26B00" }}>
+                <ArrowRight className="h-4 w-4" /> Continuar al registral
+              </button>
             )}
             </>)}
 
