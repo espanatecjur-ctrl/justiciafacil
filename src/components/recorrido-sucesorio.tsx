@@ -52,7 +52,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean }) {
+export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
@@ -80,6 +80,19 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
   const estadoRobot: "sinaloa" | "bcs" | "jalisco" = x.estado === "Jalisco" ? "jalisco" : x.estado === "Baja California Sur" ? "bcs" : "sinaloa";
   useEffect(() => { if (precargar?.datos) setX((p) => ({ ...p, ...precargar.datos })); }, []);
+
+  // Robot al inicio: sembrar expediente + hallazgos (una sola vez).
+  useEffect(() => {
+    if (hallazgosIniciales && hallazgosIniciales.length) setHallazgos(hallazgosIniciales);
+    if ((hallazgosIniciales?.length || expedienteInicial)) {
+      setX((p) => {
+        const prev = p.anotaciones || "";
+        const notas = (hallazgosIniciales || []).filter((h) => !prev.includes(h.split("\n")[0]));
+        const sep = prev.trim() && notas.length ? "\n\n" : "";
+        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
+      });
+    }
+  }, []);
 
   const r1 = useMemo(() => veredictoSuc1({ hayActaDefuncion: x.hayActaDefuncion, casaANombreDeCujus: x.casaANombreDeCujus, fuenteRevisada: x.fuenteRevisada }), [x.hayActaDefuncion, x.casaANombreDeCujus, x.fuenteRevisada]);
   const r2 = useMemo(() => veredictoSuc2({
