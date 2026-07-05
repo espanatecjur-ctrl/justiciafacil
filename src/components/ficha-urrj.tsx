@@ -249,6 +249,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             onVolver={recargarEstado}
             puedeFirmarElabora={puede("firmar_elabora")}
             puedeValidar={puede("validar")}
+            puedePrecioPiso={puede("precio_piso")}
           />
         </TabsContent>
 
