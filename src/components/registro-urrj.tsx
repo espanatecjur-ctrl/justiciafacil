@@ -1,7 +1,8 @@
 // ============================================================
 //  Registro de URRJ · dictámenes hechos, ordenados por módulos
 // ------------------------------------------------------------
-//  4 pestañas:
+//  Pestañas:
+//   - Dictaminar  → hacer un dictamen nuevo (se le pasa como nodo)
 //   - Jurídicos   → reusa HistorialPredictamen (tabla predictamen)
 //   - Registrales → dictamen_registral
 //   - Archivados  → los "terminados" de ambas tablas
@@ -10,11 +11,11 @@
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
-import { Scale, Landmark, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw } from "lucide-react";
+import { Scale, Landmark, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-type Tab = "juridicos" | "registrales" | "archivados" | "eliminados";
+type Tab = "dictaminar" | "juridicos" | "registrales" | "archivados" | "eliminados";
 
 interface FilaReg {
   id: string;
@@ -47,14 +48,14 @@ function mapReg(r: any): FilaReg {
   };
 }
 
-export function RegistroURRJ({ onReDictaminar }: { onReDictaminar?: (f: any) => void }) {
+export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: (f: any) => void; dictaminar?: React.ReactNode }) {
   const [tab, setTab] = useState<Tab>("juridicos");
   const [filas, setFilas] = useState<FilaReg[]>([]);
   const [cargando, setCargando] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
 
   const cargar = async () => {
-    if (tab === "juridicos") return; // esa pestaña la maneja HistorialPredictamen
+    if (tab === "juridicos" || tab === "dictaminar") return; // esas pestañas no cargan lista
     setCargando(true); setFilas([]);
     try {
       if (tab === "registrales") {
@@ -87,6 +88,7 @@ export function RegistroURRJ({ onReDictaminar }: { onReDictaminar?: (f: any) => 
   };
 
   const TABS: { k: Tab; label: string; icon: any }[] = [
+    ...(dictaminar ? [{ k: "dictaminar" as Tab, label: "Dictaminar", icon: Gavel }] : []),
     { k: "juridicos", label: "Jurídicos", icon: Scale },
     { k: "registrales", label: "Registrales (RPPC)", icon: Landmark },
     { k: "archivados", label: "Archivados", icon: Archive },
@@ -102,15 +104,17 @@ export function RegistroURRJ({ onReDictaminar }: { onReDictaminar?: (f: any) => 
             <t.icon className="h-3.5 w-3.5" /> {t.label}
           </button>
         ))}
-        {tab !== "juridicos" && (
+        {tab !== "juridicos" && tab !== "dictaminar" && (
           <button onClick={cargar} className="ml-auto inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs hover:bg-muted">
             <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin" : ""}`} /> Actualizar
           </button>
         )}
       </div>
 
-      {tab === "juridicos" ? (
-        <HistorialPredictamen onReDictaminar={onReDictaminar} />
+      {tab === "dictaminar" ? (
+        <div>{dictaminar}</div>
+      ) : tab === "juridicos" ? (
+        <HistorialPredictamen onReDictaminar={(f) => { if (dictaminar) setTab("dictaminar"); onReDictaminar?.(f); }} />
       ) : cargando ? (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
       ) : filas.length === 0 ? (
