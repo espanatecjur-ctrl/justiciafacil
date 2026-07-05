@@ -302,6 +302,13 @@ export function RecorridoActor({
     }
   };
 
+  const checarExiste = async (exp?: string | null, caso?: string | null) => {
+    if (precargar) return; // en re-dictaminar no aplica
+    if (!exp && !caso) { setYaExiste(null); return; }
+    const ex = await buscarPredictamenVigente(exp, caso);
+    setYaExiste(ex);
+  };
+
   const asuntoBanner = destino === "contabilidad"
     ? `Solicitud de precio — Dictamen URRJ ${dictamen.txt} · Exp. ${d.expediente || "—"}`
     : `Garantía lista para Comercial — ${dictamen.txt} · Exp. ${d.expediente || "—"}`;
@@ -393,6 +400,20 @@ export function RecorridoActor({
         </div>
       </div>
 
+      {yaExiste && (
+        <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">Ya existe un pre-dictamen para este expediente{yaExiste.folio ? ` (folio ${yaExiste.folio})` : ""}.</p>
+          <p className="text-[13px]">No se creará otro para no duplicarlo. Puedes ver la ficha o re-dictaminar.</p>
+          <div className="flex flex-wrap gap-2">
+            {(yaExiste.caso_id || d.caso_id) && (
+              <Link to="/expediente" search={{ id: (yaExiste.caso_id || d.caso_id) as string, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
+            )}
+            <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
+            <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Ignorar por ahora</button>
+          </div>
+        </div>
+      )}
+
       {/* Contenido de cada fase */}
       <div className="rounded-xl border border-border bg-card p-5">
         {paso === 0 && (
@@ -402,6 +423,7 @@ export function RecorridoActor({
               <select className={inp} value={d.caso_id} onChange={(e) => {
                 const c = casos.find((x) => String(x.id) === e.target.value);
                 setD((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: c?.juzgado || p.juzgado, ubicacion: c?.direccion_garantia || p.ubicacion, deudor: c?.cliente_nombre || p.deudor, estado: ESTADOS_URRJ.includes(c?.entidad) ? c.entidad : p.estado }));
+                checarExiste(c?.expediente || d.expediente, e.target.value);
               }}>
                 <option value="">— Escribir a mano —</option>
                 {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
@@ -412,7 +434,7 @@ export function RecorridoActor({
               <Campo label="Estado del juicio"><select className={inp} value={d.estado} onChange={(e) => set("estado", e.target.value)}>{ESTADOS_URRJ.map((t) => <option key={t}>{t}</option>)}</select></Campo>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Expediente"><input className={inp} value={d.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
+              <Campo label="Expediente"><input className={inp} value={d.expediente} onChange={(e) => set("expediente", e.target.value)} onBlur={() => checarExiste(d.expediente, d.caso_id)} /></Campo>
               <Campo label="Juzgado"><input className={inp} value={d.juzgado} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
               <Campo label="Ubicación del inmueble"><input className={inp} value={d.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
               <Campo label="Deudor"><input className={inp} value={d.deudor} onChange={(e) => set("deudor", e.target.value)} /></Campo>
