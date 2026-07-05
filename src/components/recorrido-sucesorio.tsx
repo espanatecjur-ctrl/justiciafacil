@@ -11,7 +11,7 @@ import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
-import { Mail } from "lucide-react";
+import { Mail, Eye } from "lucide-react";
 import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Search, Bot } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -55,6 +55,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
   const [verBanner, setVerBanner] = useState(false);
   const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
@@ -118,9 +119,9 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
-  const descargarPDF = async (decision: string) => {
+  const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
     const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
-    await descargarPredictamenPDF({
+    const urlPdf = await descargarPredictamenPDF({
       expediente: x.expediente, juzgado: x.juzgado, estado: x.estado, tipoJuicio: "Sucesorio · Caso " + x.caso, posicion: "Sucesorio",
       ubicacion: x.ubicacion, deudor: x.deCujus, quienCede: x.heredero, queCede: "Derechos hereditarios",
       dictamen: consolidado.txt,
@@ -134,11 +135,26 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
       intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cSan, usura: false },
       admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
       boletines: hallazgos,
-    });
+    }, modo);
+    if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
   };
 
   return (
     <>
+      {pdfUrl && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setPdfUrl(null)}>
+          <div className="my-4 flex h-[88vh] w-[94vw] max-w-4xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <p className="text-sm font-semibold" style={{ color: NAVY }}>Pre-dictamen · Exp. {x.expediente || "—"}</p>
+              <div className="flex items-center gap-3">
+                <a href={pdfUrl} download={`predictamen-${(x.expediente || "caso").replace(/[^\w-]/g, "_")}.pdf`} className="text-xs font-medium text-[color:var(--teal)] hover:underline">Descargar</a>
+                <button onClick={() => setPdfUrl(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+              </div>
+            </div>
+            <iframe src={pdfUrl} title="Pre-dictamen PDF" className="min-h-0 flex-1 rounded-b-xl" />
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
           <button onClick={onVolver} className="flex items-center gap-1 hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Cambiar posición</button>
@@ -312,7 +328,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
               <button onClick={() => guardar("No pasa")} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white"><X className="h-4 w-4" /> No pasa</button>
               <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} className="rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP</button>
             </div>
-            <div><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
+            <div className="flex flex-wrap gap-2"><button onClick={() => descargarPDF("(borrador)", "ver")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF</button><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
             {guardado && !/no pasa/i.test(guardado) && (
               <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
