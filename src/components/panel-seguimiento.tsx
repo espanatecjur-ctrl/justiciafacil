@@ -9,6 +9,7 @@
 // Acepta `caso` completo o solo `expediente` (reusable en cualquier módulo).
 // ============================================================
 import { useEffect, useState } from "react";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { getAuth } from "@/lib/auth";
@@ -88,7 +89,7 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
                     {t.responsable_nombre ? <><User className="mr-0.5 inline h-3 w-3" />{t.responsable_nombre}{t.responsable_rol ? <span className="text-[color:var(--teal)]"> · {t.responsable_rol}</span> : null}</> : "Sin responsable"}
                     {t.fecha_limite && !esEvid ? ` · vence ${fmt(t.fecha_limite)}` : ""}
                   </p>
-                  {esEvid && t.evidencia_url && <a href={t.evidencia_url} target="_blank" rel="noreferrer" className="text-[11px] text-[color:var(--teal)] hover:underline">ver evidencia</a>}
+                  {esEvid && t.evidencia_url && <BotonVerDoc url={t.evidencia_url} nombre="Evidencia" label="ver evidencia" className="text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />}
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : "tarea"}</span>
               </div>
