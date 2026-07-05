@@ -34,6 +34,19 @@ export interface DatosPDF {
   decision: string;
   noValido?: boolean;
   cambios?: { campos: { campo: string; antes: string; ahora: string }[]; nota?: string } | null;
+  /** Datos capturados del recorrido (todas las fases) para el PDF completo. */
+  datos?: {
+    hipotecaInscrita?: string; prelacion?: string; propietario?: string; anotaciones?: string;
+    etapa?: string; sentenciaFirme?: string; situacion?: string; ultimaActuacion?: string;
+    ultimoPago?: string; tipoAccion?: string; emplazado?: string; fechaEmplazamiento?: string;
+    convenioRatificado?: string; convenioFecha?: string;
+    interpelacionJV?: string; interpelacionJVFecha?: string; interpelacionTipo?: string; interpelacionExpediente?: string;
+    quienPosee?: string; inicioPosesion?: string; buenaFe?: string; demandaDespojo?: string;
+    predial?: string; agua?: string; condominio?: string; fiscales?: string; laborales?: string; otrosGravamenes?: string;
+    margenObjetivo?: string;
+  } | null;
+  /** Hallazgos del robot en boletines oficiales (uno por renglón). */
+  boletines?: string[];
 }
 
 const mxn = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -77,6 +90,64 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
   fila("Inmueble:", d.ubicacion);
   fila("Deudor:", d.deudor);
   fila("Cede / qué cede:", `${d.quienCede || "—"} · ${d.queCede}`);
+  y += 3;
+
+  // Helpers para las secciones nuevas
+  const dd = d.datos || {};
+  const oDash = (v?: string) => (v && String(v).trim() ? String(v) : "—");
+  const sn = (v?: string) => (v === "si" ? "Sí" : v === "no" ? "No" : "—");
+  const pn = (v?: string) => (v && String(v).trim() ? mxn(Number(v) || 0) : "—");
+  const seccion = (t: string) => {
+    nuevaPaginaSiHace(12);
+    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text(t, M, y); y += 6;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+  };
+
+  // ---- 2 · Verificación registral (RPP) ----
+  seccion("Verificación registral (RPP)");
+  fila("Hipoteca inscrita:", sn(dd.hipotecaInscrita));
+  fila("Prelación:", oDash(dd.prelacion));
+  fila("Propietario (RPP):", oDash(dd.propietario));
+  fila("Anotaciones / embargos:", oDash(dd.anotaciones));
+  y += 3;
+
+  // ---- 3 · Estado procesal ----
+  seccion("Estado procesal");
+  fila("Etapa:", oDash(dd.etapa));
+  fila("Sentencia firme a favor:", sn(dd.sentenciaFirme));
+  fila("Situación:", oDash(dd.situacion));
+  fila("Última actuación:", oDash(dd.ultimaActuacion));
+  y += 3;
+
+  // ---- 4 · Prescripción y caducidad (datos capturados) ----
+  seccion("Prescripción y caducidad");
+  fila("Último pago:", oDash(dd.ultimoPago));
+  fila("Tipo de acción:", oDash(dd.tipoAccion));
+  fila("Emplazado:", `${sn(dd.emplazado)}${dd.fechaEmplazamiento ? ` · ${dd.fechaEmplazamiento}` : ""}`);
+  fila("Convenio ratificado:", `${sn(dd.convenioRatificado)}${dd.convenioFecha ? ` · ${dd.convenioFecha}` : ""}`);
+  fila("Interpelación (JV):", `${sn(dd.interpelacionJV)}${dd.interpelacionJVFecha ? ` · ${dd.interpelacionJVFecha}` : ""}`);
+  if (dd.interpelacionJV === "si") {
+    fila("JV · tipo / exp.:", `${oDash(dd.interpelacionTipo)} · ${oDash(dd.interpelacionExpediente)}`);
+  }
+  y += 3;
+
+  // ---- 5 · Posesión y ocupantes ----
+  seccion("Posesión y ocupantes");
+  fila("Quién posee:", oDash(dd.quienPosee));
+  fila("Posesión desde:", oDash(dd.inicioPosesion));
+  fila("Buena fe (título):", sn(dd.buenaFe));
+  fila("Demanda de despojo:", sn(dd.demandaDespojo));
+  y += 3;
+
+  // ---- 6 · Cargas ocultas (desglose) ----
+  seccion("Cargas ocultas");
+  fila("Predial:", pn(dd.predial));
+  fila("Agua:", pn(dd.agua));
+  fila("Condominio:", pn(dd.condominio));
+  fila("Créditos fiscales:", pn(dd.fiscales));
+  fila("Créditos laborales:", pn(dd.laborales));
+  fila("Otros gravámenes:", pn(dd.otrosGravamenes));
   y += 3;
 
   // ---- Dictamen ----
@@ -127,8 +198,31 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
     linea("Valor comercial:", mxn(d.admin.valorComercial));
     linea("Costos:", mxn(d.admin.costos));
     linea("Precio de la cesión:", mxn(d.admin.precioCesion));
+    if (d.datos?.margenObjetivo?.trim()) linea("Margen objetivo:", mxn(Number(d.datos.margenObjetivo) || 0));
     linea("Viabilidad:", `${d.admin.viab.etiqueta} (${d.admin.viab.dato || ""})`);
     y += 2;
+  }
+
+  // ---- Boletines oficiales (hallazgos del robot) ----
+  {
+    nuevaPaginaSiHace(16);
+    doc.setFillColor(...GOLD); doc.roundedRect(M, y - 4, W - 2 * M, 8, 1.2, 1.2, "F");
+    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+    doc.text("Boletines oficiales · hallazgos del robot", M + 3, y + 1.5); y += 10;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    const bs = (d.boletines || []).filter((x) => x && x.trim());
+    if (bs.length === 0) {
+      doc.setTextColor(120, 120, 120);
+      doc.text("Sin hallazgos registrados en el boletín estatal.", M, y); y += 6;
+      doc.setTextColor(40, 40, 40);
+    } else {
+      for (const b of bs) {
+        const lines = doc.splitTextToSize("• " + b, W - 2 * M);
+        nuevaPaginaSiHace(lines.length * 4.5 + 2);
+        doc.text(lines, M, y); y += lines.length * 4.5 + 2;
+      }
+    }
+    y += 3;
   }
 
   // ---- Anotaciones ----
