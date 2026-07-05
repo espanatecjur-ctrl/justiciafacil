@@ -146,7 +146,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
             <div className="divide-y divide-border">
               {garantias.map((g) => (
                 <div key={g.clave} className="flex items-center justify-between gap-3 p-3 hover:bg-muted/30">
-                  <button onClick={() => { if (g.id) navigate({ to: "/expediente", search: { id: g.id } as any }); else alert("Esta garantía aún no está vinculada. Vincúlala primero."); }} className="min-w-0 flex-1 text-left">
+                  <button onClick={() => { if (g.id) navigate({ to: "/expediente", search: { id: g.id, origen: "urrj" } as any }); else alert("Esta garantía aún no está vinculada. Vincúlala primero."); }} className="min-w-0 flex-1 text-left">
                     <p className="truncate text-sm font-semibold">{g.expediente || "Sin expediente"}</p>
                     <p className="truncate text-xs text-muted-foreground">{g.direccion_garantia || g.cliente_nombre || "—"}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
                   </button>
@@ -157,7 +157,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
                       <button onClick={() => setMenu(menu === g.clave ? null : g.clave)} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                       {menu === g.clave && (
                         <div className="absolute right-0 top-8 z-20 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
-                          <button onClick={() => { setMenu(null); if (g.id) navigate({ to: "/expediente", search: { id: g.id } as any }); else alert("Esta garantía aún no está vinculada. Vincúlala primero."); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha</button>
+                          <button onClick={() => { setMenu(null); if (g.id) navigate({ to: "/expediente", search: { id: g.id, origen: "urrj" } as any }); else alert("Esta garantía aún no está vinculada. Vincúlala primero."); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha</button>
                         </div>
                       )}
                     </div>
