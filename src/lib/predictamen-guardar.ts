@@ -37,6 +37,24 @@ export function diffDatos(viejo: any, nuevo: any): { campo: string; antes: strin
   return out;
 }
 
+export interface PredictamenExistente { id: string; folio: string | null; posicion: string | null; caso_id: string | null; expediente: string | null; }
+
+/** Busca un pre-dictamen VIGENTE (no en papelera) por caso o por expediente.
+ *  Sirve para no duplicar: si ya hay uno, se avisa y se ofrece ir a ese. */
+export async function buscarPredictamenVigente(expediente?: string | null, casoId?: string | null): Promise<PredictamenExistente | null> {
+  const conds: string[] = [];
+  if (casoId) conds.push(`caso_id.eq.${casoId}`);
+  if (expediente && expediente.trim()) conds.push(`expediente.eq.${encodeURIComponent(expediente.trim())}`);
+  if (conds.length === 0) return null;
+  const filtro = conds.length === 1 ? conds[0].replace(".eq.", "=eq.") : `or=(${conds.join(",")})`;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,caso_id,expediente&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.[0] || null;
+  } catch { return null; }
+}
+
 export async function guardarPredictamen(payload: any, precargar?: Precarga | null): Promise<string | null> {
   const version = precargar ? (precargar.version || 1) + 1 : 1;
   let cambiosTxt: string | null = null;
