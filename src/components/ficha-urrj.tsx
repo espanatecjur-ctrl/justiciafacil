@@ -47,6 +47,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [reg, setReg] = useState<Dictamen>(null);
   const [folio, setFolio] = useState<string>("");
   const [decision, setDecision] = useState<string>("");
+  const [predJur, setPredJur] = useState<any>(null);
+  const [predReg, setPredReg] = useState<any>(null);
+  const [preview, setPreview] = useState<null | "juridico" | "registral">(null);
 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
 
@@ -59,9 +62,14 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       setReg(u?.dic_registral ?? null);
     }).catch(() => {});
     const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,dictamen_final,pasa_a_ucp,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
-      .then((rows: any[]) => { setFolio(rows?.[0]?.folio || ""); setDecision(rows?.[0]?.dictamen_final || ""); })
+      .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
+      .catch(() => {});
+    const filtroReg = garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
+    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,created_at&${filtroReg}&order=created_at.desc&limit=1`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((rows: any[]) => setPredReg(rows?.[0] || null))
       .catch(() => {});
   };
   useEffect(recargarEstado, [garantia.id, garantia.expediente]);
@@ -134,6 +142,81 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         <VeredictoBadge label="Registral" dic={reg} />
         {decision && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${decisionCls}`}>Dictamen final: {decision}</span>}
         {folio && <span className="ml-auto rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">Folio {folio}</span>}
+      </div>
+
+      {/* Modulitos de estado de dictamen */}
+      <div>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Estado de los dictámenes de esta garantía</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Jurídico */}
+          {predJur ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Scale className="h-4 w-4" /> Jurídico</span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-emerald-800">✓ tiene</span>
+              </div>
+              <p className="mt-1.5 text-xs text-emerald-800">Resultado: <b>{predJur.dictamen_sugerido || "—"}</b> · versión {predJur.version || 1}</p>
+              <p className="text-xs text-emerald-800">Firmas: Elabora {predJur.firma_elabora ? "✓" : "—"} · Valida {predJur.firma_valida ? "✓" : "—"}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={() => setPreview(preview === "juridico" ? null : "juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
+                <button onClick={() => setTab("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Jurídico</button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-sm font-semibold"><Scale className="h-4 w-4" /> Jurídico</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">— sin dictamen</span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">Aún no se ha dictaminado el jurídico de esta garantía.</p>
+              <button onClick={() => setTab("juridico")} className="mt-2 inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-muted">Ir al proceso →</button>
+            </div>
+          )}
+
+          {/* Registral */}
+          {predReg ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Landmark className="h-4 w-4" /> Registral (RPPC)</span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-emerald-800">✓ tiene</span>
+              </div>
+              <p className="mt-1.5 text-xs text-emerald-800">Resultado: <b>{predReg.resultado || "—"}</b>{predReg.hay_adicional ? " · con gravamen adicional" : ""}</p>
+              <p className="text-xs text-emerald-800">Firmas: Elabora {predReg.firma_elabora?.nombre ? "✓" : "—"} · Valida {predReg.firma_valida?.nombre ? "✓" : "—"}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={() => setPreview(preview === "registral" ? null : "registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
+                <button onClick={() => setTab("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Registral</button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-sm font-semibold"><Landmark className="h-4 w-4" /> Registral (RPPC)</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">— sin dictamen</span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">Aún no se ha dictaminado el registral de esta garantía.</p>
+              <button onClick={() => setTab("registral")} className="mt-2 inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-muted">Ir al proceso →</button>
+            </div>
+          )}
+        </div>
+
+        {/* Vista previa (solo lectura) */}
+        {preview === "juridico" && predJur && (
+          <div className="mt-3 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+            <p className="mb-1 text-sm font-medium text-foreground">👁 Vista previa · Jurídico (solo lectura)</p>
+            <div>Posición: {predJur.posicion || "—"} · Exp. {garantia.expediente || "—"}</div>
+            <div>Dictamen del sistema: <b>{predJur.dictamen_sugerido || "—"}</b></div>
+            <div>Decisión: {predJur.dictamen_final || "—"}</div>
+            <div>Elabora: {predJur.firma_elabora || "—"} · Valida: {predJur.firma_valida || "—"}</div>
+          </div>
+        )}
+        {preview === "registral" && predReg && (
+          <div className="mt-3 rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+            <p className="mb-1 text-sm font-medium text-foreground">👁 Vista previa · Registral (solo lectura)</p>
+            <div>Acreditado: {predReg.acreditado || "—"} · Exp. {garantia.expediente || "—"}</div>
+            <div>Resultado: <b>{predReg.resultado || "—"}</b>{predReg.hay_adicional ? " · con gravamen adicional" : ""}</div>
+            <div>Elabora: {predReg.firma_elabora?.nombre || "—"} · Valida: {predReg.firma_valida?.nombre || "—"}</div>
+          </div>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v); setVista("elegir"); }}>
