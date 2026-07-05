@@ -28,6 +28,13 @@ function dicColor(d?: string | null) {
   if (d.includes("NEGATIVO") || d.includes("NO LITIGABLE")) return "text-red-700";
   return "text-amber-700";
 }
+function situacion(f: Fila): { label: string; cls: string } {
+  if (f.terminado) return { label: "✓ Terminado", cls: "bg-muted text-muted-foreground border border-border" };
+  const d = (f.dictamen_sugerido || "").toUpperCase();
+  if (d.includes("POSITIVO") || (d.includes("RECUPERABLE") && !d.includes("NO"))) return { label: "Litigable", cls: "bg-emerald-50 text-emerald-700" };
+  if (d.includes("NEGATIVO") || d.includes("NO LITIGABLE")) return { label: "No litigable", cls: "bg-red-50 text-red-700" };
+  return { label: "En proceso", cls: "bg-amber-50 text-amber-700" };
+}
 function semColor(s: Semaforo) {
   return s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
 }
@@ -119,16 +126,16 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
           <thead>
             <tr>
               <Th col="folio">Folio</Th><Th col="posicion">Posición</Th><Th col="ubicacion">Garantía / dirección</Th>
-              <Th col="expediente">Expediente</Th><Th col="estado">Estado</Th><Th col="abogado_nombre">Abogado</Th><Th col="dictamen_sugerido">Dictamen</Th>
+              <Th col="expediente">Expediente</Th><Th col="estado">Entidad</Th><Th col="abogado_nombre">Abogado</Th><Th col="dictamen_sugerido">Dictamen</Th><th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-3 py-2 text-left text-[11px] font-medium text-muted-foreground">Estado</th>
               <Th col="dictamen_final">Decisión</Th><Th col="created_at">Fecha</Th>
               <th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">Cargando…</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">Cargando…</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
             ) : filtradas.map((f) => (
               <tr key={f.id} className="border-b border-border/60 hover:bg-muted/40">
                 <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => abrirFicha(f)}>{f.folio || "—"}</td>
@@ -137,7 +144,8 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
                 <td className="px-3 py-2">{f.expediente || "—"}</td>
                 <td className="px-3 py-2">{f.estado || "—"}</td>
                 <td className="px-3 py-2 text-[13px]">{f.abogado_nombre || <span className="text-muted-foreground">— sin asignar —</span>}</td>
-                <td className={`px-3 py-2 text-[12px] font-medium ${dicColor(f.dictamen_sugerido)}`}>{f.dictamen_sugerido || "—"}</td>
+                <td className={`px-3 py-2 text-[12px] font-medium ${dicColor(f.dictamen_sugerido)}`}>{(f.dictamen_sugerido || "—").replace(/FALTAN DATOS/i, "EN PROCESO")}</td>
+                <td className="px-3 py-2">{(() => { const st = situacion(f); return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>{st.label}</span>; })()}</td>
                 <td className="px-3 py-2 text-[12px]">{f.dictamen_final || "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{fecha(f.created_at)}</td>
                 <td className="relative px-2 py-2 text-right">
