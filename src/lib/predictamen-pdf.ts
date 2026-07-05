@@ -51,7 +51,7 @@ export interface DatosPDF {
 
 const mxn = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
-export async function descargarPredictamenPDF(d: DatosPDF) {
+export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "ver" = "descargar"): Promise<string | void> {
   const mod: any = await import(/* @vite-ignore */ "https://esm.sh/jspdf@2.5.1");
   const jsPDF = mod.jsPDF || mod.default;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -104,6 +104,8 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
   };
 
+  // Secciones detalladas (solo cuando el recorrido las provee, p. ej. Actor)
+  if (d.datos) {
   // ---- 2 · Verificación registral (RPP) ----
   seccion("Verificación registral (RPP)");
   fila("Hipoteca inscrita:", sn(dd.hipotecaInscrita));
@@ -149,6 +151,7 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
   fila("Créditos laborales:", pn(dd.laborales));
   fila("Otros gravámenes:", pn(dd.otrosGravamenes));
   y += 3;
+  }
 
   // ---- Dictamen ----
   nuevaPaginaSiHace(16);
@@ -204,7 +207,7 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
   }
 
   // ---- Boletines oficiales (hallazgos del robot) ----
-  {
+  if (d.boletines) {
     nuevaPaginaSiHace(16);
     doc.setFillColor(...GOLD); doc.roundedRect(M, y - 4, W - 2 * M, 8, 1.2, 1.2, "F");
     doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
@@ -322,5 +325,8 @@ export async function descargarPredictamenPDF(d: DatosPDF) {
   doc.text("Documento generado por JusticiaFácil DIIPA · el sistema calcula y avisa; las personas firman y deciden.", M, 290);
 
   const nombre = `predictamen-${(d.expediente || "caso").replace(/[^\w-]/g, "_")}.pdf`;
+  if (modo === "ver") {
+    return doc.output("bloburl") as unknown as string;
+  }
   doc.save(nombre);
 }
