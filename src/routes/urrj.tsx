@@ -96,6 +96,7 @@ function URRJ() {
           onVolver={volver}
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
+          puedePrecioPiso={puedePrecioPiso}
         />
       ) : vista === "elegir" ? (
         <>
