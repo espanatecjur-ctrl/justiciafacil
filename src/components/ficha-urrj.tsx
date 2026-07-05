@@ -1,6 +1,6 @@
 // ============================================================
 //  FichaURRJ · ficha 360 de una garantía — AQUÍ SE DICTAMINA
-//  Datos · Jurídico · Registral · Avances (reusa los motores)
+//  Datos · Jurídico · Registral · Documentos · Avances
 // ============================================================
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
@@ -10,7 +10,7 @@ import { DictamenRegistral } from "@/components/dictamen-registral";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { getAuth } from "@/lib/auth";
 import { type Precarga } from "@/lib/predictamen-guardar";
-import { ArrowLeft, Scale, Landmark, FileText, Activity } from "lucide-react";
+import { ArrowLeft, Scale, Landmark, FileText, Activity, Paperclip, ExternalLink } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -24,15 +24,26 @@ export interface RefGarantia {
   entidad?: string;
 }
 
-type Tab = "datos" | "juridico" | "registral" | "avances";
+type Tab = "datos" | "juridico" | "registral" | "documentos" | "avances";
 
 export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVolver: () => void }) {
   const [tab, setTab] = useState<Tab>("datos");
   const [vista, setVista] = useState<VistaPosicion>("elegir");
   const [permisos, setPermisos] = useState<string[]>([]);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  const [docs, setDocs] = useState<{ nombre: string; url: string }[]>([]);
 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
+  useEffect(() => {
+    const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
+    fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos,created_at&${filtro}&order=created_at.desc&limit=50`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((rows: any[]) => {
+        const todos: { nombre: string; url: string }[] = [];
+        for (const row of rows) for (const d of (row.documentos || [])) if (d?.url) todos.push({ nombre: d.nombre || "documento", url: d.url });
+        setDocs(todos);
+      }).catch(() => setDocs([]));
+  }, [garantia.id, garantia.expediente]);
   useEffect(() => {
     (async () => {
       try {
@@ -71,6 +82,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     { k: "datos", label: "Datos", icon: FileText },
     { k: "juridico", label: "Jurídico", icon: Scale },
     { k: "registral", label: "Registral (RPPC)", icon: Landmark },
+    { k: "documentos", label: `Documentos${docs.length ? " (" + docs.length + ")" : ""}`, icon: Paperclip },
     { k: "avances", label: "Avances", icon: Activity },
   ];
 
@@ -130,6 +142,24 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
         />
+      )}
+
+      {tab === "documentos" && (
+        <div className="rounded-xl border border-border p-5">
+          <p className="mb-3 text-sm font-semibold">Documentos que envió la Dirección para dictaminar</p>
+          {docs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aún no hay documentos para esta garantía. La Dirección los envía desde “Documentos → pre-dictamen”.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {docs.map((d, i) => (
+                <a key={i} href={d.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-muted/40">
+                  <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {tab === "avances" && <div className="rounded-xl border border-border p-5"><LineaVidaAreas caso={casoLV} /></div>}
