@@ -14,6 +14,7 @@
 // por número de expediente.
 // ============================================================
 import { useEffect, useState } from "react";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { useNavigate } from "@tanstack/react-router";
 import { sbSelect } from "@/lib/supabase";
 import { cargarModulosVisibles, puedeVerModulo } from "@/lib/permisos-modulos";
@@ -168,7 +169,7 @@ export function AntecedentesGarantia({ casoId, expediente }: { casoId?: string |
                     {fmt(it.fecha)}
                     {typeof it.firmas === "number" && it.firmas > 0 ? ` · ${it.firmas} firma${it.firmas === 1 ? "" : "s"}` : ""}
                     {it.meta ? ` · ${it.meta}` : ""}
-                    {it.url ? <> · <a href={it.url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] hover:underline">ver archivo</a></> : null}
+                    {it.url ? <> · <BotonVerDoc url={it.url} nombre={it.titulo} label="ver archivo" /></> : null}
                   </p>
                 </div>
                 {verOjito && (
