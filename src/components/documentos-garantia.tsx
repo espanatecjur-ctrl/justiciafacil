@@ -244,7 +244,6 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
             <div className="flex items-center justify-between gap-2 p-3 text-white" style={{ background: NAVY }}>
               <p className="flex min-w-0 items-center gap-2 text-sm font-semibold">{iconoArchivo(ver.mime, ver.nombre)} <span className="truncate">{ver.nombre || "Documento"}</span></p>
               <div className="flex shrink-0 items-center gap-3">
-                <a href={ver.link} target="_blank" rel="noreferrer" title="Abrir / descargar" className="grid h-8 w-8 place-items-center rounded-md hover:bg-white/10"><Download className="h-4 w-4" /></a>
                 <button onClick={() => setVer(null)} title="Cerrar" className="grid h-8 w-8 place-items-center rounded-md hover:bg-white/10"><X className="h-5 w-5" /></button>
               </div>
             </div>
