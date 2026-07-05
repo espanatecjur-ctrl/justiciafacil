@@ -23,6 +23,9 @@ import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 import { DictamenRegistral, type PrecargaRegistral } from "@/components/dictamen-registral";
 import { registrarEvento } from "@/lib/cronologia-urrj";
+import { BannerCorreo } from "@/components/banner-correo";
+import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
+import { Mail } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 
@@ -119,7 +122,7 @@ const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-
 
 export function RecorridoActor({
   casos, onVolver, precargar,
-  puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false,
+  puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
   onResultados, modoFicha = false,
 }: {
   casos: any[];
@@ -128,6 +131,8 @@ export function RecorridoActor({
   puedeFirmarElabora?: boolean;
   puedeValidar?: boolean;
   puedeAdmin?: boolean;
+  /** Solo la Directora (DGE/Super_Admin) ve/edita el precio piso. */
+  puedePrecioPiso?: boolean;
   /** Si se pasa, el recorrido avisa hacia afuera sus 4 resultados de motor
    *  cada vez que cambian (lo usa la ficha UCP). */
   onResultados?: (r: ResultadosActor) => void;
@@ -142,20 +147,12 @@ export function RecorridoActor({
   const [d, setD] = useState<Datos>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
-  const [correoPara, setCorreoPara] = useState("");
-  const [mostrarCorreo, setMostrarCorreo] = useState(false);
-  const [enviandoCorreo, setEnviandoCorreo] = useState(false);
-  const [correoMsg, setCorreoMsg] = useState<string | null>(null);
+  const [verBanner, setVerBanner] = useState(false);
+  const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
+  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
+  const [seed, setSeed] = useState(0);
+  const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
   const [verRegistral, setVerRegistral] = useState(false);
-
-  const notificarPositivo = () => {
-    setCorreoMsg(null);
-    const asunto = `Dictamen jurídico URRJ ${dictamen.txt} — Exp. ${d.expediente || "—"}`;
-    const cuerpo = `Aviso interno a asesores URRJ.\n\nResultado jurídico: ${dictamen.txt}\nExpediente: ${d.expediente || "—"}\nGarantía: ${d.ubicacion || "—"}\nDeudor: ${d.deudor || "—"}\nElabora: ${firmaElabora?.nombre || "—"}\nValida: ${firmaValida?.nombre || "—"}\n\nEl registral se elabora enseguida; puede quedar pendiente. Lo litigable lo define el jurídico.`;
-    window.location.href = `mailto:${correoPara}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "correo_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `Asunto: ${asunto}\n\n${cuerpo}` });
-    setCorreoMsg("Se abrió tu correo con el borrador listo. Elige los asesores y envía.");
-  };
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
 
@@ -255,7 +252,6 @@ export function RecorridoActor({
       await guardarPredictamen(payload, precargar);
       registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: `Decisión: ${decision}` });
       setGuardado(`Pre-dictamen guardado: ${decision}`);
-      if (!/no pasa/i.test(decision) && /pasa/i.test(decision)) setMostrarCorreo(true);
     } catch (e: any) {
       setGuardado("No se pudo guardar (¿corriste el SQL de predictamen?): " + e.message);
     } finally { setGuardando(false); }
@@ -283,6 +279,22 @@ export function RecorridoActor({
     }
   };
 
+  const asuntoBanner = destino === "contabilidad"
+    ? `Solicitud de precio — Dictamen URRJ ${dictamen.txt} · Exp. ${d.expediente || "—"}`
+    : `Garantía lista para Comercial — ${dictamen.txt} · Exp. ${d.expediente || "—"}`;
+  const mensajeBanner = [
+    destino === "contabilidad"
+      ? "Se solicita el precio para esta garantía ya dictaminada por URRJ."
+      : "Garantía dictaminada y con precio; queda lista para Comercial.",
+    "",
+    `Resultado jurídico: ${dictamen.txt}`,
+    `Expediente: ${d.expediente || "—"}`,
+    `Garantía: ${d.ubicacion || "—"}`,
+    `Deudor: ${d.deudor || "—"}`,
+    "",
+    resumenPrecio(precio),
+  ].join("\n");
+
   if (verRegistral) {
     const precReg: PrecargaRegistral = { acreditado: d.deudor || undefined, numeroCredito: d.expediente || undefined, direccion: d.ubicacion || undefined };
     return <DictamenRegistral precarga={precReg} casoId={d.caso_id || undefined} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} onVolver={() => setVerRegistral(false)} />;
@@ -290,6 +302,29 @@ export function RecorridoActor({
 
   return (
     <div className="space-y-5">
+      {verBanner && (
+        <BannerCorreo
+          key={`${destino}-${seed}`}
+          titulo="Enviar dictamen URRJ"
+          asuntoInicial={asuntoBanner}
+          mensajeInicial={mensajeBanner}
+          folio={d.expediente}
+          extra={
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => abrirDestino("contabilidad")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "contabilidad" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"}`}>1º Contabilidad · solicitar precio</button>
+                <button onClick={() => precio.precioPiso.trim() && abrirDestino("comercial")} disabled={!precio.precioPiso.trim()} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "comercial" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"} disabled:opacity-40`}>2º Comercial · con precio</button>
+                {!precio.precioPiso.trim() && <span className="self-center text-[11px] text-muted-foreground">Comercial se habilita al poner el precio piso.</span>}
+              </div>
+              <BloquePrecioURRJ valor={precio} onChange={setPrecio} puedePrecioPiso={puedePrecioPiso} />
+              <p className="text-[11px] text-muted-foreground">Al cambiar de destino o poner el precio, vuelve a tocar el botón del destino para actualizar el mensaje.</p>
+            </div>
+          }
+          onCerrar={() => setVerBanner(false)}
+          onEnviado={() => registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "correo_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `A ${destino} · Asunto: ${asuntoBanner}\n\n${mensajeBanner}`, detalle: `Enviado a ${destino}` })}
+        />
+      )}
+
       <div className="-mt-1 flex justify-start">
         <button onClick={onVolver} className="flex items-center gap-1 text-xs text-muted-foreground hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Cambiar posición (Actor)</button>
       </div>
@@ -570,20 +605,9 @@ export function RecorridoActor({
               </button>
             </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
-            {mostrarCorreo && (
-              <div className="space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-                <p className="text-sm font-semibold text-[color:var(--teal)]">Avisar el dictamen jurídico a los asesores (correo interno)</p>
-                <label className="block text-xs font-medium">Para (asesores — sepáralos con coma)
-                  <input className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} />
-                </label>
-                <p className="text-xs text-muted-foreground">Se abrirá tu correo con el borrador listo (asunto y mensaje prellenados). Tú eliges los asesores y envías.</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={notificarPositivo} disabled={enviandoCorreo} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">{enviandoCorreo ? "Abriendo…" : "Abrir correo"}</button>
-                  <button onClick={() => setMostrarCorreo(false)} className="text-xs font-medium text-muted-foreground underline">Ahora no</button>
-                  {correoMsg && <span className={`text-sm ${correoMsg.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{correoMsg}</span>}
-                </div>
-              </div>
-            )}
+            <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
+              <Mail className="h-4 w-4" /> Solicitar precio / enviar
+            </button>
             {guardado && !/no pasa/i.test(guardado) && (
               <button onClick={() => setVerRegistral(true)} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white" style={{ background: "#B26B00" }}>
                 <ArrowRight className="h-4 w-4" /> Continuar al registral
