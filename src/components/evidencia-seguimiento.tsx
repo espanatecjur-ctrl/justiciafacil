@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { getAuth } from "@/lib/auth";
 import {
@@ -237,9 +238,7 @@ export function EvidenciaSeguimiento({ casoId, expediente, abrirNueva }: { casoI
 
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {e.documento_url && (
-                  <a href={e.documento_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full bg-[color:var(--teal)]/10 px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--teal)] hover:underline">
-                    <Paperclip className="h-3 w-3" /> {e.nombre_documento || "Documento"}
-                  </a>
+                  <BotonVerDoc url={e.documento_url} nombre={e.nombre_documento || "Documento"} label={e.nombre_documento || "Documento"} icon={false} className="inline-flex items-center gap-1 rounded-full bg-[color:var(--teal)]/10 px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--teal)] hover:underline" />
                 )}
                 {!e.documento_url && e.nombre_documento && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-muted-foreground">
