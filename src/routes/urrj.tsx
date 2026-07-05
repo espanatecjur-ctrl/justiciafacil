@@ -1,9 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, ScrollText } from "lucide-react";
+import { Scale, ScrollText, MoreVertical } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SelectorGarantia } from "@/components/selector-garantia";
@@ -11,6 +11,7 @@ import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
 import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
+import { RegistroURRJ } from "@/components/registro-urrj";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -30,6 +31,7 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
+  const [menu, setMenu] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -85,6 +87,20 @@ function URRJ() {
             <h1 className="text-xl font-bold">{soloRegistro ? "URRJ · Registro" : "URRJ · Dictaminación"}</h1>
             <p className="text-sm text-white/70">{soloRegistro ? "Unidad de Resolución Jurídica · registro de pre-dictámenes" : "Unidad de Resolución Jurídica · dictaminación de garantías (jurídico y registral)"}</p>
           </div>
+          <div className="relative ml-auto">
+            <button onClick={() => setMenu((v) => !v)} title="Más acciones" className="rounded-md p-1.5 hover:bg-white/10">
+              <MoreVertical className="h-5 w-5" />
+            </button>
+            {menu && (
+              <div className="absolute right-0 top-10 z-30 w-56 rounded-md border border-border bg-white py-1 text-foreground shadow-lg">
+                {!soloRegistro ? (
+                  <Link to="/urrj" search={{ soloRegistro: true }} onClick={() => setMenu(false)} className="block px-3 py-2 text-sm hover:bg-muted">Registro (dictámenes hechos)</Link>
+                ) : (
+                  <Link to="/urrj" onClick={() => setMenu(false)} className="block px-3 py-2 text-sm hover:bg-muted">Ir a dictaminación</Link>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -134,7 +150,7 @@ function URRJ() {
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
           puedeAdmin={puedeAdmin}
-          pantallaElegir={soloRegistro ? <HistorialPredictamen onReDictaminar={reDictaminar} /> : undefined}
+          pantallaElegir={soloRegistro ? <RegistroURRJ onReDictaminar={reDictaminar} /> : undefined}
         />
       )}
     </div>
