@@ -1,16 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, ScrollText, MoreVertical } from "lucide-react";
+import { Scale, ScrollText } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SelectorGarantia } from "@/components/selector-garantia";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
 import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
-import { HistorialPredictamen } from "@/components/historial-predictamen";
 import { RegistroURRJ } from "@/components/registro-urrj";
 
 export const Route = createFileRoute("/urrj")({
@@ -31,7 +30,6 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
-  const [menu, setMenu] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -78,33 +76,9 @@ function URRJ() {
       .then((r) => (r.ok ? r.json() : [])).then(setCasos).catch(() => {});
   }, []);
 
-  return (
+  const dictaminacion = (
     <div className="space-y-5">
-      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, #0C5C46)` }}>
-        <div className="flex items-center gap-2">
-          <Scale className="h-6 w-6" style={{ color: "#C2A24C" }} />
-          <div>
-            <h1 className="text-xl font-bold">{soloRegistro ? "URRJ · Registro" : "URRJ · Dictaminación"}</h1>
-            <p className="text-sm text-white/70">{soloRegistro ? "Unidad de Resolución Jurídica · registro de pre-dictámenes" : "Unidad de Resolución Jurídica · dictaminación de garantías (jurídico y registral)"}</p>
-          </div>
-          <div className="relative ml-auto">
-            <button onClick={() => setMenu((v) => !v)} title="Más acciones" className="rounded-md p-1.5 hover:bg-white/10">
-              <MoreVertical className="h-5 w-5" />
-            </button>
-            {menu && (
-              <div className="absolute right-0 top-10 z-30 w-56 rounded-md border border-border bg-white py-1 text-foreground shadow-lg">
-                {!soloRegistro ? (
-                  <Link to="/urrj" search={{ soloRegistro: true }} onClick={() => setMenu(false)} className="block px-3 py-2 text-sm hover:bg-muted">Registro (dictámenes hechos)</Link>
-                ) : (
-                  <Link to="/urrj" onClick={() => setMenu(false)} className="block px-3 py-2 text-sm hover:bg-muted">Ir a dictaminación</Link>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!soloRegistro && vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
+      {vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
         <DictamenRegistral
           precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.expediente || "", direccion: "" }}
           casoId={solicitudActiva.caso_id || ""}
@@ -112,12 +86,12 @@ function URRJ() {
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
         />
-      ) : !soloRegistro && vista === "elegir" ? (
+      ) : vista === "elegir" ? (
         <>
           {solicitudActiva && (
             <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-4">
               <p className="text-sm font-semibold text-[color:var(--teal)]">
-                Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "—"}
+                Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "\u2014"}
                 {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
@@ -139,7 +113,7 @@ function URRJ() {
         </>
       ) : null}
 
-      {!(vista === "elegir" && !soloRegistro && solicitudActiva?.tipo_dictamen === "Registral") && (
+      {!(vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral") && (
         <DictaminadorPosicion
           casos={casos}
           vista={vista}
@@ -150,9 +124,24 @@ function URRJ() {
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
           puedeAdmin={puedeAdmin}
-          pantallaElegir={soloRegistro ? <RegistroURRJ onReDictaminar={reDictaminar} /> : undefined}
         />
       )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, #0C5C46)` }}>
+        <div className="flex items-center gap-2">
+          <Scale className="h-6 w-6" style={{ color: "#C2A24C" }} />
+          <div>
+            <h1 className="text-xl font-bold">URRJ · Dictaminación</h1>
+            <p className="text-sm text-white/70">Unidad de Resolución Jurídica · dictaminación y registro de garantías</p>
+          </div>
+        </div>
+      </div>
+
+      <RegistroURRJ onReDictaminar={reDictaminar} dictaminar={dictaminacion} />
     </div>
   );
 }
