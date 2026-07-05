@@ -9,7 +9,9 @@
 // ============================================================
 import { useState } from "react";
 import { registrarEvento } from "@/lib/cronologia-urrj";
-import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer } from "lucide-react";
+import { BannerCorreo } from "@/components/banner-correo";
+import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
+import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { reflejarDictamen } from "@/lib/recorrido";
@@ -63,13 +65,14 @@ const VACIO = {
 };
 
 export function DictamenRegistral({
-  precarga, onVolver, casoId, puedeFirmarElabora = true, puedeValidar = true,
+  precarga, onVolver, casoId, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false,
 }: {
   precarga?: PrecargaRegistral;
   onVolver: () => void;
   casoId?: string;
   puedeFirmarElabora?: boolean;
   puedeValidar?: boolean;
+  puedePrecioPiso?: boolean;
 }) {
   const [d, setD] = useState({
     ...VACIO,
@@ -85,17 +88,25 @@ export function DictamenRegistral({
 
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
-  const [correoPara, setCorreoPara] = useState("");
-  const [correoMsg, setCorreoMsg] = useState<string | null>(null);
+  const [verBanner, setVerBanner] = useState(false);
+  const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
+  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
+  const [seed, setSeed] = useState(0);
+  const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
 
-  const avisarRegistral = () => {
-    setCorreoMsg(null);
-    const asunto = `Dictamen registral URRJ ${d.resultado || "—"} — Exp. ${d.numeroCredito || "—"}`;
-    const cuerpo = `Aviso interno a asesores URRJ (registral).\n\nResultado registral: ${d.resultado || "—"}\nExpediente / crédito: ${d.numeroCredito || "—"}\nAcreditado: ${d.acreditado || "—"}\nGravamen adicional: ${hayAdicional ? "Sí" : "No"}\nElabora: ${firmaElabora?.nombre || "—"}\nValida: ${firmaValida?.nombre || "—"}\n\nLo litigable lo define el jurídico; el registral no bloquea. Si quedó pendiente, se elabora después.`;
-    window.location.href = `mailto:${correoPara}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `Asunto: ${asunto}\n\n${cuerpo}` });
-    setCorreoMsg("Se abrió tu correo con el borrador listo. Elige los asesores y envía.");
-  };
+  const asuntoBanner = destino === "contabilidad"
+    ? `Solicitud de precio — Registral URRJ ${d.resultado || "—"} · Exp. ${d.numeroCredito || "—"}`
+    : `Garantía lista para Comercial (registral) — ${d.resultado || "—"} · Exp. ${d.numeroCredito || "—"}`;
+  const mensajeBanner = [
+    destino === "contabilidad" ? "Se solicita el precio para esta garantía (registral)." : "Garantía con dictamen registral y precio; lista para Comercial.",
+    "",
+    `Resultado registral: ${d.resultado || "—"}`,
+    `Expediente / crédito: ${d.numeroCredito || "—"}`,
+    `Acreditado: ${d.acreditado || "—"}`,
+    `Gravamen adicional: ${hayAdicional ? "Sí" : "No"}`,
+    "",
+    resumenPrecio(precio),
+  ].join("\n");
 
   const guardar = async () => {
     if (!d.resultado) { setGuardado("Falta elegir el RESULTADO (POSITIVO/NEGATIVO)."); return; }
@@ -239,17 +250,32 @@ export function DictamenRegistral({
       </div>
 
       {guardado?.includes("✓") && (
-        <div className="no-print space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-          <p className="text-sm font-semibold text-[color:var(--teal)]">Avisar el resultado registral a los asesores (correo interno)</p>
-          <label className="block text-xs font-medium">Para (asesores — sepáralos con coma)
-            <input className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} />
-          </label>
-          <p className="text-xs text-muted-foreground">Se abrirá tu correo con el borrador listo (asunto y mensaje prellenados). Tú eliges los asesores y envías.</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={avisarRegistral} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background">Abrir correo</button>
-            {correoMsg && <span className="text-sm text-emerald-700">{correoMsg}</span>}
-          </div>
-        </div>
+        <button onClick={() => abrirDestino("contabilidad")} className="no-print inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
+          <Mail className="h-4 w-4" /> Solicitar precio / enviar
+        </button>
+      )}
+
+      {verBanner && (
+        <BannerCorreo
+          key={`${destino}-${seed}`}
+          titulo="Enviar dictamen registral URRJ"
+          asuntoInicial={asuntoBanner}
+          mensajeInicial={mensajeBanner}
+          folio={d.numeroCredito}
+          extra={
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => abrirDestino("contabilidad")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "contabilidad" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"}`}>1º Contabilidad · solicitar precio</button>
+                <button onClick={() => precio.precioPiso.trim() && abrirDestino("comercial")} disabled={!precio.precioPiso.trim()} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "comercial" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"} disabled:opacity-40`}>2º Comercial · con precio</button>
+                {!precio.precioPiso.trim() && <span className="self-center text-[11px] text-muted-foreground">Comercial se habilita al poner el precio piso.</span>}
+              </div>
+              <BloquePrecioURRJ valor={precio} onChange={setPrecio} puedePrecioPiso={puedePrecioPiso} />
+              <p className="text-[11px] text-muted-foreground">Al cambiar de destino o poner el precio, vuelve a tocar el botón del destino para actualizar el mensaje.</p>
+            </div>
+          }
+          onCerrar={() => setVerBanner(false)}
+          onEnviado={() => registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `A ${destino} · Asunto: ${asuntoBanner}\n\n${mensajeBanner}`, detalle: `Enviado a ${destino}` })}
+        />
       )}
     </div>
   );
