@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
+import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
 import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
@@ -308,6 +309,11 @@ function FichaExpedientePage() {
 
       {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
       <DocumentosGarantia area={areaFicha} caso={c} />
+
+      {/* Cronología URRJ: dictámenes firmados y correos preparados */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <CronologiaURRJ casoId={c.id} expediente={c.expediente} />
+      </div>
 
       {/* ANTECEDENTES (solo lectura): pre-dictámenes, dictámenes, firmas, actuaciones y evidencias */}
       <AntecedentesGarantia casoId={c.id} expediente={c.expediente} />
