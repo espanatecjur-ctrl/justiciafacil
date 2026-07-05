@@ -22,6 +22,7 @@ import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
 import { DictamenRegistral, type PrecargaRegistral } from "@/components/dictamen-registral";
+import { registrarEvento } from "@/lib/cronologia-urrj";
 
 const NAVY = "#0B1E3A";
 
@@ -152,6 +153,7 @@ export function RecorridoActor({
     const asunto = `Dictamen jurídico URRJ ${dictamen.txt} — Exp. ${d.expediente || "—"}`;
     const cuerpo = `Aviso interno a asesores URRJ.\n\nResultado jurídico: ${dictamen.txt}\nExpediente: ${d.expediente || "—"}\nGarantía: ${d.ubicacion || "—"}\nDeudor: ${d.deudor || "—"}\nElabora: ${firmaElabora?.nombre || "—"}\nValida: ${firmaValida?.nombre || "—"}\n\nEl registral se elabora enseguida; puede quedar pendiente. Lo litigable lo define el jurídico.`;
     window.location.href = `mailto:${correoPara}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "correo_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `Asunto: ${asunto}\n\n${cuerpo}` });
     setCorreoMsg("Se abrió tu correo con el borrador listo. Elige los asesores y envía.");
   };
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
@@ -251,6 +253,7 @@ export function RecorridoActor({
     };
     try {
       await guardarPredictamen(payload, precargar);
+      registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: `Decisión: ${decision}` });
       setGuardado(`Pre-dictamen guardado: ${decision}`);
       if (!/no pasa/i.test(decision) && /pasa/i.test(decision)) setMostrarCorreo(true);
     } catch (e: any) {
