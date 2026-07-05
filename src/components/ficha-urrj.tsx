@@ -5,6 +5,7 @@
 //  Reusa los motores existentes (DictaminadorPosicion + DictamenRegistral + LineaVidaAreas).
 // ============================================================
 import { useEffect, useState } from "react";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
@@ -278,10 +279,10 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             ) : (
               <div className="divide-y divide-border">
                 {docs.map((d, i) => (
-                  <a key={i} href={d.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-muted/40">
+                  <div key={i} className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-muted/40">
                     <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
-                    <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </a>
+                    <BotonVerDoc url={d.url} nombre={d.nombre} label="ver" />
+                  </div>
                 ))}
               </div>
             )}
