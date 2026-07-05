@@ -140,18 +140,17 @@ export function RecorridoActor({
   const [d, setD] = useState<Datos>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
-  const [correoPara, setCorreoPara] = useState("contabilidadgeneral@diipadesarrollos.com");
+  const [correoPara, setCorreoPara] = useState("");
   const [mostrarCorreo, setMostrarCorreo] = useState(false);
   const [enviandoCorreo, setEnviandoCorreo] = useState(false);
   const [correoMsg, setCorreoMsg] = useState<string | null>(null);
 
-  const notificarPositivo = async () => {
-    setEnviandoCorreo(true); setCorreoMsg(null);
-    const asunto = `Dictamen URRJ POSITIVO — Exp. ${d.expediente || "—"}`;
-    const mensaje = `El dictamen jurídico de URRJ resultó POSITIVO.\n\nExpediente: ${d.expediente || "—"}\nGarantía: ${d.ubicacion || "—"}\nDeudor: ${d.deudor || "—"}\n\nQueda lista para continuar el proceso (precios / UCP).`;
-    const r = await enviarCorreo({ para: correoPara, asunto, mensaje, folio: d.expediente || undefined });
-    setEnviandoCorreo(false);
-    setCorreoMsg(r.ok ? "Correo enviado ✓" : "No se pudo enviar: " + (r.error || ""));
+  const notificarPositivo = () => {
+    setCorreoMsg(null);
+    const asunto = `Dictamen jurídico URRJ ${dictamen.txt} — Exp. ${d.expediente || "—"}`;
+    const cuerpo = `Aviso interno a asesores URRJ.\n\nResultado jurídico: ${dictamen.txt}\nExpediente: ${d.expediente || "—"}\nGarantía: ${d.ubicacion || "—"}\nDeudor: ${d.deudor || "—"}\nElabora: ${firmaElabora?.nombre || "—"}\nValida: ${firmaValida?.nombre || "—"}\n\nEl registral se elabora enseguida; puede quedar pendiente. Lo litigable lo define el jurídico.`;
+    window.location.href = `mailto:${correoPara}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    setCorreoMsg("Se abrió tu correo con el borrador listo. Elige los asesores y envía.");
   };
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
@@ -563,13 +562,13 @@ export function RecorridoActor({
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
             {mostrarCorreo && (
               <div className="space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-                <p className="text-sm font-semibold text-[color:var(--teal)]">Notificar dictamen positivo por correo</p>
-                <label className="block text-xs font-medium">Para
+                <p className="text-sm font-semibold text-[color:var(--teal)]">Avisar el dictamen jurídico a los asesores (correo interno)</p>
+                <label className="block text-xs font-medium">Para (asesores — sepáralos con coma)
                   <input className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} />
                 </label>
-                <p className="text-xs text-muted-foreground">Asunto: Dictamen URRJ POSITIVO — Exp. {d.expediente || "—"}. Revisa y envía (como los correos de contratos).</p>
+                <p className="text-xs text-muted-foreground">Se abrirá tu correo con el borrador listo (asunto y mensaje prellenados). Tú eliges los asesores y envías.</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={notificarPositivo} disabled={enviandoCorreo} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">{enviandoCorreo ? "Enviando…" : "Enviar correo"}</button>
+                  <button onClick={notificarPositivo} disabled={enviandoCorreo} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">{enviandoCorreo ? "Abriendo…" : "Abrir correo"}</button>
                   <button onClick={() => setMostrarCorreo(false)} className="text-xs font-medium text-muted-foreground underline">Ahora no</button>
                   {correoMsg && <span className={`text-sm ${correoMsg.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{correoMsg}</span>}
                 </div>
