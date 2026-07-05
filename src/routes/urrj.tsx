@@ -58,7 +58,7 @@ function URRJ() {
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
   const navigate = useNavigate();
   const verFichaVieja = (f: any) => {
-    if (f.caso_id) navigate({ to: "/expediente", search: { id: f.caso_id } as any });
+    if (f.caso_id) navigate({ to: "/expediente", search: { id: f.caso_id, origen: "urrj" } as any });
     else alert("Este pre-dictamen aún no está vinculado a una garantía. Vincúlalo primero (cliente ↔ garantía).");
   };
   const reDictaminarRegistral = (f: any) => {
