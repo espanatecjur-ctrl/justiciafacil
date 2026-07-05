@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2, UserCheck } from "lucide-react";
+import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2, UserCheck, Scale, Landmark } from "lucide-react";
 import type { Semaforo } from "@/lib/urrj-motores";
 import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
@@ -32,7 +32,7 @@ function semColor(s: Semaforo) {
   return s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
 }
 
-export function HistorialPredictamen({ onReDictaminar, onVerFicha }: { onReDictaminar?: (f: Fila) => void; onVerFicha?: (f: Fila) => void }) {
+export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, onVerFichaVieja }: { onReDictaminar?: (f: Fila) => void; onReDictaminarRegistral?: (f: Fila) => void; onVerFichaVieja?: (f: Fila) => void }) {
   const [filas, setFilas] = useState<Fila[]>([]);
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
@@ -153,12 +153,13 @@ export function HistorialPredictamen({ onReDictaminar, onVerFicha }: { onReDicta
         if (!f) return null;
         return (
           <div data-menu-predictamen onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
-            <Item icon={FolderOpen} onClick={() => { setMenu(null); onVerFicha ? onVerFicha(f) : abrirFicha(f); }}>Ver ficha</Item>
+            <Item icon={FolderOpen} onClick={() => { setMenu(null); onVerFichaVieja ? onVerFichaVieja(f) : abrirFicha(f); }}>Ver ficha</Item>
             <Item icon={FileText} onClick={() => { setMenu(null); setVerPre(f); }}>Ver pre-dictamen</Item>
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
             <Item icon={Search} onClick={() => { setMenu(null); setEscogerJuicio(f); }}>Escoger juicio del boletín</Item>
-            {!f.terminado && can("reelaborar") && <Item icon={RefreshCw} onClick={() => { setMenu(null); if (confirm("¿Crear una versión nueva? La actual quedará como antecedente.")) onReDictaminar?.(f); }}>Ir al proceso de pre-dictaminación</Item>}
+            {!f.terminado && can("reelaborar") && <Item icon={Scale} onClick={() => { setMenu(null); if (confirm("¿Ir al proceso a re-pre-dictaminar el JURÍDICO? Se creará una versión nueva; la actual quedará como antecedente.")) onReDictaminar?.(f); }}>Ir a re-pre-dictaminar jurídico</Item>}
+            {!f.terminado && can("reelaborar") && onReDictaminarRegistral && <Item icon={Landmark} onClick={() => { setMenu(null); onReDictaminarRegistral(f); }}>Ir a re-pre-dictaminar registral</Item>}
             {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
               setMenu(null);
               if (!confirm("¿Dar por TERMINADO este pre-dictamen? Es definitivo: ya no se podrá re-pre-dictaminar.")) return;
