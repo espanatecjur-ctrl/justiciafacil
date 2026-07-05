@@ -154,6 +154,7 @@ export function RecorridoActor({
   const [seed, setSeed] = useState(0);
   const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
   const [verRegistral, setVerRegistral] = useState(false);
+  const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
 
@@ -274,6 +275,17 @@ export function RecorridoActor({
         admin: puedeAdmin && (n(d.valorComercial) || n(d.precioCesion)) ? { valorComercial: n(d.valorComercial), costos: cargas + n(d.costosOperativos), precioCesion: n(d.precioCesion), viab: rViab } : null,
         anotaciones: d.anotacionesHumanas,
         firmaElabora, firmaValida, decision,
+        datos: {
+          hipotecaInscrita: d.hipotecaInscrita, prelacion: d.prelacion, propietario: d.propietario, anotaciones: d.anotaciones,
+          etapa: d.etapa, sentenciaFirme: d.sentenciaFirme, situacion: d.situacion, ultimaActuacion: d.ultimaActuacion,
+          ultimoPago: d.ultimoPago, tipoAccion: d.tipoAccion, emplazado: d.emplazado, fechaEmplazamiento: d.fechaEmplazamiento,
+          convenioRatificado: d.convenioRatificado, convenioFecha: d.convenioFecha,
+          interpelacionJV: d.interpelacionJV, interpelacionJVFecha: d.interpelacionJVFecha, interpelacionTipo: d.interpelacionTipo, interpelacionExpediente: d.interpelacionExpediente,
+          quienPosee: d.quienPosee, inicioPosesion: d.inicioPosesion, buenaFe: d.buenaFe, demandaDespojo: d.demandaDespojo,
+          predial: d.predial, agua: d.agua, condominio: d.condominio, fiscales: d.fiscales, laborales: d.laborales, otrosGravamenes: d.otrosGravamenes,
+          margenObjetivo: d.margenObjetivo,
+        },
+        boletines: hallazgos,
       });
     } catch (e: any) {
       setGuardado("No se pudo generar el PDF: " + e.message);
@@ -433,12 +445,15 @@ export function RecorridoActor({
                       expedienteInicial={d.expediente}
                       estadoInicial={estadoRobot}
                       resaltarAmparo
-                      onHallazgoAmparo={(nota) => setD((p) => {
+                      onHallazgoAmparo={(nota) => {
                         const marca = nota.split("\n")[0];
-                        if (p.anotacionesHumanas.includes(marca)) return p; // no duplicar el mismo expediente
-                        const sep = p.anotacionesHumanas.trim() ? "\n\n" : "";
-                        return { ...p, anotacionesHumanas: p.anotacionesHumanas + sep + nota };
-                      })}
+                        setHallazgos((prev) => prev.some((x) => x.includes(marca)) ? prev : [...prev, nota]);
+                        setD((p) => {
+                          if (p.anotacionesHumanas.includes(marca)) return p; // no duplicar el mismo expediente
+                          const sep = p.anotacionesHumanas.trim() ? "\n\n" : "";
+                          return { ...p, anotacionesHumanas: p.anotacionesHumanas + sep + nota };
+                        });
+                      }}
                     />
                   </div>
                 )}
