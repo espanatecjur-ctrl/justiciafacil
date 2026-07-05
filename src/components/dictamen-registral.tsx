@@ -8,6 +8,7 @@
 //  línea de vida (bolita registral de URRJ).
 // ============================================================
 import { useState } from "react";
+import { registrarEvento } from "@/lib/cronologia-urrj";
 import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
@@ -92,6 +93,7 @@ export function DictamenRegistral({
     const asunto = `Dictamen registral URRJ ${d.resultado || "—"} — Exp. ${d.numeroCredito || "—"}`;
     const cuerpo = `Aviso interno a asesores URRJ (registral).\n\nResultado registral: ${d.resultado || "—"}\nExpediente / crédito: ${d.numeroCredito || "—"}\nAcreditado: ${d.acreditado || "—"}\nGravamen adicional: ${hayAdicional ? "Sí" : "No"}\nElabora: ${firmaElabora?.nombre || "—"}\nValida: ${firmaValida?.nombre || "—"}\n\nLo litigable lo define el jurídico; el registral no bloquea. Si quedó pendiente, se elabora después.`;
     window.location.href = `mailto:${correoPara}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `Asunto: ${asunto}\n\n${cuerpo}` });
     setCorreoMsg("Se abrió tu correo con el borrador listo. Elige los asesores y envía.");
   };
 
@@ -114,6 +116,7 @@ export function DictamenRegistral({
       });
       if (res.ok) {
         setGuardado("Dictamen registral guardado ✓");
+        registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "dictamen_registral", resultado: d.resultado, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: hayAdicional ? "Con gravamen adicional" : "Sin gravamen adicional" });
         if (casoId) {
           try {
             await reflejarDictamen({ id: casoId, expediente: d.numeroCredito } as any, "URRJ", "registral", d.resultado === "POSITIVO" ? "positivo" : "negativo", firmaValida?.nombre || firmaElabora?.nombre || null);
