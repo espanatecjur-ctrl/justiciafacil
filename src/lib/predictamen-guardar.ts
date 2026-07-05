@@ -44,7 +44,7 @@ export async function guardarPredictamen(payload: any, precargar?: Precarga | nu
     const campos = diffDatos(precargar.datos, payload.datos);
     cambiosTxt = JSON.stringify({ campos, nota: precargar.cambios || "" });
   }
-  const body = { ...payload, version, vigente: true, antecedente_de: null, cambios: cambiosTxt };
+  const body = { ...payload, version, vigente: true, antecedente_de: null, cambios: cambiosTxt, pasa_a_ucp: /pasa a ucp/i.test(String(payload.dictamen_final || "")) };
   const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
     method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
   });
