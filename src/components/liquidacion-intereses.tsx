@@ -6,6 +6,7 @@
 //    y moratorio por mensualidad vencida (como el estado de cuenta certificado).
 // ============================================================================
 import { useEffect, useMemo, useState } from "react";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { ChevronDown, Save, Loader2, FileText, Archive, Trash2, Eye, X, RotateCcw, Sheet, FileDown } from "lucide-react";
 import { crearEstadoCuenta, listarEstadosCuenta, actualizarEstadoCuenta, subirArchivoEC, type EstadoCuenta } from "@/lib/estado-cuenta";
 import { usuarioActualEtiqueta } from "@/lib/auth";
@@ -747,8 +748,8 @@ function FichaEstado({ e, onCerrar }: { e: EstadoCuenta; onCerrar: () => void })
           <p><b>Deuda total:</b> {fmtN(e.deuda_total)}</p>
           <p><b>Fecha de corte:</b> {e.fecha_corte || "—"}</p>
           {e.perito_nombre && <p><b>Firma (perito):</b> {e.perito_nombre}</p>}
-          {e.perito_cedula_url && <p><b>Cédula:</b> <a href={e.perito_cedula_url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] underline">ver archivo</a></p>}
-          {e.perito_doc_url && <p><b>Documento:</b> <a href={e.perito_doc_url} target="_blank" rel="noreferrer" className="text-[color:var(--teal)] underline">ver archivo</a></p>}
+          {e.perito_cedula_url && <p><b>Cédula:</b> <BotonVerDoc url={e.perito_cedula_url} nombre="Cédula del perito" label="ver archivo" /></p>}
+          {e.perito_doc_url && <p><b>Documento:</b> <BotonVerDoc url={e.perito_doc_url} nombre="Documento del perito" label="ver archivo" /></p>}
           <p className="text-xs text-muted-foreground">Guardado {e.created_at ? new Date(e.created_at).toLocaleString("es-MX") : ""}{e.creado_por ? ` · por ${e.creado_por}` : ""}</p>
         </div>
       </div>
