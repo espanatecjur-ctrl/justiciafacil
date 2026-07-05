@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
-import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, ChevronRight } from "lucide-react";
+import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -139,17 +139,24 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
           <div className="overflow-hidden rounded-xl border border-border">
             <div className="divide-y divide-border">
               {garantias.map((g) => (
-                <button key={g.clave} onClick={() => setFicha(g)} className="flex w-full items-center justify-between gap-3 p-3 text-left hover:bg-muted/40">
-                  <div className="min-w-0">
+                <div key={g.clave} className="flex items-center justify-between gap-3 p-3 hover:bg-muted/30">
+                  <button onClick={() => setFicha(g)} className="min-w-0 flex-1 text-left">
                     <p className="truncate text-sm font-semibold">{g.expediente || "Sin expediente"}</p>
                     <p className="truncate text-xs text-muted-foreground">{g.direccion_garantia || g.cliente_nombre || "—"}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-2">
                     <span className="shrink-0 rounded-full bg-[color:var(--teal)]/10 px-2 py-0.5 text-[10px] font-medium text-[color:var(--teal)]">{g.nJur} jur · {g.nReg} reg</span>
                     {g.ultimoResultado && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${colorRes(g.ultimoResultado)}`}>{g.ultimoResultado}</span>}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="relative">
+                      <button onClick={() => setMenu(menu === g.clave ? null : g.clave)} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
+                      {menu === g.clave && (
+                        <div className="absolute right-0 top-8 z-20 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+                          <button onClick={() => { setMenu(null); setFicha(g); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha 360</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
