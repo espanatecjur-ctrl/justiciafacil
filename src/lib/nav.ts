@@ -28,7 +28,6 @@ export const navItems: NavItem[] = [
   { label: "Recursos", to: "/recursos", icon: GitBranch, group: "Procesal" },
   { label: "JUFA", sub: "Simulador de dictamen", to: "/jufa", icon: Bot, group: "Inteligencia" },
   { label: "URRJ", sub: "Unidad de Resolución Jurídica", to: "/urrj", icon: Scale, group: "Inteligencia" },
-  { label: "URRJ · Registro", sub: "Historial de pre-dictámenes", to: "/urrj", search: { soloRegistro: true }, icon: Scale, group: "Inteligencia" },
   { label: "UCP", sub: "Unidad de Consolidación Patrimonial", to: "/ucp", icon: Building2, group: "Inteligencia" },
   { label: "Liquidación de Intereses", sub: "Calculadora e incidente", to: "/liquidacion", icon: Calculator, group: "Inteligencia" },
   { label: "Contratos", to: "/contratos", icon: FileSignature, group: "Documentos" },
