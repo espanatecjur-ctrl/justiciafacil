@@ -8,7 +8,7 @@
 //   <BotonVerDoc url={doc.url} nombre={doc.nombre} label="ver archivo" />
 // ============================================================
 import { useState } from "react";
-import { Eye, X, ExternalLink, Download } from "lucide-react";
+import { Eye, X } from "lucide-react";
 
 /** Convierte un enlace a su forma embebible (vista previa). */
 export function urlVistaPrevia(url: string, driveId?: string | null): string {
@@ -32,10 +32,7 @@ export function VisorDocumentoModal({ url, driveId, nombre, onCerrar }: { url: s
       <div className="my-4 flex h-[88vh] w-[94vw] max-w-4xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <p className="truncate text-sm font-semibold" style={{ color: "#0B1E3A" }}>{nombre || "Documento"}</p>
-          <div className="flex items-center gap-3">
-            <a href={url} target="_blank" rel="noreferrer" title="Abrir en pestaña / descargar" className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--teal)] hover:underline"><Download className="h-3.5 w-3.5" /> Abrir</a>
-            <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-          </div>
+          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
         </div>
         {src ? (
           <iframe src={src} title={nombre || "Documento"} className="min-h-0 flex-1 rounded-b-xl border-0 bg-muted" />
