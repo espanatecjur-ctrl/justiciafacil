@@ -54,4 +54,20 @@ export interface CasoJuridico {
   nombre_juzgado?: string | null;
   actor?: string | null;
   demandado?: string | null;
+  // Campos opcionales de registros de amparo / recurso / notaría (usados en la ficha)
+  tipo_registro?: string | null;
+  quejoso?: string | null;
+  acto_reclamado?: string | null;
+  tipo_amparo?: string | null;
+  autoridad_responsable?: string | null;
+  promovente?: string | null;
+  tipo_recurso?: string | null;
+  fecha_interposicion?: string | null;
+  resolucion?: string | null;
+  diligencia?: string | null;
+  folio?: string | null;
+  expediente_origen?: string | null;
+  juzgado_origen?: string | null;
+  fecha_vence?: string | null;
+  archivado?: boolean | null;
 }
