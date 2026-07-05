@@ -297,7 +297,7 @@ export function RecorridoActor({
 
   if (verRegistral) {
     const precReg: PrecargaRegistral = { acreditado: d.deudor || undefined, numeroCredito: d.expediente || undefined, direccion: d.ubicacion || undefined };
-    return <DictamenRegistral precarga={precReg} casoId={d.caso_id || undefined} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} onVolver={() => setVerRegistral(false)} />;
+    return <DictamenRegistral precarga={precReg} casoId={d.caso_id || undefined} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} onVolver={() => setVerRegistral(false)} />;
   }
 
   return (
