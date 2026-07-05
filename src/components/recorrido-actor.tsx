@@ -8,7 +8,8 @@
 //   y maneja su propio estado, motores, guardado y PDF.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
-import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import { Link } from "@tanstack/react-router";
+import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
@@ -154,6 +155,7 @@ export function RecorridoActor({
   const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
   const [verRegistral, setVerRegistral] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [yaExiste, setYaExiste] = useState<PredictamenExistente | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
@@ -241,6 +243,12 @@ export function RecorridoActor({
 
   const guardar = async (decision: string) => {
     setGuardando(true);
+    // Deduplicación: si es un pre-dictamen NUEVO (no un re-dictaminar) y ya existe
+    // uno vigente para este expediente o caso, no se duplica: se avisa.
+    if (!precargar) {
+      const ex = await buscarPredictamenVigente(d.expediente, d.caso_id);
+      if (ex) { setYaExiste(ex); setGuardando(false); return; }
+    }
     const payload = {
       caso_id: d.caso_id || null, expediente: d.expediente || null, juzgado: d.juzgado || null, estado: d.estado,
       tipo_juicio: d.tipoJuicio, posicion: d.posicion,
@@ -275,6 +283,7 @@ export function RecorridoActor({
         admin: puedeAdmin && (n(d.valorComercial) || n(d.precioCesion)) ? { valorComercial: n(d.valorComercial), costos: cargas + n(d.costosOperativos), precioCesion: n(d.precioCesion), viab: rViab } : null,
         anotaciones: d.anotacionesHumanas,
         firmaElabora, firmaValida, decision,
+        cambios: precargar ? { campos: diffDatos(precargar.datos || {}, d), nota: precargar.cambios } : null,
         datos: {
           hipotecaInscrita: d.hipotecaInscrita, prelacion: d.prelacion, propietario: d.propietario, anotaciones: d.anotaciones,
           etapa: d.etapa, sentenciaFirme: d.sentenciaFirme, situacion: d.situacion, ultimaActuacion: d.ultimaActuacion,
@@ -639,6 +648,19 @@ export function RecorridoActor({
               </button>
             </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+            {yaExiste && (
+              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Ya existe un pre-dictamen para este expediente{yaExiste.folio ? ` (folio ${yaExiste.folio})` : ""}.</p>
+                <p className="text-[13px]">No se crea otro para no duplicarlo. ¿Qué quieres hacer?</p>
+                <div className="flex flex-wrap gap-2">
+                  {(yaExiste.caso_id || d.caso_id) && (
+                    <Link to="/expediente" search={{ id: (yaExiste.caso_id || d.caso_id) as string, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
+                  )}
+                  <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
+                  <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Cancelar</button>
+                </div>
+              </div>
+            )}
             <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
               <Mail className="h-4 w-4" /> Solicitar precio / enviar
             </button>
