@@ -3,6 +3,7 @@ import { useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { Bot } from "lucide-react";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
+import { SelectorGarantia } from "@/components/selector-garantia";
 
 export const Route = createFileRoute("/jufa")({
   head: () => ({ meta: [{ title: "JUFA — Simulador de dictamen — JusticiaFácil" }] }),
@@ -27,6 +28,10 @@ function JUFA() {
           </div>
         </div>
       </div>
+
+      {vista === "elegir" && (
+        <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
+      )}
 
       <DictaminadorPosicion
         casos={[]}
