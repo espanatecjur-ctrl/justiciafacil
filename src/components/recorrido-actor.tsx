@@ -124,7 +124,7 @@ const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-
 export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
-  onResultados, modoFicha = false,
+  onResultados, modoFicha = false, hallazgosIniciales, expedienteInicial,
 }: {
   casos: any[];
   onVolver: () => void;
@@ -141,6 +141,8 @@ export function RecorridoActor({
    *  recorrido (el dictamen lo dan los 10 hitos de la ficha). Solo deja la
    *  captura de datos + Administración (para el hito 10 Viabilidad). */
   modoFicha?: boolean;
+  hallazgosIniciales?: string[];
+  expedienteInicial?: string;
 }) {
   const [paso, setPaso] = useState(0);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
@@ -162,6 +164,18 @@ export function RecorridoActor({
 
   // precarga (re-dictaminar desde el historial)
   useEffect(() => { if (precargar?.datos) setD((p) => ({ ...p, ...precargar.datos })); }, [precargar]);
+
+  // Robot al inicio: sembrar expediente + hallazgos (una sola vez).
+  useEffect(() => {
+    if (hallazgosIniciales && hallazgosIniciales.length) setHallazgos(hallazgosIniciales);
+    if ((hallazgosIniciales?.length || expedienteInicial)) {
+      setD((p) => {
+        const notas = (hallazgosIniciales || []).filter((h) => !p.anotacionesHumanas.includes(h.split("\n")[0]));
+        const sep = p.anotacionesHumanas.trim() && notas.length ? "\n\n" : "";
+        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
+      });
+    }
+  }, []);
 
   const set = (k: keyof Datos, v: string) => setD((p) => ({ ...p, [k]: v }));
 
