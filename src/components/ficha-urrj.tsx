@@ -1,15 +1,18 @@
 // ============================================================
-//  FichaURRJ · ficha 360 de una garantía en URRJ
-//  4 pestañas: Datos · Jurídico · Registral · Avances
+//  FichaURRJ · ficha 360 de una garantía — AQUÍ SE DICTAMINA
+//  Datos · Jurídico · Registral · Avances (reusa los motores)
 // ============================================================
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
-import { ArrowLeft, Scale, Landmark, FileText, Activity, Loader2 } from "lucide-react";
+import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
+import { DictamenRegistral } from "@/components/dictamen-registral";
+import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
+import { getAuth } from "@/lib/auth";
+import { type Precarga } from "@/lib/predictamen-guardar";
+import { ArrowLeft, Scale, Landmark, FileText, Activity } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
-const enc = (s: string) => encodeURIComponent(s);
-const fdate = (s?: string) => s ? new Date(s).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "";
 
 export interface RefGarantia {
   id?: string;
@@ -23,29 +26,38 @@ export interface RefGarantia {
 
 type Tab = "datos" | "juridico" | "registral" | "avances";
 
-function color(res: string) {
-  return /positivo|pasa/i.test(res) ? "bg-emerald-100 text-emerald-800"
-    : /negativo|no pasa/i.test(res) ? "bg-red-100 text-red-800"
-    : "bg-muted text-muted-foreground";
-}
-
 export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVolver: () => void }) {
   const [tab, setTab] = useState<Tab>("datos");
-  const [juridicos, setJuridicos] = useState<any[]>([]);
-  const [registrales, setRegistrales] = useState<any[]>([]);
-  const [cargando, setCargando] = useState(true);
+  const [vista, setVista] = useState<VistaPosicion>("elegir");
+  const [permisos, setPermisos] = useState<string[]>([]);
+  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
 
+  useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   useEffect(() => {
-    setCargando(true);
-    const filtroJur = garantia.id
-      ? `caso_id=eq.${garantia.id}`
-      : garantia.expediente ? `expediente=eq.${enc(garantia.expediente)}` : "id=eq.0";
-    const filtroReg = garantia.expediente ? `expediente=eq.${enc(garantia.expediente)}` : "id=eq.0";
-    Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,version,posicion,dictamen_sugerido,dictamen_final,firma_elabora,firma_valida,created_at&${filtroJur}&order=created_at.desc&limit=50`, { headers }).then((r) => r.ok ? r.json() : []),
-      fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=*&${filtroReg}&order=created_at.desc&limit=50`, { headers }).then((r) => r.ok ? r.json() : []),
-    ]).then(([j, r]) => { setJuridicos(j); setRegistrales(r); }).finally(() => setCargando(false));
-  }, [garantia.id, garantia.expediente]);
+    (async () => {
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        const correo = data.session?.user?.email;
+        if (!correo) return;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+        const j = r.ok ? await r.json() : [];
+        setRolUsuario(j?.[0]?.rol ?? null);
+      } catch { /* sin rol admin */ }
+    })();
+  }, []);
+  const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
+  const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
+
+  const precargaJuridico: Precarga = {
+    datos: {
+      caso_id: garantia.id || "",
+      expediente: garantia.expediente || "",
+      juzgado: garantia.juzgado || "",
+      deudor: garantia.deudor || garantia.cliente_nombre || "",
+      ubicacion: garantia.direccion_garantia || "",
+    },
+  };
 
   const casoLV: CasoJuridico = {
     id: garantia.id || "",
@@ -58,7 +70,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const TABS: { k: Tab; label: string; icon: any }[] = [
     { k: "datos", label: "Datos", icon: FileText },
     { k: "juridico", label: "Jurídico", icon: Scale },
-    { k: "registral", label: "Registral", icon: Landmark },
+    { k: "registral", label: "Registral (RPPC)", icon: Landmark },
     { k: "avances", label: "Avances", icon: Activity },
   ];
 
@@ -70,76 +82,57 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <button onClick={onVolver} className="inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Volver al registro</button>
-        <h2 className="font-display text-lg font-bold">Ficha · {garantia.expediente || garantia.direccion_garantia || "Garantía"}</h2>
+        <h2 className="text-lg font-bold">Ficha · {garantia.expediente || garantia.direccion_garantia || "Garantía"}</h2>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
-          <button key={t.k} onClick={() => setTab(t.k)}
+          <button key={t.k} onClick={() => { setTab(t.k); setVista("elegir"); }}
             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${tab === t.k ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-border text-muted-foreground hover:bg-muted"}`}>
             <t.icon className="h-3.5 w-3.5" /> {t.label}
           </button>
         ))}
       </div>
 
-      {cargando ? (
-        <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
-      ) : (
+      {tab === "datos" && (
         <div className="rounded-xl border border-border p-5">
-          {tab === "datos" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Dato label="Expediente" valor={garantia.expediente} />
-              <Dato label="Juzgado" valor={garantia.juzgado} />
-              <Dato label="Garantía / dirección" valor={garantia.direccion_garantia} />
-              <Dato label="Entidad" valor={garantia.entidad} />
-              <Dato label="Cliente" valor={garantia.cliente_nombre} />
-              <Dato label="Deudor" valor={garantia.deudor} />
-              <Dato label="Dictámenes jurídicos" valor={String(juridicos.length)} />
-              <Dato label="Dictámenes registrales" valor={String(registrales.length)} />
-            </div>
-          )}
-
-          {tab === "juridico" && (
-            juridicos.length === 0 ? <p className="text-sm text-muted-foreground">Esta garantía no tiene dictámenes jurídicos.</p> : (
-              <div className="divide-y divide-border">
-                {juridicos.map((j) => (
-                  <div key={j.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                    <div>
-                      <p className="text-sm font-semibold">{j.posicion || "—"} · v{j.version || 1} <span className="text-xs font-normal text-muted-foreground">{fdate(j.created_at)}</span></p>
-                      <p className="text-xs text-muted-foreground">
-                        Decisión: {j.dictamen_final || "—"}
-                        {(j.firma_elabora || j.firma_valida) ? ` · Firmas: ${[j.firma_elabora, j.firma_valida].filter(Boolean).join(" / ")}` : ""}
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${color(j.dictamen_sugerido || "")}`}>{j.dictamen_sugerido || "—"}</span>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-
-          {tab === "registral" && (
-            registrales.length === 0 ? <p className="text-sm text-muted-foreground">Esta garantía no tiene dictámenes registrales.</p> : (
-              <div className="divide-y divide-border">
-                {registrales.map((r) => (
-                  <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                    <div>
-                      <p className="text-sm font-semibold">{r.acreditado || "—"} <span className="text-xs font-normal text-muted-foreground">{fdate(r.created_at)}</span></p>
-                      <p className="text-xs text-muted-foreground">
-                        {r.hay_adicional ? "Con gravamen adicional · " : ""}
-                        {(r.firma_elabora?.nombre || r.firma_valida?.nombre) ? `Firmas: ${[r.firma_elabora?.nombre, r.firma_valida?.nombre].filter(Boolean).join(" / ")}` : "Sin firmas"}
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${color(r.resultado || "")}`}>{r.resultado || "—"}</span>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-
-          {tab === "avances" && <LineaVidaAreas caso={casoLV} />}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Dato label="Expediente" valor={garantia.expediente} />
+            <Dato label="Juzgado" valor={garantia.juzgado} />
+            <Dato label="Garantía / dirección" valor={garantia.direccion_garantia} />
+            <Dato label="Entidad" valor={garantia.entidad} />
+            <Dato label="Cliente" valor={garantia.cliente_nombre} />
+            <Dato label="Deudor" valor={garantia.deudor} />
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">Para dictaminar, entra a la pestaña <b>Jurídico</b> (recorrido con boletín y firmas) o <b>Registral (RPPC)</b>. Los avances se ven en <b>Avances</b>.</p>
         </div>
       )}
+
+      {tab === "juridico" && (
+        <DictaminadorPosicion
+          casos={[]}
+          vista={vista}
+          onVista={setVista}
+          precargar={precargaJuridico}
+          onVolver={() => setVista("elegir")}
+          puedeElaborar={puede("elaborar")}
+          puedeFirmarElabora={puede("firmar_elabora")}
+          puedeValidar={puede("validar")}
+          puedeAdmin={puedeAdmin}
+        />
+      )}
+
+      {tab === "registral" && (
+        <DictamenRegistral
+          precarga={{ acreditado: garantia.cliente_nombre || garantia.deudor || "", numeroCredito: garantia.expediente || "", direccion: garantia.direccion_garantia || "" }}
+          casoId={garantia.id || ""}
+          onVolver={() => setTab("datos")}
+          puedeFirmarElabora={puede("firmar_elabora")}
+          puedeValidar={puede("validar")}
+        />
+      )}
+
+      {tab === "avances" && <div className="rounded-xl border border-border p-5"><LineaVidaAreas caso={casoLV} /></div>}
     </div>
   );
 }
