@@ -29,6 +29,7 @@ interface Props {
   puedeFirmarElabora?: boolean;
   puedeValidar?: boolean;
   puedeAdmin?: boolean;
+  puedePrecioPiso?: boolean;
   titulo?: string;
   subtitulo?: string;
   /** Si se pasa, se reciben los resultados de motor del recorrido Actor
@@ -43,7 +44,7 @@ interface Props {
 
 export function DictaminadorPosicion({
   casos, vista, onVista, precargar, onVolver,
-  puedeElaborar = true, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false,
+  puedeElaborar = true, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
   titulo = "¿Cuál es la posición de DIIPA en este caso?",
   subtitulo = "Cada posición tiene su propio recorrido de pre-dictamen.",
   onResultados,
@@ -98,7 +99,7 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} onResultados={onResultados} modoFicha={modoFicha} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} />;
   if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} />;
   if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
