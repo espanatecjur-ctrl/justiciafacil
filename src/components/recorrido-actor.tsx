@@ -16,8 +16,7 @@ import {
 } from "@/lib/urrj-motores";
 import {
   ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
-  Check, X, ClipboardCheck, Lock, Calculator, Download,
-} from "lucide-react";
+  Check, X, ClipboardCheck, Lock, Calculator, Download, Eye } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
@@ -154,6 +153,7 @@ export function RecorridoActor({
   const [seed, setSeed] = useState(0);
   const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
   const [verRegistral, setVerRegistral] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
@@ -259,7 +259,7 @@ export function RecorridoActor({
     } finally { setGuardando(false); }
   };
 
-  const descargarPDF = async (decision: string) => {
+  const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
     const riesgos = [
       { nombre: "Prescripción", r: rPresc },
       { nombre: "Caducidad", r: rCaduc },
@@ -267,7 +267,7 @@ export function RecorridoActor({
       ...(avisoJV ? [{ nombre: "Interpelación (JV)", r: avisoJV }] : []),
     ];
     try {
-      await descargarPredictamenPDF({
+      const urlPdf = await descargarPredictamenPDF({
         expediente: d.expediente, juzgado: d.juzgado, estado: d.estado, tipoJuicio: d.tipoJuicio, posicion: d.posicion,
         ubicacion: d.ubicacion, deudor: d.deudor, quienCede: d.quienCede, queCede: d.queCede,
         dictamen: dictamen.txt, riesgos,
@@ -286,7 +286,8 @@ export function RecorridoActor({
           margenObjetivo: d.margenObjetivo,
         },
         boletines: hallazgos,
-      });
+      }, modo);
+      if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
     } catch (e: any) {
       setGuardado("No se pudo generar el PDF: " + e.message);
     }
@@ -315,6 +316,20 @@ export function RecorridoActor({
 
   return (
     <div className="space-y-5">
+      {pdfUrl && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setPdfUrl(null)}>
+          <div className="my-4 flex h-[88vh] w-[94vw] max-w-4xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <p className="text-sm font-semibold" style={{ color: NAVY }}>Pre-dictamen · Exp. {d.expediente || "—"}</p>
+              <div className="flex items-center gap-3">
+                <a href={pdfUrl} download={`predictamen-${(d.expediente || "caso").replace(/[^\w-]/g, "_")}.pdf`} className="text-xs font-medium text-[color:var(--teal)] hover:underline">Descargar</a>
+                <button onClick={() => setPdfUrl(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+              </div>
+            </div>
+            <iframe src={pdfUrl} title="Pre-dictamen PDF" className="min-h-0 flex-1 rounded-b-xl" />
+          </div>
+        </div>
+      )}
       {verBanner && (
         <BannerCorreo
           key={`${destino}-${seed}`}
@@ -615,7 +630,10 @@ export function RecorridoActor({
               <button onClick={() => guardar("No pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><X className="h-4 w-4" /> No pasa</button>
               <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={guardando} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP (dictamen formal)</button>
             </div>
-            <div className="pt-1">
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button onClick={() => descargarPDF("(borrador)", "ver")} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+                <Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF
+              </button>
               <button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
                 <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF del pre-dictamen
               </button>
