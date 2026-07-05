@@ -7,7 +7,8 @@ import {
 } from "@/lib/urrj-demandado";
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
-import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Scale, Lock, Calculator } from "lucide-react";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Scale, Lock, Calculator, Search, Bot } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -63,8 +64,11 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     setEnviandoCorreo(false);
     setCorreoMsg(r.ok ? "Correo enviado ✓" : "No se pudo enviar: " + (r.error || ""));
   };
+  const [hallazgos, setHallazgos] = useState<string[]>([]);
+  const [mostrarBoletin, setMostrarBoletin] = useState(false);
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
+  // estadoRobot se calcula más abajo con x.estado
   const [x, setX] = useState<Record<string, string>>({
     caso_id: "", expediente: "", juzgado: "", estado: "Sinaloa", deudor: "", rfc: "", ubicacion: "",
     acreedor: "", tipoAcreedor: "", materia: "", tipoJuicio: "Hipotecario", copropietarios: "",
@@ -77,6 +81,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     anotaciones: "",
   });
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
+  const estadoRobot: "sinaloa" | "bcs" | "jalisco" = x.estado === "Jalisco" ? "jalisco" : x.estado === "Baja California Sur" ? "bcs" : "sinaloa";
   useEffect(() => { if (precargar?.datos) setX((p) => ({ ...p, ...precargar.datos })); }, []);
 
   const r1 = useMemo(() => veredictoHito1({ descripcionCoincide: x.descripcionCoincide, fuenteRevisada: x.fuenteRevisada }), [x.descripcionCoincide, x.fuenteRevisada]);
@@ -156,6 +161,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
       ],
       intereses: { ordinarios: 0, moratorios: n(x.interesMoratorio), iva: 0, total: vaae.cLiq, usura: false },
       admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+      boletines: hallazgos,
     });
   };
 
@@ -211,6 +217,30 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               </Campo>
             </div>
             <Aviso r={r1} />
+            <div className="rounded-lg border border-border p-3">
+              <button type="button" onClick={() => setMostrarBoletin((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+                <Bot className="h-3.5 w-3.5" /> {mostrarBoletin ? "Ocultar búsqueda del boletín" : "Buscar el expediente en el boletín (robot)"}
+              </button>
+              {mostrarBoletin && (
+                <div className="mt-3">
+                  <p className="mb-2 text-[11px] leading-snug text-muted-foreground">El robot lee el boletín <b>estatal</b>. Lo que encuentre se guarda como hallazgo y entra al PDF.</p>
+                  <BuscadorBoletin
+                    expedienteInicial={x.expediente}
+                    estadoInicial={estadoRobot}
+                    resaltarAmparo
+                    onHallazgoAmparo={(nota) => {
+                      const marca = nota.split("\n")[0];
+                      setHallazgos((prev) => prev.some((h) => h.includes(marca)) ? prev : [...prev, nota]);
+                      setX((p) => {
+                        if ((p.anotaciones || "").includes(marca)) return p;
+                        const sep = (p.anotaciones || "").trim() ? "\n\n" : "";
+                        return { ...p, anotaciones: (p.anotaciones || "") + sep + nota };
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
