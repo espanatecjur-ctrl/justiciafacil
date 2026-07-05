@@ -9,6 +9,7 @@
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import { enviarCorreo } from "@/lib/enviar-correo";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
   calculoFinanciero, viabilidad, type ResultadoMotor, type Semaforo,
@@ -139,6 +140,19 @@ export function RecorridoActor({
   const [d, setD] = useState<Datos>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const [correoPara, setCorreoPara] = useState("contabilidadgeneral@diipadesarrollos.com");
+  const [mostrarCorreo, setMostrarCorreo] = useState(false);
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false);
+  const [correoMsg, setCorreoMsg] = useState<string | null>(null);
+
+  const notificarPositivo = async () => {
+    setEnviandoCorreo(true); setCorreoMsg(null);
+    const asunto = `Dictamen URRJ POSITIVO — Exp. ${d.expediente || "—"}`;
+    const mensaje = `El dictamen jurídico de URRJ resultó POSITIVO.\n\nExpediente: ${d.expediente || "—"}\nGarantía: ${d.ubicacion || "—"}\nDeudor: ${d.deudor || "—"}\n\nQueda lista para continuar el proceso (precios / UCP).`;
+    const r = await enviarCorreo({ para: correoPara, asunto, mensaje, folio: d.expediente || undefined });
+    setEnviandoCorreo(false);
+    setCorreoMsg(r.ok ? "Correo enviado ✓" : "No se pudo enviar: " + (r.error || ""));
+  };
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
 
@@ -237,6 +251,7 @@ export function RecorridoActor({
     try {
       await guardarPredictamen(payload, precargar);
       setGuardado(`Pre-dictamen guardado: ${decision}`);
+      if (!/no pasa/i.test(decision) && /pasa/i.test(decision)) setMostrarCorreo(true);
     } catch (e: any) {
       setGuardado("No se pudo guardar (¿corriste el SQL de predictamen?): " + e.message);
     } finally { setGuardando(false); }
@@ -546,6 +561,20 @@ export function RecorridoActor({
               </button>
             </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+            {mostrarCorreo && (
+              <div className="space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+                <p className="text-sm font-semibold text-[color:var(--teal)]">Notificar dictamen positivo por correo</p>
+                <label className="block text-xs font-medium">Para
+                  <input className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} />
+                </label>
+                <p className="text-xs text-muted-foreground">Asunto: Dictamen URRJ POSITIVO — Exp. {d.expediente || "—"}. Revisa y envía (como los correos de contratos).</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={notificarPositivo} disabled={enviandoCorreo} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">{enviandoCorreo ? "Enviando…" : "Enviar correo"}</button>
+                  <button onClick={() => setMostrarCorreo(false)} className="text-xs font-medium text-muted-foreground underline">Ahora no</button>
+                  {correoMsg && <span className={`text-sm ${correoMsg.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{correoMsg}</span>}
+                </div>
+              </div>
+            )}
             </>)}
 
             {/* ---- Sección de Administración (valuación y precio) ---- */}
