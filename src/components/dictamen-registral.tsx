@@ -84,6 +84,16 @@ export function DictamenRegistral({
 
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const [correoPara, setCorreoPara] = useState("");
+  const [correoMsg, setCorreoMsg] = useState<string | null>(null);
+
+  const avisarRegistral = () => {
+    setCorreoMsg(null);
+    const asunto = `Dictamen registral URRJ ${d.resultado || "—"} — Exp. ${d.numeroCredito || "—"}`;
+    const cuerpo = `Aviso interno a asesores URRJ (registral).\n\nResultado registral: ${d.resultado || "—"}\nExpediente / crédito: ${d.numeroCredito || "—"}\nAcreditado: ${d.acreditado || "—"}\nGravamen adicional: ${hayAdicional ? "Sí" : "No"}\nElabora: ${firmaElabora?.nombre || "—"}\nValida: ${firmaValida?.nombre || "—"}\n\nLo litigable lo define el jurídico; el registral no bloquea. Si quedó pendiente, se elabora después.`;
+    window.location.href = `mailto:${correoPara}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    setCorreoMsg("Se abrió tu correo con el borrador listo. Elige los asesores y envía.");
+  };
 
   const guardar = async () => {
     if (!d.resultado) { setGuardado("Falta elegir el RESULTADO (POSITIVO/NEGATIVO)."); return; }
@@ -224,6 +234,20 @@ export function DictamenRegistral({
         </button>
         {guardado && <span className={`text-sm ${guardado.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{guardado}</span>}
       </div>
+
+      {guardado?.includes("✓") && (
+        <div className="no-print space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+          <p className="text-sm font-semibold text-[color:var(--teal)]">Avisar el resultado registral a los asesores (correo interno)</p>
+          <label className="block text-xs font-medium">Para (asesores — sepáralos con coma)
+            <input className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} />
+          </label>
+          <p className="text-xs text-muted-foreground">Se abrirá tu correo con el borrador listo (asunto y mensaje prellenados). Tú eliges los asesores y envías.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={avisarRegistral} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background">Abrir correo</button>
+            {correoMsg && <span className="text-sm text-emerald-700">{correoMsg}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
