@@ -123,13 +123,15 @@ function PanelPlantillas() {
   const [preview, setPreview] = useState<string | null>(null);
   const [nuevoPaq, setNuevoPaq] = useState(false);
   const [elaborar, setElaborar] = useState<Grupo | null>(null);
+  const [cargando, setCargando] = useState(true);
 
-  const recargar = () => {
-    listarEstadosPlantilla().then(setEstados);
-    listarGrupos().then(setGrupos);
-    listarAsignaciones().then(setAsig);
-  };
-  useEffect(() => { recargar(); listarPlantillasCustom().then(setCustoms); }, []);
+  // Trae TODO junto y actualiza en un solo render (evita el parpadeo
+  // de que las plantillas se vean "sueltas" antes de caer en su paquete).
+  const recargar = () =>
+    Promise.all([listarEstadosPlantilla(), listarGrupos(), listarAsignaciones(), listarPlantillasCustom()])
+      .then(([e, g, a, c]) => { setEstados(e); setGrupos(g); setAsig(a); setCustoms(c); })
+      .finally(() => setCargando(false));
+  useEffect(() => { recargar(); }, []);
 
   const cambiar = async (tipo: string, estado: string) => { await setEstadoPlantilla(tipo, estado); recargar(); };
   const mover = async (tipo: string, grupoId: string | null) => { await asignarPlantillaGrupo(tipo, grupoId); recargar(); };
@@ -169,6 +171,9 @@ function PanelPlantillas() {
         <Button variant="outline" size="sm" onClick={() => setNuevoPaq(true)}><FolderPlus className="h-4 w-4 mr-1.5" /> Nuevo paquete</Button>
       </div>
 
+      {cargando ? (
+        <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando plantillas…</div>
+      ) : (<>
       {/* Paquetes */}
       {grupos.map((g) => {
         const items = activas.filter((p) => asig[p.tipo] === g.id);
@@ -202,6 +207,7 @@ function PanelPlantillas() {
         <p className="mb-2 font-display text-sm font-semibold text-muted-foreground">{grupos.length ? "Individuales (sin paquete)" : "Plantillas"}</p>
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">{individuales.map(tarjeta)}</div>
       </div>
+      </>)}
 
       {plantillaPreview && <PreviewPlantilla plantilla={plantillaPreview} onCerrar={() => setPreview(null)} onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: plantillaPreview.tipo } })} />}
 
@@ -216,7 +222,7 @@ function PanelPlantillas() {
         />
       )}
 
-      {(() => {
+      {!cargando && (() => {
         const ocultas = todas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
         if (!ocultas.length) return null;
         return (
