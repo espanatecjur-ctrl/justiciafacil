@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -129,7 +130,7 @@ function PanelMisTramites({ lista, cargando, onCambio }: { lista: Tramite[]; car
               {t.cliente || "—"}{t.expediente ? ` · Exp. ${t.expediente}` : ""}{t.responsable ? ` · Resp. ${t.responsable}` : ""}
             </p>
             {t.nota && <p className="mt-0.5 text-xs text-muted-foreground">{t.nota}</p>}
-            {t.doc_url && <a href={t.doc_url} target="_blank" rel="noreferrer" className="mt-0.5 inline-block text-xs text-[color:var(--teal)] underline">{t.doc_nombre || "ver documento"}</a>}
+            {t.doc_url && <BotonVerDoc url={t.doc_url} nombre={t.doc_nombre} label={t.doc_nombre || "ver documento"} className="mt-0.5 inline-flex items-center gap-1 text-xs text-[color:var(--teal)] underline" />}
           </div>
           <div className="flex items-center gap-2">
             <select value={t.estado || "solicitado"} onChange={(e) => t.id && cambiarEstado(t.id, e.target.value)} className={`rounded-full border-0 px-2.5 py-1 text-[11px] font-medium ${ESTADO_TRAMITE_TONO[t.estado || "solicitado"] || ""}`}>
