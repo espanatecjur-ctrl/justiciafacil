@@ -36,7 +36,7 @@ const fmt = (s?: string) => {
 
 const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
 
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void } = {}) {
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void } = {}) {
   const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
@@ -93,6 +93,12 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
   const notaAmparo = () => {
     const lineas = acuerdosAmparo.map((a) => `- ${fmt(a.fecha)} · ${a.acuerdo || ""}`).join("\n");
     return `Amparo detectado en boletín (exp. ${party?.expediente || exp}):\n${lineas}`;
+  };
+  const [guardadoGen, setGuardadoGen] = useState(false);
+  const notaGeneral = () => {
+    const cab = `Boletín (exp. ${party?.expediente || exp})${party?.actor || party?.demandado ? ` · ${party?.actor || "—"} vs. ${party?.demandado || "—"}` : ""}:`;
+    const lineas = acuerdos.slice(0, 12).map((a) => `- ${fmt(a.fecha)} · ${(a.etapa || "").trim()} ${a.acuerdo || ""}`.replace(/ +/g, " ").trim()).join("\n");
+    return `${cab}\n${lineas}`;
   };
 
   return (
@@ -195,6 +201,9 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
                 <p className="text-base font-bold text-[color:var(--teal)]">{party?.expediente} · {acuerdos.length} acuerdos</p>
                 {(party?.actor || party?.demandado) && (
                   <p className="text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
+                )}
+                {onGuardarHallazgos && acuerdos.length > 0 && (
+                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? "Hallazgos guardados ✓" : "Guardar hallazgos del boletín"}</button>
                 )}
               </div>
               {resaltarAmparo && acuerdosAmparo.length > 0 && (
