@@ -6,7 +6,8 @@ import {
 } from "@/lib/urrj-sucesorio";
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
-import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download } from "lucide-react";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Search, Bot } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -48,6 +49,8 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
 export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const [hallazgos, setHallazgos] = useState<string[]>([]);
+  const [mostrarBoletin, setMostrarBoletin] = useState(false);
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
   const [x, setX] = useState<Record<string, string>>({
@@ -62,6 +65,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
     cedenteAceptoHerencia: "", derechoTantoNotificado: "", cesionEscrituraPublica: "", anotaciones: "",
   });
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
+  const estadoRobot: "sinaloa" | "bcs" | "jalisco" = x.estado === "Jalisco" ? "jalisco" : x.estado === "Baja California Sur" ? "bcs" : "sinaloa";
   useEffect(() => { if (precargar?.datos) setX((p) => ({ ...p, ...precargar.datos })); }, []);
 
   const r1 = useMemo(() => veredictoSuc1({ hayActaDefuncion: x.hayActaDefuncion, casaANombreDeCujus: x.casaANombreDeCujus, fuenteRevisada: x.fuenteRevisada }), [x.hayActaDefuncion, x.casaANombreDeCujus, x.fuenteRevisada]);
@@ -118,6 +122,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
       ],
       intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cSan, usura: false },
       admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+      boletines: hallazgos,
     });
   };
 
@@ -176,6 +181,30 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
             </div>
             <p className="text-xs text-muted-foreground">Checklist: acta de defunción · escritura a nombre del de cujus + CLG · testamento o constancia de intestado · parentescos · predial/agua · inventario/avalúos.</p>
             <Aviso r={r1} />
+            <div className="rounded-lg border border-border p-3">
+              <button type="button" onClick={() => setMostrarBoletin((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+                <Bot className="h-3.5 w-3.5" /> {mostrarBoletin ? "Ocultar búsqueda del boletín" : "Buscar el expediente en el boletín (robot)"}
+              </button>
+              {mostrarBoletin && (
+                <div className="mt-3">
+                  <p className="mb-2 text-[11px] leading-snug text-muted-foreground">El robot lee el boletín <b>estatal</b>. Lo que encuentre se guarda como hallazgo y entra al PDF.</p>
+                  <BuscadorBoletin
+                    expedienteInicial={x.expediente}
+                    estadoInicial={estadoRobot}
+                    resaltarAmparo
+                    onHallazgoAmparo={(nota) => {
+                      const marca = nota.split("\n")[0];
+                      setHallazgos((prev) => prev.some((h) => h.includes(marca)) ? prev : [...prev, nota]);
+                      setX((p) => {
+                        if ((p.anotaciones || "").includes(marca)) return p;
+                        const sep = (p.anotaciones || "").trim() ? "\n\n" : "";
+                        return { ...p, anotaciones: (p.anotaciones || "") + sep + nota };
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
