@@ -10,6 +10,7 @@ import { SelectorGarantia } from "@/components/selector-garantia";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
 import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
+import { HistorialPredictamen } from "@/components/historial-predictamen";
 import { RegistroURRJ } from "@/components/registro-urrj";
 
 export const Route = createFileRoute("/urrj")({
@@ -110,6 +111,12 @@ function URRJ() {
             </>
           )}
           <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
+          {!solicitudActiva && (
+            <div className="pt-1">
+              <p className="mb-2 text-sm font-semibold text-muted-foreground">Registro de pre-dictámenes (jurídico)</p>
+              <HistorialPredictamen onReDictaminar={reDictaminar} />
+            </div>
+          )}
         </>
       ) : null}
 
