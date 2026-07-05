@@ -11,6 +11,7 @@ import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 import { RegistroURRJ } from "@/components/registro-urrj";
+import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -30,6 +31,7 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
+  const [fichaAbierta, setFichaAbierta] = useState<RefGarantia | null>(null);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -56,6 +58,10 @@ function URRJ() {
     setVista(v);
   };
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
+  const verFichaDeFila = (f: any) => setFichaAbierta({
+    id: f.caso_id || undefined, expediente: f.expediente || "", direccion_garantia: f.datos?.ubicacion || "",
+    juzgado: f.juzgado || "", deudor: f.datos?.deudor || "", cliente_nombre: f.datos?.deudor || "", entidad: f.estado || "",
+  });
 
   useEffect(() => {
     (async () => {
@@ -112,7 +118,7 @@ function URRJ() {
           {!solicitudActiva && (
             <div className="pt-1">
               <p className="mb-2 text-sm font-semibold text-muted-foreground">Registro de pre-dictámenes (jurídico)</p>
-              <HistorialPredictamen onReDictaminar={reDictaminar} />
+              <HistorialPredictamen onReDictaminar={reDictaminar} onVerFicha={verFichaDeFila} />
             </div>
           )}
         </>
@@ -133,6 +139,8 @@ function URRJ() {
       )}
     </div>
   );
+
+  if (fichaAbierta) return <FichaURRJ garantia={fichaAbierta} onVolver={() => setFichaAbierta(null)} />;
 
   return (
     <div className="space-y-5">
