@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import { enviarCorreo } from "@/lib/enviar-correo";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
   veredictoHito1, veredictoHito2, veredictoHito3, veredictoHito4, calcularVAAE,
@@ -49,6 +50,19 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
 export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const [correoPara, setCorreoPara] = useState("contabilidadgeneral@diipadesarrollos.com");
+  const [mostrarCorreo, setMostrarCorreo] = useState(false);
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false);
+  const [correoMsg, setCorreoMsg] = useState<string | null>(null);
+
+  const notificarPositivo = async () => {
+    setEnviandoCorreo(true); setCorreoMsg(null);
+    const asunto = `Dictamen URRJ POSITIVO — Exp. ${x.expediente || "—"}`;
+    const mensaje = `El dictamen jurídico de URRJ (Demandado) resultó POSITIVO.\n\nExpediente: ${x.expediente || "—"}\nGarantía: ${x.ubicacion || "—"}\nDemandado-vendedor: ${x.deudor || "—"}\n\nQueda lista para continuar el proceso (precios / UCP).`;
+    const r = await enviarCorreo({ para: correoPara, asunto, mensaje, folio: x.expediente || undefined });
+    setEnviandoCorreo(false);
+    setCorreoMsg(r.ok ? "Correo enviado ✓" : "No se pudo enviar: " + (r.error || ""));
+  };
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
   const [x, setX] = useState<Record<string, string>>({
@@ -122,6 +136,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     try {
       await guardarPredictamen(payload, precargar);
       setGuardado("Pre-dictamen (Demandado) guardado: " + decision);
+      if (!/no pasa/i.test(decision) && /pasa/i.test(decision)) setMostrarCorreo(true);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
@@ -289,6 +304,20 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
             </div>
             <div><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+            {mostrarCorreo && (
+              <div className="space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+                <p className="text-sm font-semibold text-[color:var(--teal)]">Notificar dictamen positivo por correo</p>
+                <label className="block text-xs font-medium">Para
+                  <input className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} />
+                </label>
+                <p className="text-xs text-muted-foreground">Asunto: Dictamen URRJ POSITIVO — Exp. {x.expediente || "—"}. Revisa y envía (como los correos de contratos).</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={notificarPositivo} disabled={enviandoCorreo} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">{enviandoCorreo ? "Enviando…" : "Enviar correo"}</button>
+                  <button onClick={() => setMostrarCorreo(false)} className="text-xs font-medium text-muted-foreground underline">Ahora no</button>
+                  {correoMsg && <span className={`text-sm ${correoMsg.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{correoMsg}</span>}
+                </div>
+              </div>
+            )}
 
             {/* ---- Motor financiero V_AAE (solo Contabilidad) ---- */}
             <div className="mt-2 rounded-xl border border-dashed border-border p-4">
