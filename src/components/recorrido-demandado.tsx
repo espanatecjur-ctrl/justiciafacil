@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { Link } from "@tanstack/react-router";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
@@ -63,6 +64,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
   const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((z) => z + 1); setVerBanner(true); };
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [yaExiste, setYaExiste] = useState<PredictamenExistente | null>(null);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
@@ -128,6 +130,10 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
   }, [r1, r2, r3, r4, vaae, avisoAdj]);
 
   const guardar = async (decision: string) => {
+    if (!precargar) {
+      const ex = await buscarPredictamenVigente(x.expediente, x.caso_id);
+      if (ex) { setYaExiste(ex); return; }
+    }
     const payload = {
       caso_id: x.caso_id || null, expediente: x.expediente || null, juzgado: x.juzgado || null, estado: x.estado,
       tipo_juicio: x.tipoJuicio, posicion: "Demandado", datos: x,
@@ -159,6 +165,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
       ],
       intereses: { ordinarios: 0, moratorios: n(x.interesMoratorio), iva: 0, total: vaae.cLiq, usura: false },
       admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+      cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
       boletines: hallazgos,
     }, modo);
     if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
@@ -347,6 +354,19 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
             </div>
             <div className="flex flex-wrap gap-2"><button onClick={() => descargarPDF("(borrador)", "ver")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF</button><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+            {yaExiste && (
+              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Ya existe un pre-dictamen para este expediente{yaExiste.folio ? ` (folio ${yaExiste.folio})` : ""}.</p>
+                <p className="text-[13px]">No se crea otro para no duplicarlo. ¿Qué quieres hacer?</p>
+                <div className="flex flex-wrap gap-2">
+                  {(yaExiste.caso_id || x.caso_id) && (
+                    <Link to="/expediente" search={{ id: (yaExiste.caso_id || x.caso_id) as string, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
+                  )}
+                  <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
+                  <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Cancelar</button>
+                </div>
+              </div>
+            )}
             {guardado && !/no pasa/i.test(guardado) && (
               <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
                 <Mail className="h-4 w-4" /> Solicitar precio / enviar
