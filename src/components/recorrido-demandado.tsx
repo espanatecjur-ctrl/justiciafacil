@@ -129,6 +129,13 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
   }, [r1, r2, r3, r4, vaae, avisoAdj]);
 
+  const checarExiste = async (exp?: string | null, caso?: string | null) => {
+    if (precargar) return;
+    if (!exp && !caso) { setYaExiste(null); return; }
+    const ex = await buscarPredictamenVigente(exp, caso);
+    setYaExiste(ex);
+  };
+
   const guardar = async (decision: string) => {
     if (!precargar) {
       const ex = await buscarPredictamenVigente(x.expediente, x.caso_id);
@@ -200,11 +207,24 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
           <div className="space-y-4">
             <p className="text-base font-semibold">0 · Datos básicos</p>
             <Campo label="Caso de la cartera (opcional)">
-              <select className={inp} value={x.caso_id} onChange={(e) => { const c = casos.find((y) => String(y.id) === e.target.value); setX((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: c?.juzgado || p.juzgado, deudor: c?.cliente_nombre || p.deudor, ubicacion: c?.direccion_garantia || p.ubicacion })); }}>
+              <select className={inp} value={x.caso_id} onChange={(e) => { const c = casos.find((y) => String(y.id) === e.target.value); setX((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: c?.juzgado || p.juzgado, deudor: c?.cliente_nombre || p.deudor, ubicacion: c?.direccion_garantia || p.ubicacion })); checarExiste(c?.expediente || x.expediente, e.target.value); }}>
                 <option value="">— Escribir a mano —</option>
                 {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
               </select>
             </Campo>
+            {yaExiste && (
+              <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Ya existe un pre-dictamen para este expediente{yaExiste.folio ? ` (folio ${yaExiste.folio})` : ""}.</p>
+                <p className="text-[13px]">No se creará otro para no duplicarlo. Puedes ver la ficha o re-dictaminar.</p>
+                <div className="flex flex-wrap gap-2">
+                  {(yaExiste.caso_id || x.caso_id) && (
+                    <Link to="/expediente" search={{ id: (yaExiste.caso_id || x.caso_id) as string, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
+                  )}
+                  <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
+                  <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Ignorar por ahora</button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Demandado-vendedor (nombre)"><input className={inp} value={x.deudor} onChange={(e) => set("deudor", e.target.value)} /></Campo>
               <Campo label="RFC del demandado"><input className={inp} value={x.rfc} onChange={(e) => set("rfc", e.target.value)} /></Campo>
