@@ -56,6 +56,7 @@ function URRJ() {
     setVista(v);
   };
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
+  const puedePrecioPiso = ["DGE", "Super_Admin"].includes(rolUsuario || "");
   const navigate = useNavigate();
   const verFichaVieja = (f: any) => {
     if (f.caso_id) navigate({ to: "/expediente", search: { id: f.caso_id, origen: "urrj" } as any });
@@ -139,6 +140,7 @@ function URRJ() {
           puedeFirmarElabora={puede("firmar_elabora")}
           puedeValidar={puede("validar")}
           puedeAdmin={puedeAdmin}
+          puedePrecioPiso={puedePrecioPiso}
         />
       )}
     </div>
