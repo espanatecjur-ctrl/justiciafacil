@@ -132,7 +132,7 @@ function UCP() {
     Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&order=expediente.asc`, { headers })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`casos ${r.status}`)))),
-      fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,dictamen_final,datos,resultados&vigente=eq.true&dictamen_final=eq.POSITIVO`, { headers })
+      fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,dictamen_final,pasa_a_ucp,datos,resultados&vigente=eq.true&pasa_a_ucp=eq.true`, { headers })
         .then((r) => (r.ok ? r.json() : [])),
       fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=id,caso_id,predictamen_id,estado,requisitos,juridico,registral,contable,firmas,rppc,veredicto,vigente&vigente=eq.true`, { headers })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`dictamen ${r.status} — ¿corriste el SQL?`)))),
