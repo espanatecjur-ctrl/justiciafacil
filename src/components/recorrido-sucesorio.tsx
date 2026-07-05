@@ -7,6 +7,11 @@ import {
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { BannerCorreo } from "@/components/banner-correo";
+import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
+import { registrarEvento } from "@/lib/cronologia-urrj";
+import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
+import { Mail } from "lucide-react";
 import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Search, Bot } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -46,11 +51,16 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean }) {
+export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
+  const [verBanner, setVerBanner] = useState(false);
+  const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
+  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
+  const [seed, setSeed] = useState(0);
+  const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((z) => z + 1); setVerBanner(true); };
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
   const [x, setX] = useState<Record<string, string>>({
@@ -103,6 +113,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
     };
     try {
       await guardarPredictamen(payload, precargar);
+      registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Sucesorio · Decisión: ${decision}` });
       setGuardado("Pre-dictamen (Sucesorio) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
@@ -303,9 +314,49 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
             </div>
             <div><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
+            {guardado && !/no pasa/i.test(guardado) && (
+              <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
+                <Mail className="h-4 w-4" /> Solicitar precio / enviar
+              </button>
+            )}
+            {verBanner && (
+              <BannerCorreo
+                key={`${destino}-${seed}`}
+                titulo="Enviar dictamen URRJ (Sucesorio)"
+                asuntoInicial={destino === "contabilidad" ? `Solicitud de precio — Dictamen URRJ (Sucesorio) ${consolidado.txt} · Exp. ${x.expediente || "—"}` : `Garantía lista para Comercial (Sucesorio) — ${consolidado.txt} · Exp. ${x.expediente || "—"}`}
+                mensajeInicial={[
+                  destino === "contabilidad" ? "Se solicita el precio para esta garantía (Sucesorio) ya dictaminada por URRJ." : "Garantía (Sucesorio) dictaminada y con precio; queda lista para Comercial.",
+                  "",
+                  `Resultado jurídico: ${consolidado.txt}`,
+                  `Expediente: ${x.expediente || "—"}`,
+                  "",
+                  resumenPrecio(precio),
+                ].join("\n")}
+                folio={x.expediente}
+                extra={
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => abrirDestino("contabilidad")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "contabilidad" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"}`}>1º Contabilidad · solicitar precio</button>
+                      <button onClick={() => precio.precioPiso.trim() && abrirDestino("comercial")} disabled={!precio.precioPiso.trim()} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "comercial" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"} disabled:opacity-40`}>2º Comercial · con precio</button>
+                      {!precio.precioPiso.trim() && <span className="self-center text-[11px] text-muted-foreground">Comercial se habilita al poner el precio piso.</span>}
+                    </div>
+                    <BloquePrecioURRJ valor={precio} onChange={setPrecio} puedePrecioPiso={puedePrecioPiso} />
+                    <p className="text-[11px] text-muted-foreground">Al cambiar de destino o poner el precio, vuelve a tocar el botón del destino para actualizar el mensaje.</p>
+                  </div>
+                }
+                onCerrar={() => setVerBanner(false)}
+                onEnviado={() => registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "correo_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, vista_previa: `A ${destino} · Sucesorio · Exp. ${x.expediente || "—"}`, detalle: `Enviado a ${destino}` })}
+              />
+            )}
           </div>
         )}
       </div>
+
+      {(x.caso_id || x.expediente) && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <CronologiaURRJ casoId={x.caso_id || undefined} expediente={x.expediente || undefined} />
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <button onClick={() => setPaso((p) => Math.max(0, p - 1))} disabled={paso === 0} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm disabled:opacity-40"><ArrowLeft className="h-4 w-4" /> Atrás</button>
