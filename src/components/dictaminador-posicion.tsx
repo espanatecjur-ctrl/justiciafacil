@@ -9,8 +9,10 @@
 // actual (`vista`) y recibe los cambios (`onVista`), para no duplicar la
 // lógica de soloRegistro / re-dictaminar.
 // ============================================================
+import { useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
-import { Scale } from "lucide-react";
+import { Scale, Bot } from "lucide-react";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
 import { RecorridoDemandado } from "@/components/recorrido-demandado";
 import { RecorridoSucesorio } from "@/components/recorrido-sucesorio";
@@ -51,6 +53,16 @@ export function DictaminadorPosicion({
   modoFicha = false,
   pantallaElegir,
 }: Props) {
+  // robot al inicio: expediente + hallazgos que se llevarán al recorrido
+  const [expedienteIni, setExpedienteIni] = useState("");
+  const [estadoIni, setEstadoIni] = useState<"sinaloa" | "bcs" | "jalisco">("sinaloa");
+  const [hallazgosIni, setHallazgosIni] = useState<string[]>([]);
+  const [mostrarRobotIni, setMostrarRobotIni] = useState(false);
+  const agregarHallazgoIni = (nota: string) => {
+    const marca = nota.split("\n")[0];
+    setHallazgosIni((prev) => prev.some((h) => h.includes(marca)) ? prev : [...prev, nota]);
+  };
+
   // intento de abrir una posición (respeta el candado de elaborar)
   const abrir = (v: VistaPosicion) => {
     if (!puedeElaborar) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; }
@@ -63,6 +75,33 @@ export function DictaminadorPosicion({
       <div className="rounded-xl border border-border bg-card p-6">
         <p className="text-base font-semibold">{titulo}</p>
         <p className="mb-4 text-sm text-muted-foreground">{subtitulo}</p>
+
+        {/* Paso 1: robot al inicio (buscar el expediente antes de elegir posición) */}
+        <div className="mb-4 rounded-xl border border-border bg-muted/20 p-4">
+          <button type="button" onClick={() => setMostrarRobotIni((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+            <Bot className="h-3.5 w-3.5" /> {mostrarRobotIni ? "Ocultar robot de búsqueda" : "1) Buscar el expediente en el boletín (robot)"}
+          </button>
+          {hallazgosIni.length > 0 && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{hallazgosIni.length} hallazgo(s) guardado(s) — se llevarán al pre-dictamen</span>}
+          {mostrarRobotIni && (
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Expediente</label>
+                  <input value={expedienteIni} onChange={(e) => setExpedienteIni(e.target.value)} placeholder="Ej. 1393/2017" className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Estado (boletín)</label>
+                  <select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value as "sinaloa" | "bcs" | "jalisco")} className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="sinaloa">Sinaloa</option><option value="jalisco">Jalisco</option><option value="bcs">Baja California Sur</option>
+                  </select>
+                </div>
+              </div>
+              <BuscadorBoletin key={`${expedienteIni}-${estadoIni}`} expedienteInicial={expedienteIni} estadoInicial={estadoIni} resaltarAmparo onHallazgoAmparo={agregarHallazgoIni} onGuardarHallazgos={agregarHallazgoIni} />
+              <p className="text-[11px] text-muted-foreground">Guarda los hallazgos que quieras; luego elige la posición y se copiarán al pre-dictamen (anotaciones + PDF).</p>
+            </div>
+          )}
+        </div>
+
         {!puedeElaborar && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">🔒 Tu rol no puede elaborar pre-dictámenes nuevos. Puedes consultar el historial.</div>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <button onClick={() => abrir("Actor")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
@@ -99,9 +138,9 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} />;
-  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} />;
-  if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} />;
+  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} />;
+  if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Tramites") return <RecorridoTramites casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   return null;
