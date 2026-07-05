@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
@@ -11,7 +11,6 @@ import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 import { RegistroURRJ } from "@/components/registro-urrj";
-import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -31,7 +30,6 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
-  const [fichaAbierta, setFichaAbierta] = useState<RefGarantia | null>(null);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -58,10 +56,16 @@ function URRJ() {
     setVista(v);
   };
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
-  const verFichaDeFila = (f: any) => setFichaAbierta({
-    id: f.caso_id || undefined, expediente: f.expediente || "", direccion_garantia: f.datos?.ubicacion || "",
-    juzgado: f.juzgado || "", deudor: f.datos?.deudor || "", cliente_nombre: f.datos?.deudor || "", entidad: f.estado || "",
-  });
+  const navigate = useNavigate();
+  const verFichaVieja = (f: any) => {
+    if (f.caso_id) navigate({ to: "/expediente", search: { id: f.caso_id } as any });
+    else alert("Este pre-dictamen aún no está vinculado a una garantía. Vincúlalo primero (cliente ↔ garantía).");
+  };
+  const reDictaminarRegistral = (f: any) => {
+    setSolicitudActiva({ tipo_dictamen: "Registral", cliente: f.datos?.deudor || "", expediente: f.expediente || "", caso_id: f.caso_id || "" } as any);
+    setPrecargar({ datos: { caso_id: f.caso_id || "", expediente: f.expediente || "" } });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   useEffect(() => {
     (async () => {
@@ -118,7 +122,7 @@ function URRJ() {
           {!solicitudActiva && (
             <div className="pt-1">
               <p className="mb-2 text-sm font-semibold text-muted-foreground">Registro de pre-dictámenes (jurídico)</p>
-              <HistorialPredictamen onReDictaminar={reDictaminar} onVerFicha={verFichaDeFila} />
+              <HistorialPredictamen onReDictaminar={reDictaminar} onReDictaminarRegistral={reDictaminarRegistral} onVerFichaVieja={verFichaVieja} />
             </div>
           )}
         </>
@@ -139,8 +143,6 @@ function URRJ() {
       )}
     </div>
   );
-
-  if (fichaAbierta) return <FichaURRJ garantia={fichaAbierta} onVolver={() => setFichaAbierta(null)} />;
 
   return (
     <div className="space-y-5">
