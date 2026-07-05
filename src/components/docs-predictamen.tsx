@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Upload, FileText, Trash2, Loader2, X, ExternalLink } from "lucide-react";
 
@@ -69,7 +70,7 @@ export function ListaDocs({ predictamenId, refresco }: { predictamenId: string; 
             </div>
           </div>
           <div className="flex shrink-0 gap-1">
-            {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"><ExternalLink className="h-4 w-4" /></a>}
+            {d.archivo_url && <BotonVerDoc url={d.archivo_url} nombre={d.nombre} label="" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted" />}
             <button onClick={() => borrar(d)} className="rounded-md p-1.5 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
           </div>
         </div>
