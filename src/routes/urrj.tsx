@@ -6,7 +6,6 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Scale, ScrollText } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
-import { SelectorGarantia } from "@/components/selector-garantia";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
 import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
@@ -110,7 +109,6 @@ function URRJ() {
               <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
             </>
           )}
-          <SelectorGarantia onCargar={(pre, pos) => { setPrecargar(pre); setVista(pos); }} />
           {!solicitudActiva && (
             <div className="pt-1">
               <p className="mb-2 text-sm font-semibold text-muted-foreground">Registro de pre-dictámenes (jurídico)</p>
@@ -120,7 +118,7 @@ function URRJ() {
         </>
       ) : null}
 
-      {!(vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral") && (
+      {solicitudActiva?.tipo_dictamen !== "Registral" && (solicitudActiva || vista !== "elegir") && (
         <DictaminadorPosicion
           casos={casos}
           vista={vista}
