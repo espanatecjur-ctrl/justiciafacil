@@ -36,17 +36,22 @@ export const COLOR: Record<ColorArea, { color: string; bg: string; texto: string
   naranja: { color: "#B26B00", bg: "#B26B0015", texto: "En espera" },
   gris:    { color: "#8A8F98", bg: "#8A8F9812", texto: "Sin dictamen" },
 };
-
 // Regla del color: los DOS deben ser positivos para verde.
+// Excepción URRJ: manda el jurídico (el registral no bloquea).
 export function colorDeArea(p?: PasoRecorrido): ColorArea {
   if (!p || (!p.dic_registral && !p.dic_juridico)) return "gris";
   const r = p.dic_registral, j = p.dic_juridico;
+  if (p.area === "URRJ") {
+    if (j === "negativo") return "rojo";
+    if (j === "positivo") return "verde";
+    if (j === "espera") return "naranja";
+    return "gris";
+  }
   if (r === "negativo" || j === "negativo") return "rojo";
   if (r === "positivo" && j === "positivo") return "verde";
   if (r === "espera" || j === "espera" || r === "positivo" || j === "positivo") return "naranja";
   return "gris";
 }
-
 // Etiqueta corta de un dictamen suelto.
 export function textoDictamen(d: Dictamen): string {
   if (d === "positivo") return "Positivo";
