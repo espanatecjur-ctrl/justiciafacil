@@ -1,5 +1,11 @@
 // ============================================================
-//  Registro de URRJ · Nivel 1 = lista de GARANTÍAS
+//  Registro de URRJ · Solicitudes primero, luego el registro de garantías
+// ------------------------------------------------------------
+//  Pestañas:
+//   - Solicitudes → arranca el proceso (nodo que se le pasa)
+//   - Registro (garantías) → una fila por expediente; al abrir → FichaURRJ
+//   - Archivados  → dictámenes "terminados" (nivel dictamen)
+//   - Eliminados  → papelera (con restaurar)
 //  El Jurídico y el Registral viven DENTRO de la ficha de cada garantía.
 // ============================================================
 import { useEffect, useState } from "react";
@@ -9,7 +15,7 @@ import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-type Tab = "dictaminar" | "garantias" | "archivados" | "eliminados";
+type Tab = "solicitudes" | "garantias" | "archivados" | "eliminados";
 
 const fdate = (s?: string) => s ? new Date(s).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "";
 const colorRes = (res: string) => /positivo|pasa/i.test(res) ? "bg-emerald-100 text-emerald-800" : /negativo|no pasa/i.test(res) ? "bg-red-100 text-red-800" : "bg-muted text-muted-foreground";
@@ -34,7 +40,7 @@ function mapReg(r: any): FilaDic {
 }
 
 export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: (f: any) => void; dictaminar?: React.ReactNode }) {
-  const [tab, setTab] = useState<Tab>("garantias");
+  const [tab, setTab] = useState<Tab>(dictaminar ? "solicitudes" : "garantias");
   const [garantias, setGarantias] = useState<Garantia[]>([]);
   const [filas, setFilas] = useState<FilaDic[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -84,7 +90,8 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
   };
 
   useEffect(() => {
-    if (tab === "garantias") cargarGarantias();
+    if (tab === "solicitudes") return;
+    else if (tab === "garantias") cargarGarantias();
     else if (tab === "archivados") cargarDicts("archivados");
     else if (tab === "eliminados") cargarDicts("eliminados");
     /* eslint-disable-next-line */
@@ -101,8 +108,8 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
   if (ficha) return <FichaURRJ garantia={ficha} onVolver={() => { setFicha(null); if (tab === "garantias") cargarGarantias(); }} />;
 
   const TABS: { k: Tab; label: string; icon: any }[] = [
-    ...(dictaminar ? [{ k: "dictaminar" as Tab, label: "Dictaminar", icon: Gavel }] : []),
-    { k: "garantias", label: "Garantías", icon: Building2 },
+    ...(dictaminar ? [{ k: "solicitudes" as Tab, label: "Solicitudes", icon: Gavel }] : []),
+    { k: "garantias", label: "Registro (garantías)", icon: Building2 },
     { k: "archivados", label: "Archivados", icon: Archive },
     { k: "eliminados", label: "Eliminados", icon: Trash2 },
   ];
@@ -118,14 +125,14 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
             <t.icon className="h-3.5 w-3.5" /> {t.label}
           </button>
         ))}
-        {tab !== "dictaminar" && (
+        {tab !== "solicitudes" && (
           <button onClick={recargar} className="ml-auto inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs hover:bg-muted">
             <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin" : ""}`} /> Actualizar
           </button>
         )}
       </div>
 
-      {tab === "dictaminar" ? (
+      {tab === "solicitudes" ? (
         <div>{dictaminar}</div>
       ) : cargando ? (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
