@@ -119,43 +119,73 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
       )}
 
       {/* detalle desplegado del área abierta */}
-      {abierta && abierta !== "UFC" && (
+      {abierta && abierta !== "UFC" && (() => {
+        const soloLectura = abierta === "URRJ";
+        const pill = (v: string | null) => {
+          const map: Record<string, { t: string; c: string }> = {
+            positivo: { t: "✓ Positivo", c: COLOR.verde.color },
+            negativo: { t: "✗ Negativo", c: COLOR.rojo.color },
+            espera: { t: "⏳ En espera", c: COLOR.naranja.color },
+          };
+          const m = v ? map[v] : null;
+          return m
+            ? <span className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium" style={{ color: m.c, borderColor: m.c }}>{m.t}</span>
+            : <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground">Sin dictamen</span>;
+        };
+        return (
         <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
           <p className="mb-2 text-xs font-semibold" style={{ color: NAVY }}>{abierta} — dictamen</p>
+
+          {soloLectura && (
+            <p className="mb-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-2 py-1.5 text-[11px] text-[color:var(--teal)]">
+              Se refleja automáticamente del pre-dictamen jurídico y del dictamen registral firmados en el proceso. Aquí no se edita a mano.
+            </p>
+          )}
 
           {/* dictamen registral */}
           <div className="mb-2">
             <p className="mb-1 text-[11px] font-medium text-muted-foreground">Dictamen registral</p>
-            <div className="flex flex-wrap gap-1.5">
-              <BotonDic activo={reg === "positivo"} color={COLOR.verde.color} onClick={() => setReg("positivo")}>✓ Positivo</BotonDic>
-              <BotonDic activo={reg === "negativo"} color={COLOR.rojo.color} onClick={() => setReg("negativo")}>✗ Negativo</BotonDic>
-              <BotonDic activo={reg === "espera"} color={COLOR.naranja.color} onClick={() => setReg("espera")}>⏳ En espera</BotonDic>
-            </div>
+            {soloLectura ? (
+              <div className="flex flex-wrap gap-1.5">{pill(reg)}</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                <BotonDic activo={reg === "positivo"} color={COLOR.verde.color} onClick={() => setReg("positivo")}>✓ Positivo</BotonDic>
+                <BotonDic activo={reg === "negativo"} color={COLOR.rojo.color} onClick={() => setReg("negativo")}>✗ Negativo</BotonDic>
+                <BotonDic activo={reg === "espera"} color={COLOR.naranja.color} onClick={() => setReg("espera")}>⏳ En espera</BotonDic>
+              </div>
+            )}
           </div>
 
           {/* dictamen jurídico */}
           <div className="mb-2">
             <p className="mb-1 text-[11px] font-medium text-muted-foreground">Dictamen jurídico</p>
-            <div className="flex flex-wrap gap-1.5">
-              <BotonDic activo={jur === "positivo"} color={COLOR.verde.color} onClick={() => setJur("positivo")}>✓ Positivo</BotonDic>
-              <BotonDic activo={jur === "negativo"} color={COLOR.rojo.color} onClick={() => setJur("negativo")}>✗ Negativo</BotonDic>
-              <BotonDic activo={jur === "espera"} color={COLOR.naranja.color} onClick={() => setJur("espera")}>⏳ En espera</BotonDic>
-            </div>
+            {soloLectura ? (
+              <div className="flex flex-wrap gap-1.5">{pill(jur)}</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                <BotonDic activo={jur === "positivo"} color={COLOR.verde.color} onClick={() => setJur("positivo")}>✓ Positivo</BotonDic>
+                <BotonDic activo={jur === "negativo"} color={COLOR.rojo.color} onClick={() => setJur("negativo")}>✗ Negativo</BotonDic>
+                <BotonDic activo={jur === "espera"} color={COLOR.naranja.color} onClick={() => setJur("espera")}>⏳ En espera</BotonDic>
+              </div>
+            )}
           </div>
 
-          <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional)…" className="mb-2 w-full rounded border border-input bg-background px-2 py-1 text-xs" />
+          {soloLectura
+            ? (nota ? <p className="mb-2 text-[11px] text-muted-foreground">Nota: {nota}</p> : null)
+            : <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional)…" className="mb-2 w-full rounded border border-input bg-background px-2 py-1 text-xs" />}
 
           {/* resumen del color que quedará */}
-          <p className="mb-2 text-[11px]">Quedará: <b style={{ color: COLOR[colorDeArea({ ...pasos[abierta], area: abierta, caso_id: caso.id, expediente: caso.expediente, dic_registral: reg, dic_juridico: jur, nota, marcado_por: null } as PasoRecorrido)].color }}>{COLOR[colorDeArea({ dic_registral: reg, dic_juridico: jur } as PasoRecorrido)].texto}</b> {reg === "positivo" && jur === "positivo" ? "(ambos positivos → verde)" : ""}</p>
+          <p className="mb-2 text-[11px]">Quedará: <b style={{ color: COLOR[colorDeArea({ ...pasos[abierta], area: abierta, caso_id: caso.id, expediente: caso.expediente, dic_registral: reg, dic_juridico: jur, nota, marcado_por: null } as PasoRecorrido)].color }}>{COLOR[colorDeArea({ area: abierta, dic_registral: reg, dic_juridico: jur } as PasoRecorrido)].texto}</b> {abierta === "URRJ" ? (jur === "positivo" ? "(jurídico manda → verde)" : "") : (reg === "positivo" && jur === "positivo" ? "(ambos positivos → verde)" : "")}</p>
 
           {pasos[abierta]?.marcado_por && <p className="mb-2 text-[10px] text-muted-foreground">Última marca: {pasos[abierta].marcado_por} · {pasos[abierta].updated_at ? new Date(pasos[abierta].updated_at!).toLocaleDateString("es-MX") : ""}</p>}
 
           <div className="flex gap-2">
-            <button onClick={guardar} disabled={guardando} className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardando ? "Guardando…" : "Guardar dictamen"}</button>
+            {!soloLectura && <button onClick={guardar} disabled={guardando} className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardando ? "Guardando…" : "Guardar dictamen"}</button>}
             <button onClick={() => setAbierta(null)} className="rounded-md border border-input px-3 py-1.5 text-xs">Cerrar</button>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
