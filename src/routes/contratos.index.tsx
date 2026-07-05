@@ -268,12 +268,14 @@ function ModalNuevoPaquete({ onCerrar, onCreado }: { onCerrar: () => void; onCre
   const [fase, setFase] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const guardar = async () => {
     if (!nombre.trim()) return;
-    setOcupado(true);
-    await crearGrupo(nombre.trim(), fase.trim(), descripcion.trim());
+    setOcupado(true); setError(null);
+    const r = await crearGrupo(nombre.trim(), fase.trim(), descripcion.trim());
     setOcupado(false);
-    onCreado();
+    if (r.ok) onCreado();
+    else setError("No se pudo guardar el paquete (" + (r.error || "") + "). Revisa que hayas corrido el SQL de plantilla_grupo en Supabase.");
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
@@ -296,7 +298,8 @@ function ModalNuevoPaquete({ onCerrar, onCreado }: { onCerrar: () => void; onCre
             <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </div>
         </div>
-        <div className="mt-4 flex justify-end gap-2 border-t border-border pt-3">
+        <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
+          {error && <span className="mr-auto text-[11px] font-medium text-red-700">{error}</span>}
           <Button variant="outline" size="sm" onClick={onCerrar}>Cancelar</Button>
           <Button size="sm" disabled={ocupado || !nombre.trim()} onClick={guardar} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">{ocupado ? "Guardando…" : "Crear paquete"}</Button>
         </div>
