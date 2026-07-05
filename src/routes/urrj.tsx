@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, ScrollText } from "lucide-react";
+import { Scale, ScrollText, Plus } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
@@ -30,10 +30,11 @@ function URRJ() {
   const { soloRegistro } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
+  const [crearNuevo, setCrearNuevo] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
-  const volver = () => { setPrecargar(null); setSolicitudActiva(null); setVista("elegir"); };
+  const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
 
   const dictaminarSolicitud = (sol: SolicitudPredictamen) => {
     setSolicitudActiva(sol);
@@ -110,9 +111,13 @@ function URRJ() {
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
-          {!solicitudActiva && (
+          {!solicitudActiva && !crearNuevo && (
             <>
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                <button onClick={() => setCrearNuevo(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                  <Plus className="h-3.5 w-3.5" /> Crear pre-dictamen (boletín → posición)
+                </button>
                 <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
                   <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
@@ -121,16 +126,21 @@ function URRJ() {
               <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
             </>
           )}
-          {!solicitudActiva && (
+          {!solicitudActiva && !crearNuevo && (
             <div className="pt-1">
               <p className="mb-2 text-sm font-semibold text-muted-foreground">Registro de pre-dictámenes (jurídico)</p>
               <HistorialPredictamen onReDictaminar={reDictaminar} onReDictaminarRegistral={reDictaminarRegistral} onVerFichaVieja={verFichaVieja} />
             </div>
           )}
+          {crearNuevo && (
+            <div>
+              <button onClick={volver} className="text-xs font-medium text-muted-foreground underline">← Cancelar y volver a solicitudes</button>
+            </div>
+          )}
         </>
       ) : null}
 
-      {solicitudActiva?.tipo_dictamen !== "Registral" && (solicitudActiva || vista !== "elegir") && (
+      {solicitudActiva?.tipo_dictamen !== "Registral" && (solicitudActiva || vista !== "elegir" || crearNuevo) && (
         <DictaminadorPosicion
           casos={casos}
           vista={vista}
