@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
@@ -140,30 +141,32 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar);
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
       registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Sucesorio · Decisión: ${decision}` });
       setGuardado("Pre-dictamen (Sucesorio) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
+  const construirDatosPDF = (decision: string): DatosPDF => ({
+    expediente: x.expediente, juzgado: x.juzgado, estado: x.estado, tipoJuicio: "Sucesorio · Caso " + x.caso, posicion: "Sucesorio",
+    ubicacion: x.ubicacion, deudor: x.deCujus, quienCede: x.heredero, queCede: "Derechos hereditarios",
+    dictamen: consolidado.txt,
+    riesgos: [
+      { nombre: "Acreditación", r: r1 },
+      { nombre: "¿Litigable?", r: r2 },
+      { nombre: "¿Recuperable?", r: r3 },
+      { nombre: "Bloqueo legal", r: r4 },
+      { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No recuperable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
+    ],
+    intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cSan, usura: false },
+    admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+    cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
+    boletines: hallazgos,
+  });
+
   const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
     const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
-    const urlPdf = await descargarPredictamenPDF({
-      expediente: x.expediente, juzgado: x.juzgado, estado: x.estado, tipoJuicio: "Sucesorio · Caso " + x.caso, posicion: "Sucesorio",
-      ubicacion: x.ubicacion, deudor: x.deCujus, quienCede: x.heredero, queCede: "Derechos hereditarios",
-      dictamen: consolidado.txt,
-      riesgos: [
-        { nombre: "Acreditación", r: r1 },
-        { nombre: "¿Litigable?", r: r2 },
-        { nombre: "¿Recuperable?", r: r3 },
-        { nombre: "Bloqueo legal", r: r4 },
-        { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No recuperable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
-      ],
-      intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cSan, usura: false },
-      admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
-      cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
-      boletines: hallazgos,
-    }, modo);
+    const urlPdf = await descargarPredictamenPDF(construirDatosPDF(decision), modo);
     if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
   };
 
