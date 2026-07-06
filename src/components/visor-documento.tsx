@@ -29,7 +29,7 @@ export function VisorDocumentoModal({ url, driveId, nombre, onCerrar }: { url: s
   const src = urlVistaPrevia(url, driveId);
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={onCerrar}>
-      <div className="my-4 flex h-[88vh] w-[94vw] max-w-4xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="my-2 flex h-[95vh] w-[97vw] max-w-6xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <p className="truncate text-sm font-semibold" style={{ color: "#0B1E3A" }}>{nombre || "Documento"}</p>
           <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
