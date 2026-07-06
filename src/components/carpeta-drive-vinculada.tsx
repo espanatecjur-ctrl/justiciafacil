@@ -14,7 +14,8 @@ import {
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
@@ -102,6 +103,10 @@ export function CarpetaDriveVinculada({
   // paginación de la vista previa (para no cargar muchos iframes a la vez)
   const PAGE = 6;
   const [pagina, setPagina] = useState(0);
+  const [filtroDoc, setFiltroDoc] = useState("");
+  const docsFiltrados = filtroDoc.trim()
+    ? docs.filter((d) => normaliza(d.name).includes(normaliza(filtroDoc)) || normaliza(d.ruta || "").includes(normaliza(filtroDoc)))
+    : docs;
 
   const cargarDocs = (modo: "todos" | "esta" = modoVista, folderId: string = carpetaId) => {
     if (!carpetaId) return;
@@ -175,9 +180,9 @@ export function CarpetaDriveVinculada({
     }
   };
 
-  const totalPag = Math.max(1, Math.ceil(docs.length / PAGE));
+  const totalPag = Math.max(1, Math.ceil(docsFiltrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
-  const docsPag = docs.slice(pag * PAGE, pag * PAGE + PAGE);
+  const docsPag = docsFiltrados.slice(pag * PAGE, pag * PAGE + PAGE);
 
   return (
     <Card className="legal-card p-4 space-y-3">
@@ -265,6 +270,11 @@ export function CarpetaDriveVinculada({
                 <Folder className="h-3.5 w-3.5" /> Esta carpeta
               </button>
             </div>
+            {/* Filtro instantáneo por nombre (busca también en subcarpetas cuando estás en "Todos") */}
+            <div className="relative min-w-[180px] flex-1">
+              <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={filtroDoc} onChange={(e) => setFiltroDoc(e.target.value)} placeholder="Filtrar documentos por nombre…" className="h-8 pl-8 text-xs" />
+            </div>
             {/* Migas (solo al navegar) */}
             {modoVista === "esta" && rutaFicha.length > 0 && (
               <div className="flex flex-wrap items-center gap-1 text-xs">
@@ -299,9 +309,11 @@ export function CarpetaDriveVinculada({
               {error}
               <p className="mt-1 text-xs">Si dice que no hay acceso, agrega la cuenta de servicio como Lector en esa Unidad de Drive.</p>
             </div>
-          ) : docs.length === 0 ? (
+          ) : docsFiltrados.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              {modoVista === "esta"
+              {filtroDoc.trim()
+                ? `Ningún documento coincide con “${filtroDoc}”.`
+                : modoVista === "esta"
                 ? (subcarpetas.length > 0 ? "Aquí no hay documentos sueltos. Entra a una subcarpeta." : "Esta carpeta no tiene documentos.")
                 : "No se encontraron documentos (ni en subcarpetas)."}
             </p>
