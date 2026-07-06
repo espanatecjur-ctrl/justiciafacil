@@ -15,6 +15,7 @@ import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, Shield
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { reflejarDictamen } from "@/lib/recorrido";
+import type { DatosPDF } from "@/lib/predictamen-pdf";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
@@ -133,8 +134,7 @@ export function DictamenRegistral({
   ];
   const nAnomalias = cotejos.filter((c) => c.estado === "anomalia").length;
 
-  const descargarPDFCompleto = async () => {
-    const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+  const construirDatosPDF = (): DatosPDF => {
     const jrDatos = juridico?.datos || {};
     const jr = juridico?.resultados || {};
     const riesgos = [
@@ -143,7 +143,7 @@ export function DictamenRegistral({
       ...(jr.usucapion ? [{ nombre: "Usucapión", r: jr.usucapion }] : []),
     ].filter((x) => x.r);
     const fin = jr.financiero || { ordinarios: 0, moratorios: 0, iva: 0, totalDeuda: 0, udis: 0, alertaUsura: false };
-    await descargarPredictamenPDF({
+    return {
       expediente: jrDatos.expediente || d.numeroCredito || "", juzgado: jrDatos.juzgado || "", estado: jrDatos.estado || "",
       tipoJuicio: jrDatos.tipoJuicio || "", posicion: jrDatos.posicion || "Actor",
       ubicacion: jrDatos.ubicacion || "", deudor: jrDatos.deudor || "", quienCede: jrDatos.quienCede || "", queCede: jrDatos.queCede || "",
@@ -159,7 +159,12 @@ export function DictamenRegistral({
         firmaElabora, firmaValida,
       },
       cotejos,
-    });
+    };
+  };
+
+  const descargarPDFCompleto = async () => {
+    const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+    await descargarPredictamenPDF(construirDatosPDF());
   };
 
   const asuntoBanner = `Estado registral — Exp. ${d.numeroCredito || "—"} · ${d.resultado || "—"}`;
@@ -181,7 +186,7 @@ export function DictamenRegistral({
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral`, {
         method: "POST",
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
         body: JSON.stringify({
           expediente: d.numeroCredito || null,
           acreditado: d.acreditado || null,
@@ -200,6 +205,22 @@ export function DictamenRegistral({
             await reflejarDictamen({ id: casoId, expediente: d.numeroCredito } as any, "URRJ", "registral", d.resultado === "POSITIVO" ? "positivo" : "negativo", firmaValida?.nombre || firmaElabora?.nombre || null);
           } catch { /* la linea de vida no debe romper el guardado */ }
         }
+        // Archivar el PDF registral (Camino 1): sube el PDF y guarda su URL en pdf_url.
+        try {
+          const rows = await res.json().catch(() => [] as any);
+          const nuevoId = rows?.[0]?.id;
+          if (nuevoId) {
+            const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+            const url = await descargarPredictamenPDF(construirDatosPDF(), "archivar");
+            if (typeof url === "string") {
+              await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?id=eq.${nuevoId}`, {
+                method: "PATCH",
+                headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ pdf_url: url }),
+              });
+            }
+          }
+        } catch { /* el PDF se puede archivar luego */ }
       }
       else setGuardado("No se pudo guardar (¿corriste el SQL de dictamen_registral?).");
     } catch (e: any) {
