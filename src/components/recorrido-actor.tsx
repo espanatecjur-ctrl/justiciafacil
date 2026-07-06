@@ -294,7 +294,7 @@ export function RecorridoActor({
       firma_valida: firmaValida?.nombre || null, firma_valida_fecha: firmaValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar);
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
       registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: `Decisión: ${decision}` });
       setGuardado(`Pre-dictamen guardado: ${decision}`);
     } catch (e: any) {
@@ -302,35 +302,39 @@ export function RecorridoActor({
     } finally { setGuardando(false); }
   };
 
-  const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
+  const construirDatosPDF = (decision: string) => {
     const riesgos = [
       { nombre: "Prescripción", r: rPresc },
       { nombre: "Caducidad", r: rCaduc },
       ...(usaUsucapion ? [{ nombre: "Usucapión", r: rUsuc }] : []),
       ...(avisoJV ? [{ nombre: "Interpelación (JV)", r: avisoJV }] : []),
     ];
+    return {
+      expediente: d.expediente, juzgado: d.juzgado, estado: d.estado, tipoJuicio: d.tipoJuicio, posicion: d.posicion,
+      ubicacion: d.ubicacion, deudor: d.deudor, quienCede: d.quienCede, queCede: d.queCede,
+      dictamen: dictamen.txt, riesgos,
+      intereses: { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura },
+      admin: puedeAdmin && (n(d.valorComercial) || n(d.precioCesion)) ? { valorComercial: n(d.valorComercial), costos: cargas + n(d.costosOperativos), precioCesion: n(d.precioCesion), viab: rViab } : null,
+      anotaciones: d.anotacionesHumanas,
+      firmaElabora, firmaValida, decision,
+      cambios: precargar ? { campos: diffDatos(precargar.datos || {}, d), nota: precargar.cambios } : null,
+      datos: {
+        hipotecaInscrita: d.hipotecaInscrita, prelacion: d.prelacion, propietario: d.propietario, anotaciones: d.anotaciones,
+        etapa: d.etapa, sentenciaFirme: d.sentenciaFirme, situacion: d.situacion, ultimaActuacion: d.ultimaActuacion,
+        ultimoPago: d.ultimoPago, tipoAccion: d.tipoAccion, emplazado: d.emplazado, fechaEmplazamiento: d.fechaEmplazamiento,
+        convenioRatificado: d.convenioRatificado, convenioFecha: d.convenioFecha,
+        interpelacionJV: d.interpelacionJV, interpelacionJVFecha: d.interpelacionJVFecha, interpelacionTipo: d.interpelacionTipo, interpelacionExpediente: d.interpelacionExpediente,
+        quienPosee: d.quienPosee, inicioPosesion: d.inicioPosesion, buenaFe: d.buenaFe, demandaDespojo: d.demandaDespojo,
+        predial: d.predial, agua: d.agua, condominio: d.condominio, fiscales: d.fiscales, laborales: d.laborales, otrosGravamenes: d.otrosGravamenes,
+        margenObjetivo: d.margenObjetivo,
+      },
+      boletines: hallazgos,
+    };
+  };
+
+  const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
     try {
-      const urlPdf = await descargarPredictamenPDF({
-        expediente: d.expediente, juzgado: d.juzgado, estado: d.estado, tipoJuicio: d.tipoJuicio, posicion: d.posicion,
-        ubicacion: d.ubicacion, deudor: d.deudor, quienCede: d.quienCede, queCede: d.queCede,
-        dictamen: dictamen.txt, riesgos,
-        intereses: { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura },
-        admin: puedeAdmin && (n(d.valorComercial) || n(d.precioCesion)) ? { valorComercial: n(d.valorComercial), costos: cargas + n(d.costosOperativos), precioCesion: n(d.precioCesion), viab: rViab } : null,
-        anotaciones: d.anotacionesHumanas,
-        firmaElabora, firmaValida, decision,
-        cambios: precargar ? { campos: diffDatos(precargar.datos || {}, d), nota: precargar.cambios } : null,
-        datos: {
-          hipotecaInscrita: d.hipotecaInscrita, prelacion: d.prelacion, propietario: d.propietario, anotaciones: d.anotaciones,
-          etapa: d.etapa, sentenciaFirme: d.sentenciaFirme, situacion: d.situacion, ultimaActuacion: d.ultimaActuacion,
-          ultimoPago: d.ultimoPago, tipoAccion: d.tipoAccion, emplazado: d.emplazado, fechaEmplazamiento: d.fechaEmplazamiento,
-          convenioRatificado: d.convenioRatificado, convenioFecha: d.convenioFecha,
-          interpelacionJV: d.interpelacionJV, interpelacionJVFecha: d.interpelacionJVFecha, interpelacionTipo: d.interpelacionTipo, interpelacionExpediente: d.interpelacionExpediente,
-          quienPosee: d.quienPosee, inicioPosesion: d.inicioPosesion, buenaFe: d.buenaFe, demandaDespojo: d.demandaDespojo,
-          predial: d.predial, agua: d.agua, condominio: d.condominio, fiscales: d.fiscales, laborales: d.laborales, otrosGravamenes: d.otrosGravamenes,
-          margenObjetivo: d.margenObjetivo,
-        },
-        boletines: hallazgos,
-      }, modo);
+      const urlPdf = await descargarPredictamenPDF(construirDatosPDF(decision), modo);
       if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
     } catch (e: any) {
       setGuardado("No se pudo generar el PDF: " + e.message);
