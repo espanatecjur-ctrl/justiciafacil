@@ -73,6 +73,13 @@ function areaActual(c: CasoJuridico, d?: DictamenRow): string {
 
 const PAGE = 25;
 
+// Cuenta cuántas de las 5 firmas del dictamen final ya están puestas.
+const SLOTS_UCP = ["elabora", "dil", "gad", "dgc", "dge"];
+function firmasUCP(d: any): number {
+  const f = d?.firmas || {};
+  return SLOTS_UCP.filter((k) => f?.[k]?.fecha).length;
+}
+
 interface Seleccion { caso: CasoJuridico; dictamen: DictamenRow; pred?: PredFuente; tab: "requisitos" | "juridico" | "rppc"; }
 
 function UCP() {
@@ -451,6 +458,7 @@ function UCP() {
                         <div className="flex flex-col gap-1">
                           {info && <Badge variant="outline" className={`border ${info.cls} w-fit`}>{info.label}</Badge>}
                           {d && <Badge variant="outline" className={`border ${VEREDICTO_CLS[ver] || ""} w-fit text-[10px]`}>{ver}</Badge>}
+                          {d && <Badge variant="outline" className={`w-fit border text-[10px] ${firmasUCP(d) >= 5 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border text-muted-foreground"}`}>✍ {firmasUCP(d)}/5 firmas</Badge>}
                         </div>
                       </TableCell>
                       <TableCell>
