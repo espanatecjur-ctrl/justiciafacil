@@ -20,7 +20,7 @@ import {
   Check, X, ClipboardCheck, Lock, Calculator, Download, Eye } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
-import { descargarPredictamenPDF } from "@/lib/predictamen-pdf";
+import { descargarPredictamenPDF, type DatosPDF } from "@/lib/predictamen-pdf";
 import { DictamenRegistral, type PrecargaRegistral } from "@/components/dictamen-registral";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { BannerCorreo } from "@/components/banner-correo";
@@ -302,7 +302,7 @@ export function RecorridoActor({
     } finally { setGuardando(false); }
   };
 
-  const construirDatosPDF = (decision: string) => {
+  const construirDatosPDF = (decision: string): DatosPDF => {
     const riesgos = [
       { nombre: "Prescripción", r: rPresc },
       { nombre: "Caducidad", r: rCaduc },
