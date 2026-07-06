@@ -4,6 +4,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
 import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
+import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
@@ -399,6 +400,8 @@ function FichaExpedientePage() {
       </Seccion>
 
       {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
+      <CarpetaDriveVinculada caso={c} onGuardar={(campos) => guardarDatos(campos, () => {})} />
+
       <DocumentosGarantia area={areaFicha} caso={c} />
 
       {/* Cronología URRJ: dictámenes firmados y correos preparados */}
