@@ -6,6 +6,7 @@
 // ============================================================
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import type { DatosFirma } from "@/components/firma-parte";
+import { subirDocPredictamen } from "@/lib/solicitud-predictamen";
 
 const NAVY: [number, number, number] = [11, 30, 58];
 const TEAL: [number, number, number] = [12, 92, 70];
@@ -59,7 +60,7 @@ export interface DatosPDF {
 
 const mxn = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
-export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "ver" = "descargar"): Promise<string | void> {
+export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "ver" | "archivar" = "descargar"): Promise<string | void> {
   const mod: any = await import(/* @vite-ignore */ "https://esm.sh/jspdf@2.5.1");
   const jsPDF = mod.jsPDF || mod.default;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -379,6 +380,14 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   const nombre = `predictamen-${(d.expediente || "caso").replace(/[^\w-]/g, "_")}.pdf`;
   if (modo === "ver") {
     return doc.output("bloburl") as unknown as string;
+  }
+  if (modo === "archivar") {
+    // Genera el PDF, lo sube a Storage (bucket predictamen-docs) y devuelve la
+    // URL permanente para guardarla en pdf_url. Reusa el mismo generador.
+    const blob = doc.output("blob") as Blob;
+    const file = new File([blob], nombre, { type: "application/pdf" });
+    const { url } = await subirDocPredictamen(file);
+    return url;
   }
   doc.save(nombre);
 }
