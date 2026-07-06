@@ -9,9 +9,9 @@ import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { HITOS_UCP } from "@/lib/ucp-dictamen";
 import { descargarDictamenFinalPDF, type FirmaConTitulo } from "@/lib/dictamen-final-pdf";
 import { type DictamenRow, type PredFuente } from "@/components/ficha-ucp";
-import { cargarPermisosUCP, puedeFirmar, puedePasarEtapaB } from "@/lib/ucp-permisos";
+import { cargarPermisosUCP, puedeFirmar, puedePasarEtapaB, FIRMA_ROL } from "@/lib/ucp-permisos";
 import {
-  Save, Loader2, FileDown, ArrowRightCircle, CheckCircle2, AlertTriangle, Calculator, Stamp,
+  Save, Loader2, FileDown, ArrowRightCircle, CheckCircle2, AlertTriangle, Calculator, Stamp, Mail,
 } from "lucide-react";
 
 const headers = {
@@ -109,6 +109,41 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       onGuardado();
     } catch (e: any) { setError("No se pudo guardar la firma: " + e.message); }
+  };
+
+  // ---- solicitar firma por correo (genera link único y abre el correo prellenado) ----
+  const [solicitando, setSolicitando] = useState<SlotFirma | null>(null);
+  const solicitarFirma = async (s: { clave: SlotFirma; titulo: string }) => {
+    setSolicitando(s.clave); setError(null);
+    try {
+      // correo del firmante según su rol (si no hay, lo pregunta)
+      let correo = "";
+      try {
+        const rf = FIRMA_ROL[s.clave];
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=correo&rol=eq.${encodeURIComponent(rf)}&limit=1`, { headers });
+        const rows = r.ok ? await r.json() : [];
+        correo = rows?.[0]?.correo || "";
+      } catch { /* no-op */ }
+      if (!correo) {
+        correo = window.prompt(`¿A qué correo mando el link de firma para "${s.titulo}"?`) || "";
+        if (!correo) { setSolicitando(null); return; }
+      }
+      // crea la solicitud (token único)
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud`, {
+        method: "POST", headers: { ...headers, Prefer: "return=representation" },
+        body: JSON.stringify({ dictamen_id: dictamen.id, caso_id: caso.id, slot: s.clave, correo_esperado: correo }),
+      });
+      if (!res.ok) throw new Error(`Supabase ${res.status} — ¿corriste el SQL de firma_solicitud?`);
+      const row = (await res.json())?.[0];
+      const link = `${window.location.origin}/firmar?token=${row.token}`;
+      const asunto = `Firma requerida · ${caso.expediente || "dictamen"} · ${s.titulo}`;
+      const cuerpo = `Hola,\n\nSe requiere tu firma (${s.titulo}) en el dictamen de la garantía ${caso.expediente || ""}.\n\nEntra a este link con tu cuenta de DIIPA para revisar y firmar:\n${link}\n\nGracias.`;
+      window.location.href = `mailto:${correo}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    } catch (e: any) {
+      setError("No se pudo generar el link de firma: " + (e?.message || ""));
+    } finally {
+      setSolicitando(null);
+    }
   };
 
   // ---- pasar a Etapa B (UCM) ----
@@ -223,14 +258,21 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {SLOTS.map((s) => (
-              <FirmaParte
-                key={s.clave}
-                titulo={s.titulo}
-                cargoSugerido={s.cargo}
-                valor={firmas[s.clave] || null}
-                onFirmar={(f) => firmar(s.clave, f)}
-                bloqueado={!puedeFirmar(s.clave, rol)}
-              />
+              <div key={s.clave} className="space-y-1.5">
+                <FirmaParte
+                  titulo={s.titulo}
+                  cargoSugerido={s.cargo}
+                  valor={firmas[s.clave] || null}
+                  onFirmar={(f) => firmar(s.clave, f)}
+                  bloqueado={!puedeFirmar(s.clave, rol)}
+                />
+                {!firmas[s.clave]?.fecha && (
+                  <button onClick={() => solicitarFirma(s)} disabled={solicitando === s.clave}
+                    className="flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline disabled:opacity-50">
+                    {solicitando === s.clave ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />} Solicitar firma por correo
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </CardContent>
