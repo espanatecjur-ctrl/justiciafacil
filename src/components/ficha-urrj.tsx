@@ -63,12 +63,12 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       setReg(u?.dic_registral ?? null);
     }).catch(() => {});
     const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
       .catch(() => {});
     const filtroReg = garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,created_at&${filtroReg}&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,terminado,created_at&${filtroReg}&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => setPredReg(rows?.[0] || null))
       .catch(() => {});
@@ -154,7 +154,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Scale className="h-4 w-4" /> Jurídico</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-emerald-800">✓ tiene</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${predJur.terminado ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>{predJur.terminado ? "Dictamen jurídico terminado" : "Pre-dictamen abierto"}</span>
               </div>
               <p className="mt-1.5 text-xs text-emerald-800">Resultado: <b>{predJur.dictamen_sugerido || "—"}</b> · versión {predJur.version || 1}</p>
               <p className="text-xs text-emerald-800">Firmas: Elabora {predJur.firma_elabora ? "✓" : "—"} · Valida {predJur.firma_valida ? "✓" : "—"}</p>
@@ -179,7 +179,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Landmark className="h-4 w-4" /> Registral (RPPC)</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-emerald-800">✓ tiene</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${predReg.terminado ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>{predReg.terminado ? "Registral terminado" : "Registral abierto"}</span>
               </div>
               <p className="mt-1.5 text-xs text-emerald-800">Resultado: <b>{predReg.resultado || "—"}</b>{predReg.hay_adicional ? " · con gravamen adicional" : ""}</p>
               <p className="text-xs text-emerald-800">Firmas: Elabora {predReg.firma_elabora?.nombre ? "✓" : "—"} · Valida {predReg.firma_valida?.nombre ? "✓" : "—"}</p>
