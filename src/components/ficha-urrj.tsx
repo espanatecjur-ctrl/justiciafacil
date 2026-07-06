@@ -22,7 +22,8 @@ import { obtenerRecorrido, textoDictamen, type Dictamen } from "@/lib/recorrido"
 import { TIPOS_TRAMITE } from "@/lib/urrj-tramites";
 import { diasHabiles } from "@/lib/urrj-motores";
 import { type Precarga } from "@/lib/predictamen-guardar";
-import { ArrowLeft, Scale, Landmark, Gavel, Paperclip, Activity, Clock, ArrowRight } from "lucide-react";
+import { ArrowLeft, Scale, Landmark, Gavel, Paperclip, Activity, Clock, ArrowRight, PenLine, Loader2 } from "lucide-react";
+import { VincularClienteModal } from "@/components/vincular-cliente";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -49,6 +50,16 @@ function VeredictoBadge({ label, dic }: { label: string; dic: Dictamen }) {
 }
 
 // Fila de dato (label + valor); marca ⚠️ si vacío y es importante
+const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
+function Campo({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 block text-[11px] text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 function Dato({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
   const vacio = !valor || !String(valor).trim();
   return (
@@ -86,6 +97,13 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [predJur, setPredJur] = useState<any>(null);
   const [predReg, setPredReg] = useState<any>(null);
   const [preview, setPreview] = useState<null | "juridico" | "registral">(null);
+  const [editAnt, setEditAnt] = useState(false);
+  const [editEst, setEditEst] = useState(false);
+  const [verVincular, setVerVincular] = useState(false);
+  const [override, setOverride] = useState<Partial<RefGarantia>>({});
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [guardandoDatos, setGuardandoDatos] = useState(false);
+  const [errorDatos, setErrorDatos] = useState<string | null>(null);
 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
 
@@ -154,6 +172,23 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     juzgado: garantia.juzgado,
     cliente_nombre: garantia.cliente_nombre,
   } as CasoJuridico;
+
+  // garantía con las ediciones locales aplicadas (para reflejarlas sin recargar)
+  const g = { ...garantia, ...override };
+  const guardarDatos = async (campos: Partial<RefGarantia>, cerrar: () => void) => {
+    if (!garantia.id) { setErrorDatos("El caso no tiene id para guardar."); return; }
+    setGuardandoDatos(true); setErrorDatos(null);
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${garantia.id}`, {
+        method: "PATCH", headers, body: JSON.stringify(campos),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      setOverride((p) => ({ ...p, ...campos }));
+      cerrar();
+    } catch {
+      setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
+    } finally { setGuardandoDatos(false); }
+  };
 
   const decisionCls = /pasa a ucp/i.test(decision)
     ? "bg-[color:var(--teal)]/10 text-[color:var(--teal)] border-[color:var(--teal)]/30"
@@ -311,22 +346,81 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
 
       {/* Antecedente + Estatus */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía">
-          <Dato label="ID garantía" valor={garantia.id} />
-          <Dato label="No. de crédito" valor={garantia.expediente} />
-          <Dato label="Dirección de la garantía" valor={garantia.direccion_garantia || predJur?.datos?.ubicacion} importante />
-          <Dato label="Cliente / deudor" valor={garantia.cliente_nombre || garantia.deudor || predJur?.datos?.deudor} importante />
-          <Dato label="Entidad" valor={garantia.entidad || predJur?.datos?.estado} />
+        <Seccion
+          icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />}
+          titulo="Antecedente de la garantía"
+          accion={
+            <button onClick={() => { setForm({ direccion_garantia: g.direccion_garantia || "", entidad: g.entidad || "" }); setErrorDatos(null); setEditAnt(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+              <PenLine className="h-3 w-3" /> Editar / validar
+            </button>
+          }
+        >
+          {editAnt ? (
+            <div className="space-y-2">
+              <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
+              <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
+              <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
+                <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{g.cliente_nombre || "sin vincular"}</b></span>
+                <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}><Scale className="h-3 w-3" /> {g.cliente_nombre ? "Cambiar" : "Vincular"} cliente</button>
+              </div>
+              {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => guardarDatos({ direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: TEAL }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Dato label="ID garantía" valor={g.id} />
+              <Dato label="No. de crédito" valor={g.expediente} />
+              <Dato label="Dirección de la garantía" valor={g.direccion_garantia || predJur?.datos?.ubicacion} importante />
+              <Dato label="Cliente / deudor" valor={g.cliente_nombre || g.deudor || predJur?.datos?.deudor} importante />
+              <Dato label="Entidad" valor={g.entidad || predJur?.datos?.estado} />
+            </>
+          )}
         </Seccion>
 
-        <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual">
-          <Dato label="Etapa actual" valor="Pre-dictamen (URRJ)" />
-          <Dato label="Estatus general" valor={estatusGeneral} />
-          <Dato label="Posición" valor={predJur?.posicion} />
-          <Dato label="Unidad" valor="URRJ · Dictaminación" />
-          <Dato label="Folio" valor={folio} />
+        <Seccion
+          icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />}
+          titulo="Estatus actual"
+          accion={
+            <button onClick={() => { setForm({ expediente: g.expediente || "", juzgado: g.juzgado || "" }); setErrorDatos(null); setEditEst(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+              <PenLine className="h-3 w-3" /> Editar / validar
+            </button>
+          }
+        >
+          {editEst ? (
+            <div className="space-y-2">
+              <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1393/2017" /></Campo>
+              <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Primero Civil…" /></Campo>
+              <p className="text-[11px] text-muted-foreground">Con el expediente y el juzgado, el Boletín ya puede jalar las actuaciones.</p>
+              {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => guardarDatos({ expediente: form.expediente, juzgado: form.juzgado }, () => setEditEst(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: TEAL }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Dato label="Etapa actual" valor="Pre-dictamen (URRJ)" />
+              <Dato label="Estatus general" valor={estatusGeneral} />
+              <Dato label="No. de expediente / juicio" valor={g.expediente} />
+              <Dato label="No. de juzgado" valor={g.juzgado} />
+              <Dato label="Posición" valor={predJur?.posicion} />
+              <Dato label="Unidad" valor="URRJ · Dictaminación" />
+              <Dato label="Folio" valor={folio} />
+            </>
+          )}
         </Seccion>
       </div>
+
+      {verVincular && (
+        <VincularClienteModal
+          caso={casoLV}
+          onClose={() => setVerVincular(false)}
+          onVinculado={(cl) => { setOverride((p) => ({ ...p, cliente_nombre: cl.nombre ?? undefined })); setVerVincular(false); }}
+        />
+      )}
 
       {/* Dictamen de la garantía · URRJ */}
       <Seccion
