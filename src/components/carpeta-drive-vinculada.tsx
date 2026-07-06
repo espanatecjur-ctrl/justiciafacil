@@ -8,12 +8,12 @@
 import { useEffect, useState } from "react";
 import {
   HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
-  Loader2, RefreshCw, X, Link2,
+  Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
 import { type CasoJuridico } from "@/lib/supabase";
@@ -57,6 +57,22 @@ export function CarpetaDriveVinculada({
   // crear carpeta nueva (reusa el crear-carpeta del sistema: Área → Rol → garantía)
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
+
+  // sincronizar (copiar Drive → almacén del sistema)
+  const [sincro, setSincro] = useState(false);
+  const [msgSincro, setMsgSincro] = useState<string | null>(null);
+  const sincronizar = async () => {
+    if (!carpetaId) return;
+    setSincro(true); setMsgSincro(null);
+    const r = await sincronizarCarpeta(caso.id, carpetaId);
+    setSincro(false);
+    if (!r.ok) { setMsgSincro("⚠️ " + (r.error || "No se pudo sincronizar.")); return; }
+    const partes = [`Copiados: ${r.copiados ?? 0}`];
+    if ((r.restantes ?? 0) > 0) partes.push(`faltan ${r.restantes} (dale de nuevo)`);
+    else partes.push("todo al día ✅");
+    if (r.errores && r.errores.length) partes.push(`${r.errores.length} con aviso`);
+    setMsgSincro(partes.join(" · "));
+  };
 
   // sugerencias por número (expediente / crédito / gar)
   const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
@@ -175,9 +191,16 @@ export function CarpetaDriveVinculada({
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800"><FolderCheck className="h-3 w-3" /> Vinculada</span>
             <span className="flex-1" />
             <button onClick={cargarDocs} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
+            {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             {puedeDrive && <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>}
           </div>
+
+          {msgSincro && (
+            <div className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)]/5 px-3 py-1.5 text-xs text-[color:var(--teal)]">
+              <CheckCircle2 className="h-3.5 w-3.5" /> {msgSincro}
+            </div>
+          )}
 
           {cargando ? (
             <p className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Cargando documentos…</p>
