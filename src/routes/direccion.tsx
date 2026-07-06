@@ -15,8 +15,8 @@ export const Route = createFileRoute("/direccion")({
   component: Direccion,
 });
 
-// Solo estos roles entran al módulo de Dirección.
-const ROLES_DIRECCION = ["DGE", "Super_Admin"];
+// Solo la Directora (DGE) entra al módulo de Dirección. Nadie más, ni Tecnología.
+const ROLES_DIRECCION = ["DGE"];
 
 type TabKey = "documentos" | "abogados" | "validaciones" | "faseb";
 
