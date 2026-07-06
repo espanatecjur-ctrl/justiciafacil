@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
 import { useNavigate } from "@tanstack/react-router";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2, UserCheck, Scale, Landmark } from "lucide-react";
@@ -66,6 +67,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
   };
   // Ver el pre-dictamen (la vista de ficha de la garantía con el dictamen)
   const [verPre, setVerPre] = useState<Fila | null>(null);
+  const [fichaURRJ, setFichaURRJ] = useState<RefGarantia | null>(null);
   const [escogerJuicio, setEscogerJuicio] = useState<Fila | null>(null);
 
   useEffect(() => {
@@ -123,6 +125,13 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
           </div>
         </div>
       )}
+      {fichaURRJ && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-2 sm:p-4" onClick={() => setFichaURRJ(null)}>
+          <div className="mx-auto my-2 max-w-5xl rounded-xl bg-card p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <FichaURRJ garantia={fichaURRJ} onVolver={() => setFichaURRJ(null)} />
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
@@ -175,7 +184,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
         if (!f) return null;
         return (
           <div data-menu-predictamen onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
-            <Item icon={FolderOpen} onClick={() => { setMenu(null); if (f.caso_id && onVerFichaVieja) onVerFichaVieja(f); else setVerPre(f); }}>Ver ficha</Item>
+            <Item icon={FolderOpen} onClick={() => { setMenu(null); setFichaURRJ({ id: f.caso_id || undefined, expediente: f.expediente || undefined, direccion_garantia: f.datos?.ubicacion, juzgado: f.juzgado || undefined, deudor: f.datos?.deudor, cliente_nombre: f.datos?.deudor }); }}>Ver ficha</Item>
             <Item icon={FileText} onClick={() => { setMenu(null); setVerPre(f); }}>Ver pre-dictamen</Item>
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
