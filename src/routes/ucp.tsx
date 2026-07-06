@@ -65,9 +65,9 @@ function normArea(u?: string | null): string {
   return s.trim();
 }
 function areaActual(c: CasoJuridico, d?: DictamenRow): string {
-  if (d?.estado === "etapa_b") return "UCM";
+  if (d?.estado === "etapa_b") return "UCM"; // ya pasó a Fase B → UCM
   const a = normArea(c.unidad);
-  return (a && a !== "UCP") ? a : "UCM";
+  return a || "UCP"; // entrada / por defecto → UCP
 }
 
 const PAGE = 25;
