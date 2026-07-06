@@ -23,6 +23,7 @@ import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { SeccionFinal } from "@/components/seccion-final";
 import { FirmasDictamen } from "@/components/firmas-dictamen";
+import { BannerCorreo } from "@/components/banner-correo";
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -101,6 +102,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
   const [tab, setTab] = useState(tabInicial === "r2" ? "juridico" : tabInicial);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [verCorreoDocs, setVerCorreoDocs] = useState(false);
 
   // ---- requisitos ----
   const [req, setReq] = useState<Requisitos>({ ...REQ_VACIOS(), ...(dictamen.requisitos || {}) });
@@ -199,14 +201,42 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       setHitos(hitosCalculados);
       onGuardado();
+      // Si el dictamen jurídico salió POSITIVO, se prepara el correo para
+      // solicitar los documentos obligatorios de este paso (juzgado + RPPC).
+      if (veredicto.txt === "POSITIVO") setVerCorreoDocs(true);
     } catch (e: any) { setError("No se pudo guardar el dictamen jurídico: " + e.message); }
     finally { setGuardando(false); }
   };
 
   const reqOK = reqCompletos(req);
 
+  const asuntoDocs = `Dictamen jurídico POSITIVO — Solicitar documentos · Exp. ${caso.expediente || "—"}`;
+  const mensajeDocs = [
+    "El dictamen jurídico resultó POSITIVO.",
+    "",
+    "En este paso jurídico deben solicitarse los documentos importantes. Son OBLIGATORIOS:",
+    "• Visita al juzgado (seguimiento jurídico)",
+    "• Documentos completos del RPPC (dictamen registral)",
+    "",
+    `Expediente: ${caso.expediente || "—"}`,
+    `Garantía: ${caso.direccion_garantia || "—"}`,
+    `Juzgado: ${caso.juzgado || "—"}`,
+    `Cliente: ${caso.cliente_nombre || caso.cliente_codigo || "—"}`,
+    "",
+    "El seguimiento no se bloquea: se puede avanzar capturando. Pero para pasar a Fase B, el dictamen jurídico y el registral deben quedar ambos POSITIVOS.",
+  ].join("\n");
+
   return (
     <div className="space-y-4">
+      {verCorreoDocs && (
+        <BannerCorreo
+          titulo="Solicitar documentos — Dictamen jurídico POSITIVO"
+          asuntoInicial={asuntoDocs}
+          mensajeInicial={mensajeDocs}
+          folio={caso.expediente}
+          onCerrar={() => setVerCorreoDocs(false)}
+        />
+      )}
       {/* encabezado */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
         <div className="min-w-0">
