@@ -4,7 +4,7 @@ import { Check, X as XIcon, Clock, Circle } from "lucide-react";
 import { type CasoJuridico } from "@/lib/supabase";
 import { getAuth } from "@/lib/auth";
 import { formalizacionDeCaso } from "@/lib/formalizacion";
-import { AREAS_LINEA, COLOR, colorDeArea, textoDictamen, obtenerRecorrido, marcarArea, type PasoRecorrido, type Dictamen } from "@/lib/recorrido";
+import { AREAS_LINEA, COLOR, colorDeArea, textoDictamen, obtenerRecorrido, marcarArea, preDictamenURRJ, type PasoRecorrido, type Dictamen } from "@/lib/recorrido";
 
 const NAVY = "#0B1E3A";
 
@@ -25,7 +25,20 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
   const [form, setForm] = useState<{ id?: string; estado_tramite?: string | null } | null>(null);
   useEffect(() => { if (caso.id) formalizacionDeCaso(caso.id).then(setForm); }, [caso.id]);
 
-  const cargar = () => { obtenerRecorrido(caso).then(setPasos).finally(() => setCargando(false)); };
+  const cargar = () => {
+    obtenerRecorrido(caso).then(async (mapa) => {
+      // Conectar la bolita URRJ al pre-dictamen abierto real (manda el jurídico).
+      const dicURRJ = await preDictamenURRJ(caso);
+      if (dicURRJ) {
+        const base = mapa["URRJ"] || {
+          caso_id: caso.id || null, expediente: caso.expediente || null, area: "URRJ",
+          dic_registral: null, dic_juridico: null, nota: null, marcado_por: null,
+        };
+        mapa["URRJ"] = { ...base, dic_juridico: dicURRJ };
+      }
+      setPasos(mapa);
+    }).finally(() => setCargando(false));
+  };
   useEffect(cargar, [caso.id]);
 
   // al abrir un área, precarga sus dictámenes actuales
