@@ -98,6 +98,20 @@ export function textosDeCaso(caso: { expediente?: string | null; no_credito?: st
   return Array.from(set);
 }
 
+/** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema. */
+export async function sincronizarCarpeta(casoId: string, carpetaId: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/sincronizar-drive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ casoId, carpetaId }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
 export function esCarpeta(it: ItemDrive): boolean {
   return it.mimeType === CARPETA_MIME;
 }
