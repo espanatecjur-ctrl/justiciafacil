@@ -458,15 +458,10 @@ function FichaExpedientePage() {
             )}
           </Seccion>
 
-          {/* Carpeta de Drive vinculada + vista previa de documentos */}
-          <CarpetaDriveVinculada caso={c} area={areaFicha} modulo={moduloPermFicha} onGuardar={(campos) => guardarDatos(campos, () => {})} />
-
-          <DocumentosGarantia area={areaFicha} caso={c} />
-
           {/* Cronología URRJ: dictámenes firmados y correos preparados */}
           <div className="rounded-xl border border-border bg-card p-5">
             <CronologiaURRJ casoId={c.id} expediente={c.expediente} />
-          </div>
+          </div>>
 
           {/* ANTECEDENTES (solo lectura): pre-dictámenes, dictámenes, firmas, actuaciones y evidencias */}
           <AntecedentesGarantia casoId={c.id} expediente={c.expediente} />
@@ -487,7 +482,12 @@ function FichaExpedientePage() {
 
       {/* ============ MÓDULO DOCUMENTOS (Parte 3) ============ */}
       {modulo === "documentos" && (
-        <Proximamente icon={<FolderOpen className="h-4 w-4" />} titulo="Documentos (vista única, tipo Drive)" nota="Una vista dedicada de todos los documentos del expediente, como una carpeta de Drive. Llega en la Parte 3." />
+        <div className="space-y-4">
+          {/* Carpeta de Drive vinculada + vista previa de documentos */}
+          <CarpetaDriveVinculada caso={c} area={areaFicha} modulo={moduloPermFicha} onGuardar={(campos) => guardarDatos(campos, () => {})} />
+
+          <DocumentosGarantia area={areaFicha} caso={c} />
+        </div>
       )}
 
       {/* ============ MÓDULO BOLETÍN (Parte 3) ============ */}
