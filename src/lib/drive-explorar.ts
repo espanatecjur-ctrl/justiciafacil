@@ -15,6 +15,7 @@ export interface ItemDrive {
   webViewLink?: string | null;
   modifiedTime?: string | null;
   size?: string | null;
+  ruta?: string | null;
 }
 
 export interface Unidad {
@@ -55,6 +56,16 @@ export async function listarUnidades(): Promise<{ ok: boolean; unidades: Unidad[
 export async function listarCarpeta(carpetaId: string): Promise<{ ok: boolean; items: ItemDrive[]; error?: string }> {
   try {
     const d = await llamar<{ ok: boolean; items?: ItemDrive[]; error?: string }>({ accion: "listar", carpetaId });
+    return { ok: !!d.ok, items: d.items || [], error: d.error };
+  } catch (e: any) {
+    return { ok: false, items: [], error: String(e?.message || e) };
+  }
+}
+
+/** Lista TODOS los documentos bajando por todas las subcarpetas (recursivo). */
+export async function listarTodo(carpetaId: string): Promise<{ ok: boolean; items: ItemDrive[]; error?: string }> {
+  try {
+    const d = await llamar<{ ok: boolean; items?: ItemDrive[]; error?: string }>({ accion: "listar_todo", carpetaId });
     return { ok: !!d.ok, items: d.items || [], error: d.error };
   } catch (e: any) {
     return { ok: false, items: [], error: String(e?.message || e) };
