@@ -3,6 +3,7 @@
 // Llama a /.netlify/functions/explorar-drive para leer carpetas
 // y documentos de Drive (Unidades compartidas) SIN crear nada.
 // ============================================================
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 export const CARPETA_MIME = "application/vnd.google-apps.folder";
 
@@ -146,6 +147,44 @@ export async function buscarEnDrive(texto: string): Promise<{ ok: boolean; carpe
     return { ok: !!d.ok, carpetas: d.carpetas || [], archivos: d.archivos || [], error: d.error };
   } catch (e: any) {
     return { ok: false, carpetas: [], archivos: [], error: String(e?.message || e) };
+  }
+}
+
+export interface Copia {
+  drive_id: string;
+  storage_path: string;
+  nombre: string | null;
+  mime: string | null;
+}
+
+/** Copias ya hechas al almacén del sistema para un expediente (por caso). */
+export async function listarCopias(casoId: string): Promise<Record<string, Copia>> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/drive_copia?select=drive_id,storage_path,nombre,mime&caso_id=eq.${encodeURIComponent(casoId)}`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    const filas: Copia[] = r.ok ? await r.json() : [];
+    const mapa: Record<string, Copia> = {};
+    for (const f of filas) mapa[f.drive_id] = f;
+    return mapa;
+  } catch {
+    return {};
+  }
+}
+
+/** Firma (temporalmente) los enlaces de varias copias del almacén. */
+export async function firmarCopias(paths: string[]): Promise<Record<string, string>> {
+  try {
+    const r = await fetch("/.netlify/functions/enlace-copia", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+    const d = await r.json();
+    return d.ok ? (d.urls || {}) : {};
+  } catch {
+    return {};
   }
 }
 
