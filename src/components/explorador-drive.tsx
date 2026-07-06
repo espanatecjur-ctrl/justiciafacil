@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import {
   listarUnidades, listarCarpeta, resolverEntrada, correoCuentaServicio,
-  esCarpeta, previewDeId, tipoLegible, type ItemDrive, type Unidad,
+  esCarpeta, previewDeId, tipoLegible, buscarEnDrive, normaliza,
+  type ItemDrive, type Unidad, type ArchivoEncontrado,
 } from "@/lib/drive-explorar";
 
 type Miga = { id: string; name: string };
@@ -36,6 +37,22 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: {
   const [modo, setModo] = useState<"grid" | "lista">("grid");
   const [docSel, setDocSel] = useState<ItemDrive | null>(null);
   const [copiado, setCopiado] = useState(false);
+
+  // buscador inteligente (filtra Unidades al instante + busca dentro bajo botón)
+  const [busq, setBusq] = useState("");
+  const [buscando, setBuscando] = useState(false);
+  const [resBusq, setResBusq] = useState<{ carpetas: Unidad[]; archivos: ArchivoEncontrado[] } | null>(null);
+  const buscarDentro = async () => {
+    if (normaliza(busq).length < 2) return;
+    setBuscando(true); setResBusq(null);
+    const r = await buscarEnDrive(busq.trim());
+    setBuscando(false);
+    setResBusq({ carpetas: r.carpetas, archivos: r.archivos });
+  };
+  const unidadesFiltradas = useMemo(() => {
+    const t = normaliza(busq);
+    return t ? unidades.filter((u) => normaliza(u.name).includes(t)) : unidades;
+  }, [unidades, busq]);
 
   // --- cargar Unidades compartidas + correo de la cuenta de servicio ---
   const cargarUnidades = () => {
@@ -127,7 +144,68 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: {
         </div>
       </div>
 
+      {/* Buscador inteligente (arriba, prominente) */}
+      {ruta.length === 0 && (
+        <div className="space-y-2">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input value={busq} onChange={(e) => setBusq(e.target.value)} onKeyDown={(e) => e.key === "Enter" && buscarDentro()} placeholder="Buscar por garantía, calle, crédito…" className="pl-8" />
+              </div>
+              <button onClick={buscarDentro} disabled={buscando || normaliza(busq).length < 2} className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)]/40 px-3 py-2 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-50">
+                {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Buscar también dentro de las carpetas
+              </button>
+            </div>
+
+            {/* Resultados de "buscar dentro" */}
+            {resBusq && (
+              <div className="space-y-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+                {resBusq.carpetas.length === 0 && resBusq.archivos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sin coincidencias para “{busq}”.</p>
+                ) : (
+                  <>
+                    {resBusq.carpetas.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-[11px] font-semibold text-[color:var(--teal)]">Carpetas que coinciden</p>
+                        <div className="space-y-1">
+                          {resBusq.carpetas.map((c) => (
+                            <div key={c.id} className="flex items-center gap-2 rounded-md border border-input bg-white px-2.5 py-1.5">
+                              <Folder className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
+                              <button onClick={() => abrirCarpeta(c.id, c.name, [{ id: c.id, name: c.name }])} className="min-w-0 flex-1 truncate text-left text-sm hover:underline" title={c.name}>{c.name}</button>
+                              {onElegirCarpeta && <button onClick={() => onElegirCarpeta(c.id, c.name)} className="shrink-0 rounded px-2 py-0.5 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">Usar</button>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {resBusq.archivos.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-[11px] font-semibold text-[color:var(--teal)]">Documentos que coinciden</p>
+                        <div className="space-y-1">
+                          {resBusq.archivos.map((a) => (
+                            <div key={a.id} className="flex items-center gap-2 rounded-md border border-input bg-white px-2.5 py-1.5">
+                              <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm" title={a.name}>{a.name}</p>
+                                {a.carpeta ? <p className="truncate text-[10px] text-muted-foreground">📁 en: {a.carpeta}</p> : null}
+                              </div>
+                              <button onClick={() => setDocSel({ id: a.id, name: a.name, mimeType: a.mimeType, webViewLink: a.webViewLink })} className="shrink-0 text-[color:var(--teal)] hover:underline" title="Vista previa"><Maximize2 className="h-4 w-4" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Pegar enlace / ID (funciona aunque la unidad no aparezca en la lista) */}
+      <p className="text-[11px] text-muted-foreground">¿Ya tienes el enlace de la carpeta? Pégalo aquí (opcional):</p>
       <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]">
         <div className="relative">
           <Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -166,9 +244,9 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: {
             <p className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Leyendo tus Unidades compartidas…</p>
           ) : (
             <>
-              {unidades.length > 0 && (
+              {unidadesFiltradas.length > 0 && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {unidades.map((u) => (
+                  {unidadesFiltradas.map((u) => (
                     <div key={u.id} className="flex items-center gap-1 rounded-md border border-input hover:border-[color:var(--teal)]">
                       <button onClick={() => entrarUnidad(u)} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-[color:var(--teal)]/5">
                         <Folder className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
