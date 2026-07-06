@@ -15,7 +15,7 @@ export interface Fila {
   expediente: string | null; juzgado: string | null; estado: string | null;
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
   datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number; terminado?: boolean;
-  abogado_id?: string | null; abogado_nombre?: string | null;
+  abogado_id?: string | null; abogado_nombre?: string | null; caso_id?: string | null;
 }
 
 const POS_COLOR: Record<string, string> = {
@@ -86,6 +86,15 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
     const t = q.trim().toLowerCase();
     let arr = filas;
     if (t) arr = filas.filter((f) => [f.folio, f.posicion, f.tipo_juicio, f.expediente, f.juzgado, f.estado, f.dictamen_sugerido, f.dictamen_final, f.datos?.ubicacion, f.datos?.deudor, f.datos?.deCujus, f.datos?.heredero, f.datos?.acreedor].filter(Boolean).join(" ").toLowerCase().includes(t));
+    // No repetir en el historial: solo el más reciente por garantía/expediente.
+    // (filas viene ordenado por created_at desc, así que el primero por clave es el último.)
+    const vistos = new Set<string>();
+    arr = arr.filter((f: any) => {
+      const key = (f.caso_id || f.expediente || f.id || "").toString().trim().toLowerCase();
+      if (!key) return true;
+      if (vistos.has(key)) return false;
+      vistos.add(key); return true;
+    });
     const c = orden.col;
     return [...arr].sort((a: any, b: any) => { const va = (a[c] ?? "").toString(); const vb = (b[c] ?? "").toString(); return orden.asc ? va.localeCompare(vb) : vb.localeCompare(va); });
   }, [filas, q, orden]);
@@ -105,10 +114,15 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
     </button>
   );
 
-  if (verPre) return <FichaGarantia f={verPre} onVolver={() => setVerPre(null)} />;
-
   return (
     <div className="rounded-xl border border-border bg-card">
+      {verPre && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-3 sm:p-4" onClick={() => setVerPre(null)}>
+          <div className="mx-auto my-2 max-w-4xl rounded-xl bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <FichaGarantia f={verPre} onVolver={() => setVerPre(null)} />
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
@@ -161,7 +175,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
         if (!f) return null;
         return (
           <div data-menu-predictamen onClick={(e) => e.stopPropagation()} className="fixed z-50 w-56 rounded-lg border border-border bg-card p-1.5 shadow-xl" style={{ top: menu.y + 4, left: Math.max(8, menu.x - 224) }}>
-            <Item icon={FolderOpen} onClick={() => { setMenu(null); onVerFichaVieja ? onVerFichaVieja(f) : abrirFicha(f); }}>Ver ficha</Item>
+            <Item icon={FolderOpen} onClick={() => { setMenu(null); if (f.caso_id && onVerFichaVieja) onVerFichaVieja(f); else setVerPre(f); }}>Ver ficha</Item>
             <Item icon={FileText} onClick={() => { setMenu(null); setVerPre(f); }}>Ver pre-dictamen</Item>
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
