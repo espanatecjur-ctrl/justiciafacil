@@ -47,6 +47,14 @@ export interface DatosPDF {
   } | null;
   /** Hallazgos del robot en boletines oficiales (uno por renglón). */
   boletines?: string[];
+  /** Dictamen registral (para el PDF final completo jurídico + registral). */
+  registral?: {
+    resultado: string; titular?: string; deudor?: string; gravamenAcreedor?: string;
+    hayAdicional?: boolean; conclusion?: string; anotaciones?: string;
+    firmaElabora?: DatosFirma | null; firmaValida?: DatosFirma | null;
+  } | null;
+  /** Cotejo jurídico vs registral (indicadores de anomalías). */
+  cotejos?: { campo: string; jur: string; reg: string; estado: string }[];
 }
 
 const mxn = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -267,6 +275,50 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   firmaBox(d.firmaElabora, "Elabora · abogado URRJ", M);
   firmaBox(d.firmaValida, "Valida · Director Legal", M + colW);
   y += 40;
+
+  // ---- Dictamen registral (RPPC) — para el PDF final completo ----
+  if (d.registral) {
+    const rg = d.registral;
+    doc.addPage(); y = 18;
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 24, "F");
+    doc.setFillColor(...GOLD); doc.rect(0, 24, W, 1.2, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+    doc.text("DICTAMEN REGISTRAL (RPPC)", M, 15);
+    y = 34;
+    seccion("Resultado registral");
+    fila("Resultado:", rg.resultado || "—");
+    fila("Titular registral:", rg.titular || "—");
+    fila("Deudor (gravamen):", rg.deudor || "—");
+    fila("Acreedor (gravamen):", rg.gravamenAcreedor || "—");
+    fila("Gravamen adicional:", rg.hayAdicional ? "Sí" : "No");
+    fila("Conclusión:", rg.conclusion || "—");
+    if (rg.anotaciones) fila("Anotaciones:", rg.anotaciones);
+    y += 4;
+    nuevaPaginaSiHace(44);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...NAVY);
+    doc.text("Firmas · registral", M, y); y += 4;
+    firmaBox(rg.firmaElabora || null, "Elabora · abogado URRJ", M);
+    firmaBox(rg.firmaValida || null, "Valida · Director Legal", M + colW);
+    y += 42;
+  }
+
+  // ---- Cotejo jurídico vs registral (anomalías) ----
+  if (d.cotejos && d.cotejos.length) {
+    seccion("Cotejo jurídico vs registral");
+    for (const c of d.cotejos) {
+      nuevaPaginaSiHace(11);
+      const estadoTxt = c.estado === "anomalia" ? "ANOMALÍA" : c.estado === "ok" ? "Coincide" : "Sin dato";
+      if (c.estado === "anomalia") doc.setTextColor(180, 60, 60);
+      else if (c.estado === "ok") doc.setTextColor(20, 120, 70);
+      else doc.setTextColor(120, 120, 120);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11.5);
+      doc.text(`${c.campo}: ${estadoTxt}`, M, y); y += 5;
+      doc.setTextColor(70, 70, 70); doc.setFont("helvetica", "normal");
+      const l = doc.splitTextToSize(`Jurídico: ${c.jur}   ·   Registral: ${c.reg}`, W - 2 * M - 4);
+      doc.text(l, M + 4, y); y += l.length * 5 + 3;
+    }
+    y += 2;
+  }
 
   // ---- Hoja de cambios (solo si es una versión nueva) ----
   if (d.cambios && (d.cambios.campos.length || d.cambios.nota)) {
