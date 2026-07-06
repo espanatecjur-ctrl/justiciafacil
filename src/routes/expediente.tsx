@@ -8,6 +8,7 @@ import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { SubJuicios } from "@/components/sub-juicios";
+import { BoletinExpediente } from "@/components/boletin-expediente";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { VincularClienteModal } from "@/components/vincular-cliente";
@@ -491,7 +492,7 @@ function FichaExpedientePage() {
 
       {/* ============ MÓDULO BOLETÍN (Parte 3) ============ */}
       {modulo === "boletin" && (
-        <Proximamente icon={<Megaphone className="h-4 w-4" />} titulo="Actuaciones del boletín (robot)" nota="Todas las actuaciones que trae el robot del boletín, en su propia vista al lado de los documentos. Llega en la Parte 3." />
+        <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} />
       )}
 
       {verSeguimiento && <SeguimientoJuicioModal area={areaFicha} caso={c} onClose={() => setVerSeguimiento(false)} />}
