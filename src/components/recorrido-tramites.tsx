@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
   TIPOS_TRAMITE, veredictoTra1, veredictoTra2, veredictoTra3, veredictoTra4, analisisContencioso, calcularVAAETra, consolidadoTra,
@@ -84,15 +85,14 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar);
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
       setGuardado("Pre-dictamen (Trámite) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
-  const descargarPDF = async (decision: string) => {
-    const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+  const construirDatosPDF = (decision: string): DatosPDF => {
     const tipoNom = TIPOS_TRAMITE.find((t) => t.clave === x.tipoTramite)?.nombre || x.tipoTramite;
-    await descargarPredictamenPDF({
+    return {
       expediente: x.expediente, juzgado: x.autoridad, estado: x.estado, tipoJuicio: tipoNom, posicion: "Trámite administrativo",
       ubicacion: x.ubicacion, deudor: "—", quienCede: x.contraparte, queCede: x.afectaComo || "Afectación a la garantía",
       dictamen: consolidado.txt,
@@ -104,7 +104,12 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
       ],
       intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cAfe, usura: false },
       admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
-    });
+    };
+  };
+
+  const descargarPDF = async (decision: string) => {
+    const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+    await descargarPredictamenPDF(construirDatosPDF(decision));
   };
 
   return (
