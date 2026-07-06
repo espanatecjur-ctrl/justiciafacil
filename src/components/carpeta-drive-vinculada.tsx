@@ -15,7 +15,7 @@ import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
-import { cargarPermisosModulo, puedeAccion, type ModuloPerm } from "@/lib/permisos-acciones";
+import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
 import { type CasoJuridico } from "@/lib/supabase";
 
 export function CarpetaDriveVinculada({
@@ -39,6 +39,12 @@ export function CarpetaDriveVinculada({
     cargarPermisosModulo(modulo)
       .then((p) => setPuedeVincular(puedeAccion(p.acciones, "vincular_drive")))
       .catch(() => setPuedeVincular(true));
+  }, [modulo]);
+
+  // ¿Puede ver el botón "Abrir en Drive"? (negado por defecto; solo DGE/Super_Admin o quien la DGE prenda)
+  const [puedeDrive, setPuedeDrive] = useState(false);
+  useEffect(() => {
+    puedeAbrirDrive(modulo).then(setPuedeDrive).catch(() => setPuedeDrive(false));
   }, [modulo]);
 
   const [eligiendo, setEligiendo] = useState(false);
@@ -170,7 +176,7 @@ export function CarpetaDriveVinculada({
             <span className="flex-1" />
             <button onClick={cargarDocs} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
-            <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>
+            {puedeDrive && <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>}
           </div>
 
           {cargando ? (
@@ -200,7 +206,7 @@ export function CarpetaDriveVinculada({
                     </button>
                     <div className="flex items-center justify-between px-3 py-1.5">
                       <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                      {a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
+                      {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
                     </div>
                   </div>
                 ))}
