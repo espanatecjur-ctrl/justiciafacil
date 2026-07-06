@@ -1,270 +1,235 @@
 // ============================================================
-// CarpetaDriveVinculada · dentro de la ficha del expediente.
-//  · Si NO hay carpeta vinculada → botón "Vincular carpeta de Drive"
-//    (o "Crear una nueva" si no existe ninguna).
-//  · Si YA hay → muestra el nombre + vista previa de todos sus documentos.
-// Guarda la carpeta en el caso (columnas drive_carpeta_id / drive_carpeta_nombre).
+// Permisos por acción · unificado para todos los módulos
+// ------------------------------------------------------------
+// Calca la lógica de urrj-permisos (que ya funciona), pero para
+// varios módulos. NO crea tabla nueva: reusa la app_permisos que ya
+// existe (la de "Módulos por rol"), agregándole una llave `acciones`:
+//   app_permisos.config = { modulos: {...}, acciones: { ucp:{UCP:[...]}, ucm:{...} } }
+// URRJ NO está aquí (usa su propia urrj-permisos). Este cubre:
+//   ucp · ucm · udp · ufc · amparos · contratos
+//
+// Reglas:
+//  · DGE / Super_Admin = pueden todo.
+//  · Rol NO definido para ese módulo = ve todo (anti-bloqueo) hasta cuadrarlo.
+//  · La tabla se SIEMBRA con MATRIZ_DEFAULT (abajo). Si la config no tiene
+//    ese rol, cae al default; si el default tampoco, ve todo.
 // ============================================================
-import { useEffect, useState } from "react";
-import {
-  HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
-  Loader2, RefreshCw, X, Link2,
-} from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { VisorDocumentoModal } from "@/components/visor-documento";
-import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
-import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
-import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
-import { type CasoJuridico } from "@/lib/supabase";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { getAuth } from "@/lib/auth";
 
-export function CarpetaDriveVinculada({
-  caso,
-  onGuardar,
-  modulo,
-  area,
-}: {
-  caso: CasoJuridico;
-  onGuardar: (campos: Record<string, string>) => void | Promise<void>;
-  modulo?: ModuloPerm;
-  area?: string;
-}) {
-  const carpetaId = caso.drive_carpeta_id || "";
-  const carpetaNombre = caso.drive_carpeta_nombre || "";
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+const VEN_TODO = ["DGE", "Super_Admin"];
 
-  // ¿Este usuario puede vincular/cambiar carpetas? (los demás solo ven)
-  const [puedeVincular, setPuedeVincular] = useState(true);
-  useEffect(() => {
-    if (!modulo) { setPuedeVincular(true); return; }
-    cargarPermisosModulo(modulo)
-      .then((p) => setPuedeVincular(puedeAccion(p.acciones, "vincular_drive")))
-      .catch(() => setPuedeVincular(true));
-  }, [modulo]);
+export type ModuloPerm = "ucp" | "ucm" | "udp" | "ufc" | "amparos" | "contratos";
 
-  // ¿Puede ver el botón "Abrir en Drive"? (negado por defecto; solo DGE/Super_Admin o quien la DGE prenda)
-  const [puedeDrive, setPuedeDrive] = useState(false);
-  useEffect(() => {
-    puedeAbrirDrive(modulo).then(setPuedeDrive).catch(() => setPuedeDrive(false));
-  }, [modulo]);
+// ---- Catálogo de acciones por módulo (clave + label para la pantalla) ----
+export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = {
+  ucp: [
+    { clave: "requisitos", label: "Requisitos (7)" },
+    { clave: "dictaminar_juridico", label: "Dictaminar jurídico (10 hitos)" },
+    { clave: "dictaminar_registral", label: "Dictaminar RPPC / Registral" },
+    { clave: "firma_elabora", label: "Firma 1 · Elabora" },
+    { clave: "firma_dil", label: "Firma 2 · Valida jurídico (DIL)" },
+    { clave: "firma_gad", label: "Firma 3 · Administrativo (GAD)" },
+    { clave: "firma_dgc", label: "Firma 4 · Comercial (DGC)" },
+    { clave: "firma_dge", label: "Firma 5 · Dirección (cierra)" },
+    { clave: "asignar_abogado", label: "Asignar abogado" },
+    { clave: "pasar_etapa_b", label: "Pasar a Etapa B (a UCM)" },
+    { clave: "redictaminar", label: "Re-dictaminar" },
+    { clave: "pdf", label: "Ver / Descargar PDF" },
+    { clave: "terminar", label: "Dar por terminado" },
+    { clave: "papelera", label: "Papelera / eliminar" },
+    { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
+    { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+  ],
+  ucm: [
+    { clave: "crear", label: "Crear expediente" },
+    { clave: "editar", label: "Editar expediente" },
+    { clave: "asignar_juzgado", label: "Asignar / validar juzgado" },
+    { clave: "config_seguimiento", label: "Configurar seguimiento del juicio" },
+    { clave: "actuacion", label: "Registrar actuación" },
+    { clave: "subir_evidencia", label: "Subir evidencia / tarea / documento" },
+    { clave: "ver_robot", label: "Ver última actuación (robot)" },
+    { clave: "asignar_abogado", label: "Asignar / reasignar abogado" },
+    { clave: "archivar", label: "Archivar" },
+    { clave: "borrar", label: "Borrar / papelera" },
+    { clave: "ver", label: "Ver (solo lectura)" },
+    { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
+    { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+  ],
+  udp: [
+    { clave: "crear", label: "Crear caso de defensa" },
+    { clave: "editar", label: "Editar caso" },
+    { clave: "estrategia", label: "Definir estrategia / posición" },
+    { clave: "actuacion", label: "Registrar actuación / avance" },
+    { clave: "subir_evidencia", label: "Subir evidencia / documento" },
+    { clave: "vincular", label: "Vincular a Amparo / Recurso" },
+    { clave: "validar_dil", label: "Validar el caso (DIL)" },
+    { clave: "asignar_abogado", label: "Asignar / reasignar abogado" },
+    { clave: "archivar", label: "Archivar" },
+    { clave: "borrar", label: "Borrar / papelera" },
+    { clave: "ver", label: "Ver (solo lectura)" },
+    { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
+    { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+  ],
+  ufc: [
+    { clave: "contrato_crear", label: "Crear / editar contrato (plantillas, paquetes)" },
+    { clave: "contrato_generar", label: "Generar contrato para cliente" },
+    { clave: "firma_elabora", label: "Firma 1 · Elabora (UFC)" },
+    { clave: "firma_dgc", label: "Firma 2 · Visto bueno Comercial (DGC)" },
+    { clave: "firma_dge", label: "Firma 3 · Autoriza Dirección (DGE)" },
+    { clave: "apoderados", label: "Gestionar apoderados" },
+    { clave: "notaria", label: "Enviar a notaría / escrituración" },
+    { clave: "tramites_rppc", label: "Trámites RPPC / gestorías" },
+    { clave: "entrega_finiquito", label: "Entrega-recepción / finiquito" },
+    { clave: "pdf", label: "Ver / Descargar PDF" },
+    { clave: "papelera", label: "Papelera / eliminar" },
+    { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
+    { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+  ],
+  amparos: [
+    { clave: "crear", label: "Crear amparo / recurso / exhorto" },
+    { clave: "editar", label: "Editar" },
+    { clave: "actuacion", label: "Registrar actuación / resolución" },
+    { clave: "subir_documento", label: "Subir documento / evidencia" },
+    { clave: "vincular", label: "Vincular al juicio / caso de origen" },
+    { clave: "vencimiento", label: "Marcar vencimiento / plazo" },
+    { clave: "asignar_abogado", label: "Asignar / reasignar abogado" },
+    { clave: "archivar", label: "Archivar" },
+    { clave: "borrar", label: "Borrar / papelera" },
+    { clave: "ver", label: "Ver (solo lectura)" },
+    { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
+    { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+  ],
+  contratos: [
+    { clave: "plantilla_maestra", label: "Crear / editar plantilla maestra" },
+    { clave: "paquetes", label: "Crear / editar paquetes / grupos" },
+    { clave: "generar", label: "Generar contrato para cliente" },
+    { clave: "editar_generado", label: "Editar contrato generado (marcadores)" },
+    { clave: "kpis", label: "Ver KPIs / indicadores" },
+    { clave: "exportar", label: "Descargar / exportar" },
+    { clave: "enviar_notaria", label: "Enviar a firma / notaría (a UFC)" },
+    { clave: "papelera", label: "Papelera / eliminar" },
+    { clave: "ver", label: "Ver (solo lectura)" },
+  ],
+};
 
-  const [eligiendo, setEligiendo] = useState(false);
-  const [docs, setDocs] = useState<ItemDrive[]>([]);
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [docSel, setDocSel] = useState<ItemDrive | null>(null);
-  const [guardando, setGuardando] = useState(false);
+// ---- Matriz aprobada (default y semilla). Solo se listan las acciones ✓. ----
+// Los roles no listados para un módulo = ve todo (anti-bloqueo).
+export const MATRIZ_DEFAULT: Record<ModuloPerm, Record<string, string[]>> = {
+  ucp: {
+    UCP: ["requisitos", "dictaminar_juridico", "dictaminar_registral", "firma_elabora", "pasar_etapa_b", "redictaminar", "pdf", "carpeta", "vincular_drive"],
+    DIL: ["requisitos", "dictaminar_juridico", "dictaminar_registral", "firma_dil", "asignar_abogado", "pasar_etapa_b", "redictaminar", "pdf", "terminar", "papelera", "carpeta", "vincular_drive"],
+    GAD: ["requisitos", "firma_gad", "asignar_abogado", "pdf", "papelera", "carpeta", "vincular_drive"],
+    DGC: ["firma_dgc", "pdf", "carpeta", "vincular_drive"],
+  },
+  ucm: {
+    UCM: ["crear", "editar", "asignar_juzgado", "config_seguimiento", "actuacion", "subir_evidencia", "ver_robot", "archivar", "ver", "carpeta", "vincular_drive"],
+    DIL: ["crear", "editar", "asignar_juzgado", "config_seguimiento", "actuacion", "subir_evidencia", "ver_robot", "asignar_abogado", "archivar", "borrar", "ver", "carpeta", "vincular_drive"],
+    GAD: ["ver_robot", "asignar_abogado", "borrar", "ver", "carpeta", "vincular_drive"],
+  },
+  udp: {
+    UDP: ["crear", "editar", "estrategia", "actuacion", "subir_evidencia", "vincular", "archivar", "ver", "carpeta", "vincular_drive"],
+    DIL: ["crear", "editar", "estrategia", "actuacion", "subir_evidencia", "vincular", "validar_dil", "asignar_abogado", "archivar", "borrar", "ver", "carpeta", "vincular_drive"],
+    GAD: ["asignar_abogado", "borrar", "ver", "carpeta", "vincular_drive"],
+  },
+  ufc: {
+    UFC: ["contrato_crear", "contrato_generar", "firma_elabora", "notaria", "tramites_rppc", "entrega_finiquito", "pdf", "carpeta", "vincular_drive"],
+    DGC: ["contrato_crear", "contrato_generar", "firma_dgc", "notaria", "entrega_finiquito", "pdf", "papelera", "carpeta", "vincular_drive"],
+    DIL: ["contrato_crear", "apoderados", "pdf", "papelera", "carpeta", "vincular_drive"],
+    GAD: ["tramites_rppc", "pdf", "carpeta", "vincular_drive"],
+  },
+  amparos: {
+    DIL: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "asignar_abogado", "archivar", "borrar", "ver", "carpeta", "vincular_drive"],
+    UCM: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "archivar", "ver", "carpeta", "vincular_drive"],
+    UDP: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "archivar", "ver", "carpeta", "vincular_drive"],
+    GAD: ["asignar_abogado", "borrar", "ver", "carpeta", "vincular_drive"],
+  },
+  contratos: {
+    UFC: ["paquetes", "generar", "editar_generado", "kpis", "exportar", "enviar_notaria", "ver"],
+    DGC: ["paquetes", "generar", "editar_generado", "kpis", "exportar", "enviar_notaria", "papelera", "ver"],
+    DIL: ["plantilla_maestra", "paquetes", "kpis", "exportar", "papelera", "ver"],
+  },
+};
 
-  // crear carpeta nueva (reusa el crear-carpeta del sistema: Área → Rol → garantía)
-  const [creando, setCreando] = useState(false);
-  const [errorCrear, setErrorCrear] = useState<string | null>(null);
+const todas = (modulo: ModuloPerm) => ACCIONES[modulo].map((a) => a.clave);
 
-  // sugerencias por número (expediente / crédito / gar)
-  const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
-  const [cargSug, setCargSug] = useState(false);
-  const textos = textosDeCaso(caso);
-  const cargarSugerencias = () => {
-    if (textos.length === 0) return;
-    setCargSug(true);
-    sugerirCarpetas(textos).then(setSugerencias).finally(() => setCargSug(false));
-  };
-  useEffect(() => {
-    if (!carpetaId && textos.length > 0) cargarSugerencias();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [carpetaId]);
+// cache por módulo
+const cache: Partial<Record<ModuloPerm, { rol: string | null; acciones: string[] }>> = {};
 
-  // paginación de la vista previa (para no cargar muchos iframes a la vez)
-  const PAGE = 6;
-  const [pagina, setPagina] = useState(0);
+export async function cargarPermisosModulo(modulo: ModuloPerm): Promise<{ rol: string | null; acciones: string[] }> {
+  if (cache[modulo]) return cache[modulo]!;
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    const correo = data?.session?.user?.email ?? null;
+    if (!correo) { cache[modulo] = { rol: null, acciones: todas(modulo) }; return cache[modulo]!; }
 
-  const cargarDocs = () => {
-    if (!carpetaId) return;
-    setCargando(true); setError(null);
-    listarCarpeta(carpetaId)
-      .then((r) => {
-        if (!r.ok) setError(r.error || "No se pudieron leer los documentos.");
-        setDocs((r.items || []).filter((it) => !esCarpeta(it)));
-      })
-      .finally(() => setCargando(false));
-  };
-  useEffect(() => { setPagina(0); cargarDocs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
+    const [colRes, cfgRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/app_permisos?select=config&id=eq.1`, { headers }),
+    ]);
+    const col = colRes.ok ? await colRes.json() : [];
+    const rol: string | null = col?.[0]?.rol ?? null;
+    if (!rol || VEN_TODO.includes(rol)) { cache[modulo] = { rol, acciones: todas(modulo) }; return cache[modulo]!; }
 
-  const elegir = async (id: string, nombre: string) => {
-    setGuardando(true);
-    await onGuardar({ drive_carpeta_id: id, drive_carpeta_nombre: nombre });
-    setGuardando(false);
-    setEligiendo(false);
-  };
+    const cfg = cfgRes.ok ? await cfgRes.json() : [];
+    const config = cfg?.[0]?.config?.acciones?.[modulo] ?? {};
+    // 1º la config guardada; si no, el default de la matriz; si tampoco, ve todo.
+    const acciones: string[] = Array.isArray(config[rol])
+      ? config[rol]
+      : (MATRIZ_DEFAULT[modulo][rol] ?? todas(modulo));
+    cache[modulo] = { rol, acciones };
+    return cache[modulo]!;
+  } catch {
+    cache[modulo] = { rol: null, acciones: todas(modulo) };
+    return cache[modulo]!;
+  }
+}
 
-  // Crea una carpeta nueva para este expediente y la deja vinculada.
-  const crearYVincular = async () => {
-    setCreando(true); setErrorCrear(null);
-    const r = await crearCarpetaDrive(area || "UCM", caso);
-    setCreando(false);
-    if (r.ok && r.carpetaId) {
-      await elegir(r.carpetaId, nombreGarantia(caso));
-    } else {
-      setErrorCrear(r.error || "No se pudo crear la carpeta.");
-    }
-  };
+export function puedeAccion(acciones: string[], accion: string): boolean {
+  return acciones.length === 0 || acciones.includes(accion);
+}
 
-  const totalPag = Math.max(1, Math.ceil(docs.length / PAGE));
-  const pag = Math.min(pagina, totalPag - 1);
-  const docsPag = docs.slice(pag * PAGE, pag * PAGE + PAGE);
+export function limpiarCachePermisosAcciones() {
+  (Object.keys(cache) as ModuloPerm[]).forEach((k) => delete cache[k]);
+}
 
-  return (
-    <Card className="legal-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><HardDrive className="h-4 w-4" /></div>
-        <p className="text-sm font-semibold" style={{ color: "#0B1E3A" }}>Carpeta de Drive</p>
-      </div>
+// ============================================================
+// Permiso ESTRICTO "Abrir en Drive" (salir a Drive).
+// Negado por defecto para TODOS. Solo lo tienen:
+//   · DGE y Super_Admin (siempre), y
+//   · los roles a los que la DGE/Super_Admin se lo enciendan
+//     explícitamente en la pantalla de permisos.
+// No usa la regla anti-bloqueo (a diferencia de las demás acciones),
+// justo para que nadie lo tenga "por default".
+// ============================================================
+export async function puedeAbrirDrive(modulo?: ModuloPerm): Promise<boolean> {
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    const correo = data?.session?.user?.email ?? null;
+    if (!correo) return false; // sin sesión → no
 
-      {/* ---- SIN carpeta vinculada ---- */}
-      {!carpetaId && !eligiendo && !puedeVincular && (
-        <div className="rounded-md border border-dashed border-input p-4 text-center text-sm text-muted-foreground">
-          Este expediente todavía no tiene una carpeta de Drive.
-        </div>
-      )}
-      {!carpetaId && !eligiendo && puedeVincular && (
-        <div className="space-y-3">
-          {/* Sugerencias por número (expediente / crédito / gar) */}
-          {(cargSug || sugerencias.length > 0) && (
-            <div className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-              <p className="mb-2 text-xs font-semibold text-[color:var(--teal)]">
-                {cargSug ? "Buscando carpetas que coincidan…" : "¿Es alguna de estas? (coinciden por número)"}
-              </p>
-              {cargSug ? (
-                <p className="text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Un momento…</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {sugerencias.map((s) => (
-                    <div key={s.id} className="flex items-center gap-2 rounded-md border border-input bg-white px-3 py-2">
-                      <FolderCheck className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-                      <span className="min-w-0 flex-1 truncate text-sm" title={s.name}>{s.name}</span>
-                      <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">coincide: {s.coincide}</span>
-                      <button onClick={() => elegir(s.id, s.name)} className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold text-white" style={{ background: "#0C5C46" }}>Usar</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+    const colRes = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+    const col = colRes.ok ? await colRes.json() : [];
+    const rol: string | null = col?.[0]?.rol ?? null;
+    if (!rol) return false;
+    if (VEN_TODO.includes(rol)) return true; // DGE / Super_Admin siempre
 
-          <div className="rounded-md border border-dashed border-input p-4 text-center">
-            <p className="mb-2 text-sm text-muted-foreground">
-              {sugerencias.length > 0 ? "¿Ninguna es? Vincula una carpeta existente o crea una nueva." : "Este expediente todavía no tiene una carpeta de Drive."}
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button onClick={() => setEligiendo(true)} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
-                <Link2 className="h-4 w-4" /> Vincular carpeta de Drive
-              </button>
-              <button onClick={crearYVincular} disabled={creando} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60">
-                {creando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4 text-[color:var(--teal)]" />} Crear una nueva
-              </button>
-            </div>
-            {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
-          </div>
-        </div>
-      )}
+    if (!modulo) return false; // sin módulo, solo DGE/Super_Admin
 
-      {/* ---- CON carpeta vinculada ---- */}
-      {carpetaId && !eligiendo && (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <FolderCheck className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-            <span className="min-w-0 truncate text-sm font-medium" title={carpetaNombre}>{carpetaNombre || "Carpeta vinculada"}</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800"><FolderCheck className="h-3 w-3" /> Vinculada</span>
-            <span className="flex-1" />
-            <button onClick={cargarDocs} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
-            {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
-            {puedeDrive && <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>}
-          </div>
-
-          {cargando ? (
-            <p className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Cargando documentos…</p>
-          ) : error ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              {error}
-              <p className="mt-1 text-xs">Si dice que no hay acceso, agrega la cuenta de servicio como Lector en esa Unidad de Drive.</p>
-            </div>
-          ) : docs.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Esta carpeta no tiene documentos.</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {docsPag.map((a) => (
-                  <div key={a.id} className="overflow-hidden rounded-lg border border-border bg-white">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                      <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-                      <p className="min-w-0 flex-1 truncate text-xs font-medium" title={a.name}>{a.name}</p>
-                      <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tipoLegible(a.mimeType)}</span>
-                    </div>
-                    <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
-                      <iframe src={previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
-                      <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
-                      </span>
-                    </button>
-                    <div className="flex items-center justify-between px-3 py-1.5">
-                      <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                      {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {docs.length > PAGE && (
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{docs.length} documentos · pág. {pag + 1} de {totalPag}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => setPagina(pag - 1)} disabled={pag === 0} className="rounded-md border border-input px-3 py-1.5 disabled:opacity-40">Anterior</button>
-                    <button onClick={() => setPagina(pag + 1)} disabled={pag >= totalPag - 1} className="rounded-md border border-input px-3 py-1.5 disabled:opacity-40">Siguiente</button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      {/* ---- ESCOGER carpeta (buscador de Drive) ---- */}
-      {eligiendo && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Escoge la carpeta de Drive para este expediente</p>
-            <button onClick={() => setEligiendo(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-          </div>
-          {guardando && <p className="text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Guardando…</p>}
-
-          {sugerencias.length > 0 && (
-            <div className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-              <p className="mb-2 text-xs font-semibold text-[color:var(--teal)]">¿Es alguna de estas? (coinciden por número)</p>
-              <div className="space-y-1.5">
-                {sugerencias.map((s) => (
-                  <div key={s.id} className="flex items-center gap-2 rounded-md border border-input bg-white px-3 py-2">
-                    <FolderCheck className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-                    <span className="min-w-0 flex-1 truncate text-sm" title={s.name}>{s.name}</span>
-                    <button onClick={() => elegir(s.id, s.name)} className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold text-white" style={{ background: "#0C5C46" }}>Usar</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Crear una nueva si no existe ninguna */}
-          <div className="rounded-md border border-dashed border-input p-3 text-center">
-            <p className="mb-2 text-xs text-muted-foreground">¿No existe la carpeta en Drive?</p>
-            <button onClick={crearYVincular} disabled={creando} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60">
-              {creando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4 text-[color:var(--teal)]" />} Crear una nueva para este expediente
-            </button>
-            {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
-          </div>
-
-          <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={elegir} />
-        </div>
-      )}
-
-      {docSel && (
-        <VisorDocumentoModal url={docSel.webViewLink || ""} driveId={docSel.id} nombre={docSel.name} onCerrar={() => setDocSel(null)} />
-      )}
-    </Card>
-  );
+    const cfgRes = await fetch(`${SUPABASE_URL}/rest/v1/app_permisos?select=config&id=eq.1`, { headers });
+    const cfg = cfgRes.ok ? await cfgRes.json() : [];
+    const lista = cfg?.[0]?.config?.acciones?.[modulo]?.[rol];
+    // Solo si la config lo incluye EXPLÍCITAMENTE (nada de "ve todo").
+    return Array.isArray(lista) && lista.includes("abrir_drive");
+  } catch {
+    return false; // ante cualquier error → no mostrar (seguro)
+  }
 }
