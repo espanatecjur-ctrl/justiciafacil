@@ -7,7 +7,7 @@ import {
 } from "@/lib/urrj-tramites";
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
-import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Lock, RefreshCw } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -74,6 +74,9 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
   const r4 = useMemo(() => veredictoTra4({ suspensionOtorgada: x.suspensionOtorgada, remateInminente: x.remateInminente, contraparteAceptaPoder: x.contraparteAceptaPoder, cesionSuspensiva: x.cesionSuspensiva, escrow: x.escrow, poderIrrevocable: x.poderIrrevocable, dineroYaEntregado: x.dineroYaEntregado }), [x.suspensionOtorgada, x.remateInminente, x.contraparteAceptaPoder, x.cesionSuspensiva, x.escrow, x.poderIrrevocable, x.dineroYaEntregado]);
   const consolidado = useMemo(() => consolidadoTra(r2.semaforo, r3.semaforo, vaae.viable), [r2.semaforo, r3.semaforo, vaae.viable]);
   const fmt = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+
+  const dosFirmas = !!(fElabora && fValida);
+  const decidido = !!guardado && guardado.startsWith("Pre-dictamen");
 
   const guardar = async (decision: string) => {
     const payload = {
@@ -240,12 +243,21 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
               <FirmaParte titulo="Valida · Director Legal" valor={fValida} onFirmar={(f) => setFValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
             <p className="text-sm font-medium">Decisión humana · ¿pasa para la defensa/compra?</p>
+            {!dosFirmas && !decidido && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Faltan las dos firmas (Elabora + Valida) para poder decidir y para el PDF.</p>
+            )}
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => guardar("Sí pasa")} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white"><Check className="h-4 w-4" /> Sí pasa</button>
-              <button onClick={() => guardar("No pasa")} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white"><X className="h-4 w-4" /> No pasa</button>
-              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} className="rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP</button>
+              <button onClick={() => guardar("Sí pasa")} disabled={!dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> Sí pasa</button>
+              <button onClick={() => guardar("No pasa")} disabled={!dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
+              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={!dosFirmas || decidido} className="rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed">Pasa a UCP</button>
+              {decidido && (
+                <button onClick={() => setGuardado(null)} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Re-pre-dictaminar</button>
+              )}
             </div>
-            <div><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
+            {decidido && (
+              <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><Lock className="h-3.5 w-3.5" /> Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”.</p>
+            )}
+            <div><button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
           </div>
         )}
