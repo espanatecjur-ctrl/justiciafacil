@@ -84,6 +84,7 @@ export function CarpetaDriveVinculada({
     else partes.push("todo al día ✅");
     if (r.errores && r.errores.length) partes.push(`${r.errores.length} con aviso`);
     setMsgSincro(partes.join(" · "));
+    if (r.errores && r.errores.length) setMsgSincro((m) => (m || "") + " — 1º: " + r.errores![0]);
     cargarCopias(); // refresca qué ya está en el almacén
   };
 
