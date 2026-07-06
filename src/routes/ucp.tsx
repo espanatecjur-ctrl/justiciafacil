@@ -12,6 +12,7 @@ import {
   Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle,
 } from "@/components/ui/dialog";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { cargarPermisosModulo, puedeAccion } from "@/lib/permisos-acciones";
 import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import {
   FichaUCP, REQ_VACIOS, reqCompletos, reqCuenta,
@@ -82,6 +83,9 @@ function UCP() {
   const [dicts, setDicts] = useState<DictamenRow[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [permUCP, setPermUCP] = useState<string[]>([]);
+  useEffect(() => { cargarPermisosModulo("ucp").then((p) => setPermUCP(p.acciones)).catch(() => {}); }, []);
+  const puedo = (a: string) => puedeAccion(permUCP, a);
 
   const [modo, setModo] = useState<"dictaminables" | "todas" | "recientes">("dictaminables");
   const [busca, setBusca] = useState("");
@@ -492,18 +496,18 @@ function UCP() {
           <div data-menu-ucp onClick={(e) => e.stopPropagation()} className="fixed z-50 w-60 rounded-lg border border-border bg-card p-1.5 shadow-xl"
             style={{ top: menuUCP.y + 4, left: Math.max(8, menuUCP.x - 240) }}>
             <Item icon={Eye} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Ver ficha</Item>
-            <Item icon={FileStack} onClick={() => { cerrar(); abrir(c, "requisitos"); }}>Abrir requisitos</Item>
+            <Item icon={FileStack} disabled={!puedo("requisitos")} title={puedo("requisitos") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); abrir(c, "requisitos"); }}>Abrir requisitos</Item>
             <div className="my-1 border-t border-border" />
-            <Item icon={Scale} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Dictaminar jurídico</Item>
-            <Item icon={Landmark} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Dictaminar registral (RPPC)</Item>
-            <Item icon={RefreshCw} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Re-dictaminar jurídico</Item>
-            <Item icon={RefreshCw} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Re-dictaminar registral</Item>
+            <Item icon={Scale} disabled={!puedo("dictaminar_juridico")} title={puedo("dictaminar_juridico") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Dictaminar jurídico</Item>
+            <Item icon={Landmark} disabled={!puedo("dictaminar_registral")} title={puedo("dictaminar_registral") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Dictaminar registral (RPPC)</Item>
+            <Item icon={RefreshCw} disabled={!puedo("redictaminar")} title={puedo("redictaminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); abrir(c, "juridico"); }}>Re-dictaminar jurídico</Item>
+            <Item icon={RefreshCw} disabled={!puedo("redictaminar")} title={puedo("redictaminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); abrir(c, "rppc"); }}>Re-dictaminar registral</Item>
             <div className="my-1 border-t border-border" />
-            <Item icon={UserCheck} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Asignar abogado</Item>
+            <Item icon={UserCheck} disabled={!puedo("asignar_abogado")} title={puedo("asignar_abogado") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Asignar abogado</Item>
             <Item icon={Upload} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Subir actuaciones</Item>
             <Item icon={FileText} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Escoger boletín judicial</Item>
             <div className="my-1 border-t border-border" />
-            <Item icon={CheckCircle2} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Dar por terminado</Item>
+            <Item icon={CheckCircle2} disabled={!puedo("terminar")} title={puedo("terminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Dar por terminado</Item>
           </div>
         );
       })()}
