@@ -64,25 +64,25 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   doc.setFillColor(...NAVY); doc.rect(0, 0, W, 26, "F");
   doc.setFillColor(...GOLD); doc.rect(0, 26, W, 1.4, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(18);
   doc.text("PRE-DICTAMEN URRJ", M, 12);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5);
   doc.text("Unidad de Resolución Jurídica · JusticiaFácil DIIPA", M, 18);
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   doc.text(new Date().toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" }), W - M, 18, { align: "right" });
   y = 34;
 
   // ---- Datos del caso ----
-  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
   doc.text("Datos del caso", M, y); y += 6;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(11.5); doc.setTextColor(40, 40, 40);
   const fila = (k: string, v: string) => {
-    nuevaPaginaSiHace(6);
+    nuevaPaginaSiHace(7);
     doc.setFont("helvetica", "bold"); doc.text(k, M, y);
     doc.setFont("helvetica", "normal");
     const lines = doc.splitTextToSize(v || "—", W - M - 50);
     doc.text(lines, M + 46, y);
-    y += Math.max(5.5, lines.length * 5);
+    y += Math.max(6.5, lines.length * 5.8);
   };
   fila("Expediente:", d.expediente);
   fila("Juzgado:", d.juzgado);
@@ -99,9 +99,9 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   const pn = (v?: string) => (v && String(v).trim() ? mxn(Number(v) || 0) : "—");
   const seccion = (t: string) => {
     nuevaPaginaSiHace(12);
-    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
     doc.text(t, M, y); y += 6;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11.5); doc.setTextColor(40, 40, 40);
   };
 
   // Secciones detalladas (solo cuando el recorrido las provee, p. ej. Actor)
@@ -157,15 +157,15 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   nuevaPaginaSiHace(16);
   const dc: [number, number, number] = d.dictamen === "POSITIVO" ? TEAL : d.dictamen === "NEGATIVO" ? [220, 38, 38] : [194, 162, 76];
   doc.setFillColor(...dc); doc.roundedRect(M, y, W - 2 * M, 11, 1.5, 1.5, "F");
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
   doc.text(`Pre-dictamen del sistema: ${d.dictamen}`, M + 4, y + 7);
   y += 16;
 
   // ---- Riesgos ----
   nuevaPaginaSiHace(10);
-  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
   doc.text("Auditores legales (riesgos)", M, y); y += 6;
-  doc.setFontSize(9);
+  doc.setFontSize(10.5);
   for (const { nombre, r } of d.riesgos) {
     nuevaPaginaSiHace(12);
     const c = colorSem(r.semaforo);
@@ -175,16 +175,16 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
     y += 4.5;
     doc.setTextColor(70, 70, 70); doc.setFont("helvetica", "normal");
     const lines = doc.splitTextToSize(r.detalle, W - 2 * M - 5);
-    doc.text(lines, M + 5, y); y += lines.length * 4.2 + 2;
+    doc.text(lines, M + 5, y); y += lines.length * 5 + 2;
   }
   y += 2;
 
   // ---- Intereses ----
   nuevaPaginaSiHace(28);
-  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
   doc.text("Cálculo de intereses", M, y); y += 6;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
-  const linea = (k: string, v: string) => { nuevaPaginaSiHace(5); doc.text(`${k}  ${v}`, M, y); y += 5; };
+  doc.setFont("helvetica", "normal"); doc.setFontSize(11.5); doc.setTextColor(40, 40, 40);
+  const linea = (k: string, v: string) => { nuevaPaginaSiHace(7); doc.text(`${k}  ${v}`, M, y); y += 6; };
   linea("Intereses ordinarios:", mxn(d.intereses.ordinarios));
   linea("Intereses moratorios:", mxn(d.intereses.moratorios));
   if (d.intereses.iva > 0) linea("IVA:", mxn(d.intereses.iva));
@@ -195,9 +195,9 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   // ---- Administración (solo si viene) ----
   if (d.admin) {
     nuevaPaginaSiHace(24);
-    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
     doc.text("Administración · valuación y precio", M, y); y += 6;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11.5); doc.setTextColor(40, 40, 40);
     linea("Valor comercial:", mxn(d.admin.valorComercial));
     linea("Costos:", mxn(d.admin.costos));
     linea("Precio de la cesión:", mxn(d.admin.precioCesion));
@@ -210,9 +210,9 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   if (d.boletines) {
     nuevaPaginaSiHace(16);
     doc.setFillColor(...GOLD); doc.roundedRect(M, y - 4, W - 2 * M, 8, 1.2, 1.2, "F");
-    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
+    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
     doc.text("Boletines oficiales · hallazgos del robot", M + 3, y + 1.5); y += 10;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11.5); doc.setTextColor(40, 40, 40);
     const bs = (d.boletines || []).filter((x) => x && x.trim());
     if (bs.length === 0) {
       doc.setTextColor(120, 120, 120);
@@ -221,8 +221,8 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
     } else {
       for (const b of bs) {
         const lines = doc.splitTextToSize("• " + b, W - 2 * M);
-        nuevaPaginaSiHace(lines.length * 4.5 + 2);
-        doc.text(lines, M, y); y += lines.length * 4.5 + 2;
+        nuevaPaginaSiHace(lines.length * 5.3 + 2);
+        doc.text(lines, M, y); y += lines.length * 5.3 + 2;
       }
     }
     y += 3;
@@ -231,12 +231,12 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   // ---- Anotaciones ----
   if (d.anotaciones?.trim()) {
     nuevaPaginaSiHace(14);
-    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
     doc.text("Anotaciones del abogado", M, y); y += 6;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11.5); doc.setTextColor(40, 40, 40);
     const lines = doc.splitTextToSize(d.anotaciones, W - 2 * M);
-    nuevaPaginaSiHace(lines.length * 4.5);
-    doc.text(lines, M, y); y += lines.length * 4.5 + 4;
+    nuevaPaginaSiHace(lines.length * 5.3);
+    doc.text(lines, M, y); y += lines.length * 5.3 + 4;
   }
 
   // ---- Decisión ----
@@ -246,7 +246,7 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
 
   // ---- Firmas ----
   nuevaPaginaSiHace(40);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(...NAVY);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...NAVY);
   doc.text("Firmas", M, y); y += 4;
   const colW = (W - 2 * M) / 2;
   const firmaBox = (f: DatosFirma | null, titulo: string, x: number) => {
@@ -254,13 +254,13 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
     doc.setDrawColor(210, 210, 210); doc.setLineWidth(0.3);
     doc.roundedRect(x, yy, colW - 4, 34, 1.5, 1.5, "S");
     yy += 5;
-    doc.setFontSize(8); doc.setTextColor(120, 120, 120); doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5); doc.setTextColor(120, 120, 120); doc.setFont("helvetica", "normal");
     doc.text(titulo, x + 3, yy); yy += 4;
     if (f?.dibujo) { try { doc.addImage(f.dibujo, "PNG", x + 3, yy, 40, 14); } catch {} yy += 16; }
     else { doc.setDrawColor(180, 180, 180); doc.line(x + 3, yy + 12, x + colW - 8, yy + 12); yy += 16; }
-    doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+    doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold"); doc.setFontSize(11.5);
     doc.text(f?.nombre || "_______________", x + 3, yy); yy += 4;
-    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
     if (f?.cargo) { doc.text(f.cargo, x + 3, yy); yy += 3.5; }
     if (f?.fecha) doc.text("Firmado: " + new Date(f.fecha).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }), x + 3, yy);
   };
@@ -275,13 +275,13 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
     doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
     doc.text("Hoja de cambios de esta versión", M, 15);
     y = 34;
-    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal"); doc.setFontSize(10.5);
     doc.text("Comparación automática contra la versión anterior (antecedente).", M, y); y += 8;
 
     if (d.cambios.campos.length) {
       doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
       doc.text("Campos que cambiaron:", M, y); y += 6;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
       for (const c of d.cambios.campos) {
         nuevaPaginaSiHace(10);
         doc.setFont("helvetica", "bold"); doc.text(`• ${c.campo}:`, M, y);
@@ -302,7 +302,7 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
       nuevaPaginaSiHace(20);
       doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
       doc.text("Nota del abogado:", M, y); y += 6;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
       const lineas = doc.splitTextToSize(d.cambios.nota, W - 2 * M);
       doc.text(lineas, M, y);
     }
@@ -315,7 +315,7 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
       doc.setPage(i);
       doc.setTextColor(235, 170, 170); doc.setFont("helvetica", "bold"); doc.setFontSize(34);
       doc.text("PRE-DICTAMEN NO VÁLIDO", 105, 150, { align: "center", angle: 35 } as any);
-      doc.setFontSize(15);
+      doc.setFontSize(18);
       doc.text("existe una versión nueva", 105, 165, { align: "center", angle: 35 } as any);
     }
   }
