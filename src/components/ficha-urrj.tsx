@@ -98,12 +98,12 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       setReg(u?.dic_registral ?? null);
     }).catch(() => {});
     const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
       .catch(() => {});
     const filtroReg = garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,terminado,created_at&${filtroReg}&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,terminado,pdf_url,created_at&${filtroReg}&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => setPredReg(rows?.[0] || null))
       .catch(() => {});
@@ -367,6 +367,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <p className="text-xs text-emerald-800">Firmas: Elabora {predJur.firma_elabora ? "✓" : "—"} · Valida {predJur.firma_valida ? "✓" : "—"}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button onClick={() => setPreview(preview === "juridico" ? null : "juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
+                {predJur.pdf_url
+                  ? <BotonVerDoc url={predJur.pdf_url} nombre={`Pre-dictamen jurídico ${folio || garantia.expediente || ""}.pdf`} label="Ver PDF" className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" />
+                  : <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" title="El PDF se archiva al firmar el dictamen">PDF (en el proceso)</button>}
                 <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Jurídico</button>
               </div>
             </div>
@@ -392,6 +395,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <p className="text-xs text-emerald-800">Firmas: Elabora {predReg.firma_elabora?.nombre ? "✓" : "—"} · Valida {predReg.firma_valida?.nombre ? "✓" : "—"}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button onClick={() => setPreview(preview === "registral" ? null : "registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
+                {predReg.pdf_url
+                  ? <BotonVerDoc url={predReg.pdf_url} nombre={`Dictamen registral ${garantia.expediente || ""}.pdf`} label="Ver PDF" className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" />
+                  : <button onClick={() => abrirProceso("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" title="El PDF se archiva al firmar el dictamen">PDF (en el proceso)</button>}
                 <button onClick={() => abrirProceso("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Registral</button>
               </div>
             </div>
