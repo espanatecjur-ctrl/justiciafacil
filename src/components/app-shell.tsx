@@ -36,6 +36,7 @@ export function AppShell() {
   const [masAbierto, setMasAbierto] = useState(false);
   const [visibles, setVisibles] = useState<Set<string> | null>(null); // null = ver todo
   const [puedeConfig, setPuedeConfig] = useState(true);
+  const [rol, setRol] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function AppShell() {
         setNombre(meta.full_name ?? meta.name ?? (correo ? correo.split("@")[0] : null));
         setFoto(meta.avatar_url ?? meta.picture ?? null);
 
-        if (!correo) { setVisibles(null); setPuedeConfig(true); return; }
+        if (!correo) { setVisibles(null); setRol(null); setPuedeConfig(false); return; }
 
         const h = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
         const [colRes, permRes] = await Promise.all([
@@ -59,23 +60,27 @@ export function AppShell() {
         ]);
         const colData = colRes.ok ? await colRes.json() : [];
         const permData = permRes.ok ? await permRes.json() : [];
-        const rol = colData?.[0]?.rol ?? null;
+        const rolActual = colData?.[0]?.rol ?? null;
+        setRol(rolActual);
+        const esAdmin = rolActual === "Super_Admin" || rolActual === "DGE";
 
-        if (!rol) { setVisibles(null); setPuedeConfig(true); return; } // sin rol asignado = ve todo hasta que lo validen
+        if (!rolActual) { setVisibles(null); setPuedeConfig(false); return; } // sin rol: ve módulos (anti-bloqueo) pero NO Configuración
 
-        const def = ROLES.find((r) => r.codigo === rol);
-        if (def && rolVeTodo(def.modulos)) { setVisibles(null); setPuedeConfig(true); return; }
+        const def = ROLES.find((r) => r.codigo === rolActual);
+        if (def && rolVeTodo(def.modulos)) { setVisibles(null); setPuedeConfig(esAdmin); return; }
 
         const cfg = permData?.[0]?.config?.modulos ?? {};
-        const mods: string[] = cfg[rol] ?? (def && def.modulos !== "todos" ? (def.modulos as string[]) : ["inicio"]);
+        const mods: string[] = cfg[rolActual] ?? (def && def.modulos !== "todos" ? (def.modulos as string[]) : ["inicio"]);
         const set = new Set<string>(mods);
         set.add("inicio");
         setVisibles(set);
-        setPuedeConfig(set.has("configuracion"));
+        setPuedeConfig(esAdmin);
       } catch {
-        // Si algo falla (internet), NO bloqueamos: se ve todo.
+        // Si algo falla (internet), NO bloqueamos los módulos de trabajo; pero
+        // Configuración sí queda cerrada (no anti-bloqueo en Sistema).
         setVisibles(null);
-        setPuedeConfig(true);
+        setRol(null);
+        setPuedeConfig(false);
       }
     })();
   }, []);
@@ -96,16 +101,20 @@ export function AppShell() {
 
   const iniciales = (nombre || email || "?").trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
-  const verRuta = (to: string) => visibles === null || visibles.has(MOD_RUTA[to] ?? "inicio");
+  const verRuta = (to: string) => {
+    if (to === "/direccion") return rol === "DGE"; // Dirección: SOLO la Directora (DGE). Sobrescribe cualquier "todos".
+    return visibles === null || visibles.has(MOD_RUTA[to] ?? "inicio");
+  };
 
   const grouped = useMemo(() => {
     const g: Record<string, typeof navItems> = {};
     for (const it of navItems) {
-      if (visibles !== null && !visibles.has(MOD_RUTA[it.to] ?? "inicio")) continue;
+      if (!verRuta(it.to)) continue;
       (g[it.group] ??= []).push(it);
     }
     return g;
-  }, [visibles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibles, rol]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
