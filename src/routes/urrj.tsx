@@ -15,8 +15,12 @@ import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
-  validateSearch: (s: Record<string, unknown>): { soloRegistro?: boolean } => ({
+  validateSearch: (s: Record<string, unknown>): { soloRegistro?: boolean; registral?: boolean; exp?: string; cliente?: string; caso?: string } => ({
     soloRegistro: s.soloRegistro === true || s.soloRegistro === "true",
+    registral: s.registral === true || s.registral === "true",
+    exp: typeof s.exp === "string" ? s.exp : undefined,
+    cliente: typeof s.cliente === "string" ? s.cliente : undefined,
+    caso: typeof s.caso === "string" ? s.caso : undefined,
   }),
   component: URRJ,
 });
@@ -28,7 +32,7 @@ function URRJ() {
   const [casos, setCasos] = useState<any[]>([]);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
   const [vista, setVista] = useState<VistaPosicion>("elegir");
-  const { soloRegistro } = Route.useSearch();
+  const { soloRegistro, registral, exp, cliente, caso } = Route.useSearch();
   const [precargar, setPrecargar] = useState<Precarga | null>(null);
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
   const [crearNuevo, setCrearNuevo] = useState(false);
@@ -100,6 +104,16 @@ function URRJ() {
     fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente,juzgado,entidad,cliente_nombre,direccion_garantia&order=expediente.asc&limit=300`, { headers })
       .then((r) => (r.ok ? r.json() : [])).then(setCasos).catch(() => {});
   }, []);
+
+  // Si llegamos desde "Continuar con el registral" (del recorrido jurídico),
+  // abrimos directo el dictamen registral con el expediente ya cargado.
+  useEffect(() => {
+    if (registral) {
+      setSolicitudActiva({ tipo_dictamen: "Registral", expediente: exp || "", cliente: cliente || "", caso_id: caso || "" } as any);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registral]);
 
   const dictaminacion = (
     <div className="space-y-5">
