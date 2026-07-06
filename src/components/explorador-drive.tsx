@@ -1,147 +1,211 @@
 // ============================================================
-// JusticiaFácil · Explorar Drive (cliente)
-// Llama a /.netlify/functions/explorar-drive para leer carpetas
-// y documentos de Drive (Unidades compartidas) SIN crear nada.
+// JusticiaFácil · Explorar Drive (leer, NO crear)
+// Sirve para escoger una carpeta / Unidad compartida y ver sus documentos.
+// Usa la MISMA cuenta de servicio que crear-carpeta / subir-documento.
+//
+// Acciones (POST { accion, ... }):
+//   { accion: "cuenta" }                 -> { ok, correo }   (correo de la cuenta de servicio)
+//   { accion: "unidades" }               -> { ok, unidades: [{id,name}] }
+//   { accion: "listar", carpetaId }      -> { ok, items: [...] }
+//   { accion: "resolver", entrada }      -> { ok, item: {...} }  (de un enlace o ID pegado)
+//
+// Variables de entorno en Netlify (ya existen):
+//   GOOGLE_SERVICE_ACCOUNT  = JSON completo de la credencial
 // ============================================================
+import crypto from "crypto";
 
-export const CARPETA_MIME = "application/vnd.google-apps.folder";
-
-export interface ItemDrive {
-  id: string;
-  name: string;
-  mimeType: string;
-  iconLink?: string | null;
-  thumbnailLink?: string | null;
-  webViewLink?: string | null;
-  modifiedTime?: string | null;
-  size?: string | null;
-  ruta?: string | null;
+function base64url(input) {
+  return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-export interface Unidad {
-  id: string;
-  name: string;
-}
+async function obtenerAccessToken(clientEmail, privateKey) {
+  const ahora = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claim = {
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/drive.readonly",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: ahora,
+    exp: ahora + 3600,
+  };
+  const sinFirma = base64url(JSON.stringify(header)) + "." + base64url(JSON.stringify(claim));
+  const firma = crypto.createSign("RSA-SHA256").update(sinFirma).sign(privateKey)
+    .toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const jwt = sinFirma + "." + firma;
 
-async function llamar<T>(cuerpo: Record<string, unknown>): Promise<T> {
-  const r = await fetch("/.netlify/functions/explorar-drive", {
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cuerpo),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" + encodeURIComponent(jwt),
   });
-  return (await r.json()) as T;
+  const data = await resp.json();
+  if (!data.access_token) throw new Error("No se obtuvo access_token de Google: " + JSON.stringify(data));
+  return data.access_token;
 }
 
-/** Correo de la cuenta de servicio (para agregarla como Lector en las Unidades). */
-export async function correoCuentaServicio(): Promise<string> {
+// Extrae el ID de Drive de un enlace pegado (carpeta o archivo) o devuelve el texto tal cual si ya es un ID.
+function extraerId(entrada) {
+  const t = String(entrada || "").trim();
+  if (!t) return "";
+  const m =
+    t.match(/\/folders\/([a-zA-Z0-9_-]+)/) ||
+    t.match(/\/drive\/folders\/([a-zA-Z0-9_-]+)/) ||
+    t.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+    t.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+    t.match(/\/drive\/u\/\d+\/folders\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  // Si no trae "/", probablemente ya es un ID pelón.
+  if (!t.includes("/") && !t.includes(" ")) return t;
+  return "";
+}
+
+const CAMPOS = "files(id,name,mimeType,iconLink,thumbnailLink,webViewLink,modifiedTime,size),nextPageToken";
+
+// Lista todo lo que hay dentro de una carpeta (o de la raíz de una Unidad compartida).
+async function listarCarpeta(accessToken, carpetaId) {
+  const seguro = String(carpetaId).replace(/'/g, "\\'");
+  const q = `'${seguro}' in parents and trashed=false`;
+  let items = [];
+  let pageToken = "";
+  for (let i = 0; i < 6; i++) {
+    const url =
+      "https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(q) +
+      "&fields=" + encodeURIComponent(CAMPOS) +
+      "&orderBy=folder,name" +
+      "&pageSize=200" +
+      "&corpora=allDrives&includeItemsFromAllDrives=true&supportsAllDrives=true" +
+      (pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : "");
+    const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.error?.message || ("Drive respondió " + r.status));
+    items = items.concat(d.files || []);
+    pageToken = d.nextPageToken || "";
+    if (!pageToken) break;
+  }
+  return items;
+}
+
+// Lista TODOS los documentos bajando por todas las subcarpetas (recursivo, con topes de seguridad).
+async function listarTodoRecursivo(accessToken, raizId) {
+  const TOPE_CARPETAS = 400;   // máximo de carpetas a revisar
+  const TOPE_NIVELES = 25;     // máximo de profundidad
+  const archivos = [];
+  const vistas = new Set();
+  let revisadas = 0;
+  // cola de { id, ruta }
+  const cola = [{ id: raizId, ruta: "" }];
+  while (cola.length) {
+    const actual = cola.shift();
+    if (vistas.has(actual.id)) continue;
+    vistas.add(actual.id);
+    if (revisadas++ > TOPE_CARPETAS) break;
+    if (actual.ruta.split("/").length > TOPE_NIVELES) continue;
+    const items = await listarCarpeta(accessToken, actual.id);
+    for (const it of items) {
+      if (it.mimeType === "application/vnd.google-apps.folder") {
+        cola.push({ id: it.id, ruta: actual.ruta ? actual.ruta + "/" + it.name : it.name });
+      } else {
+        archivos.push({ ...it, ruta: actual.ruta || "" });
+      }
+    }
+  }
+  return archivos;
+}
+
+export default async (req) => {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok: false, error: "Método no permitido" }), { status: 405 });
+  }
   try {
-    const d = await llamar<{ ok: boolean; correo?: string }>({ accion: "cuenta" });
-    return d.ok ? (d.correo || "") : "";
-  } catch {
-    return "";
+    const body = await req.json();
+    const accion = body.accion || "";
+
+    const credBruto = process.env.GOOGLE_SERVICE_ACCOUNT;
+    if (!credBruto) {
+      return new Response(JSON.stringify({ ok: false, error: "Falta GOOGLE_SERVICE_ACCOUNT en Netlify." }), { status: 500 });
+    }
+    const cred = JSON.parse(credBruto);
+
+    // La cuenta de servicio: solo necesita el correo, sin pedir token.
+    if (accion === "cuenta") {
+      return new Response(JSON.stringify({ ok: true, correo: cred.client_email || "" }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    let privateKey = cred.private_key || "";
+    if (privateKey.includes("\\n")) privateKey = privateKey.replace(/\\n/g, "\n");
+    const accessToken = await obtenerAccessToken(cred.client_email, privateKey);
+
+    if (accion === "unidades") {
+      const url = "https://www.googleapis.com/drive/v3/drives?pageSize=100&fields=drives(id,name)";
+      const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.error?.message || ("Drive respondió " + r.status));
+      return new Response(JSON.stringify({ ok: true, unidades: d.drives || [], correo: cred.client_email }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    if (accion === "listar") {
+      const carpetaId = String(body.carpetaId || "").trim();
+      if (!carpetaId) return new Response(JSON.stringify({ ok: false, error: "Falta carpetaId." }), { status: 400 });
+      const items = await listarCarpeta(accessToken, carpetaId);
+      return new Response(JSON.stringify({ ok: true, items }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    if (accion === "listar_todo") {
+      const carpetaId = String(body.carpetaId || "").trim();
+      if (!carpetaId) return new Response(JSON.stringify({ ok: false, error: "Falta carpetaId." }), { status: 400 });
+      const items = await listarTodoRecursivo(accessToken, carpetaId);
+      return new Response(JSON.stringify({ ok: true, items }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    if (accion === "sugerir") {
+      // Busca carpetas cuyo nombre contenga alguno de los textos (expediente, crédito, gar).
+      const textos = Array.isArray(body.textos) ? body.textos : [];
+      const limpios = textos
+        .map((t) => String(t || "").trim())
+        .filter((t) => t.length >= 3)
+        .slice(0, 6);
+      const vistos = new Set();
+      const resultados = [];
+      for (const t of limpios) {
+        const seguro = t.replace(/'/g, "\\'");
+        const q = `mimeType='application/vnd.google-apps.folder' and name contains '${seguro}' and trashed=false`;
+        const url =
+          "https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(q) +
+          "&fields=" + encodeURIComponent("files(id,name)") +
+          "&pageSize=20&corpora=allDrives&includeItemsFromAllDrives=true&supportsAllDrives=true";
+        const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+        const d = await r.json();
+        if (r.ok && Array.isArray(d.files)) {
+          for (const f of d.files) {
+            if (!vistos.has(f.id)) { vistos.add(f.id); resultados.push({ id: f.id, name: f.name, coincide: t }); }
+          }
+        }
+      }
+      return new Response(JSON.stringify({ ok: true, sugerencias: resultados }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    if (accion === "resolver") {
+      const id = extraerId(body.entrada);
+      if (!id) return new Response(JSON.stringify({ ok: false, error: "No reconocí un enlace o ID de Drive." }), { status: 400 });
+      const url = "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) +
+        "?fields=id,name,mimeType,webViewLink&supportsAllDrives=true";
+      const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+      const d = await r.json();
+      if (!r.ok) {
+        const msg = d?.error?.message || ("Drive respondió " + r.status);
+        return new Response(JSON.stringify({ ok: false, error: msg + " — ¿ya agregaste la cuenta de servicio como Lector?" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true, item: d }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    return new Response(JSON.stringify({ ok: false, error: "Acción no reconocida." }), { status: 400 });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String((e && e.message) || e) }), { status: 500 });
   }
-}
-
-/** Lista las Unidades compartidas que la cuenta de servicio puede ver. */
-export async function listarUnidades(): Promise<{ ok: boolean; unidades: Unidad[]; correo?: string; error?: string }> {
-  try {
-    const d = await llamar<{ ok: boolean; unidades?: Unidad[]; correo?: string; error?: string }>({ accion: "unidades" });
-    return { ok: !!d.ok, unidades: d.unidades || [], correo: d.correo, error: d.error };
-  } catch (e: any) {
-    return { ok: false, unidades: [], error: String(e?.message || e) };
-  }
-}
-
-/** Lista carpetas y documentos dentro de una carpeta (o de una Unidad compartida). */
-export async function listarCarpeta(carpetaId: string): Promise<{ ok: boolean; items: ItemDrive[]; error?: string }> {
-  try {
-    const d = await llamar<{ ok: boolean; items?: ItemDrive[]; error?: string }>({ accion: "listar", carpetaId });
-    return { ok: !!d.ok, items: d.items || [], error: d.error };
-  } catch (e: any) {
-    return { ok: false, items: [], error: String(e?.message || e) };
-  }
-}
-
-/** Lista TODOS los documentos bajando por todas las subcarpetas (recursivo). */
-export async function listarTodo(carpetaId: string): Promise<{ ok: boolean; items: ItemDrive[]; error?: string }> {
-  try {
-    const d = await llamar<{ ok: boolean; items?: ItemDrive[]; error?: string }>({ accion: "listar_todo", carpetaId });
-    return { ok: !!d.ok, items: d.items || [], error: d.error };
-  } catch (e: any) {
-    return { ok: false, items: [], error: String(e?.message || e) };
-  }
-}
-
-/** Resuelve un enlace o ID pegado a un item de Drive (carpeta o archivo). */
-export async function resolverEntrada(entrada: string): Promise<{ ok: boolean; item?: ItemDrive; error?: string }> {
-  try {
-    const d = await llamar<{ ok: boolean; item?: ItemDrive; error?: string }>({ accion: "resolver", entrada });
-    return { ok: !!d.ok, item: d.item, error: d.error };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
-  }
-}
-
-export interface Sugerencia {
-  id: string;
-  name: string;
-  coincide: string;
-}
-
-/** Sugiere carpetas cuyo nombre contenga alguno de los textos (expediente, crédito, gar…). */
-export async function sugerirCarpetas(textos: string[]): Promise<Sugerencia[]> {
-  try {
-    const d = await llamar<{ ok: boolean; sugerencias?: Sugerencia[] }>({ accion: "sugerir", textos });
-    return d.ok ? (d.sugerencias || []) : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Arma los textos de búsqueda a partir de los datos del caso (sin duplicados ni vacíos). */
-export function textosDeCaso(caso: { expediente?: string | null; no_credito?: string | null; gar_id?: string | null }): string[] {
-  const brutos = [caso.expediente, caso.no_credito, caso.gar_id];
-  const set = new Set<string>();
-  for (const b of brutos) {
-    const t = String(b || "").trim();
-    if (t.length >= 3) set.add(t);
-  }
-  return Array.from(set);
-}
-
-/** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema. */
-export async function sincronizarCarpeta(casoId: string, carpetaId: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
-  try {
-    const r = await fetch("/.netlify/functions/sincronizar-drive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ casoId, carpetaId }),
-    });
-    return await r.json();
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
-  }
-}
-
-export function esCarpeta(it: ItemDrive): boolean {
-  return it.mimeType === CARPETA_MIME;
-}
-
-/** Enlace embebible (/preview) para cualquier archivo de Drive por su id. */
-export function previewDeId(id: string): string {
-  return `https://drive.google.com/file/d/${id}/preview`;
-}
-
-/** Etiqueta corta del tipo de archivo, para mostrar en la tarjeta. */
-export function tipoLegible(mime: string): string {
-  const m = (mime || "").toLowerCase();
-  if (m === CARPETA_MIME) return "Carpeta";
-  if (m.includes("pdf")) return "PDF";
-  if (m.includes("image")) return "Imagen";
-  if (m.includes("wordprocessingml") || m.includes("msword") || m.includes("google-apps.document")) return "Word";
-  if (m.includes("spreadsheet") || m.includes("excel")) return "Excel";
-  if (m.includes("presentation") || m.includes("powerpoint")) return "Diapositivas";
-  if (m.includes("video")) return "Video";
-  if (m.includes("text")) return "Texto";
-  return "Archivo";
-}
+};
