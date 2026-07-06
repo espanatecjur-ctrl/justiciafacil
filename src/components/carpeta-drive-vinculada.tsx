@@ -14,7 +14,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -84,6 +84,7 @@ export function CarpetaDriveVinculada({
     else partes.push("todo al día ✅");
     if (r.errores && r.errores.length) partes.push(`${r.errores.length} con aviso`);
     setMsgSincro(partes.join(" · "));
+    cargarCopias(); // refresca qué ya está en el almacén
   };
 
   // sugerencias por número (expediente / crédito / gar)
@@ -107,6 +108,15 @@ export function CarpetaDriveVinculada({
   const docsFiltrados = filtroDoc.trim()
     ? docs.filter((d) => normaliza(d.name).includes(normaliza(filtroDoc)) || normaliza(d.ruta || "").includes(normaliza(filtroDoc)))
     : docs;
+
+  // copias en el almacén del sistema (para servir desde ahí cuando existan) — opción B
+  const [copias, setCopias] = useState<Record<string, Copia>>({});
+  const [urlsCopia, setUrlsCopia] = useState<Record<string, string>>({});
+  const cargarCopias = () => {
+    if (!carpetaId) return;
+    listarCopias(caso.id).then(setCopias).catch(() => setCopias({}));
+  };
+  useEffect(() => { cargarCopias(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
 
   const cargarDocs = (modo: "todos" | "esta" = modoVista, folderId: string = carpetaId) => {
     if (!carpetaId) return;
@@ -183,6 +193,24 @@ export function CarpetaDriveVinculada({
   const totalPag = Math.max(1, Math.ceil(docsFiltrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
   const docsPag = docsFiltrados.slice(pag * PAGE, pag * PAGE + PAGE);
+
+  // firma los enlaces de las copias visibles (las que ya están en el almacén)
+  useEffect(() => {
+    const faltan = docsPag
+      .filter((d) => copias[d.id] && !urlsCopia[d.id])
+      .map((d) => copias[d.id].storage_path);
+    if (faltan.length === 0) return;
+    firmarCopias(faltan).then((urls) => {
+      // urls viene por storage_path → lo paso a driveId
+      const porId: Record<string, string> = {};
+      for (const d of docsPag) {
+        const p = copias[d.id]?.storage_path;
+        if (p && urls[p]) porId[d.id] = urls[p];
+      }
+      if (Object.keys(porId).length) setUrlsCopia((prev) => ({ ...prev, ...porId }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pag, filtroDoc, docs, copias]);
 
   return (
     <Card className="legal-card p-4 space-y-3">
@@ -329,15 +357,17 @@ export function CarpetaDriveVinculada({
                         {modoVista === "todos" && a.ruta ? <p className="truncate text-[10px] text-muted-foreground" title={a.ruta}>📁 {a.ruta}</p> : null}
                       </div>
                       <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tipoLegible(a.mimeType)}</span>
+                      {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
-                      <iframe src={previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                      <iframe src={urlsCopia[a.id] || previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
                       <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
                         <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
                       </span>
                     </button>
                     <div className="flex items-center justify-between px-3 py-1.5">
                       <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
+                      {urlsCopia[a.id] && <a href={`${urlsCopia[a.id]}&download=${encodeURIComponent(copias[a.id]?.nombre || a.name)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
                       {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
                     </div>
                   </div>
@@ -396,7 +426,7 @@ export function CarpetaDriveVinculada({
       )}
 
       {docSel && (
-        <VisorDocumentoModal url={docSel.webViewLink || ""} driveId={docSel.id} nombre={docSel.name} onCerrar={() => setDocSel(null)} />
+        <VisorDocumentoModal url={urlsCopia[docSel.id] || docSel.webViewLink || ""} driveId={urlsCopia[docSel.id] ? null : docSel.id} nombre={docSel.name} onCerrar={() => setDocSel(null)} />
       )}
     </Card>
   );
