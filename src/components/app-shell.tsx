@@ -116,6 +116,9 @@ export function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibles, rol]);
 
+  // La página de firma por link se ve sola, sin menú ni barra lateral.
+  if (pathname === "/firmar") return <Outlet />;
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
