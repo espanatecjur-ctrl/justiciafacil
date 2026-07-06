@@ -1,0 +1,122 @@
+// ============================================================
+// JusticiaFácil · Explorar Drive (cliente)
+// Llama a /.netlify/functions/explorar-drive para leer carpetas
+// y documentos de Drive (Unidades compartidas) SIN crear nada.
+// ============================================================
+
+export const CARPETA_MIME = "application/vnd.google-apps.folder";
+
+export interface ItemDrive {
+  id: string;
+  name: string;
+  mimeType: string;
+  iconLink?: string | null;
+  thumbnailLink?: string | null;
+  webViewLink?: string | null;
+  modifiedTime?: string | null;
+  size?: string | null;
+}
+
+export interface Unidad {
+  id: string;
+  name: string;
+}
+
+async function llamar<T>(cuerpo: Record<string, unknown>): Promise<T> {
+  const r = await fetch("/.netlify/functions/explorar-drive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cuerpo),
+  });
+  return (await r.json()) as T;
+}
+
+/** Correo de la cuenta de servicio (para agregarla como Lector en las Unidades). */
+export async function correoCuentaServicio(): Promise<string> {
+  try {
+    const d = await llamar<{ ok: boolean; correo?: string }>({ accion: "cuenta" });
+    return d.ok ? (d.correo || "") : "";
+  } catch {
+    return "";
+  }
+}
+
+/** Lista las Unidades compartidas que la cuenta de servicio puede ver. */
+export async function listarUnidades(): Promise<{ ok: boolean; unidades: Unidad[]; correo?: string; error?: string }> {
+  try {
+    const d = await llamar<{ ok: boolean; unidades?: Unidad[]; correo?: string; error?: string }>({ accion: "unidades" });
+    return { ok: !!d.ok, unidades: d.unidades || [], correo: d.correo, error: d.error };
+  } catch (e: any) {
+    return { ok: false, unidades: [], error: String(e?.message || e) };
+  }
+}
+
+/** Lista carpetas y documentos dentro de una carpeta (o de una Unidad compartida). */
+export async function listarCarpeta(carpetaId: string): Promise<{ ok: boolean; items: ItemDrive[]; error?: string }> {
+  try {
+    const d = await llamar<{ ok: boolean; items?: ItemDrive[]; error?: string }>({ accion: "listar", carpetaId });
+    return { ok: !!d.ok, items: d.items || [], error: d.error };
+  } catch (e: any) {
+    return { ok: false, items: [], error: String(e?.message || e) };
+  }
+}
+
+/** Resuelve un enlace o ID pegado a un item de Drive (carpeta o archivo). */
+export async function resolverEntrada(entrada: string): Promise<{ ok: boolean; item?: ItemDrive; error?: string }> {
+  try {
+    const d = await llamar<{ ok: boolean; item?: ItemDrive; error?: string }>({ accion: "resolver", entrada });
+    return { ok: !!d.ok, item: d.item, error: d.error };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+export interface Sugerencia {
+  id: string;
+  name: string;
+  coincide: string;
+}
+
+/** Sugiere carpetas cuyo nombre contenga alguno de los textos (expediente, crédito, gar…). */
+export async function sugerirCarpetas(textos: string[]): Promise<Sugerencia[]> {
+  try {
+    const d = await llamar<{ ok: boolean; sugerencias?: Sugerencia[] }>({ accion: "sugerir", textos });
+    return d.ok ? (d.sugerencias || []) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Arma los textos de búsqueda a partir de los datos del caso (sin duplicados ni vacíos). */
+export function textosDeCaso(caso: { expediente?: string | null; no_credito?: string | null; gar_id?: string | null }): string[] {
+  const brutos = [caso.expediente, caso.no_credito, caso.gar_id];
+  const set = new Set<string>();
+  for (const b of brutos) {
+    const t = String(b || "").trim();
+    if (t.length >= 3) set.add(t);
+  }
+  return Array.from(set);
+}
+
+export function esCarpeta(it: ItemDrive): boolean {
+  return it.mimeType === CARPETA_MIME;
+}
+
+/** Enlace embebible (/preview) para cualquier archivo de Drive por su id. */
+export function previewDeId(id: string): string {
+  return `https://drive.google.com/file/d/${id}/preview`;
+}
+
+/** Etiqueta corta del tipo de archivo, para mostrar en la tarjeta. */
+export function tipoLegible(mime: string): string {
+  const m = (mime || "").toLowerCase();
+  if (m === CARPETA_MIME) return "Carpeta";
+  if (m.includes("pdf")) return "PDF";
+  if (m.includes("image")) return "Imagen";
+  if (m.includes("wordprocessingml") || m.includes("msword") || m.includes("google-apps.document")) return "Word";
+  if (m.includes("spreadsheet") || m.includes("excel")) return "Excel";
+  if (m.includes("presentation") || m.includes("powerpoint")) return "Diapositivas";
+  if (m.includes("video")) return "Video";
+  if (m.includes("text")) return "Texto";
+  return "Archivo";
+}
