@@ -394,6 +394,11 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
             {decidido && (
               <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><Lock className="h-3.5 w-3.5" /> Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”.</p>
             )}
+            {decidido && !/no pasa/i.test(guardado || "") && (
+              <Link to="/urrj" search={{ registral: true, exp: x.expediente || "", cliente: x.deudor || "", caso: x.caso_id || "" } as any} className="inline-flex w-fit items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0B1E3A" }}>
+                <ArrowRight className="h-4 w-4" /> Continuar con el registral
+              </Link>
+            )}
             <div className="flex flex-wrap gap-2"><button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF</button><button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
             {yaExiste && (
