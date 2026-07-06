@@ -32,6 +32,8 @@ export const navItems: NavItem[] = [
   { label: "Liquidación de Intereses", sub: "Calculadora e incidente", to: "/liquidacion", icon: Calculator, group: "Inteligencia" },
   { label: "Contratos", to: "/contratos", icon: FileSignature, group: "Documentos" },
   { label: "Editor de Contratos", to: "/contratos/editor", icon: FileText, group: "Documentos" },
+  { label: "Escritos", to: "/escritos", icon: Scale, group: "Documentos" },
+  { label: "Editor de Escritos", to: "/escritos/editor", icon: FileText, group: "Documentos" },
   { label: "Trámites Gob.", to: "/tramites", icon: FileCheck2, group: "Trámites" },
   { label: "Conectores Juzgados", to: "/conectores", icon: Network, group: "Operación" },
 ];
