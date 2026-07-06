@@ -10,6 +10,7 @@ import { SolicitudesEntradaConfig } from "@/components/solicitudes-entrada-confi
 import { AreasConfig } from "@/components/areas-config";
 import { PapeleraConfig } from "@/components/papelera-config";
 import { PermisosURRJConfig } from "@/components/permisos-urrj-config";
+import { PermisosAccionesConfig } from "@/components/permisos-acciones-config";
 import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale, ScrollText, DoorOpen } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
@@ -63,6 +64,7 @@ function ConfiguracionPage() {
 
       {activa === "roles" && <RolesPermisos />}
       {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><PermisosURRJConfig /></div>}
+      {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><PermisosAccionesConfig /></div>}
       {activa === "colaboradores" && <ColaboradoresConfig />}
       {activa === "apoderados" && <ApoderadosConfig />}
       {activa === "entradas" && <SolicitudesEntradaConfig />}
@@ -131,10 +133,13 @@ function RolesPermisos() {
     setGuardando(true);
     setError(null);
     try {
+      const cur = await fetch(`${SUPABASE_URL}/rest/v1/app_permisos?select=config&id=eq.1`, { headers })
+        .then((r) => (r.ok ? r.json() : [])).catch(() => []);
+      const base = cur?.[0]?.config ?? {};
       const res = await fetch(`${SUPABASE_URL}/rest/v1/app_permisos?id=eq.1`, {
         method: "PATCH",
         headers: { ...headers, Prefer: "return=representation" },
-        body: JSON.stringify({ config: { modulos }, updated_at: new Date().toISOString() }),
+        body: JSON.stringify({ config: { ...base, modulos }, updated_at: new Date().toISOString() }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       const data = await res.json();
