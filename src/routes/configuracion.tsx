@@ -11,6 +11,7 @@ import { AreasConfig } from "@/components/areas-config";
 import { PapeleraConfig } from "@/components/papelera-config";
 import { PermisosURRJConfig } from "@/components/permisos-urrj-config";
 import { PermisosAccionesConfig } from "@/components/permisos-acciones-config";
+import { GestionRolesConfig } from "@/components/gestion-roles-config";
 import { ShieldCheck, Save, Check, Lock, Settings, Users, Network, Bookmark, Trash2, Hammer, Scale, ScrollText, DoorOpen } from "lucide-react";
 
 export const Route = createFileRoute("/configuracion")({
@@ -62,7 +63,8 @@ function ConfiguracionPage() {
         ))}
       </div>
 
-      {activa === "roles" && <RolesPermisos />}
+      {activa === "roles" && <GestionRolesConfig />}
+      {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><RolesPermisos /></div>}
       {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><PermisosURRJConfig /></div>}
       {activa === "roles" && <div className="mt-8 border-t border-border pt-6"><PermisosAccionesConfig /></div>}
       {activa === "colaboradores" && <ColaboradoresConfig />}
