@@ -40,6 +40,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "terminar", label: "Dar por terminado" },
     { clave: "papelera", label: "Papelera / eliminar" },
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
   ],
   ucm: [
     { clave: "crear", label: "Crear expediente" },
@@ -54,6 +55,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "borrar", label: "Borrar / papelera" },
     { clave: "ver", label: "Ver (solo lectura)" },
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
   ],
   udp: [
     { clave: "crear", label: "Crear caso de defensa" },
@@ -68,6 +70,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "borrar", label: "Borrar / papelera" },
     { clave: "ver", label: "Ver (solo lectura)" },
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
   ],
   ufc: [
     { clave: "contrato_crear", label: "Crear / editar contrato (plantillas, paquetes)" },
@@ -82,6 +85,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "pdf", label: "Ver / Descargar PDF" },
     { clave: "papelera", label: "Papelera / eliminar" },
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
   ],
   amparos: [
     { clave: "crear", label: "Crear amparo / recurso / exhorto" },
@@ -95,6 +99,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "borrar", label: "Borrar / papelera" },
     { clave: "ver", label: "Ver (solo lectura)" },
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
+    { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
   ],
   contratos: [
     { clave: "plantilla_maestra", label: "Crear / editar plantilla maestra" },
@@ -113,32 +118,32 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
 // Los roles no listados para un módulo = ve todo (anti-bloqueo).
 export const MATRIZ_DEFAULT: Record<ModuloPerm, Record<string, string[]>> = {
   ucp: {
-    UCP: ["requisitos", "dictaminar_juridico", "dictaminar_registral", "firma_elabora", "pasar_etapa_b", "redictaminar", "pdf", "carpeta"],
-    DIL: ["requisitos", "dictaminar_juridico", "dictaminar_registral", "firma_dil", "asignar_abogado", "pasar_etapa_b", "redictaminar", "pdf", "terminar", "papelera", "carpeta"],
-    GAD: ["requisitos", "firma_gad", "asignar_abogado", "pdf", "papelera", "carpeta"],
-    DGC: ["firma_dgc", "pdf", "carpeta"],
+    UCP: ["requisitos", "dictaminar_juridico", "dictaminar_registral", "firma_elabora", "pasar_etapa_b", "redictaminar", "pdf", "carpeta", "vincular_drive"],
+    DIL: ["requisitos", "dictaminar_juridico", "dictaminar_registral", "firma_dil", "asignar_abogado", "pasar_etapa_b", "redictaminar", "pdf", "terminar", "papelera", "carpeta", "vincular_drive"],
+    GAD: ["requisitos", "firma_gad", "asignar_abogado", "pdf", "papelera", "carpeta", "vincular_drive"],
+    DGC: ["firma_dgc", "pdf", "carpeta", "vincular_drive"],
   },
   ucm: {
-    UCM: ["crear", "editar", "asignar_juzgado", "config_seguimiento", "actuacion", "subir_evidencia", "ver_robot", "archivar", "ver", "carpeta"],
-    DIL: ["crear", "editar", "asignar_juzgado", "config_seguimiento", "actuacion", "subir_evidencia", "ver_robot", "asignar_abogado", "archivar", "borrar", "ver", "carpeta"],
-    GAD: ["ver_robot", "asignar_abogado", "borrar", "ver", "carpeta"],
+    UCM: ["crear", "editar", "asignar_juzgado", "config_seguimiento", "actuacion", "subir_evidencia", "ver_robot", "archivar", "ver", "carpeta", "vincular_drive"],
+    DIL: ["crear", "editar", "asignar_juzgado", "config_seguimiento", "actuacion", "subir_evidencia", "ver_robot", "asignar_abogado", "archivar", "borrar", "ver", "carpeta", "vincular_drive"],
+    GAD: ["ver_robot", "asignar_abogado", "borrar", "ver", "carpeta", "vincular_drive"],
   },
   udp: {
-    UDP: ["crear", "editar", "estrategia", "actuacion", "subir_evidencia", "vincular", "archivar", "ver", "carpeta"],
-    DIL: ["crear", "editar", "estrategia", "actuacion", "subir_evidencia", "vincular", "validar_dil", "asignar_abogado", "archivar", "borrar", "ver", "carpeta"],
-    GAD: ["asignar_abogado", "borrar", "ver", "carpeta"],
+    UDP: ["crear", "editar", "estrategia", "actuacion", "subir_evidencia", "vincular", "archivar", "ver", "carpeta", "vincular_drive"],
+    DIL: ["crear", "editar", "estrategia", "actuacion", "subir_evidencia", "vincular", "validar_dil", "asignar_abogado", "archivar", "borrar", "ver", "carpeta", "vincular_drive"],
+    GAD: ["asignar_abogado", "borrar", "ver", "carpeta", "vincular_drive"],
   },
   ufc: {
-    UFC: ["contrato_crear", "contrato_generar", "firma_elabora", "notaria", "tramites_rppc", "entrega_finiquito", "pdf", "carpeta"],
-    DGC: ["contrato_crear", "contrato_generar", "firma_dgc", "notaria", "entrega_finiquito", "pdf", "papelera", "carpeta"],
-    DIL: ["contrato_crear", "apoderados", "pdf", "papelera", "carpeta"],
-    GAD: ["tramites_rppc", "pdf", "carpeta"],
+    UFC: ["contrato_crear", "contrato_generar", "firma_elabora", "notaria", "tramites_rppc", "entrega_finiquito", "pdf", "carpeta", "vincular_drive"],
+    DGC: ["contrato_crear", "contrato_generar", "firma_dgc", "notaria", "entrega_finiquito", "pdf", "papelera", "carpeta", "vincular_drive"],
+    DIL: ["contrato_crear", "apoderados", "pdf", "papelera", "carpeta", "vincular_drive"],
+    GAD: ["tramites_rppc", "pdf", "carpeta", "vincular_drive"],
   },
   amparos: {
-    DIL: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "asignar_abogado", "archivar", "borrar", "ver", "carpeta"],
-    UCM: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "archivar", "ver", "carpeta"],
-    UDP: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "archivar", "ver", "carpeta"],
-    GAD: ["asignar_abogado", "borrar", "ver", "carpeta"],
+    DIL: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "asignar_abogado", "archivar", "borrar", "ver", "carpeta", "vincular_drive"],
+    UCM: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "archivar", "ver", "carpeta", "vincular_drive"],
+    UDP: ["crear", "editar", "actuacion", "subir_documento", "vincular", "vencimiento", "archivar", "ver", "carpeta", "vincular_drive"],
+    GAD: ["asignar_abogado", "borrar", "ver", "carpeta", "vincular_drive"],
   },
   contratos: {
     UFC: ["paquetes", "generar", "editar_generado", "kpis", "exportar", "enviar_notaria", "ver"],
