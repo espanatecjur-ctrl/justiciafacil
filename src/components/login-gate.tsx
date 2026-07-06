@@ -24,7 +24,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
+  // Al iniciar sesión, si veníamos de un link de firma, regresamos ahí
+  // (el OAuth de Google regresa al origin y perdería el ?token=).
+  useEffect(() => {
+    if (!email) return;
+    try {
+      const r = localStorage.getItem("jf_redir");
+      if (r) {
+        localStorage.removeItem("jf_redir");
+        if ((window.location.pathname + window.location.search) !== r) window.location.replace(r);
+      }
+    } catch { /* no-op */ }
+  }, [email]);
+
   const entrar = async () => {
+    try { if (window.location.pathname === "/firmar") localStorage.setItem("jf_redir", window.location.pathname + window.location.search); } catch { /* no-op */ }
     const auth = await getAuth();
     await auth.auth.signInWithOAuth({
       provider: "google",
