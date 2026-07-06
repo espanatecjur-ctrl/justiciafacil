@@ -461,7 +461,7 @@ function FichaExpedientePage() {
           {/* Cronología URRJ: dictámenes firmados y correos preparados */}
           <div className="rounded-xl border border-border bg-card p-5">
             <CronologiaURRJ casoId={c.id} expediente={c.expediente} />
-          </div>>
+          </div>
 
           {/* ANTECEDENTES (solo lectura): pre-dictámenes, dictámenes, firmas, actuaciones y evidencias */}
           <AntecedentesGarantia casoId={c.id} expediente={c.expediente} />
