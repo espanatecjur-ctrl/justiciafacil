@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
-import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
@@ -227,7 +226,6 @@ function FichaExpedientePage() {
           <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: areaBg }} title={`Ficha del área ${areaFicha}`}>{areaFicha}</span>
           <BadgeAvance caso={c} />
         </div>
-        <BotonCarpetaDrive area={areaFicha} caso={c} />
       </div>
 
       {/* Encabezado */}
@@ -430,7 +428,7 @@ function FichaExpedientePage() {
       </Seccion>
 
       {/* Carpeta de Drive vinculada + vista previa de documentos */}
-      <CarpetaDriveVinculada caso={c} modulo={moduloPermFicha} onGuardar={(campos) => guardarDatos(campos, () => {})} />
+      <CarpetaDriveVinculada caso={c} area={areaFicha} modulo={moduloPermFicha} onGuardar={(campos) => guardarDatos(campos, () => {})} />
 
       <DocumentosGarantia area={areaFicha} caso={c} />
 
