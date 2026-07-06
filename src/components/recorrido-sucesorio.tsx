@@ -171,7 +171,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
     <>
       {pdfUrl && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setPdfUrl(null)}>
-          <div className="my-4 flex h-[88vh] w-[94vw] max-w-4xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="my-2 flex h-[95vh] w-[97vw] max-w-6xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border px-4 py-2">
               <p className="text-sm font-semibold" style={{ color: NAVY }}>Pre-dictamen · Exp. {x.expediente || "—"}</p>
               <div className="flex items-center gap-3">
