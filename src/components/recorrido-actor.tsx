@@ -17,7 +17,7 @@ import {
 } from "@/lib/urrj-motores";
 import {
   ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
-  Check, X, ClipboardCheck, Lock, Calculator, Download, Eye } from "lucide-react";
+  Check, X, ClipboardCheck, Lock, Calculator, Download, Eye, RefreshCw } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF, type DatosPDF } from "@/lib/predictamen-pdf";
@@ -340,6 +340,9 @@ export function RecorridoActor({
       setGuardado("No se pudo generar el PDF: " + e.message);
     }
   };
+
+  const dosFirmas = !!(firmaElabora && firmaValida);
+  const decidido = !!guardado && guardado.startsWith("Pre-dictamen guardado");
 
   const checarExiste = async (exp?: string | null, caso?: string | null) => {
     if (precargar) return; // en re-dictaminar no aplica
@@ -708,16 +711,25 @@ export function RecorridoActor({
               <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
             <p className="text-sm font-medium">Decisión humana · ¿pasa para la compra de la cesión de la garantía?</p>
+            {!dosFirmas && !decidido && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Faltan las dos firmas (Elabora + Valida) para poder decidir y para el PDF.</p>
+            )}
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => guardar("Sí pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><Check className="h-4 w-4" /> Sí pasa</button>
-              <button onClick={() => guardar("No pasa")} disabled={guardando} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"><X className="h-4 w-4" /> No pasa</button>
-              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={guardando} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP (dictamen formal)</button>
+              <button onClick={() => guardar("Sí pasa")} disabled={guardando || !dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> Sí pasa</button>
+              <button onClick={() => guardar("No pasa")} disabled={guardando || !dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
+              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={guardando || !dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed">Pasa a UCP (dictamen formal)</button>
+              {decidido && (
+                <button onClick={() => setGuardado(null)} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Re-pre-dictaminar</button>
+              )}
             </div>
+            {decidido && (
+              <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><Lock className="h-3.5 w-3.5" /> Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”.</p>
+            )}
             <div className="flex flex-wrap gap-2 pt-1">
-              <button onClick={() => descargarPDF("(borrador)", "ver")} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+              <button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
                 <Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF
               </button>
-              <button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+              <button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
                 <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF del pre-dictamen
               </button>
             </div>
