@@ -124,7 +124,7 @@ const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-
 export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
-  onResultados, modoFicha = false, hallazgosIniciales, expedienteInicial, deudorInicial,
+  onResultados, modoFicha = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial,
 }: {
   casos: any[];
   onVolver: () => void;
@@ -144,6 +144,7 @@ export function RecorridoActor({
   hallazgosIniciales?: string[];
   expedienteInicial?: string;
   deudorInicial?: string;
+  juzgadoInicial?: string;
 }) {
   const [paso, setPaso] = useState(0);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
@@ -174,7 +175,7 @@ export function RecorridoActor({
       setD((p) => {
         const notas = (hallazgosIniciales || []).filter((h) => !p.anotacionesHumanas.includes(h.split("\n")[0]));
         const sep = p.anotacionesHumanas.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
+        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
   }, []);
@@ -440,7 +441,7 @@ export function RecorridoActor({
                 <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
                 <p className="text-[13px]">Boletín: <b>{expedienteInicial}</b>{deudorInicial ? ` · ${deudorInicial}` : ""} — Solicitud/registro: <b>{d.expediente}</b>{d.deudor ? ` · ${d.deudor}` : ""}. ¿Con cuál abro el pre-dictamen?</p>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => { setD((p) => ({ ...p, expediente: expedienteInicial, deudor: deudorInicial || p.deudor })); setIgnorarBoletin(true); }} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Usar el del boletín ({expedienteInicial})</button>
+                  <button onClick={() => { setD((p) => ({ ...p, expediente: expedienteInicial, deudor: deudorInicial || p.deudor, juzgado: juzgadoInicial || p.juzgado })); setIgnorarBoletin(true); }} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Usar el del boletín ({expedienteInicial})</button>
                   <button onClick={() => setIgnorarBoletin(true)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Mantener el de la solicitud ({d.expediente})</button>
                 </div>
               </div>
