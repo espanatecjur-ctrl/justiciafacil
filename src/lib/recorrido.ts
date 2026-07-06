@@ -115,3 +115,28 @@ export async function reflejarDictamen(
   const jur = tipo === "juridico" ? dictamen : (p?.dic_juridico ?? null);
   return marcarArea(caso, area, reg, jur, "Reflejado automáticamente del dictamen", quien);
 }
+
+// --- Conectar la bolita URRJ al PRE-DICTAMEN abierto (automático) ---
+// La bolita URRJ manda el jurídico. Si hay un pre-dictamen VIGENTE, refleja su
+// resultado: POSITIVO→verde, NEGATIVO→rojo, resto (CONDICIONADO / FALTAN DATOS)
+// →naranja (abierto/en proceso). Si NO hay pre-dictamen, regresa null → la bolita
+// queda gris ("no pasa nada").
+function veredictoADictamen(v?: string | null): Dictamen {
+  const s = (v || "").toUpperCase();
+  if (s.includes("POSITIVO")) return "positivo";
+  if (s.includes("NEGATIVO")) return "negativo";
+  return "espera"; // pre-dictamen abierto, aún sin concluir
+}
+
+export async function preDictamenURRJ(caso: CasoJuridico): Promise<Dictamen> {
+  const filtro = caso.id ? `caso_id=eq.${caso.id}` : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=dictamen_sugerido,vigente,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers });
+    if (!r.ok) return null;
+    const filas: { dictamen_sugerido?: string | null }[] = await r.json();
+    if (!filas.length) return null; // no hay pre-dictamen abierto → gris
+    return veredictoADictamen(filas[0].dictamen_sugerido);
+  } catch {
+    return null;
+  }
+}
