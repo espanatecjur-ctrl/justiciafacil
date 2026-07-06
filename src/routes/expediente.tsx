@@ -29,7 +29,7 @@ interface Acuerdo {
 }
 
 export const Route = createFileRoute("/expediente")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { id?: string; nueva?: boolean; origen?: string } => ({
     id: typeof s.id === "string" ? s.id : undefined,
     nueva: s.nueva === true || s.nueva === "true",
     origen: typeof s.origen === "string" ? s.origen : undefined,
