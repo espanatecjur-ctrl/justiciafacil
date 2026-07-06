@@ -4,7 +4,7 @@ import { Check, X as XIcon, Clock, Circle } from "lucide-react";
 import { type CasoJuridico } from "@/lib/supabase";
 import { getAuth } from "@/lib/auth";
 import { formalizacionDeCaso } from "@/lib/formalizacion";
-import { AREAS_LINEA, COLOR, colorDeArea, textoDictamen, obtenerRecorrido, marcarArea, preDictamenURRJ, type PasoRecorrido, type Dictamen } from "@/lib/recorrido";
+import { AREAS_LINEA, COLOR, colorDeArea, textoDictamen, obtenerRecorrido, marcarArea, preDictamenURRJ, dictamenUCP, type PasoRecorrido, type Dictamen } from "@/lib/recorrido";
 
 const NAVY = "#0B1E3A";
 
@@ -35,6 +35,15 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
           dic_registral: null, dic_juridico: null, nota: null, marcado_por: null,
         };
         mapa["URRJ"] = { ...base, dic_juridico: dicURRJ };
+      }
+      // Conectar la bolita UCP a sus dos decisiones (jurídico + registral).
+      const dicUCP = await dictamenUCP(caso);
+      if (dicUCP) {
+        const base = mapa["UCP"] || {
+          caso_id: caso.id || null, expediente: caso.expediente || null, area: "UCP",
+          dic_registral: null, dic_juridico: null, nota: null, marcado_por: null,
+        };
+        mapa["UCP"] = { ...base, dic_juridico: dicUCP.dic_juridico, dic_registral: dicUCP.dic_registral };
       }
       setPasos(mapa);
     }).finally(() => setCargando(false));
