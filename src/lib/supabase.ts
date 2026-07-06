@@ -34,6 +34,7 @@ export interface CasoJuridico {
   proveedor: string | null;
   no_credito: string | null;
   expediente: string | null;
+  expediente_validado?: boolean | null;
   juzgado: string | null;
   distrito_judicial: string | null;
   entidad: string | null;
