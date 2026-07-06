@@ -10,8 +10,9 @@ import { HITOS_UCP } from "@/lib/ucp-dictamen";
 import { descargarDictamenFinalPDF, type FirmaConTitulo } from "@/lib/dictamen-final-pdf";
 import { type DictamenRow, type PredFuente } from "@/components/ficha-ucp";
 import { cargarPermisosUCP, puedeFirmar, puedePasarEtapaB, FIRMA_ROL } from "@/lib/ucp-permisos";
+import { enviarGmail } from "@/lib/enviar-gmail";
 import {
-  Save, Loader2, FileDown, ArrowRightCircle, CheckCircle2, AlertTriangle, Calculator, Stamp, Mail,
+  Save, Loader2, FileDown, ArrowRightCircle, CheckCircle2, AlertTriangle, Calculator, Stamp, Mail, Copy, Send,
 } from "lucide-react";
 
 const headers = {
@@ -20,15 +21,14 @@ const headers = {
   "Content-Type": "application/json",
 };
 
-// los 6 espacios de firma del dictamen final (en el orden que pidió DGE)
+// los 5 espacios de firma del dictamen final (orden aprobado por DGE, sin UCM)
 type SlotFirma = "elabora" | "dil" | "ucm" | "dge" | "dgc" | "gad";
 const SLOTS: { clave: SlotFirma; titulo: string; cargo: string }[] = [
-  { clave: "elabora", titulo: "Elabora · UCP",          cargo: "UCP — Consolidación Patrimonial" },
-  { clave: "dil",     titulo: "Jurídico · DIL",         cargo: "Director de Integridad Legal" },
-  { clave: "ucm",     titulo: "Seguimiento · UCM",      cargo: "Encargado UCM" },
-  { clave: "dge",     titulo: "Dirección General · DGE",cargo: "Administradora Única / DGE" },
-  { clave: "dgc",     titulo: "Comercial · DGC",        cargo: "Director Comercial" },
-  { clave: "gad",     titulo: "Administración · GAD",   cargo: "Gerencia Administrativa" },
+  { clave: "elabora", titulo: "Elabora · UCP",           cargo: "UCP — Consolidación Patrimonial" },
+  { clave: "dil",     titulo: "Jurídico · DIL",          cargo: "Director de Integridad Legal" },
+  { clave: "gad",     titulo: "Administración · GAD",    cargo: "Gerencia Administrativa" },
+  { clave: "dgc",     titulo: "Comercial · DGC",         cargo: "Director Comercial" },
+  { clave: "dge",     titulo: "Dirección General · DGE", cargo: "Administradora Única / DGE" },
 ];
 
 type Firmas = Partial<Record<SlotFirma, DatosFirma | null>>;
@@ -146,6 +146,59 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
     }
   };
 
+  // ---- Solicitar TODAS las firmas de una vez (prellenar y/o enviar por Gmail) ----
+  const [solTodas, setSolTodas] = useState<{ slot: SlotFirma; titulo: string; correo: string; link: string }[] | null>(null);
+  const [pidiendoTodas, setPidiendoTodas] = useState(false);
+  const [enviandoGmail, setEnviandoGmail] = useState(false);
+  const [msgEnvio, setMsgEnvio] = useState<string | null>(null);
+
+  const correoDeRol = async (slot: SlotFirma): Promise<string> => {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=correo&rol=eq.${encodeURIComponent(FIRMA_ROL[slot])}&limit=1`, { headers });
+      const rows = r.ok ? await r.json() : [];
+      return rows?.[0]?.correo || "";
+    } catch { return ""; }
+  };
+  const asuntoCorreo = (titulo: string) => `Firma requerida · ${caso.expediente || "dictamen"} · ${titulo}`;
+  const cuerpoCorreo = (titulo: string, link: string) =>
+    `Hola,\n\nSe requiere tu firma (${titulo}) en el dictamen de la garantía ${caso.expediente || ""}.\n\nEntra a este link con tu cuenta de DIIPA para revisar y firmar:\n${link}\n\nGracias.`;
+
+  const solicitarTodas = async () => {
+    setPidiendoTodas(true); setError(null); setMsgEnvio(null);
+    try {
+      const pendientes = SLOTS.filter((s) => !firmas[s.clave]?.fecha);
+      const out: { slot: SlotFirma; titulo: string; correo: string; link: string }[] = [];
+      for (const s of pendientes) {
+        const correo = await correoDeRol(s.clave);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud`, {
+          method: "POST", headers: { ...headers, Prefer: "return=representation" },
+          body: JSON.stringify({ dictamen_id: dictamen.id, caso_id: caso.id, slot: s.clave, correo_esperado: correo }),
+        });
+        if (!res.ok) throw new Error(`Supabase ${res.status} — ¿corriste el SQL de firma_solicitud?`);
+        const row = (await res.json())?.[0];
+        out.push({ slot: s.clave, titulo: s.titulo, correo, link: `${window.location.origin}/firmar?token=${row.token}` });
+      }
+      setSolTodas(out);
+    } catch (e: any) {
+      setError("No se pudieron generar los links: " + (e?.message || ""));
+    } finally {
+      setPidiendoTodas(false);
+    }
+  };
+
+  const enviarTodasGmail = async () => {
+    if (!solTodas) return;
+    setEnviandoGmail(true); setMsgEnvio(null);
+    let ok = 0, fail = 0;
+    for (const it of solTodas) {
+      if (!it.correo) { fail++; continue; }
+      const r = await enviarGmail(it.correo, asuntoCorreo(it.titulo), cuerpoCorreo(it.titulo, it.link));
+      r.ok ? ok++ : fail++;
+    }
+    setMsgEnvio(`Enviados ${ok} de ${solTodas.length}${fail ? ` · ${fail} sin enviar (revisa los correos o vuelve a iniciar sesión para reactivar Gmail)` : ""}`);
+    setEnviandoGmail(false);
+  };
+
   // ---- pasar a Etapa B (UCM) ----
   const pasarEtapaB = async () => {
     setPasando(true); setError(null);
@@ -248,13 +301,18 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
         </CardContent>
       </Card>
 
-      {/* 6 firmas nuevas */}
+      {/* firmas del dictamen final */}
       <Card className="legal-card">
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold">Firmas del dictamen final</p>
-            <span className="text-xs text-muted-foreground">{SLOTS.filter((s) => firmas[s.clave]?.fecha).length}/6 firmadas</span>
+            <span className="text-xs text-muted-foreground">{SLOTS.filter((s) => firmas[s.clave]?.fecha).length}/{SLOTS.length} firmadas</span>
             {firmasCompletas && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+            {!firmasCompletas && (
+              <button onClick={solicitarTodas} disabled={pidiendoTodas} className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                {pidiendoTodas ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Solicitar todas las firmas
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {SLOTS.map((s) => (
@@ -275,10 +333,28 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
               </div>
             ))}
           </div>
+
+          {solTodas && (
+            <div className="space-y-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold" style={{ color: "#0C5C46" }}>Links de firma generados ({solTodas.length})</p>
+                <button onClick={enviarTodasGmail} disabled={enviandoGmail} className="ml-auto flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--teal)] disabled:opacity-60">
+                  {enviandoGmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Enviar todas por Gmail
+                </button>
+              </div>
+              {solTodas.map((it) => (
+                <div key={it.slot} className="flex flex-wrap items-center gap-2 rounded border border-border bg-background px-2 py-1.5 text-xs">
+                  <span className="font-medium">{it.titulo}</span>
+                  <span className="text-muted-foreground">{it.correo || "sin correo"}</span>
+                  <button onClick={() => navigator.clipboard?.writeText(it.link)} className="ml-auto flex items-center gap-1 text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /> Copiar link</button>
+                  <a href={`mailto:${it.correo}?subject=${encodeURIComponent(asuntoCorreo(it.titulo))}&body=${encodeURIComponent(cuerpoCorreo(it.titulo, it.link))}`} className="flex items-center gap-1 text-[color:var(--teal)] hover:underline"><Mail className="h-3 w-3" /> Correo</a>
+                </div>
+              ))}
+              {msgEnvio && <p className="text-[11px] text-muted-foreground">{msgEnvio}</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* cierre: PDF + Etapa B */}
       <Card className="legal-card">
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -298,7 +374,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>
                 Para pasar a Etapa B (Regla 4): veredicto final POSITIVO ({vFinal === "POSITIVO" ? "✓" : "falta"}),
-                las 6 firmas ({firmasCompletas ? "✓" : "faltan"}), la relación contable validada ({cont.validada ? "✓" : "falta"}) y tu rol con permiso ({puedePasarEtapaB(rol) ? "✓" : "no"}).
+                las {SLOTS.length} firmas ({firmasCompletas ? "✓" : "faltan"}), la relación contable validada ({cont.validada ? "✓" : "falta"}) y tu rol con permiso ({puedePasarEtapaB(rol) ? "✓" : "no"}).
               </span>
             </div>
           )}
