@@ -9,14 +9,17 @@ import { useEffect, useState } from "react";
 import {
   HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
   Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
+  Folder, ChevronRight, Home, Layers, AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
-import { type CasoJuridico } from "@/lib/supabase";
+import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+
+const hdrs = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
 export function CarpetaDriveVinculada({
   caso,
@@ -53,6 +56,14 @@ export function CarpetaDriveVinculada({
   const [error, setError] = useState<string | null>(null);
   const [docSel, setDocSel] = useState<ItemDrive | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  // vista: "todos" = todos los docs (recursivo); "esta" = navegar carpeta por carpeta
+  const [modoVista, setModoVista] = useState<"todos" | "esta">("todos");
+  const [rutaFicha, setRutaFicha] = useState<{ id: string; name: string }[]>([]);
+  const [subcarpetas, setSubcarpetas] = useState<ItemDrive[]>([]);
+
+  // aviso de carpeta ya usada por otro expediente (no repetir)
+  const [dupAviso, setDupAviso] = useState<string | null>(null);
 
   // crear carpeta nueva (reusa el crear-carpeta del sistema: Área → Rol → garantía)
   const [creando, setCreando] = useState(false);
@@ -92,20 +103,61 @@ export function CarpetaDriveVinculada({
   const PAGE = 6;
   const [pagina, setPagina] = useState(0);
 
-  const cargarDocs = () => {
+  const cargarDocs = (modo: "todos" | "esta" = modoVista, folderId: string = carpetaId) => {
     if (!carpetaId) return;
-    setCargando(true); setError(null);
-    listarCarpeta(carpetaId)
+    setCargando(true); setError(null); setPagina(0);
+    const fuente = modo === "todos" ? listarTodo(carpetaId) : listarCarpeta(folderId);
+    fuente
       .then((r) => {
         if (!r.ok) setError(r.error || "No se pudieron leer los documentos.");
-        setDocs((r.items || []).filter((it) => !esCarpeta(it)));
+        const items = r.items || [];
+        setDocs(items.filter((it) => !esCarpeta(it)));
+        setSubcarpetas(modo === "esta" ? items.filter(esCarpeta) : []);
       })
       .finally(() => setCargando(false));
   };
-  useEffect(() => { setPagina(0); cargarDocs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
+  useEffect(() => {
+    setModoVista("todos");
+    setRutaFicha([{ id: carpetaId, name: carpetaNombre || "Carpeta" }]);
+    cargarDocs("todos", carpetaId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carpetaId]);
 
+  // refresca la vista actual (respeta el modo y en qué subcarpeta vamos)
+  const refrescar = () => {
+    const folder = modoVista === "esta" ? (rutaFicha[rutaFicha.length - 1]?.id || carpetaId) : carpetaId;
+    cargarDocs(modoVista, folder);
+  };
+  const cambiarModo = (modo: "todos" | "esta") => {
+    setModoVista(modo);
+    setRutaFicha([{ id: carpetaId, name: carpetaNombre || "Carpeta" }]);
+    cargarDocs(modo, carpetaId);
+  };
+  const entrarSubFicha = (it: ItemDrive) => {
+    const base = rutaFicha.length ? rutaFicha : [{ id: carpetaId, name: carpetaNombre || "Carpeta" }];
+    const nueva = [...base, { id: it.id, name: it.name }];
+    setRutaFicha(nueva);
+    cargarDocs("esta", it.id);
+  };
+  const irMigaFicha = (i: number) => {
+    const nueva = rutaFicha.slice(0, i + 1);
+    setRutaFicha(nueva);
+    cargarDocs("esta", nueva[i].id);
+  };
+
+  // Antes de vincular: revisa que la carpeta NO esté usada por otro expediente (no repetir).
   const elegir = async (id: string, nombre: string) => {
-    setGuardando(true);
+    setGuardando(true); setDupAviso(null);
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente&drive_carpeta_id=eq.${encodeURIComponent(id)}&id=neq.${encodeURIComponent(caso.id)}`, { headers: hdrs });
+      const usados = r.ok ? await r.json() : [];
+      if (Array.isArray(usados) && usados.length > 0) {
+        const exp = usados[0].expediente || usados[0].id;
+        setDupAviso(`Esa carpeta ya está vinculada al expediente ${exp}. Una carpeta no puede usarse en dos expedientes.`);
+        setGuardando(false);
+        return;
+      }
+    } catch { /* si falla la revisión, dejamos continuar */ }
     await onGuardar({ drive_carpeta_id: id, drive_carpeta_nombre: nombre });
     setGuardando(false);
     setEligiendo(false);
@@ -178,6 +230,7 @@ export function CarpetaDriveVinculada({
               </button>
             </div>
             {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
+            {dupAviso && <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"><AlertTriangle className="mr-1 inline h-3.5 w-3.5" /> {dupAviso}</div>}
           </div>
         </div>
       )}
@@ -190,7 +243,7 @@ export function CarpetaDriveVinculada({
             <span className="min-w-0 truncate text-sm font-medium" title={carpetaNombre}>{carpetaNombre || "Carpeta vinculada"}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800"><FolderCheck className="h-3 w-3" /> Vinculada</span>
             <span className="flex-1" />
-            <button onClick={cargarDocs} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
+            <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
             {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             {puedeDrive && <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>}
@@ -202,6 +255,43 @@ export function CarpetaDriveVinculada({
             </div>
           )}
 
+          {/* Filtro: Todos los documentos / Esta carpeta (navegar) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex overflow-hidden rounded-md border border-input text-xs">
+              <button onClick={() => cambiarModo("todos")} className={`inline-flex items-center gap-1 px-2.5 py-1 ${modoVista === "todos" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
+                <Layers className="h-3.5 w-3.5" /> Todos los documentos
+              </button>
+              <button onClick={() => cambiarModo("esta")} className={`inline-flex items-center gap-1 px-2.5 py-1 ${modoVista === "esta" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
+                <Folder className="h-3.5 w-3.5" /> Esta carpeta
+              </button>
+            </div>
+            {/* Migas (solo al navegar) */}
+            {modoVista === "esta" && rutaFicha.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 text-xs">
+                {rutaFicha.map((m, i) => (
+                  <span key={m.id} className="inline-flex items-center gap-1">
+                    {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                    <button onClick={() => irMigaFicha(i)} className={`max-w-[160px] truncate ${i === rutaFicha.length - 1 ? "font-semibold text-foreground" : "text-[color:var(--teal)] hover:underline"}`}>
+                      {i === 0 ? <Home className="mr-0.5 inline h-3 w-3" /> : null}{m.name}
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Subcarpetas (solo en modo "Esta carpeta") */}
+          {modoVista === "esta" && subcarpetas.length > 0 && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {subcarpetas.map((c) => (
+                <button key={c.id} onClick={() => entrarSubFicha(c)} className="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-left text-sm hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+                  <Folder className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span className="min-w-0 truncate">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {cargando ? (
             <p className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Cargando documentos…</p>
           ) : error ? (
@@ -210,7 +300,11 @@ export function CarpetaDriveVinculada({
               <p className="mt-1 text-xs">Si dice que no hay acceso, agrega la cuenta de servicio como Lector en esa Unidad de Drive.</p>
             </div>
           ) : docs.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Esta carpeta no tiene documentos.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {modoVista === "esta"
+                ? (subcarpetas.length > 0 ? "Aquí no hay documentos sueltos. Entra a una subcarpeta." : "Esta carpeta no tiene documentos.")
+                : "No se encontraron documentos (ni en subcarpetas)."}
+            </p>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -218,7 +312,10 @@ export function CarpetaDriveVinculada({
                   <div key={a.id} className="overflow-hidden rounded-lg border border-border bg-white">
                     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                       <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-                      <p className="min-w-0 flex-1 truncate text-xs font-medium" title={a.name}>{a.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium" title={a.name}>{a.name}</p>
+                        {modoVista === "todos" && a.ruta ? <p className="truncate text-[10px] text-muted-foreground" title={a.ruta}>📁 {a.ruta}</p> : null}
+                      </div>
                       <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tipoLegible(a.mimeType)}</span>
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
@@ -256,6 +353,7 @@ export function CarpetaDriveVinculada({
             <button onClick={() => setEligiendo(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
           </div>
           {guardando && <p className="text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Guardando…</p>}
+          {dupAviso && <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" /> {dupAviso}</div>}
 
           {sugerencias.length > 0 && (
             <div className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
