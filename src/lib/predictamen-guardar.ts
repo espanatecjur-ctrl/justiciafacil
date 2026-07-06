@@ -55,7 +55,7 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
   } catch { return null; }
 }
 
-export async function guardarPredictamen(payload: any, precargar?: Precarga | null): Promise<string | null> {
+export async function guardarPredictamen(payload: any, precargar?: Precarga | null, datosPDF?: any): Promise<string | null> {
   const version = precargar ? (precargar.version || 1) + 1 : 1;
   let cambiosTxt: string | null = null;
   if (precargar) {
@@ -81,6 +81,21 @@ export async function guardarPredictamen(payload: any, precargar?: Precarga | nu
       await reflejarDictamen({ id: payload.caso_id, expediente: payload.expediente } as any, "URRJ", "juridico", decisionADictamen(payload.dictamen_final), payload.solicitado_por || null);
     }
   } catch { /* la línea de vida no debe romper el guardado */ }
+
+  // Archivar el PDF por fase (Camino 1): genera el PDF una vez, lo sube a Storage
+  // y guarda su URL en pdf_url. Import dinámico para no crear ciclos. Si algo
+  // falla, el pre-dictamen igual quedó guardado (el PDF se puede generar luego).
+  if (datosPDF && nuevoId) {
+    try {
+      const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+      const url = await descargarPredictamenPDF(datosPDF, "archivar");
+      if (typeof url === "string") {
+        await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${nuevoId}`, {
+          method: "PATCH", headers, body: JSON.stringify({ pdf_url: url }),
+        });
+      }
+    } catch { /* el PDF se puede archivar después desde el proceso */ }
+  }
 
   return nuevoId;
 }
