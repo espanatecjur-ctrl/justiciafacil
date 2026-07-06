@@ -140,3 +140,32 @@ export async function preDictamenURRJ(caso: CasoJuridico): Promise<Dictamen> {
     return null;
   }
 }
+
+// --- Conectar la bolita UCP a sus DOS decisiones (jurídico + registral) ---
+// Verde solo si AMBOS positivos; roja si cualquiera es negativo (lo resuelve
+// colorDeArea). Fuentes: jurídico = dictamen.veredicto; registral =
+// dictamen.registral.veredicto (respaldo: dictamen.rppc.resultado).
+function veredictoUCP(v?: string | null): Dictamen {
+  const s = (v || "").toUpperCase();
+  if (s.includes("POSITIVO")) return "positivo";
+  if (s.includes("NEGATIVO")) return "negativo";
+  if (s.includes("CONDICIONADO")) return "espera";
+  return null; // PENDIENTE / FALTAN DATOS / vacío
+}
+
+export async function dictamenUCP(caso: CasoJuridico): Promise<{ dic_juridico: Dictamen; dic_registral: Dictamen } | null> {
+  if (!caso.id) return null; // el dictamen de UCP se liga por caso_id
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=veredicto,juridico,registral,rppc,updated_at&caso_id=eq.${caso.id}&order=updated_at.desc&limit=1`, { headers });
+    if (!r.ok) return null;
+    const filas: { veredicto?: string | null; juridico?: { veredicto?: string } | null; registral?: { veredicto?: string } | null; rppc?: { resultado?: string } | null }[] = await r.json();
+    if (!filas.length) return null; // sin dictamen UCP → gris
+    const d = filas[0];
+    const jurTxt = d.veredicto || d.juridico?.veredicto || null;
+    const regTxt = d.registral?.veredicto || d.rppc?.resultado || null;
+    if (!jurTxt && !regTxt) return null;
+    return { dic_juridico: veredictoUCP(jurTxt), dic_registral: veredictoUCP(regTxt) };
+  } catch {
+    return null;
+  }
+}
