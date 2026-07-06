@@ -32,6 +32,14 @@ function leFalta(c: CasoJuridico): boolean {
   return sinJuzgado || !c.expediente || !c.etapa_actual;
 }
 
+// Una garantía es de UCM solo si se creó directo aquí (unidad UCM) o pasó las 5 firmas.
+// Lo que sigue en UCP / UDP / URRJ NO es de esta unidad.
+function esDeUCM(c: CasoJuridico): boolean {
+  if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return false; // tienen su propia pantalla
+  const u = (c.unidad || "").toUpperCase();
+  return !(u.includes("UCP") || u.includes("UDP") || u.includes("URRJ"));
+}
+
 function UcmPage() {
   const navigate = useNavigate();
   const [nuevoOpen, setNuevoOpen] = useState(false);
@@ -79,9 +87,11 @@ function UcmPage() {
   };
   useEffect(() => { cargar(); }, []);
 
+  // Base de la unidad: solo lo que es de UCM (excluye UCP/UDP/URRJ y amparo/recurso/exhorto).
+  const casosUCM = useMemo(() => casos.filter(esDeUCM), [casos]);
+
   const filtrados = useMemo(() => {
-    return casos.filter((c) => {
-      if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return false; // tienen su propia pantalla
+    return casosUCM.filter((c) => {
       if (verArchivados ? !c.archivado : !!c.archivado) return false;
       if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
       if (prioridad !== "todas" && (c.prioridad || "").toUpperCase() !== prioridad) return false;
@@ -89,7 +99,7 @@ function UcmPage() {
       const blob = `${c.expediente || ""} ${c.cliente_nombre || ""} ${c.juzgado || ""} ${c.proveedor || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [casos, q, entidad, prioridad, verArchivados]);
+  }, [casosUCM, q, entidad, prioridad, verArchivados]);
 
   // paginación: máximo 20 por página (web y cel)
   const PAGE = 20;
@@ -99,16 +109,16 @@ function UcmPage() {
   const pag = Math.min(pagina, totalPag - 1);
   const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
 
-  const alta = casos.filter((c) => (c.prioridad || "").toUpperCase() === "ALTA").length;
-  const conExpediente = casos.filter((c) => (c.expediente || "").match(/\d+\/\d+/)).length;
-  const expedientes = casos.map((c) => c.expediente);
+  const alta = casosUCM.filter((c) => (c.prioridad || "").toUpperCase() === "ALTA").length;
+  const conExpediente = casosUCM.filter((c) => (c.expediente || "").match(/\d+\/\d+/)).length;
+  const expedientes = casosUCM.map((c) => c.expediente);
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Unidad Civil y Mercantil"
         title="UCM · Seguimiento a juicios"
-        description={cargando ? "Cargando juicios…" : `${filtrados.length} de ${casos.length} juicios de la unidad.`}
+        description={cargando ? "Cargando juicios…" : `${filtrados.length} de ${casosUCM.length} juicios de la unidad.`}
         actions={
           <button onClick={() => setNuevoOpen(true)} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
             <FilePlus className="h-4 w-4" /> Nuevo expediente
@@ -125,7 +135,7 @@ function UcmPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="legal-card p-4 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><Gavel className="h-5 w-5" /></div>
-          <div><p className="text-2xl font-bold font-display leading-none">{casos.length}</p><p className="text-xs text-muted-foreground">Juicios totales</p></div>
+          <div><p className="text-2xl font-bold font-display leading-none">{casosUCM.length}</p><p className="text-xs text-muted-foreground">Juicios totales</p></div>
         </Card>
         <Card className="legal-card p-4 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-emerald-100 text-emerald-700"><Scale className="h-5 w-5" /></div>
