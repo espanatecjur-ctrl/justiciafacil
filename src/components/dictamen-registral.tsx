@@ -7,11 +7,11 @@
 //  Guarda en Supabase, imprime y refleja el resultado en la
 //  línea de vida (bolita registral de URRJ).
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
-import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail } from "lucide-react";
+import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, ShieldAlert, ShieldCheck, MinusCircle } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { reflejarDictamen } from "@/lib/recorrido";
@@ -92,20 +92,87 @@ export function DictamenRegistral({
   const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
   const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
   const [seed, setSeed] = useState(0);
-  const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
+  const abrirBanner = () => { setSeed((x) => x + 1); setVerBanner(true); };
 
-  const asuntoBanner = destino === "contabilidad"
-    ? `Solicitud de precio — Registral URRJ ${d.resultado || "—"} · Exp. ${d.numeroCredito || "—"}`
-    : `Garantía lista para Comercial (registral) — ${d.resultado || "—"} · Exp. ${d.numeroCredito || "—"}`;
+  // ---- Cotejo con el pre-dictamen JURÍDICO (RPPC vs jurídico) ----
+  const [juridico, setJuridico] = useState<{ datos: any; resultados: any; dictamen_final: string | null; folio: string | null } | null>(null);
+  useEffect(() => {
+    const conds: string[] = [];
+    if (casoId) conds.push(`caso_id.eq.${casoId}`);
+    if (d.numeroCredito && d.numeroCredito.trim()) conds.push(`expediente.eq.${encodeURIComponent(d.numeroCredito.trim())}`);
+    if (conds.length === 0) { setJuridico(null); return; }
+    const filtro = conds.length === 1 ? conds[0].replace(".eq.", "=eq.") : `or=(${conds.join(",")})`;
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=datos,resultados,dictamen_final,folio&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+      .then((r) => (r.ok ? r.json() : [])).then((j) => setJuridico(j?.[0] || null)).catch(() => setJuridico(null));
+  }, [casoId, d.numeroCredito]);
+
+  const norm = (s?: string) => (s || "").toString().trim().toLowerCase().replace(/\s+/g, " ");
+  const coincideNombre = (a?: string, b?: string) => {
+    const x = norm(a), y = norm(b);
+    if (!x || !y) return "sindato";
+    return x === y || x.includes(y) || y.includes(x) ? "ok" : "anomalia";
+  };
+  const jd = juridico?.datos || {};
+  const hayGravamenReg = !!(d.g_acreedor || d.g_fechaInscripcion || d.g_noEscritura);
+  const cotejos = [
+    { campo: "Titular / propietario", jur: jd.propietario || "—", reg: d.p_titularRegistral || "—", estado: coincideNombre(jd.propietario, d.p_titularRegistral) },
+    { campo: "Deudor", jur: jd.deudor || "—", reg: d.g_deudor || "—", estado: coincideNombre(jd.deudor, d.g_deudor) },
+    {
+      campo: "Hipoteca inscrita",
+      jur: jd.hipotecaInscrita === "si" ? "Sí" : jd.hipotecaInscrita === "no" ? "No" : "—",
+      reg: hayGravamenReg ? "Sí (hay gravamen)" : "No (sin gravamen)",
+      estado: (!jd.hipotecaInscrita) ? "sindato" : ((jd.hipotecaInscrita === "si") === hayGravamenReg ? "ok" : "anomalia"),
+    },
+    {
+      campo: "Resultado (jurídico vs registral)",
+      jur: juridico?.dictamen_final || "—",
+      reg: d.resultado || "—",
+      estado: (!juridico?.dictamen_final || !d.resultado) ? "sindato"
+        : (/no pasa|negativ/i.test(juridico.dictamen_final) === (d.resultado === "NEGATIVO") ? "ok" : "anomalia"),
+    },
+  ];
+  const nAnomalias = cotejos.filter((c) => c.estado === "anomalia").length;
+
+  const descargarPDFCompleto = async () => {
+    const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+    const jrDatos = juridico?.datos || {};
+    const jr = juridico?.resultados || {};
+    const riesgos = [
+      { nombre: "Prescripción", r: jr.prescripcion },
+      { nombre: "Caducidad", r: jr.caducidad },
+      ...(jr.usucapion ? [{ nombre: "Usucapión", r: jr.usucapion }] : []),
+    ].filter((x) => x.r);
+    const fin = jr.financiero || { ordinarios: 0, moratorios: 0, iva: 0, totalDeuda: 0, udis: 0, alertaUsura: false };
+    await descargarPredictamenPDF({
+      expediente: jrDatos.expediente || d.numeroCredito || "", juzgado: jrDatos.juzgado || "", estado: jrDatos.estado || "",
+      tipoJuicio: jrDatos.tipoJuicio || "", posicion: jrDatos.posicion || "Actor",
+      ubicacion: jrDatos.ubicacion || "", deudor: jrDatos.deudor || "", quienCede: jrDatos.quienCede || "", queCede: jrDatos.queCede || "",
+      dictamen: juridico?.dictamen_final || "—", riesgos: riesgos as any,
+      intereses: { ordinarios: fin.ordinarios || 0, moratorios: fin.moratorios || 0, iva: fin.iva || 0, total: fin.totalDeuda || 0, udis: fin.udis, usura: !!fin.alertaUsura },
+      admin: null, anotaciones: jrDatos.anotacionesHumanas || "",
+      firmaElabora: jr.firmas?.elabora || null, firmaValida: jr.firmas?.valida || null,
+      decision: juridico?.dictamen_final || "—",
+      datos: jrDatos,
+      registral: {
+        resultado: d.resultado, titular: d.p_titularRegistral, deudor: d.g_deudor, gravamenAcreedor: d.g_acreedor,
+        hayAdicional, conclusion: d.conclusion, anotaciones: d.anotaciones,
+        firmaElabora, firmaValida,
+      },
+      cotejos,
+    });
+  };
+
+  const asuntoBanner = `Estado registral — Exp. ${d.numeroCredito || "—"} · ${d.resultado || "—"}`;
   const mensajeBanner = [
-    destino === "contabilidad" ? "Se solicita el precio para esta garantía (registral)." : "Garantía con dictamen registral y precio; lista para Comercial.",
+    "Se informa el estado registral de la garantía (dictamen registral URRJ).",
     "",
     `Resultado registral: ${d.resultado || "—"}`,
     `Expediente / crédito: ${d.numeroCredito || "—"}`,
     `Acreditado: ${d.acreditado || "—"}`,
+    `Titular registral: ${d.p_titularRegistral || "—"}`,
+    `Gravamen (acreedor): ${d.g_acreedor || "—"}`,
     `Gravamen adicional: ${hayAdicional ? "Sí" : "No"}`,
-    "",
-    resumenPrecio(precio),
+    `Conclusión: ${d.conclusion || "—"}`,
   ].join("\n");
 
   const guardar = async () => {
@@ -220,6 +287,41 @@ export function DictamenRegistral({
       </div>
 
       <div className="rounded-lg border border-border p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium">Cotejo con el pre-dictamen jurídico (RPPC vs jurídico)</p>
+          {nAnomalias > 0
+            ? <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700"><ShieldAlert className="h-3.5 w-3.5" /> {nAnomalias} anomalía(s)</span>
+            : juridico
+              ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /> Sin anomalías</span>
+              : <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-muted-foreground">Sin pre-dictamen jurídico vinculado</span>}
+        </div>
+        {!juridico ? (
+          <p className="text-[12px] text-muted-foreground">No se encontró un pre-dictamen jurídico para este expediente/caso. Escribe el número de crédito arriba o dictamina primero el jurídico.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {cotejos.map((c) => {
+              const st = c.estado === "anomalia"
+                ? { cls: "border-red-300 bg-red-50", icon: <ShieldAlert className="h-4 w-4 text-red-600" />, txt: "Anomalía", tcls: "text-red-700" }
+                : c.estado === "ok"
+                  ? { cls: "border-emerald-200 bg-emerald-50", icon: <ShieldCheck className="h-4 w-4 text-emerald-600" />, txt: "Coincide", tcls: "text-emerald-700" }
+                  : { cls: "border-border bg-muted/20", icon: <MinusCircle className="h-4 w-4 text-muted-foreground" />, txt: "Sin dato", tcls: "text-muted-foreground" };
+              return (
+                <div key={c.campo} className={`rounded-lg border p-3 ${st.cls}`}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-[12px] font-semibold">{c.campo}</p>
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${st.tcls}`}>{st.icon} {st.txt}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Jurídico: <b className="text-foreground">{c.jur}</b></p>
+                  <p className="text-[11px] text-muted-foreground">Registral: <b className="text-foreground">{c.reg}</b></p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {nAnomalias > 0 && <p className="mt-2 text-[11px] font-medium text-red-700">⚠ Hay diferencias entre lo registral y lo jurídico. Revísalas antes de firmar el dictamen registral.</p>}
+      </div>
+
+      <div className="rounded-lg border border-border p-4">
         <p className="mb-2 text-sm font-medium">Resultado del dictamen registral</p>
         <div className="flex flex-wrap gap-2">
           {[
@@ -246,35 +348,32 @@ export function DictamenRegistral({
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-semibold hover:bg-muted">
           <Printer className="h-4 w-4" /> Imprimir
         </button>
+        {juridico && (
+          <button onClick={descargarPDFCompleto} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-semibold hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+            <ScrollText className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF final completo (jurídico + registral)
+          </button>
+        )}
         {guardado && <span className={`text-sm ${guardado.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{guardado}</span>}
       </div>
 
       {guardado?.includes("✓") && (
-        <button onClick={() => abrirDestino("contabilidad")} className="no-print inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
-          <Mail className="h-4 w-4" /> Solicitar precio / enviar
+        <button onClick={abrirBanner} className="no-print inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
+          <Mail className="h-4 w-4" /> Informar estado registral / enviar
         </button>
       )}
 
       {verBanner && (
         <BannerCorreo
-          key={`${destino}-${seed}`}
-          titulo="Enviar dictamen registral URRJ"
+          key={seed}
+          titulo="Informar estado registral (URRJ)"
           asuntoInicial={asuntoBanner}
           mensajeInicial={mensajeBanner}
           folio={d.numeroCredito}
           extra={
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => abrirDestino("contabilidad")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "contabilidad" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"}`}>1º Contabilidad · solicitar precio</button>
-                <button onClick={() => precio.precioPiso.trim() && abrirDestino("comercial")} disabled={!precio.precioPiso.trim()} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "comercial" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"} disabled:opacity-40`}>2º Comercial · con precio</button>
-                {!precio.precioPiso.trim() && <span className="self-center text-[11px] text-muted-foreground">Comercial se habilita al poner el precio piso.</span>}
-              </div>
-              <BloquePrecioURRJ valor={precio} onChange={setPrecio} puedePrecioPiso={puedePrecioPiso} />
-              <p className="text-[11px] text-muted-foreground">Al cambiar de destino o poner el precio, vuelve a tocar el botón del destino para actualizar el mensaje.</p>
-            </div>
+            <p className="text-[11px] text-muted-foreground">Este correo <b>informa el estado registral</b> (no pide precio). Escribe arriba a quién se envía (Jurídico / UCP / quien lo solicitó).</p>
           }
           onCerrar={() => setVerBanner(false)}
-          onEnviado={() => registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `A ${destino} · Asunto: ${asuntoBanner}\n\n${mensajeBanner}`, detalle: `Enviado a ${destino}` })}
+          onEnviado={() => registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `Estado registral · Asunto: ${asuntoBanner}\n\n${mensajeBanner}`, detalle: "Informado estado registral" })}
         />
       )}
     </div>
