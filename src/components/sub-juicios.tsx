@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { SubJuicioFicha } from "@/components/sub-juicio-ficha";
 import { GitBranch, Plus, Loader2, Trash2, Scale, Send, X, AlertTriangle } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -48,6 +49,7 @@ export function SubJuicios({ casoId }: { casoId: string }) {
   const [cargando, setCargando] = useState(true);
   const [agregar, setAgregar] = useState(false);
   const [borrando, setBorrando] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState<SubJuicio | null>(null);
 
   const cargar = () => {
     setCargando(true);
@@ -70,6 +72,10 @@ export function SubJuicios({ casoId }: { casoId: string }) {
 
   return (
     <div className="space-y-3">
+      {abierto ? (
+        <SubJuicioFicha sub={abierto} onVolver={() => { setAbierto(null); cargar(); }} />
+      ) : (
+      <>
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>
           <GitBranch className="h-4 w-4" style={{ color: TEAL }} /> Sub-juicios ({items.length})
@@ -105,9 +111,12 @@ export function SubJuicios({ casoId }: { casoId: string }) {
                   {s.etapa && <p className="text-[11px] text-muted-foreground">Etapa: {s.etapa}</p>}
                   {s.nota && <p className="mt-0.5 text-[11px] text-muted-foreground">{s.nota}</p>}
                 </div>
-                <button onClick={() => borrar(s.id)} disabled={borrando === s.id} title="Borrar sub-juicio" className="shrink-0 rounded-md border border-input p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600">
-                  {borrando === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button onClick={() => setAbierto(s)} title="Abrir sub-juicio" className="rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>Abrir</button>
+                  <button onClick={() => borrar(s.id)} disabled={borrando === s.id} title="Borrar sub-juicio" className="rounded-md border border-input p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600">
+                    {borrando === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -115,6 +124,8 @@ export function SubJuicios({ casoId }: { casoId: string }) {
       )}
 
       {agregar && <AltaSubJuicioModal casoId={casoId} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargar(); }} />}
+      </>
+      )}
     </div>
   );
 }
