@@ -46,10 +46,11 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
   const [patches, setPatches] = useState<Record<string, Partial<CasoJuridico>>>({});
   const [fColor, setFColor] = useState<"todos" | "verde" | "amarillo" | "rojo" | "sin">("todos");
   const [fTipo, setFTipo] = useState("todos");
+  const [fArea, setFArea] = useState("todos");
   const [soloNoLeidos, setSoloNoLeidos] = useState(false);
   const [orden, setOrden] = useState<"urgencia" | "reciente">("urgencia");
   const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [q, fColor, fTipo, soloNoLeidos, orden]);
+  useEffect(() => { setPagina(0); }, [q, fColor, fTipo, fArea, soloNoLeidos, orden]);
   const [ultimaCorrida, setUltimaCorrida] = useState<{ corrida_at: string; total_expedientes: number | null; fuente: string | null } | null>(null);
   useEffect(() => {
     sbSelect<any>("robot_log", "select=corrida_at,total_expedientes,fuente&order=corrida_at.desc&limit=1").then((d) => setUltimaCorrida(d?.[0] ?? null)).catch(() => {});
@@ -84,9 +85,11 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
       return { c, exp, acs, ultima, dias, hoy: acs.some((a) => esHoy(a.fecha_acuerdo)), noLeidos: acs.filter((a) => a.leido === false).length };
     });
     const colorDe = (d: number | null) => d === null ? "sin" : d < 7 ? "verde" : d <= 20 ? "amarillo" : "rojo";
+    const areaDe = (u?: string | null) => { const s = (u || "").toUpperCase(); if (s.includes("UDP")) return "UDP"; if (s.includes("URRJ")) return "URRJ"; if (s.includes("UCP")) return "UCP"; return "UCM"; };
     const t = q.trim().toLowerCase();
     let f = arr.filter((x) => {
       if (t && !`${x.exp} ${x.c.cliente_nombre || ""} ${x.c.juzgado || ""} ${x.c.materia || ""} ${x.c.actor || ""} ${x.c.demandado || ""}`.toLowerCase().includes(t)) return false;
+      if (fArea !== "todos" && areaDe(x.c.unidad) !== fArea) return false;
       if (fColor !== "todos" && colorDe(x.dias) !== fColor) return false;
       if (soloNoLeidos && x.noLeidos === 0) return false;
       if (fTipo !== "todos" && !x.acs.some((a) => a.tipo_acuerdo === fTipo)) return false;
@@ -95,7 +98,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
     if (orden === "urgencia") f = f.sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
     else f = f.sort((a, b) => (parseLocal(b.ultima)?.getTime() ?? 0) - (parseLocal(a.ultima)?.getTime() ?? 0));
     return f;
-  }, [casos, porExp, q, fColor, fTipo, soloNoLeidos, orden, patches]);
+  }, [casos, porExp, q, fColor, fTipo, fArea, soloNoLeidos, orden, patches]);
 
   const conteo = useMemo(() => {
     let v = 0, am = 0, r = 0, s = 0, hoy = 0;
@@ -134,6 +137,13 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
       {/* Barra de filtros */}
       <div className="flex flex-wrap items-center gap-2">
+        <select value={fArea} onChange={(e) => setFArea(e.target.value)} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs">
+          <option value="todos">Todas las áreas</option>
+          <option value="UCP">UCP</option>
+          <option value="URRJ">URRJ</option>
+          <option value="UCM">UCM</option>
+          <option value="UDP">UDP</option>
+        </select>
         <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs">
           <option value="todos">Todos los tipos</option>
           {TIPOS_ACUERDO.map((t) => <option key={t} value={t}>{t}</option>)}
