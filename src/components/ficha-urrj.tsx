@@ -1,22 +1,32 @@
 // ============================================================
-//  FichaURRJ · ficha 360 de una garantía — estilo UCP
-//  Cabecera con veredictos + folio · pestañas:
-//   Jurídico · Registral (RPPC) · Dictamen legal final · Documentos · Línea de avance
-//  Reusa los motores existentes (DictaminadorPosicion + DictamenRegistral + LineaVidaAreas).
+//  FichaURRJ · ficha 360 de una garantía — MISMO esqueleto que la
+//  ficha de expediente (encabezado, línea de vida, Antecedente +
+//  Estatus, Documentos), pero alimentada de SU propio dictamen URRJ.
+//   · Overview (modo "ficha"): veredictos + fases + cronómetro + PDF
+//   · Proceso (modo "dictaminar"): pestañas con los motores existentes
+//  Reusa DictaminadorPosicion + DictamenRegistral + LineaVidaAreas +
+//  DocumentosGarantia + BotonCarpetaDrive (sin motores nuevos).
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
+import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { DictamenRegistral } from "@/components/dictamen-registral";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { getAuth } from "@/lib/auth";
 import { obtenerRecorrido, textoDictamen, type Dictamen } from "@/lib/recorrido";
+import { TIPOS_TRAMITE } from "@/lib/urrj-tramites";
+import { diasHabiles } from "@/lib/urrj-motores";
 import { type Precarga } from "@/lib/predictamen-guardar";
-import { ArrowLeft, Scale, Landmark, Gavel, Paperclip, Activity, ExternalLink } from "lucide-react";
+import { ArrowLeft, Scale, Landmark, Gavel, Paperclip, Activity, Clock, ArrowRight } from "lucide-react";
 
+const NAVY = "#0B1E3A";
+const TEAL = "#0C5C46";
+const PURPLE = "#7A4FB0";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
 export interface RefGarantia {
@@ -38,7 +48,32 @@ function VeredictoBadge({ label, dic }: { label: string; dic: Dictamen }) {
   return <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${cls}`}>{label}: {textoDictamen(dic)}</span>;
 }
 
+// Fila de dato (label + valor); marca ⚠️ si vacío y es importante
+function Dato({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
+  const vacio = !valor || !String(valor).trim();
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">{vacio ? (importante ? <span className="text-red-600">falta</span> : "—") : valor}</span>
+    </div>
+  );
+}
+
+// Tarjeta de sección reutilizable (mismo estilo que la ficha de expediente)
+function Seccion({ icon, titulo, accion, children }: { icon: ReactNode; titulo: string; accion?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+        {accion}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVolver: () => void }) {
+  const [modo, setModo] = useState<"ficha" | "dictaminar">("ficha");
   const [tab, setTab] = useState("juridico");
   const [vista, setVista] = useState<VistaPosicion>("elegir");
   const [permisos, setPermisos] = useState<string[]>([]);
@@ -63,7 +98,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       setReg(u?.dic_registral ?? null);
     }).catch(() => {});
     const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
       .catch(() => {});
@@ -126,28 +161,200 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     : /pasa/i.test(decision) ? "bg-emerald-50 text-emerald-800 border-emerald-200"
     : "bg-muted text-muted-foreground border-border";
 
-  return (
-    <div className="space-y-4">
-      {/* Cabecera */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button onClick={onVolver} className="inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Volver al registro</button>
+  // Cronómetro de plazo (solo aplica a pre-dictámenes de trámite con fecha de
+  // notificación): reusa TIPOS_TRAMITE y diasHabiles del motor de pre-dictaminar.
+  const crono = useMemo(() => {
+    const d = predJur?.datos;
+    const pos = String(predJur?.posicion || "").toLowerCase();
+    const esTramite = pos.includes("trámite") || pos.includes("tramite");
+    if (!esTramite || !d?.fechaNotificacion) return null;
+    const tipo = TIPOS_TRAMITE.find((t) => t.clave === d.tipoTramite);
+    const plazo = d.plazoManual && Number(d.plazoManual) > 0 ? Number(d.plazoManual) : tipo?.plazo ?? 15;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const transcurridos = diasHabiles(d.fechaNotificacion, hoy);
+    const restantes = plazo - transcurridos;
+    return { restantes, plazo, tipoNombre: tipo?.nombre || d.tipoTramite || "trámite" };
+  }, [predJur]);
+
+  // Estatus general y badge de fase (para el encabezado y la tarjeta Estatus)
+  const estatusGeneral = predJur?.terminado ? "Dictamen terminado" : predJur ? "En proceso" : "Sin dictamen";
+  const ambosTerminados = predJur?.terminado && predReg?.terminado;
+  const fase = ambosTerminados
+    ? { txt: "Dictamen terminado", cls: "bg-emerald-600 text-white" }
+    : (predJur || predReg)
+    ? { txt: "Pre-dictamen abierto", cls: "bg-amber-100 text-amber-800" }
+    : { txt: "Sin dictamen", cls: "bg-muted text-muted-foreground" };
+
+  // -------------------- MODO DICTAMINAR (proceso con pestañas) --------------------
+  if (modo === "dictaminar") {
+    return (
+      <div className="space-y-4">
+        <button onClick={() => { setModo("ficha"); recargarEstado(); }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3.5 w-3.5" /> Volver a la ficha
+        </button>
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-bold">Ficha · {garantia.expediente || garantia.direccion_garantia || "Garantía"}</h2>
+          <h2 className="truncate text-lg font-bold">Proceso de dictaminación · {garantia.expediente || "Garantía"}</h2>
           <p className="truncate text-xs text-muted-foreground">{garantia.juzgado || "—"}{garantia.cliente_nombre ? " · " + garantia.cliente_nombre : ""}</p>
         </div>
+
+        <Tabs value={tab} onValueChange={(v) => { setTab(v); setVista("elegir"); }}>
+          <TabsList className="flex flex-wrap">
+            <TabsTrigger value="juridico"><Scale className="mr-1 h-4 w-4" /> Jurídico</TabsTrigger>
+            <TabsTrigger value="registral"><Landmark className="mr-1 h-4 w-4" /> Registral (RPPC)</TabsTrigger>
+            <TabsTrigger value="final"><Gavel className="mr-1 h-4 w-4" /> Dictamen legal final</TabsTrigger>
+            <TabsTrigger value="documentos"><Paperclip className="mr-1 h-4 w-4" /> Documentos{docs.length ? ` (${docs.length})` : ""}</TabsTrigger>
+            <TabsTrigger value="avances"><Activity className="mr-1 h-4 w-4" /> Línea de avance</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="juridico" className="mt-4">
+            <DictaminadorPosicion
+              casos={[]}
+              vista={vista}
+              onVista={setVista}
+              precargar={precargaJuridico}
+              onVolver={() => { setVista("elegir"); recargarEstado(); }}
+              puedeElaborar={puede("elaborar")}
+              puedeFirmarElabora={puede("firmar_elabora")}
+              puedeValidar={puede("validar")}
+              puedeAdmin={puedeAdmin}
+            />
+          </TabsContent>
+
+          <TabsContent value="registral" className="mt-4">
+            <DictamenRegistral
+              precarga={{ acreditado: garantia.cliente_nombre || garantia.deudor || "", numeroCredito: garantia.expediente || "", direccion: garantia.direccion_garantia || "" }}
+              casoId={garantia.id || ""}
+              onVolver={recargarEstado}
+              puedeFirmarElabora={puede("firmar_elabora")}
+              puedeValidar={puede("validar")}
+              puedePrecioPiso={puede("precio_piso")}
+            />
+          </TabsContent>
+
+          <TabsContent value="final" className="mt-4">
+            <div className="rounded-xl border border-border p-5 space-y-3">
+              <p className="text-sm font-semibold">Dictamen legal final de la garantía</p>
+              <div className="flex flex-wrap gap-2">
+                <VeredictoBadge label="Jurídico" dic={jur} />
+                <VeredictoBadge label="Registral" dic={reg} />
+                {decision && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${decisionCls}`}>Decisión: {decision}</span>}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {jur === "positivo" && reg === "positivo"
+                  ? "Ambos dictámenes son positivos: la garantía está lista para continuar el proceso (pasa a UCP)."
+                  : "Para pasar a UCP se necesita que el jurídico y el registral queden positivos. Complétalos en sus pestañas."}
+              </p>
+              {folio && <p className="text-xs text-muted-foreground">Folio del pre-dictamen: <b>{folio}</b>. El PDF y las firmas se generan dentro de la pestaña Jurídico.</p>}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="documentos" className="mt-4">
+            <div className="rounded-xl border border-border p-5">
+              <p className="mb-3 text-sm font-semibold">Documentos que envió la Dirección para dictaminar</p>
+              {docs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aún no hay documentos para esta garantía. La Dirección los envía desde “Documentos → pre-dictamen”.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {docs.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-muted/40">
+                      <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
+                      <BotonVerDoc url={d.url} nombre={d.nombre} label="ver" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="avances" className="mt-4">
+            <div className="rounded-xl border border-border p-5"><LineaVidaAreas caso={casoLV} /></div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
+
+  // -------------------- MODO FICHA (overview, mismo esqueleto que expediente) --------------------
+  const abrirProceso = (t: string) => { setTab(t); setModo("dictaminar"); };
+
+  return (
+    <div className="space-y-4">
+      {/* Barra superior: volver + área + fase + carpeta Drive */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button onClick={onVolver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" /> Volver al registro
+          </button>
+          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: PURPLE }}>URRJ</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${fase.cls}`}>{fase.txt}</span>
+        </div>
+        <BotonCarpetaDrive area="URRJ" caso={casoLV} />
       </div>
 
-      {/* Veredictos + folio */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
-        <VeredictoBadge label="Jurídico" dic={jur} />
-        <VeredictoBadge label="Registral" dic={reg} />
-        {decision && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${decisionCls}`}>Dictamen final: {decision}</span>}
-        {folio && <span className="ml-auto rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">Folio {folio}</span>}
+      {/* Encabezado */}
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${TEAL})` }}>
+        <p className="text-xs uppercase tracking-wider text-white/60">Ficha del expediente · URRJ</p>
+        <h1 className="mt-0.5 text-2xl font-bold">{garantia.expediente || garantia.direccion_garantia || "Garantía"}</h1>
+        <p className="mt-1 text-sm text-white/85">
+          {garantia.cliente_nombre || garantia.deudor || "—"}
+          {garantia.deudor && garantia.cliente_nombre && garantia.deudor !== garantia.cliente_nombre ? <> <span className="text-white/50">vs</span> {garantia.deudor}</> : null}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          {garantia.entidad && <span className="rounded-full bg-white/15 px-2.5 py-0.5">{garantia.entidad}</span>}
+          {predJur?.posicion && <span className="rounded-full bg-white/15 px-2.5 py-0.5">{predJur.posicion}</span>}
+        </div>
+        <p className="mt-2 text-xs text-white/70">{garantia.juzgado || "Juzgado sin asignar"}</p>
       </div>
 
-      {/* Modulitos de estado de dictamen */}
-      <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Estado de los dictámenes de esta garantía</p>
+      {/* Línea de vida: recorrido por áreas */}
+      <LineaVidaAreas caso={casoLV} />
+
+      {/* Antecedente + Estatus */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía">
+          <Dato label="ID garantía" valor={garantia.id} />
+          <Dato label="No. de crédito" valor={garantia.expediente} />
+          <Dato label="Dirección de la garantía" valor={garantia.direccion_garantia || predJur?.datos?.ubicacion} importante />
+          <Dato label="Cliente / deudor" valor={garantia.cliente_nombre || garantia.deudor || predJur?.datos?.deudor} importante />
+          <Dato label="Entidad" valor={garantia.entidad || predJur?.datos?.estado} />
+        </Seccion>
+
+        <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual">
+          <Dato label="Etapa actual" valor="Pre-dictamen (URRJ)" />
+          <Dato label="Estatus general" valor={estatusGeneral} />
+          <Dato label="Posición" valor={predJur?.posicion} />
+          <Dato label="Unidad" valor="URRJ · Dictaminación" />
+          <Dato label="Folio" valor={folio} />
+        </Seccion>
+      </div>
+
+      {/* Dictamen de la garantía · URRJ */}
+      <Seccion
+        icon={<Gavel className="h-4 w-4" style={{ color: PURPLE }} />}
+        titulo="Dictamen de la garantía · URRJ"
+        accion={
+          <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ background: NAVY }}>
+            <Gavel className="h-3.5 w-3.5" /> Abrir proceso de dictaminación
+          </button>
+        }
+      >
+        {/* Veredictos + cronómetro + folio */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <VeredictoBadge label="Jurídico" dic={jur} />
+          <VeredictoBadge label="Registral" dic={reg} />
+          {decision && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${decisionCls}`}>Dictamen final: {decision}</span>}
+          {crono && (
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${crono.restantes < 0 ? "bg-red-100 text-red-800" : crono.restantes <= 3 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+              <Clock className="h-3 w-3" />
+              {crono.restantes < 0
+                ? `Plazo vencido · ${crono.tipoNombre}`
+                : `Quedan ${crono.restantes} de ${crono.plazo} días háb.${crono.restantes <= 3 ? " · URGENTE" : ""} · ${crono.tipoNombre}`}
+            </span>
+          )}
+          {folio && <span className="ml-auto rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">Folio {folio}</span>}
+        </div>
+
+        {/* Tarjetas por fase */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Jurídico */}
           {predJur ? (
@@ -160,7 +367,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <p className="text-xs text-emerald-800">Firmas: Elabora {predJur.firma_elabora ? "✓" : "—"} · Valida {predJur.firma_valida ? "✓" : "—"}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button onClick={() => setPreview(preview === "juridico" ? null : "juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
-                <button onClick={() => setTab("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Jurídico</button>
+                <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Jurídico</button>
               </div>
             </div>
           ) : (
@@ -170,7 +377,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">— sin dictamen</span>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">Aún no se ha dictaminado el jurídico de esta garantía.</p>
-              <button onClick={() => setTab("juridico")} className="mt-2 inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-muted">Ir al proceso →</button>
+              <button onClick={() => abrirProceso("juridico")} className="mt-2 inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-muted">Ir al proceso →</button>
             </div>
           )}
 
@@ -185,7 +392,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <p className="text-xs text-emerald-800">Firmas: Elabora {predReg.firma_elabora?.nombre ? "✓" : "—"} · Valida {predReg.firma_valida?.nombre ? "✓" : "—"}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button onClick={() => setPreview(preview === "registral" ? null : "registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
-                <button onClick={() => setTab("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Registral</button>
+                <button onClick={() => abrirProceso("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Registral</button>
               </div>
             </div>
           ) : (
@@ -195,7 +402,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">— sin dictamen</span>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">Aún no se ha dictaminado el registral de esta garantía.</p>
-              <button onClick={() => setTab("registral")} className="mt-2 inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-muted">Ir al proceso →</button>
+              <button onClick={() => abrirProceso("registral")} className="mt-2 inline-flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-muted">Ir al proceso →</button>
             </div>
           )}
         </div>
@@ -218,81 +425,15 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             <div>Elabora: {predReg.firma_elabora?.nombre || "—"} · Valida: {predReg.firma_valida?.nombre || "—"}</div>
           </div>
         )}
-      </div>
 
-      <Tabs value={tab} onValueChange={(v) => { setTab(v); setVista("elegir"); }}>
-        <TabsList className="flex flex-wrap">
-          <TabsTrigger value="juridico"><Scale className="mr-1 h-4 w-4" /> Jurídico</TabsTrigger>
-          <TabsTrigger value="registral"><Landmark className="mr-1 h-4 w-4" /> Registral (RPPC)</TabsTrigger>
-          <TabsTrigger value="final"><Gavel className="mr-1 h-4 w-4" /> Dictamen legal final</TabsTrigger>
-          <TabsTrigger value="documentos"><Paperclip className="mr-1 h-4 w-4" /> Documentos{docs.length ? ` (${docs.length})` : ""}</TabsTrigger>
-          <TabsTrigger value="avances"><Activity className="mr-1 h-4 w-4" /> Línea de avance</TabsTrigger>
-        </TabsList>
+        <div className="mt-3 flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <ArrowRight className="h-3.5 w-3.5" style={{ color: PURPLE }} />
+          Para dictaminar o cambiar la posición (Actor, Demandado, Trámites…), abre el proceso completo sin salir de la ficha.
+        </div>
+      </Seccion>
 
-        <TabsContent value="juridico" className="mt-4">
-          <DictaminadorPosicion
-            casos={[]}
-            vista={vista}
-            onVista={setVista}
-            precargar={precargaJuridico}
-            onVolver={() => { setVista("elegir"); recargarEstado(); }}
-            puedeElaborar={puede("elaborar")}
-            puedeFirmarElabora={puede("firmar_elabora")}
-            puedeValidar={puede("validar")}
-            puedeAdmin={puedeAdmin}
-          />
-        </TabsContent>
-
-        <TabsContent value="registral" className="mt-4">
-          <DictamenRegistral
-            precarga={{ acreditado: garantia.cliente_nombre || garantia.deudor || "", numeroCredito: garantia.expediente || "", direccion: garantia.direccion_garantia || "" }}
-            casoId={garantia.id || ""}
-            onVolver={recargarEstado}
-            puedeFirmarElabora={puede("firmar_elabora")}
-            puedeValidar={puede("validar")}
-            puedePrecioPiso={puede("precio_piso")}
-          />
-        </TabsContent>
-
-        <TabsContent value="final" className="mt-4">
-          <div className="rounded-xl border border-border p-5 space-y-3">
-            <p className="text-sm font-semibold">Dictamen legal final de la garantía</p>
-            <div className="flex flex-wrap gap-2">
-              <VeredictoBadge label="Jurídico" dic={jur} />
-              <VeredictoBadge label="Registral" dic={reg} />
-              {decision && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${decisionCls}`}>Decisión: {decision}</span>}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {jur === "positivo" && reg === "positivo"
-                ? "Ambos dictámenes son positivos: la garantía está lista para continuar el proceso (pasa a UCP)."
-                : "Para pasar a UCP se necesita que el jurídico y el registral queden positivos. Complétalos en sus pestañas."}
-            </p>
-            {folio && <p className="text-xs text-muted-foreground">Folio del pre-dictamen: <b>{folio}</b>. El PDF y las firmas se generan dentro de la pestaña Jurídico.</p>}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="documentos" className="mt-4">
-          <div className="rounded-xl border border-border p-5">
-            <p className="mb-3 text-sm font-semibold">Documentos que envió la Dirección para dictaminar</p>
-            {docs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aún no hay documentos para esta garantía. La Dirección los envía desde “Documentos → pre-dictamen”.</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {docs.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-muted/40">
-                    <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
-                    <BotonVerDoc url={d.url} nombre={d.nombre} label="ver" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="avances" className="mt-4">
-          <div className="rounded-xl border border-border p-5"><LineaVidaAreas caso={casoLV} /></div>
-        </TabsContent>
-      </Tabs>
+      {/* Documentos y movimientos */}
+      <DocumentosGarantia area="URRJ" caso={casoLV} />
     </div>
   );
 }
