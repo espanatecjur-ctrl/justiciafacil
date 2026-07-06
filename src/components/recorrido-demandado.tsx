@@ -54,7 +54,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string }) {
+export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [verBanner, setVerBanner] = useState(false);
@@ -93,7 +93,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         const prev = p.anotaciones || "";
         const notas = (hallazgosIniciales || []).filter((h) => !prev.includes(h.split("\n")[0]));
         const sep = prev.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
+        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
   }, []);
@@ -225,7 +225,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
                 <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
                 <p className="text-[13px]">Boletín: <b>{expedienteInicial}</b>{deudorInicial ? ` · ${deudorInicial}` : ""} — Solicitud/registro: <b>{x.expediente}</b>{x.deudor ? ` · ${x.deudor}` : ""}. ¿Con cuál abro?</p>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => { setX((p) => ({ ...p, expediente: expedienteInicial, deudor: deudorInicial || p.deudor })); setIgnorarBoletin(true); }} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Usar el del boletín ({expedienteInicial})</button>
+                  <button onClick={() => { setX((p) => ({ ...p, expediente: expedienteInicial, deudor: deudorInicial || p.deudor, juzgado: juzgadoInicial || p.juzgado })); setIgnorarBoletin(true); }} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Usar el del boletín ({expedienteInicial})</button>
                   <button onClick={() => setIgnorarBoletin(true)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Mantener el de la solicitud ({x.expediente})</button>
                 </div>
               </div>
