@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
+import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
   veredictoCont1, veredictoCont2, veredictoCont3, veredictoCont4, calcularVAAECont, consolidadoCont,
@@ -89,24 +90,26 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar);
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
       setGuardado("Pre-dictamen (Contingencia) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
+  const construirDatosPDF = (decision: string): DatosPDF => ({
+    expediente: x.expediente, juzgado: "—", estado: x.estado, tipoJuicio: x.tipoContingencia, posicion: "Contingencia inmobiliaria",
+    ubicacion: x.ubicacion, deudor: x.titularRPP, quienCede: x.contraparte, queCede: "Cesión de derechos (saneamiento)",
+    dictamen: consolidado.txt,
+    riesgos: [
+      { nombre: "Diagnóstico", r: r1 }, { nombre: "¿Saneable?", r: r2 }, { nombre: "¿Recuperable?", r: r3 }, { nombre: "Bloqueo legal", r: r4 },
+      { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No recuperable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
+    ],
+    intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cReg, usura: false },
+    admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+  });
+
   const descargarPDF = async (decision: string) => {
     const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
-    await descargarPredictamenPDF({
-      expediente: x.expediente, juzgado: "—", estado: x.estado, tipoJuicio: x.tipoContingencia, posicion: "Contingencia inmobiliaria",
-      ubicacion: x.ubicacion, deudor: x.titularRPP, quienCede: x.contraparte, queCede: "Cesión de derechos (saneamiento)",
-      dictamen: consolidado.txt,
-      riesgos: [
-        { nombre: "Diagnóstico", r: r1 }, { nombre: "¿Saneable?", r: r2 }, { nombre: "¿Recuperable?", r: r3 }, { nombre: "Bloqueo legal", r: r4 },
-        { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No recuperable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
-      ],
-      intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cReg, usura: false },
-      admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
-    });
+    await descargarPredictamenPDF(construirDatosPDF(decision));
   };
 
   return (
