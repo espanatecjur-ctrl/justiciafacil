@@ -67,7 +67,7 @@ interface Datos {
   // H5 cargas
   predial: string; agua: string; condominio: string; fiscales: string; laborales: string; otrosGravamenes: string;
   // H6 financiero/viabilidad
-  capital: string; tasaOrd: string; tasaMor: string; dias: string; aplicarIVA: string; gastos: string; valorUDI: string;
+  capital: string; tasaOrd: string; tasaMor: string; dias: string; aplicarIVA: string; gastos: string; valorUDI: string; fechaCorte: string;
   valorComercial: string; precioCesion: string; costosOperativos: string; margenObjetivo: string;
   // H7 firmas
   firmaElabora: string; firmaValida: string;
@@ -85,7 +85,7 @@ const VACIO: Datos = {
   interpelacionJV: "no", interpelacionJVFecha: "",
   interpelacionTipo: "", interpelacionExpediente: "", interpelacionJuzgado: "",
   predial: "", agua: "", condominio: "", fiscales: "", laborales: "", otrosGravamenes: "",
-  capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "",
+  capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "", fechaCorte: "",
   valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
   firmaElabora: "", firmaValida: "",
   anotacionesHumanas: "",
@@ -257,6 +257,24 @@ export function RecorridoActor({
       viabilidad_economica: rViab,
     });
   }, [onResultados, rPresc, rCaduc, rUsuc, usaUsucapion, rViab]);
+
+  // Días de cómputo automáticos: del último pago a la fecha de corte (por defecto hoy).
+  const hoyISO = () => new Date().toISOString().slice(0, 10);
+  const diasEntre = (desde: string, hasta: string) => {
+    if (!desde || !hasta) return null;
+    const a = new Date(desde + "T00:00:00"), b = new Date(hasta + "T00:00:00");
+    if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
+    const d = Math.round((b.getTime() - a.getTime()) / 86400000);
+    return d >= 0 ? d : null;
+  };
+  useEffect(() => {
+    // al llegar a la fase de intereses, si no hay fecha de corte, poner hoy
+    if (paso === 6 && !d.fechaCorte) setD((p) => ({ ...p, fechaCorte: hoyISO() }));
+  }, [paso]);
+  useEffect(() => {
+    const dd = diasEntre(d.ultimoPago, d.fechaCorte);
+    if (dd != null) setD((p) => (String(dd) === p.dias ? p : { ...p, dias: String(dd) }));
+  }, [d.ultimoPago, d.fechaCorte]);
 
   const guardar = async (decision: string) => {
     setGuardando(true);
@@ -637,11 +655,14 @@ export function RecorridoActor({
               <Campo label="Capital"><input type="number" className={inp} value={d.capital} onChange={(e) => set("capital", e.target.value)} /></Campo>
               <Campo label="Tasa ordinaria (% anual)"><input type="number" className={inp} value={d.tasaOrd} onChange={(e) => set("tasaOrd", e.target.value)} /></Campo>
               <Campo label="Tasa moratoria (% anual)"><input type="number" className={inp} value={d.tasaMor} onChange={(e) => set("tasaMor", e.target.value)} /></Campo>
-              <Campo label="Días de cómputo"><input type="number" className={inp} value={d.dias} onChange={(e) => set("dias", e.target.value)} /></Campo>
+              <Campo label="Fecha del último pago"><input type="date" className={inp} value={d.ultimoPago} onChange={(e) => set("ultimoPago", e.target.value)} /></Campo>
+              <Campo label="Calcular hasta (fecha de corte)"><input type="date" className={inp} value={d.fechaCorte} onChange={(e) => set("fechaCorte", e.target.value)} /></Campo>
+              <Campo label="Días de cómputo (auto, editable)"><input type="number" className={inp} value={d.dias} onChange={(e) => set("dias", e.target.value)} /></Campo>
               <Campo label="Gastos y costas"><input type="number" className={inp} value={d.gastos} onChange={(e) => set("gastos", e.target.value)} /></Campo>
               <Campo label="¿Aplicar IVA 16% a intereses?"><SiNo v={d.aplicarIVA} on={(x) => set("aplicarIVA", x)} /></Campo>
               <Campo label="Valor UDI (opcional)"><input type="number" className={inp} value={d.valorUDI} onChange={(e) => set("valorUDI", e.target.value)} /></Campo>
             </div>
+            <p className="text-[11px] text-muted-foreground">Los <b>días de cómputo</b> se calculan solos: de la <b>fecha del último pago</b> a la <b>fecha de corte</b> (por defecto hoy). Cambia la fecha de corte para calcular a otra fecha, o edita los días a mano.</p>
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm space-y-0.5">
               <div>Intereses ordinarios: <b>{fmt(fin.ordinarios)}</b></div>
               <div>Intereses moratorios: <b>{fmt(fin.moratorios)}</b></div>
