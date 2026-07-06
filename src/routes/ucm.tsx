@@ -10,6 +10,7 @@ import { FilaAcciones } from "@/components/fila-acciones";
 import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
 import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import { ValidarJuzgado } from "@/components/validar-juzgado";
+import { ValidarExpediente } from "@/components/validar-expediente";
 
 export const Route = createFileRoute("/ucm")({
   head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
@@ -199,6 +200,7 @@ function UcmPage() {
                       {c.expediente || "— sin expediente —"}
                     </p>
                     <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
+                    <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
                     {c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (
                       <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
                         <AlertTriangle className="h-2.5 w-2.5" /> {diasAvance[c.id] >= 9999 ? "sin avances" : `${diasAvance[c.id]}d sin avance`}
@@ -257,6 +259,7 @@ function UcmPage() {
                 </div>
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
+              <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
               <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 text-xs"><span className="font-medium">{c.materia || "—"}</span>{c.via_procesal ? ` · ${c.via_procesal}` : ""}{c.etapa_actual ? ` · ${c.etapa_actual}` : ""}</p>
