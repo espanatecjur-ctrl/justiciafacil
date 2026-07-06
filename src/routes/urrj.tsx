@@ -11,6 +11,7 @@ import { DictamenRegistral } from "@/components/dictamen-registral";
 import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 import { RegistroURRJ } from "@/components/registro-urrj";
+import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -32,6 +33,7 @@ function URRJ() {
   const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
   const [crearNuevo, setCrearNuevo] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
+  const [fichaGar, setFichaGar] = useState<RefGarantia | null>(null);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
@@ -60,8 +62,19 @@ function URRJ() {
   const puedePrecioPiso = ["DGE", "Super_Admin"].includes(rolUsuario || "");
   const navigate = useNavigate();
   const verFichaVieja = (f: any) => {
-    if (f.caso_id) navigate({ to: "/expediente", search: { id: f.caso_id, origen: "urrj" } as any });
-    else alert("Este pre-dictamen aún no está vinculado a una garantía. Vincúlalo primero (cliente ↔ garantía).");
+    // La solicitud/pre-dictamen YA trae su información (expediente, cliente).
+    // Aquí arranca el proceso (cuando llegan los documentos): NO se exige vincular
+    // una garantía. Abrimos la ficha por expediente; el FichaURRJ se alimenta del
+    // pre-dictamen y del registral por expediente o por caso_id.
+    setFichaGar({
+      id: f.caso_id || undefined,
+      expediente: f.expediente || "",
+      direccion_garantia: f.datos?.ubicacion || "",
+      juzgado: f.datos?.juzgado || f.juzgado || "",
+      cliente_nombre: f.datos?.deudor || f.cliente || "",
+      deudor: f.datos?.deudor || "",
+      entidad: f.datos?.estado || "",
+    });
   };
   const reDictaminarRegistral = (f: any) => {
     setSolicitudActiva({ tipo_dictamen: "Registral", cliente: f.datos?.deudor || "", expediente: f.expediente || "", caso_id: f.caso_id || "" } as any);
@@ -156,6 +169,11 @@ function URRJ() {
       )}
     </div>
   );
+
+  // Ficha del pre-dictamen abierta desde el historial (se alimenta de sus dictámenes)
+  if (fichaGar) {
+    return <FichaURRJ garantia={fichaGar} onVolver={() => setFichaGar(null)} />;
+  }
 
   return (
     <div className="space-y-5">
