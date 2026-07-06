@@ -53,14 +53,18 @@ export function DictaminadorPosicion({
   modoFicha = false,
   pantallaElegir,
 }: Props) {
-  // robot al inicio: expediente + hallazgos que se llevarán al recorrido
+  // robot al inicio: expediente + partes + hallazgos que se llevarán al recorrido
   const [expedienteIni, setExpedienteIni] = useState("");
-  const [estadoIni, setEstadoIni] = useState<"sinaloa" | "bcs" | "jalisco">("sinaloa");
+  const [deudorIni, setDeudorIni] = useState("");
   const [hallazgosIni, setHallazgosIni] = useState<string[]>([]);
   const [mostrarRobotIni, setMostrarRobotIni] = useState(false);
   const agregarHallazgoIni = (nota: string) => {
     const marca = nota.split("\n")[0];
     setHallazgosIni((prev) => prev.some((h) => h.includes(marca)) ? prev : [...prev, nota]);
+  };
+  const capturarBoletin = (d: { expediente?: string; actor?: string; demandado?: string }) => {
+    if (d.expediente) setExpedienteIni(d.expediente);
+    if (d.demandado) setDeudorIni(d.demandado); // en Actor, el deudor es el demandado del boletín
   };
 
   // intento de abrir una posición (respeta el candado de elaborar)
@@ -84,20 +88,9 @@ export function DictaminadorPosicion({
           {hallazgosIni.length > 0 && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{hallazgosIni.length} hallazgo(s) guardado(s) — se llevarán al pre-dictamen</span>}
           {mostrarRobotIni && (
             <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground">Expediente</label>
-                  <input value={expedienteIni} onChange={(e) => setExpedienteIni(e.target.value)} placeholder="Ej. 1393/2017" className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground">Estado (boletín)</label>
-                  <select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value as "sinaloa" | "bcs" | "jalisco")} className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-                    <option value="sinaloa">Sinaloa</option><option value="jalisco">Jalisco</option><option value="bcs">Baja California Sur</option>
-                  </select>
-                </div>
-              </div>
-              <BuscadorBoletin key={`${expedienteIni}-${estadoIni}`} expedienteInicial={expedienteIni} estadoInicial={estadoIni} resaltarAmparo onHallazgoAmparo={agregarHallazgoIni} onGuardarHallazgos={agregarHallazgoIni} />
-              <p className="text-[11px] text-muted-foreground">Guarda los hallazgos que quieras; luego elige la posición y se copiarán al pre-dictamen (anotaciones + PDF).</p>
+              <p className="text-[11px] text-muted-foreground">Busca el expediente en el boletín (elige estado, jurisdicción y juzgado abajo). Al <b>guardar los hallazgos</b>, se toma ese expediente y sus partes para el pre-dictamen.</p>
+              <BuscadorBoletin resaltarAmparo onHallazgoAmparo={agregarHallazgoIni} onGuardarHallazgos={agregarHallazgoIni} onDatosBoletin={capturarBoletin} />
+              {expedienteIni && <p className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-3 py-1.5 text-[11px] text-[color:var(--teal)]">Se usará del boletín → Exp. <b>{expedienteIni}</b>{deudorIni ? ` · Deudor: ${deudorIni}` : ""}. Luego elige la posición.</p>}
             </div>
           )}
         </div>
@@ -138,9 +131,9 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} />;
-  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} />;
-  if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} />;
+  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} />;
+  if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Tramites") return <RecorridoTramites casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   return null;
