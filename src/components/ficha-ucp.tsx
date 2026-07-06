@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { getAuth } from "@/lib/auth";
-import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
-import { type ResultadosActor } from "@/components/recorrido-actor";
+import { DictaminadorPosicionUCP, type VistaPosicionUCP } from "@/components/dictaminador-posicion-ucp";
+import { type ResultadosActorUCP } from "@/components/recorrido-actor-ucp";
 import { SeccionRPPC } from "@/components/seccion-rppc";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { AntecedentesGarantia } from "@/components/antecedentes-garantia";
@@ -109,11 +109,11 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
   // hitos guardados (criterio del abogado + notas + lo que se haya guardado de motor)
   const [hitos, setHitos] = useState<HitosJuridico>(() => dictamen.juridico?.hitos || {});
   // posición confirmada / recorrido embebido
-  const [vistaPos, setVistaPos] = useState<VistaPosicion>("elegir");
+  const [vistaPos, setVistaPos] = useState<VistaPosicionUCP>("elegir");
   // posición tentativa elegida en el banner (antes de confirmar)
-  const [posSel, setPosSel] = useState<Exclude<VistaPosicion, "elegir">>("Actor");
+  const [posSel, setPosSel] = useState<Exclude<VistaPosicionUCP, "elegir">>("Actor");
   // resultados que el recorrido va calculando en vivo (los 4 motores)
-  const [motoresRecorrido, setMotoresRecorrido] = useState<ResultadosActor | null>(null);
+  const [motoresRecorrido, setMotoresRecorrido] = useState<ResultadosActorUCP | null>(null);
   // cambios a mano que hizo el abogado sobre los hitos de motor (ganan al cálculo)
   const [motorOverride, setMotorOverride] = useState<Partial<Record<ClaveMotor, Semaforo>>>({});
 
@@ -277,7 +277,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
               {vistaPos === "elegir" ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--teal)]"><Scale className="h-4 w-4" /> Confirmar posición</span>
-                  <select value={posSel} onChange={(e) => setPosSel(e.target.value as Exclude<VistaPosicion, "elegir">)} className="rounded-md border border-input bg-background px-3 py-1.5 text-sm">
+                  <select value={posSel} onChange={(e) => setPosSel(e.target.value as Exclude<VistaPosicionUCP, "elegir">)} className="rounded-md border border-input bg-background px-3 py-1.5 text-sm">
                     <option value="Actor">Actor</option>
                     <option value="Demandado">Demandado</option>
                     <option value="Sucesorio">Sucesorio</option>
@@ -361,7 +361,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
               </CardContent>
             </Card>
           ) : (
-            <DictaminadorPosicion
+            <DictaminadorPosicionUCP
               casos={[caso]}
               vista={vistaPos}
               onVista={setVistaPos}
