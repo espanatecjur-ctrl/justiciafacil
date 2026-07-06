@@ -1,18 +1,20 @@
 // ============================================================
 // CarpetaDriveVinculada · dentro de la ficha del expediente.
-//  · Si NO hay carpeta vinculada → botón "Vincular carpeta de Drive".
+//  · Si NO hay carpeta vinculada → botón "Vincular carpeta de Drive"
+//    (o "Crear una nueva" si no existe ninguna).
 //  · Si YA hay → muestra el nombre + vista previa de todos sus documentos.
 // Guarda la carpeta en el caso (columnas drive_carpeta_id / drive_carpeta_nombre).
 // ============================================================
 import { useEffect, useState } from "react";
 import {
-  HardDrive, FolderCheck, FileText, ExternalLink, Maximize2,
+  HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
   Loader2, RefreshCw, X, Link2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, type ModuloPerm } from "@/lib/permisos-acciones";
 import { type CasoJuridico } from "@/lib/supabase";
 
@@ -20,10 +22,12 @@ export function CarpetaDriveVinculada({
   caso,
   onGuardar,
   modulo,
+  area,
 }: {
   caso: CasoJuridico;
   onGuardar: (campos: Record<string, string>) => void | Promise<void>;
   modulo?: ModuloPerm;
+  area?: string;
 }) {
   const carpetaId = caso.drive_carpeta_id || "";
   const carpetaNombre = caso.drive_carpeta_nombre || "";
@@ -43,6 +47,10 @@ export function CarpetaDriveVinculada({
   const [error, setError] = useState<string | null>(null);
   const [docSel, setDocSel] = useState<ItemDrive | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  // crear carpeta nueva (reusa el crear-carpeta del sistema: Área → Rol → garantía)
+  const [creando, setCreando] = useState(false);
+  const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
   // sugerencias por número (expediente / crédito / gar)
   const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
@@ -79,6 +87,18 @@ export function CarpetaDriveVinculada({
     await onGuardar({ drive_carpeta_id: id, drive_carpeta_nombre: nombre });
     setGuardando(false);
     setEligiendo(false);
+  };
+
+  // Crea una carpeta nueva para este expediente y la deja vinculada.
+  const crearYVincular = async () => {
+    setCreando(true); setErrorCrear(null);
+    const r = await crearCarpetaDrive(area || "UCM", caso);
+    setCreando(false);
+    if (r.ok && r.carpetaId) {
+      await elegir(r.carpetaId, nombreGarantia(caso));
+    } else {
+      setErrorCrear(r.error || "No se pudo crear la carpeta.");
+    }
   };
 
   const totalPag = Math.max(1, Math.ceil(docs.length / PAGE));
@@ -125,11 +145,17 @@ export function CarpetaDriveVinculada({
 
           <div className="rounded-md border border-dashed border-input p-4 text-center">
             <p className="mb-2 text-sm text-muted-foreground">
-              {sugerencias.length > 0 ? "¿Ninguna es? Busca la carpeta a mano." : "Este expediente todavía no tiene una carpeta de Drive."}
+              {sugerencias.length > 0 ? "¿Ninguna es? Vincula una carpeta existente o crea una nueva." : "Este expediente todavía no tiene una carpeta de Drive."}
             </p>
-            <button onClick={() => setEligiendo(true)} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
-              <Link2 className="h-4 w-4" /> Vincular carpeta de Drive
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button onClick={() => setEligiendo(true)} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
+                <Link2 className="h-4 w-4" /> Vincular carpeta de Drive
+              </button>
+              <button onClick={crearYVincular} disabled={creando} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60">
+                {creando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4 text-[color:var(--teal)]" />} Crear una nueva
+              </button>
+            </div>
+            {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
           </div>
         </div>
       )}
@@ -216,6 +242,15 @@ export function CarpetaDriveVinculada({
               </div>
             </div>
           )}
+
+          {/* Crear una nueva si no existe ninguna */}
+          <div className="rounded-md border border-dashed border-input p-3 text-center">
+            <p className="mb-2 text-xs text-muted-foreground">¿No existe la carpeta en Drive?</p>
+            <button onClick={crearYVincular} disabled={creando} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60">
+              {creando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4 text-[color:var(--teal)]" />} Crear una nueva para este expediente
+            </button>
+            {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
+          </div>
 
           <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={elegir} />
         </div>
