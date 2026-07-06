@@ -207,6 +207,8 @@ function FichaExpedientePage() {
   // el área de la ficha: primero respeta de dónde vino (origen), si no, la deduce de la unidad
   const areaPorUnidad = (c.unidad || "").toUpperCase().includes("UCP") ? "UCP" : (c.unidad || "").toUpperCase().includes("UDP") ? "UDP" : (c.unidad || "").toUpperCase().includes("URRJ") ? "URRJ" : "UCM";
   const areaFicha = origen ? origen.toUpperCase() : areaPorUnidad;
+  const _mapMod: Record<string, "ucm"|"ucp"|"udp"|"ufc"|"amparos"> = { UCM: "ucm", UCP: "ucp", UDP: "udp", UFC: "ufc" };
+  const moduloPermFicha = esEspecial ? "amparos" : _mapMod[areaFicha];
   // color de la etiqueta según el área
   const colorArea: Record<string, string> = { URRJ: "#7A4FB0", UCM: "#0C5C46", UCP: "#0C447C", UDP: "#854F0B" };
   const areaBg = colorArea[areaFicha] || "#0B1E3A";
@@ -427,9 +429,8 @@ function FichaExpedientePage() {
         )}
       </Seccion>
 
-      {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
-      {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
-      <CarpetaDriveVinculada caso={c} onGuardar={(campos) => guardarDatos(campos, () => {})} />
+      {/* Carpeta de Drive vinculada + vista previa de documentos */}
+      <CarpetaDriveVinculada caso={c} modulo={moduloPermFicha} onGuardar={(campos) => guardarDatos(campos, () => {})} />
 
       <DocumentosGarantia area={areaFicha} caso={c} />
 
