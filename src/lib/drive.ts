@@ -123,7 +123,7 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
     const r = await fetch("/.netlify/functions/subir-documento", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream" }),
+      body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream", carpetaId: caso.drive_carpeta_id || undefined }),
     });
     const data = await r.json();
     if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
@@ -207,7 +207,7 @@ export async function guardarMovimiento(
       const r = await fetch("/.netlify/functions/subir-documento", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream" }),
+        body: JSON.stringify({ area, solicita, garantia, archivo, nombre: file.name, mime: file.type || "application/octet-stream", carpetaId: caso.drive_carpeta_id || undefined }),
       });
       const data = await r.json();
       if (!data.ok) return { ok: false, error: data.error || "No se pudo subir a Drive." };
