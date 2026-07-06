@@ -161,6 +161,25 @@ export function CarpetaDriveVinculada({
     cargarDocs("esta", nueva[i].id);
   };
 
+  // Reflejar automático (Opción A): al volver a la app / a esta pestaña, relee Drive solo.
+  useEffect(() => {
+    if (!carpetaId) return;
+    const alVolver = () => {
+      if (document.visibilityState === "visible") {
+        const folder = modoVista === "esta" ? (rutaFicha[rutaFicha.length - 1]?.id || carpetaId) : carpetaId;
+        cargarDocs(modoVista, folder);
+        cargarCopias();
+      }
+    };
+    document.addEventListener("visibilitychange", alVolver);
+    window.addEventListener("focus", alVolver);
+    return () => {
+      document.removeEventListener("visibilitychange", alVolver);
+      window.removeEventListener("focus", alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carpetaId, modoVista, rutaFicha]);
+
   // Antes de vincular: revisa que la carpeta NO esté usada por otro expediente (no repetir).
   const elegir = async (id: string, nombre: string) => {
     setGuardando(true); setDupAviso(null);
