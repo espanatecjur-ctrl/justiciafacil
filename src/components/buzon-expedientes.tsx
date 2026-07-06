@@ -167,20 +167,15 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
           </div>
           <div className="max-h-[560px] overflow-auto p-2">
             {filas.length === 0 ? <p className="p-4 text-center text-sm text-muted-foreground">Sin expedientes.</p> : filasPag.map((f) => {
-              const fr = frescura(f.dias);
               const activo = f.c.id === sel;
               return (
                 <div key={f.c.id} onClick={() => navigate({ to: "/expediente", search: { id: f.c.id, nueva: false } })} className={`mb-1 flex w-full cursor-pointer items-start gap-2.5 rounded-lg p-2.5 text-left transition-colors ${activo ? "bg-[color:var(--teal)]/10 ring-1 ring-[color:var(--teal)]/30" : "hover:bg-muted/50"}`}>
-                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: fr.color }} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="truncate text-sm font-semibold text-[color:var(--teal)]">{f.exp || "— sin expediente —"}</p>
-                      {f.hoy && <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">HOY</span>}
-                      {f.noLeidos > 0 && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">{f.noLeidos}</span>}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">{f.c.materia || "—"} · {f.c.juzgado || "—"}</p>
+                    <p className="truncate text-sm font-semibold text-[color:var(--teal)]">{f.exp || "— sin expediente —"}</p>
+                    <p className="truncate text-xs text-muted-foreground">{[f.c.materia, f.c.via_procesal].filter(Boolean).join(" · ") || "—"}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{f.c.juzgado || "—"}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{[f.c.entidad, f.c.etapa_actual].filter(Boolean).join(" · ") || "—"}</p>
                     {(f.c.actor || f.c.demandado) && <p className="truncate text-[11px] text-muted-foreground"><span className="font-medium text-foreground">{f.c.actor || "—"}</span> vs. <span className="font-medium text-foreground">{f.c.demandado || "—"}</span></p>}
-                    <p className="mt-0.5 text-[11px]" style={{ color: fr.color }}>{fr.label}</p>
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); setSel(f.c.id); }} title="Ver boletín aquí mismo" className="mt-0.5 shrink-0 rounded-md border border-input p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                 </div>
