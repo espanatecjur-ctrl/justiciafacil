@@ -46,10 +46,10 @@ async function obtenerAccessToken(clientEmail, privateKey) {
   return data.access_token;
 }
 
-// Lista archivos (no carpetas) de una carpeta de Drive.
-async function listarArchivos(accessToken, carpetaId) {
+// Lista archivos (no carpetas) de una carpeta de Drive (un nivel).
+async function listarUnNivel(accessToken, carpetaId) {
   const seguro = String(carpetaId).replace(/'/g, "\\'");
-  const q = `'${seguro}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'`;
+  const q = `'${seguro}' in parents and trashed=false`;
   const campos = "files(id,name,mimeType,size),nextPageToken";
   let items = [];
   let pageToken = "";
@@ -68,6 +68,27 @@ async function listarArchivos(accessToken, carpetaId) {
     if (!pageToken) break;
   }
   return items;
+}
+
+// Lista TODOS los archivos bajando por todas las subcarpetas (recursivo, con topes).
+async function listarArchivos(accessToken, carpetaId) {
+  const TOPE_CARPETAS = 400, TOPE_NIVELES = 25, FOLDER = "application/vnd.google-apps.folder";
+  const archivos = [];
+  const vistas = new Set();
+  let revisadas = 0;
+  const cola = [{ id: carpetaId, nivel: 0 }];
+  while (cola.length) {
+    const actual = cola.shift();
+    if (vistas.has(actual.id)) continue;
+    vistas.add(actual.id);
+    if (revisadas++ > TOPE_CARPETAS || actual.nivel > TOPE_NIVELES) continue;
+    const items = await listarUnNivel(accessToken, actual.id);
+    for (const it of items) {
+      if (it.mimeType === FOLDER) cola.push({ id: it.id, nivel: actual.nivel + 1 });
+      else archivos.push(it);
+    }
+  }
+  return archivos;
 }
 
 // Convierte los Google nativos (Docs/Sheets/Slides) a PDF; el resto se baja tal cual.
