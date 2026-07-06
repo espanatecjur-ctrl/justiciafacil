@@ -3,6 +3,7 @@ import { X, Loader2, Scale, Check, CircleDot, Circle, MapPin, Megaphone, Save, S
 import { type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { CATALOGO_ETAPAS, POSICIONES, tipoJuicioPorClave, listaTiposJuicio, type EtapaJuicio } from "@/lib/etapas-juicio";
 import { obtenerSeguimiento, guardarSeguimiento, estadoChecklist, marcarChecklist, listarProcesal, agregarProcesal, type SeguimientoJuicio, type MarcaChecklist, type SeguimientoProcesal } from "@/lib/seguimiento-juicio";
+import { sugerirEtapa } from "@/lib/boletin-a-etapa";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { ChulearDocumentoModal } from "@/components/chulear-documento";
 import { ChevronDown, ChevronRight, FileCheck2, FileX2, Plus, ClipboardList, Loader2 as Spin, Eye } from "lucide-react";
@@ -25,6 +26,9 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
   const [cargando, setCargando] = useState(true);
   const [seg, setSeg] = useState<SeguimientoJuicio | null>(null);
   const [ultimoAcuerdo, setUltimoAcuerdo] = useState<Acuerdo | null>(null);
+  const [acuerdosTxt, setAcuerdosTxt] = useState<string[]>([]);
+  const [sugerencia, setSugerencia] = useState<{ clave: string; acto: string; etiqueta: string } | null>(null);
+  const [buscoSug, setBuscoSug] = useState(false);
 
   // estado de configuración (cuando aún no hay tipo)
   const [tipoSel, setTipoSel] = useState("");
@@ -60,9 +64,10 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
       else setConfig(true); // sin configurar → pedir tipo+posición
       // último acuerdo del boletín como referencia
       if (caso.expediente) {
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=fecha_acuerdo,texto&expediente=eq.${encodeURIComponent(caso.expediente.trim())}&order=fecha_acuerdo.desc&limit=1`, { headers: wHeaders });
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=fecha_acuerdo,texto&expediente=eq.${encodeURIComponent(caso.expediente.trim())}&order=fecha_acuerdo.desc&limit=40`, { headers: wHeaders });
         const d = r.ok ? await r.json() : [];
         setUltimoAcuerdo(d?.[0] || null);
+        setAcuerdosTxt((d || []).map((x: Acuerdo) => x.texto || "").filter(Boolean));
       }
       cargarChecklist();
       setCargando(false);
@@ -186,6 +191,31 @@ export function SeguimientoJuicioModal({ area, caso, onClose }: { area: string; 
                 <div>
                   <p className="mb-2 text-xs font-semibold" style={{ color: NAVY }}>Etapas del juicio · <span className="font-normal text-muted-foreground">{tipoDef.ley}</span></p>
                   <p className="mb-3 text-[11px] text-muted-foreground">Toca una etapa para marcarla como la <b>actual</b>. El ✓ marca las completadas.</p>
+
+                  {/* Sugerencia de avance a partir del boletín (siempre la confirmas tú) */}
+                  <div className="mb-3">
+                    <button
+                      type="button"
+                      onClick={() => { setSugerencia(sugerirEtapa([...acuerdosTxt, caso.etapa_actual], etapas)); setBuscoSug(true); }}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold"
+                      style={{ color: TEAL }}
+                    >
+                      <Megaphone className="h-3.5 w-3.5" /> Sugerir avance desde el boletín
+                    </button>
+                    {sugerencia ? (
+                      <div className="mt-2 rounded-lg border border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 p-2.5">
+                        <p className="text-xs">El boletín sugiere avanzar a: <b>{sugerencia.etiqueta}</b> <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{sugerencia.acto}</span></p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Revísalo. Si es correcto, se marca como etapa actual y las anteriores como hechas.</p>
+                        <div className="mt-2 flex gap-2">
+                          <button type="button" onClick={async () => { await marcarActual(sugerencia.clave); setSugerencia(null); setBuscoSug(false); }} className="rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: TEAL }}>Aplicar como etapa actual</button>
+                          <button type="button" onClick={() => { setSugerencia(null); setBuscoSug(false); }} className="rounded-md border border-input px-3 py-1.5 text-[11px] font-medium hover:bg-muted">Descartar</button>
+                        </div>
+                      </div>
+                    ) : buscoSug ? (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">No reconocí ninguna etapa en las actuaciones del boletín. Márcala a mano abajo.</p>
+                    ) : null}
+                  </div>
+
                   <div className="space-y-1.5">
                     {etapas.map((e) => {
                       const esActual = e.clave === etapaActual;
