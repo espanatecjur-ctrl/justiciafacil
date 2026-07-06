@@ -11,7 +11,7 @@ import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { VincularClienteModal } from "@/components/vincular-cliente";
 import { BadgeAvance } from "@/components/badge-avance";
 import {
-  ArrowLeft, Loader2, AlertTriangle, Landmark, Scale,
+  ArrowLeft, Loader2, AlertTriangle, Landmark, Scale, PenLine,
   DollarSign, Megaphone, Lightbulb, Lock, Shield, Layers, Send,
 } from "lucide-react";
 
@@ -79,6 +79,17 @@ function Faltante({ texto = "Falta información" }: { texto?: string }) {
   );
 }
 
+// Input y campo para los mini formularios de edición
+const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
+function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 block text-[11px] text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 // Tarjeta de sección reutilizable
 function Seccion({ icon, titulo, falta, accion, children }: { icon: React.ReactNode; titulo: string; falta?: boolean; accion?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -126,6 +137,28 @@ function FichaExpedientePage() {
   const [cargando, setCargando] = useState(true);
   const [verSeguimiento, setVerSeguimiento] = useState(false);
   const [verVincular, setVerVincular] = useState(false);
+  const [editAnt, setEditAnt] = useState(false);
+  const [editEst, setEditEst] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [guardandoDatos, setGuardandoDatos] = useState(false);
+  const [errorDatos, setErrorDatos] = useState<string | null>(null);
+
+  const guardarDatos = async (campos: Record<string, string>, cerrar: () => void) => {
+    if (!caso) return;
+    setGuardandoDatos(true); setErrorDatos(null);
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(campos),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      setCaso({ ...caso, ...(campos as any) });
+      cerrar();
+    } catch {
+      setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
+    } finally { setGuardandoDatos(false); }
+  };
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -239,28 +272,86 @@ function FichaExpedientePage() {
             <Dato label="Vence" valor={c.fecha_vence} />
           </Seccion>
         ) : (
-          <Seccion icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />} titulo="Antecedente de la garantía" falta={faltaAntecedente}>
-            <Dato label="ID garantía" valor={c.gar_id} />
-            <Dato label="Proveedor / Administradora" valor={c.proveedor} importante />
-            <Dato label="No. de crédito" valor={c.no_credito} importante />
-            <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
-            <div className="flex items-center justify-between gap-2">
-              <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
-              <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
-                <Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}
+          <Seccion
+            icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />}
+            titulo="Antecedente de la garantía"
+            falta={faltaAntecedente}
+            accion={
+              <button onClick={() => { setForm({ proveedor: c.proveedor || "", no_credito: c.no_credito || "", direccion_garantia: c.direccion_garantia || "", entidad: c.entidad || "" }); setErrorDatos(null); setEditAnt(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+                <PenLine className="h-3 w-3" /> Editar / validar
               </button>
-            </div>
-            <Dato label="Tipo de proceso" valor={c.tipo_proceso} />
+            }
+          >
+            {editAnt ? (
+              <div className="space-y-2">
+                <Campo label="Proveedor / Administradora"><input className={inp} value={form.proveedor} onChange={(e) => setForm({ ...form, proveedor: e.target.value })} /></Campo>
+                <Campo label="No. de crédito"><input className={inp} value={form.no_credito} onChange={(e) => setForm({ ...form, no_credito: e.target.value })} /></Campo>
+                <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
+                <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
+                <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
+                  <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{c.cliente_nombre || c.cliente_codigo || "sin vincular"}</b></span>
+                  <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"} cliente</button>
+                </div>
+                {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => guardarDatos({ proveedor: form.proveedor, no_credito: form.no_credito, direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                  <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Dato label="ID garantía" valor={c.gar_id} />
+                <Dato label="Proveedor / Administradora" valor={c.proveedor} importante />
+                <Dato label="No. de crédito" valor={c.no_credito} importante />
+                <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+                <div className="flex items-center justify-between gap-2">
+                  <Dato label="Cliente" valor={c.cliente_nombre || c.cliente_codigo} importante />
+                  <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+                    <Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}
+                  </button>
+                </div>
+                <Dato label="Tipo de proceso" valor={c.tipo_proceso} />
+              </>
+            )}
           </Seccion>
         )}
 
         {/* Estatus actual */}
-        <Seccion icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />} titulo="Estatus actual" falta={faltaEstatus}>
-          {!esEspecial && <Dato label="Etapa actual" valor={c.etapa_actual} importante />}
-          <Dato label={esEspecial ? "Estado" : "Estatus general"} valor={c.estatus_general} importante />
-          <Dato label="Prioridad" valor={c.prioridad} importante={!esEspecial} />
-          <Dato label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
-          <Dato label="Nota adicional" valor={c.nota_adicional} />
+        <Seccion
+          icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />}
+          titulo="Estatus actual"
+          falta={faltaEstatus}
+          accion={
+            <button onClick={() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "" }); setErrorDatos(null); setEditEst(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+              <PenLine className="h-3 w-3" /> Editar / validar
+            </button>
+          }
+        >
+          {editEst ? (
+            <div className="space-y-2">
+              {!esEspecial && <Campo label="Etapa actual"><input className={inp} value={form.etapa_actual} onChange={(e) => setForm({ ...form, etapa_actual: e.target.value })} /></Campo>}
+              <Campo label={esEspecial ? "Estado" : "Estatus general"}><input className={inp} value={form.estatus_general} onChange={(e) => setForm({ ...form, estatus_general: e.target.value })} /></Campo>
+              <Campo label="Prioridad"><input className={inp} value={form.prioridad} onChange={(e) => setForm({ ...form, prioridad: e.target.value })} placeholder="ALTA / MEDIA / BAJA" /></Campo>
+              <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1393/2017" /></Campo>
+              <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Primero Civil…" /></Campo>
+              <p className="text-[11px] text-muted-foreground">Con el expediente y el juzgado, el robot del Boletín ya puede seguir las actuaciones.</p>
+              {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado }, () => setEditEst(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {!esEspecial && <Dato label="Etapa actual" valor={c.etapa_actual} importante />}
+              <Dato label={esEspecial ? "Estado" : "Estatus general"} valor={c.estatus_general} importante />
+              <Dato label="Prioridad" valor={c.prioridad} importante={!esEspecial} />
+              {!esEspecial && <Dato label="No. de expediente / juicio" valor={c.expediente} />}
+              {!esEspecial && <Dato label="No. de juzgado" valor={c.juzgado} />}
+              <Dato label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
+              <Dato label="Nota adicional" valor={c.nota_adicional} />
+            </>
+          )}
         </Seccion>
       </div>
 
