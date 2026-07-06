@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye } from "lucide-react";
+import { ArrowLeft, Loader2, ScrollText, Landmark, Scale, CheckCircle2, XCircle, Clock, PenLine, Download, Eye } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { LineaVidaAreas } from "@/components/linea-vida-areas";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -20,6 +21,7 @@ function UCPFicha() {
   const navigate = useNavigate();
   const [c, setC] = useState<CasoJuridico | null>(null);
   const [dict, setDict] = useState<any>(null);
+  const [pred, setPred] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -27,8 +29,9 @@ function UCPFicha() {
     Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
       fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${id}&vigente=eq.true&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=posicion,folio&caso_id=eq.${id}&vigente=eq.true&order=created_at.desc&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
     ])
-      .then(([cs, ds]) => { setC(cs?.[0] || null); setDict(ds?.[0] || null); })
+      .then(([cs, ds, ps]) => { setC(cs?.[0] || null); setDict(ds?.[0] || null); setPred(ps?.[0] || null); })
       .finally(() => setCargando(false));
   }, [id]);
 
@@ -98,6 +101,28 @@ function UCPFicha() {
         <p className="mt-1 text-xs text-white/70">{c.juzgado || "Juzgado sin asignar"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
       </div>
 
+      {/* Línea de vida: recorrido por áreas (bolitas conectadas) */}
+      <LineaVidaAreas caso={c} />
+
+      {/* Antecedente de la garantía + Estatus actual (igual que la ficha de URRJ) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Seccion icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />} titulo="Antecedente de la garantía">
+          <Dato label="ID garantía" valor={c.id} />
+          <Dato label="No. de crédito" valor={(c as any).no_credito || c.expediente} />
+          <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+          <Dato label="Cliente / deudor" valor={c.cliente_nombre || (c as any).demandado} importante />
+          <Dato label="Entidad" valor={c.entidad} />
+        </Seccion>
+
+        <Seccion icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />} titulo="Estatus actual">
+          <Dato label="Etapa actual" valor="Dictamen (UCP)" />
+          <Dato label="Estatus general" valor={(c as any).estatus_general || "En proceso"} />
+          <Dato label="Posición" valor={pred?.posicion} />
+          <Dato label="Unidad" valor="UCP · Consolidación" />
+          <Dato label="Folio" valor={pred?.folio || (c as any).folio} />
+        </Seccion>
+      </div>
+
       {/* dictámenes divididos: jurídico + registral, cada uno con su proceso y firmas */}
       <div className="grid gap-4 sm:grid-cols-2">
         <BloqueDictamen
@@ -128,7 +153,24 @@ function UCPFicha() {
   );
 }
 
-// Bloque resumen de un dictamen (jurídico o registral) con su veredicto, firma y PDF.
+// Panel de datos y renglón etiqueta/valor (mismo estilo que la ficha de URRJ).
+function Seccion({ icon, titulo, children }: { icon: React.ReactNode; titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+      {children}
+    </div>
+  );
+}
+function Dato({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
+  const vacio = !valor || !String(valor).trim();
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">{vacio ? (importante ? <span className="text-red-600">falta</span> : "—") : valor}</span>
+    </div>
+  );
+}
 function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir, onVer, onDescargar }: {
   titulo: string; icon: React.ReactNode; veredicto: string | null;
   firmas: any; claveFirma: string; onAbrir: () => void; onVer: () => void; onDescargar: () => void;
