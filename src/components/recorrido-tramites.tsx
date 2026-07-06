@@ -1,26 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
-import type { DatosPDF } from "@/lib/predictamen-pdf";
-import { Link } from "@tanstack/react-router";
+import { guardarPredictamen, type Precarga } from "@/lib/predictamen-guardar";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import {
-  veredictoSuc1, veredictoSuc2, veredictoSuc3, veredictoSuc4, calcularVAAESuc, veredictoConsolidado,
-} from "@/lib/urrj-sucesorio";
+  TIPOS_TRAMITE, veredictoTra1, veredictoTra2, veredictoTra3, veredictoTra4, analisisContencioso, calcularVAAETra, consolidadoTra,
+} from "@/lib/urrj-tramites";
 import type { ResultadoMotor, Semaforo } from "@/lib/urrj-motores";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
-import { BuscadorBoletin } from "@/components/buscador-boletin";
-import { BannerCorreo } from "@/components/banner-correo";
-import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
-import { registrarEvento } from "@/lib/cronologia-urrj";
-import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
-import { Mail, Eye } from "lucide-react";
-import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Search, Bot, Lock, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const n = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v; };
-const FASES = ["Identificación + caso", "Acreditación", "¿Litigable?", "¿Recuperable? + V_AAE", "Bloqueo legal", "Dictamen y firmas"];
+const FASES = ["Identificación", "Acreditación", "Procedencia + plazo", "Impacto + V_AAE", "Bloqueo + suspensión", "Dictamen y firmas"];
 
 function SemDot({ s }: { s: Semaforo }) {
   const c = s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
@@ -53,146 +45,74 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string }) {
+export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
-  const [hallazgos, setHallazgos] = useState<string[]>([]);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [yaExiste, setYaExiste] = useState<PredictamenExistente | null>(null);
-  const [ignorarBoletin, setIgnorarBoletin] = useState(false);
-  const [mostrarBoletin, setMostrarBoletin] = useState(false);
-  const [verBanner, setVerBanner] = useState(false);
-  const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
-  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
-  const [seed, setSeed] = useState(0);
-  const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((z) => z + 1); setVerBanner(true); };
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
   const [x, setX] = useState<Record<string, string>>({
-    caso_id: "", expediente: "", juzgado: "", estado: "Sinaloa",
-    deCujus: "", fechaDefuncion: "", hayActaDefuncion: "", ubicacion: "", casaANombreDeCujus: "",
-    hayTestamento: "", via: "", heredero: "", caso: "B", fuenteRevisada: "",
-    herederosNoLocalizados: "", testamentoImpugnado: "", controversiaHerederos: "", adjudicacionProtocolizada: "",
-    herederoMenorOAusente: "", conyugeSinAclarar: "", edictosCorriendo: "", herederoVendeATercero: "",
-    acreedoresSuperanValor: "", herederosCeden: "", hipotecaNoNegociable: "", impuestosCuantificados: "", cargasManejables: "",
-    valorComercial: "", deudasDeCujus: "", hipotecaGravamenes: "", predialAgua: "", impuestos: "", mesesDesenredo: "", margenPct: "30",
-    vendedorAceptaPoder: "", cesionSuspensiva: "", escrow: "", poderIrrevocable: "", dineroYaEntregado: "",
-    cedenteAceptoHerencia: "", derechoTantoNotificado: "", cesionEscrituraPublica: "", anotaciones: "",
+    caso_id: "", expediente: "", estado: "Sinaloa", tipoTramite: "amparo_indirecto", autoridad: "", ubicacion: "", afectaComo: "", contraparte: "",
+    hayActoReclamado: "", fechaNotificacion: "", fuenteRevisada: "", plazoManual: "",
+    faltaInteres: "", cosaJuzgada: "", suspensionOtorgada: "", actoIlegalClaro: "", requiereExterno: "",
+    hayActosAdmin: "", esCreditoFiscal: "", esExpropiacionUso: "", juicioEnCurso: "",
+    afectacionSuperaValor: "", condenaFirmeArriba: "", contraparteCede: "", defendible: "",
+    valorComercial: "", condenaLaudoFiscal: "", honorariosDefensa: "", accesorios: "", mesesDesenredo: "", margenPct: "30",
+    remateInminente: "", contraparteAceptaPoder: "", cesionSuspensiva: "", escrow: "", poderIrrevocable: "", dineroYaEntregado: "", anotaciones: "",
   });
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
-  const estadoRobot: "sinaloa" | "bcs" | "jalisco" = x.estado === "Jalisco" ? "jalisco" : x.estado === "Baja California Sur" ? "bcs" : "sinaloa";
   useEffect(() => { if (precargar?.datos) setX((p) => ({ ...p, ...precargar.datos })); }, []);
 
-  // Robot al inicio: sembrar expediente + hallazgos (una sola vez).
-  useEffect(() => {
-    if (hallazgosIniciales && hallazgosIniciales.length) setHallazgos(hallazgosIniciales);
-    if ((hallazgosIniciales?.length || expedienteInicial)) {
-      setX((p) => {
-        const prev = p.anotaciones || "";
-        const notas = (hallazgosIniciales || []).filter((h) => !prev.includes(h.split("\n")[0]));
-        const sep = prev.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
-      });
-    }
-  }, []);
-
-  const r1 = useMemo(() => veredictoSuc1({ hayActaDefuncion: x.hayActaDefuncion, casaANombreDeCujus: x.casaANombreDeCujus, fuenteRevisada: x.fuenteRevisada }), [x.hayActaDefuncion, x.casaANombreDeCujus, x.fuenteRevisada]);
-  const r2 = useMemo(() => veredictoSuc2({
-    herederosNoLocalizados: x.herederosNoLocalizados, testamentoImpugnado: x.testamentoImpugnado, controversiaHerederos: x.controversiaHerederos,
-    adjudicacionProtocolizada: x.adjudicacionProtocolizada, herederoMenorOAusente: x.herederoMenorOAusente, conyugeSinAclarar: x.conyugeSinAclarar,
-    edictosCorriendo: x.edictosCorriendo, herederoVendeATercero: x.herederoVendeATercero,
-  }), [x.herederosNoLocalizados, x.testamentoImpugnado, x.controversiaHerederos, x.adjudicacionProtocolizada, x.herederoMenorOAusente, x.conyugeSinAclarar, x.edictosCorriendo, x.herederoVendeATercero]);
-  const vaae = useMemo(() => calcularVAAESuc({
-    valorComercial: n(x.valorComercial), deudasDeCujus: n(x.deudasDeCujus), hipotecaGravamenes: n(x.hipotecaGravamenes),
-    predialAgua: n(x.predialAgua), impuestos: n(x.impuestos), mesesDesenredo: n(x.mesesDesenredo), margenPct: n(x.margenPct),
-  }), [x.valorComercial, x.deudasDeCujus, x.hipotecaGravamenes, x.predialAgua, x.impuestos, x.mesesDesenredo, x.margenPct]);
-  const r3 = useMemo(() => veredictoSuc3({
-    acreedoresSuperanValor: x.acreedoresSuperanValor, herederosCeden: x.herederosCeden, hipotecaNoNegociable: x.hipotecaNoNegociable,
-    impuestosCuantificados: x.impuestosCuantificados, cargasManejables: x.cargasManejables,
-  }, vaae.viable), [x.acreedoresSuperanValor, x.herederosCeden, x.hipotecaNoNegociable, x.impuestosCuantificados, x.cargasManejables, vaae.viable]);
-  const r4 = useMemo(() => veredictoSuc4({
-    caso: x.caso, vendedorAceptaPoder: x.vendedorAceptaPoder, cesionSuspensiva: x.cesionSuspensiva, escrow: x.escrow,
-    poderIrrevocable: x.poderIrrevocable, dineroYaEntregado: x.dineroYaEntregado,
-    cedenteAceptoHerencia: x.cedenteAceptoHerencia, derechoTantoNotificado: x.derechoTantoNotificado, cesionEscrituraPublica: x.cesionEscrituraPublica,
-  }), [x.caso, x.vendedorAceptaPoder, x.cesionSuspensiva, x.escrow, x.poderIrrevocable, x.dineroYaEntregado, x.cedenteAceptoHerencia, x.derechoTantoNotificado, x.cesionEscrituraPublica]);
-
-  const consolidado = useMemo(() => veredictoConsolidado(r2.semaforo, r3.semaforo, vaae.viable), [r2.semaforo, r3.semaforo, vaae.viable]);
+  const r1 = useMemo(() => veredictoTra1({ hayActoReclamado: x.hayActoReclamado, fechaNotificacion: x.fechaNotificacion, fuenteRevisada: x.fuenteRevisada }), [x.hayActoReclamado, x.fechaNotificacion, x.fuenteRevisada]);
+  const r2 = useMemo(() => veredictoTra2({
+    tipoTramite: x.tipoTramite, fechaNotificacion: x.fechaNotificacion, plazoManual: x.plazoManual ? n(x.plazoManual) : undefined,
+    faltaInteres: x.faltaInteres, cosaJuzgada: x.cosaJuzgada, suspensionOtorgada: x.suspensionOtorgada, actoIlegalClaro: x.actoIlegalClaro, requiereExterno: x.requiereExterno,
+  }), [x.tipoTramite, x.fechaNotificacion, x.plazoManual, x.faltaInteres, x.cosaJuzgada, x.suspensionOtorgada, x.actoIlegalClaro, x.requiereExterno]);
+  const cont = useMemo(() => analisisContencioso({ hayActosAdmin: x.hayActosAdmin, esCreditoFiscal: x.esCreditoFiscal, esExpropiacionUso: x.esExpropiacionUso, juicioEnCurso: x.juicioEnCurso }), [x.hayActosAdmin, x.esCreditoFiscal, x.esExpropiacionUso, x.juicioEnCurso]);
+  const vaae = useMemo(() => calcularVAAETra({ valorComercial: n(x.valorComercial), condenaLaudoFiscal: n(x.condenaLaudoFiscal), honorariosDefensa: n(x.honorariosDefensa), accesorios: n(x.accesorios), mesesDesenredo: n(x.mesesDesenredo), margenPct: n(x.margenPct) }), [x.valorComercial, x.condenaLaudoFiscal, x.honorariosDefensa, x.accesorios, x.mesesDesenredo, x.margenPct]);
+  const r3 = useMemo(() => veredictoTra3({ afectacionSuperaValor: x.afectacionSuperaValor, condenaFirmeArriba: x.condenaFirmeArriba, contraparteCede: x.contraparteCede, defendible: x.defendible }, vaae.viable), [x.afectacionSuperaValor, x.condenaFirmeArriba, x.contraparteCede, x.defendible, vaae.viable]);
+  const r4 = useMemo(() => veredictoTra4({ suspensionOtorgada: x.suspensionOtorgada, remateInminente: x.remateInminente, contraparteAceptaPoder: x.contraparteAceptaPoder, cesionSuspensiva: x.cesionSuspensiva, escrow: x.escrow, poderIrrevocable: x.poderIrrevocable, dineroYaEntregado: x.dineroYaEntregado }), [x.suspensionOtorgada, x.remateInminente, x.contraparteAceptaPoder, x.cesionSuspensiva, x.escrow, x.poderIrrevocable, x.dineroYaEntregado]);
+  const consolidado = useMemo(() => consolidadoTra(r2.semaforo, r3.semaforo, vaae.viable), [r2.semaforo, r3.semaforo, vaae.viable]);
   const fmt = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
-  const esB = x.caso === "B" || x.caso === "C";
-
-  const checarExiste = async (exp?: string | null, caso?: string | null) => {
-    if (precargar) return;
-    if (!exp && !caso) { setYaExiste(null); return; }
-    const ex = await buscarPredictamenVigente(exp, caso);
-    setYaExiste(ex);
-  };
-
-  const dosFirmas = !!(fElabora && fValida);
-  const decidido = !!guardado && guardado.startsWith("Pre-dictamen");
 
   const guardar = async (decision: string) => {
-    if (!precargar) {
-      const ex = await buscarPredictamenVigente(x.expediente, x.caso_id);
-      if (ex) { setYaExiste(ex); return; }
-    }
     const payload = {
-      caso_id: x.caso_id || null, expediente: x.expediente || null, juzgado: x.juzgado || null, estado: x.estado,
-      tipo_juicio: "Sucesorio (Caso " + x.caso + ")", posicion: "Sucesorio", datos: x,
-      resultados: { hito1: r1, litigable: r2, recuperable: r3, bloqueo: r4, vaae, consolidado, firmas: { elabora: fElabora, valida: fValida } },
+      caso_id: x.caso_id || null, expediente: x.expediente || null, juzgado: x.autoridad || null, estado: x.estado,
+      tipo_juicio: "Trámite · " + (TIPOS_TRAMITE.find((t) => t.clave === x.tipoTramite)?.nombre || x.tipoTramite), posicion: "Trámite administrativo", datos: x,
+      resultados: { acreditacion: r1, litigable: r2, contencioso: cont, recuperable: r3, bloqueo: r4, vaae, consolidado, firmas: { elabora: fElabora, valida: fValida } },
       dictamen_sugerido: consolidado.txt, dictamen_final: decision,
       firma_elabora: fElabora?.nombre || null, firma_elabora_fecha: fElabora?.fecha || null,
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
-      registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Sucesorio · Decisión: ${decision}` });
-      setGuardado("Pre-dictamen (Sucesorio) guardado: " + decision);
+      await guardarPredictamen(payload, precargar);
+      setGuardado("Pre-dictamen (Trámite) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
-  const construirDatosPDF = (decision: string): DatosPDF => ({
-    expediente: x.expediente, juzgado: x.juzgado, estado: x.estado, tipoJuicio: "Sucesorio · Caso " + x.caso, posicion: "Sucesorio",
-    ubicacion: x.ubicacion, deudor: x.deCujus, quienCede: x.heredero, queCede: "Derechos hereditarios",
-    dictamen: consolidado.txt,
-    riesgos: [
-      { nombre: "Acreditación", r: r1 },
-      { nombre: "¿Litigable?", r: r2 },
-      { nombre: "¿Recuperable?", r: r3 },
-      { nombre: "Bloqueo legal", r: r4 },
-      { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No recuperable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
-    ],
-    intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cSan, usura: false },
-    admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
-    cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
-    boletines: hallazgos,
-  });
-
-  const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
+  const descargarPDF = async (decision: string) => {
     const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
-    const urlPdf = await descargarPredictamenPDF(construirDatosPDF(decision), modo);
-    if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
+    const tipoNom = TIPOS_TRAMITE.find((t) => t.clave === x.tipoTramite)?.nombre || x.tipoTramite;
+    await descargarPredictamenPDF({
+      expediente: x.expediente, juzgado: x.autoridad, estado: x.estado, tipoJuicio: tipoNom, posicion: "Trámite administrativo",
+      ubicacion: x.ubicacion, deudor: "—", quienCede: x.contraparte, queCede: x.afectaComo || "Afectación a la garantía",
+      dictamen: consolidado.txt,
+      riesgos: [
+        { nombre: "Acreditación", r: r1 }, { nombre: "Procedencia / plazo", r: r2 },
+        ...(cont ? [{ nombre: "Contencioso admin.", r: cont }] : []),
+        { nombre: "Impacto / recuperable", r: r3 }, { nombre: "Bloqueo + suspensión", r: r4 },
+        { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No recuperable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
+      ],
+      intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: vaae.cAfe, usura: false },
+      admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+    });
   };
 
   return (
     <>
-      {pdfUrl && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setPdfUrl(null)}>
-          <div className="my-2 flex h-[95vh] w-[97vw] max-w-6xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-border px-4 py-2">
-              <p className="text-sm font-semibold" style={{ color: NAVY }}>Pre-dictamen · Exp. {x.expediente || "—"}</p>
-              <div className="flex items-center gap-3">
-                <a href={pdfUrl} download={`predictamen-${(x.expediente || "caso").replace(/[^\w-]/g, "_")}.pdf`} className="text-xs font-medium text-[color:var(--teal)] hover:underline">Descargar</a>
-                <button onClick={() => setPdfUrl(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-              </div>
-            </div>
-            <iframe src={pdfUrl} title="Pre-dictamen PDF" className="min-h-0 flex-1 rounded-b-xl" />
-          </div>
-        </div>
-      )}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
           <button onClick={onVolver} className="flex items-center gap-1 hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Cambiar posición</button>
-          <span>Sucesorio · Caso {x.caso} · Fase {paso + 1} de {FASES.length}: {FASES[paso]}</span>
+          <span>Trámite admin. · Fase {paso + 1} de {FASES.length}: {FASES[paso]}</span>
         </div>
         <div className="flex gap-1">{FASES.map((_, i) => <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < paso ? "#0C5C46" : i === paso ? NAVY : "var(--border,#e5e7eb)" }} />)}</div>
       </div>
@@ -200,139 +120,82 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
       <div className="rounded-xl border border-border bg-card p-5">
         {paso === 0 && (
           <div className="space-y-4">
-            <p className="text-base font-semibold">0 · Identificación y clasificación del caso</p>
-            {expedienteInicial && x.expediente && expedienteInicial !== x.expediente && !ignorarBoletin && (
-              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
-                <p className="text-[13px]">Boletín: <b>{expedienteInicial}</b>{deudorInicial ? ` · ${deudorInicial}` : ""} — Solicitud/registro: <b>{x.expediente}</b>. ¿Con cuál abro?</p>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => { setX((p) => ({ ...p, expediente: expedienteInicial, juzgado: juzgadoInicial || p.juzgado })); setIgnorarBoletin(true); }} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Usar el del boletín ({expedienteInicial})</button>
-                  <button onClick={() => setIgnorarBoletin(true)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Mantener el de la solicitud ({x.expediente})</button>
-                </div>
-              </div>
-            )}
+            <p className="text-base font-semibold">0 · Identificación</p>
             <Campo label="Caso de la cartera (opcional)">
-              <select className={inp} value={x.caso_id} onChange={(e) => { const c = casos.find((y) => String(y.id) === e.target.value); setX((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: c?.juzgado || p.juzgado, ubicacion: c?.direccion_garantia || p.ubicacion })); checarExiste(c?.expediente || x.expediente, e.target.value); }}>
-                <option value="">— Escribir a mano —</option>
-                {casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
+              <select className={inp} value={x.caso_id} onChange={(e) => { const c = casos.find((y) => String(y.id) === e.target.value); setX((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, ubicacion: c?.direccion_garantia || p.ubicacion })); }}>
+                <option value="">— Escribir a mano —</option>{casos.map((c) => <option key={c.id} value={c.id}>{c.expediente} · {c.juzgado}</option>)}
               </select>
             </Campo>
-            {yaExiste && (
-              <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-semibold">Ya existe un pre-dictamen para este expediente{yaExiste.folio ? ` (folio ${yaExiste.folio})` : ""}.</p>
-                <p className="text-[13px]">No se creará otro para no duplicarlo. Puedes ver la ficha o re-dictaminar.</p>
-                <div className="flex flex-wrap gap-2">
-                  {(yaExiste.caso_id || x.caso_id) && (
-                    <Link to="/expediente" search={{ id: (yaExiste.caso_id || x.caso_id) as string, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
-                  )}
-                  <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
-                  <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Ignorar por ahora</button>
-                </div>
-              </div>
-            )}
-            <Campo label="Tipo de caso sucesorio">
-              <select className={inp} value={x.caso} onChange={(e) => set("caso", e.target.value)}>
-                <option value="A">Caso A · murió el DEUDOR (tú tienes la hipoteca)</option>
-                <option value="B">Caso B · cesión de derechos hereditarios</option>
-                <option value="C">Caso C · mixto</option>
-              </select>
-            </Campo>
+            <Campo label="Tipo de trámite"><select className={inp} value={x.tipoTramite} onChange={(e) => set("tipoTramite", e.target.value)}>{TIPOS_TRAMITE.map((t) => <option key={t.clave} value={t.clave}>{t.nombre} · {t.plazo} días háb.</option>)}</select></Campo>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="De cujus (fallecido)"><input className={inp} value={x.deCujus} onChange={(e) => set("deCujus", e.target.value)} /></Campo>
-              <Campo label="Fecha de defunción"><input type="date" className={inp} value={x.fechaDefuncion} onChange={(e) => set("fechaDefuncion", e.target.value)} /></Campo>
-              <Campo label="¿Hay acta de defunción?"><SiNo v={x.hayActaDefuncion} on={(v) => set("hayActaDefuncion", v)} /></Campo>
-              <Campo label="Dirección de la casa/garantía"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
-              <Campo label="¿La escritura está a nombre del de cujus?"><SiNo v={x.casaANombreDeCujus} on={(v) => set("casaANombreDeCujus", v)} /></Campo>
-              <Campo label="¿Hay testamento?"><select className={inp} value={x.hayTestamento} onChange={(e) => set("hayTestamento", e.target.value)}><option value="">—</option><option value="si">Sí (Testamentaria)</option><option value="no">No (Intestamentaria)</option></select></Campo>
-              <Campo label="Vía"><select className={inp} value={x.via} onChange={(e) => set("via", e.target.value)}><option value="">—</option><option>Judicial</option><option>Notarial</option></select></Campo>
-              <Campo label="Heredero con quien DIIPA trata"><input className={inp} value={x.heredero} onChange={(e) => set("heredero", e.target.value)} /></Campo>
+              <Campo label="Autoridad u órgano"><input className={inp} value={x.autoridad} onChange={(e) => set("autoridad", e.target.value)} placeholder="Juzgado de distrito / TFJA / junta laboral" /></Campo>
+              <Campo label="Inmueble / garantía afectada"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
+              <Campo label="¿Cómo afecta la garantía?"><input className={inp} value={x.afectaComo} onChange={(e) => set("afectaComo", e.target.value)} placeholder="embargo / remate / cancelación / crédito fiscal" /></Campo>
+              <Campo label="Contraparte que cede"><input className={inp} value={x.contraparte} onChange={(e) => set("contraparte", e.target.value)} /></Campo>
             </div>
           </div>
         )}
 
         {paso === 1 && (
           <div className="space-y-4">
-            <p className="text-base font-semibold">1 · Acreditación documental</p>
+            <p className="text-base font-semibold">1 · Acreditación del expediente</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Expediente del sucesorio"><input className={inp} value={x.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
-              <Campo label="Juzgado"><input className={inp} value={x.juzgado} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
-              <Campo label="Estado del juicio"><input className={inp} value={x.estado} onChange={(e) => set("estado", e.target.value)} /></Campo>
-              <Campo label="¿Cómo se revisó la documentación?">
-                <select className={inp} value={x.fuenteRevisada} onChange={(e) => set("fuenteRevisada", e.target.value)}>
-                  <option value="">—</option><option value="real">Fuente real (RPP/juzgado/notarías)</option><option value="fotocopias">Solo fotocopias del heredero</option>
-                </select>
-              </Campo>
+              <Campo label="¿Hay acto reclamado / resolución / laudo?"><SiNo v={x.hayActoReclamado} on={(v) => set("hayActoReclamado", v)} /></Campo>
+              <Campo label="Fecha de notificación (clave para el plazo)"><input type="date" className={inp} value={x.fechaNotificacion} onChange={(e) => set("fechaNotificacion", e.target.value)} /></Campo>
+              <Campo label="Expediente"><input className={inp} value={x.expediente} onChange={(e) => set("expediente", e.target.value)} /></Campo>
+              <Campo label="¿Cómo se revisó?"><select className={inp} value={x.fuenteRevisada} onChange={(e) => set("fuenteRevisada", e.target.value)}><option value="">—</option><option value="real">Directo en el órgano</option><option value="copias">Solo copias del interesado</option></select></Campo>
             </div>
-            <p className="text-xs text-muted-foreground">Checklist: acta de defunción · escritura a nombre del de cujus + CLG · testamento o constancia de intestado · parentescos · predial/agua · inventario/avalúos.</p>
             <Aviso r={r1} />
-            <div className="rounded-lg border border-border p-3">
-              <button type="button" onClick={() => setMostrarBoletin((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                <Bot className="h-3.5 w-3.5" /> {mostrarBoletin ? "Ocultar búsqueda del boletín" : "Buscar el expediente en el boletín (robot)"}
-              </button>
-              {mostrarBoletin && (
-                <div className="mt-3">
-                  <p className="mb-2 text-[11px] leading-snug text-muted-foreground">El robot lee el boletín <b>estatal</b>. Lo que encuentre se guarda como hallazgo y entra al PDF.</p>
-                  <BuscadorBoletin
-                    expedienteInicial={x.expediente}
-                    estadoInicial={estadoRobot}
-                    resaltarAmparo
-                    onHallazgoAmparo={(nota) => {
-                      const marca = nota.split("\n")[0];
-                      setHallazgos((prev) => prev.some((h) => h.includes(marca)) ? prev : [...prev, nota]);
-                      setX((p) => {
-                        if ((p.anotaciones || "").includes(marca)) return p;
-                        const sep = (p.anotaciones || "").trim() ? "\n\n" : "";
-                        return { ...p, anotaciones: (p.anotaciones || "") + sep + nota };
-                      });
-                    }}
-                  />
-                </div>
-              )}
-            </div>
           </div>
         )}
 
         {paso === 2 && (
           <div className="space-y-4">
-            <p className="text-base font-semibold">2 · Legalidad sucesoria · ¿es LITIGABLE?</p>
+            <p className="text-base font-semibold">2 · Procedencia y oportunidad · ¿es LITIGABLE?</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="¿Herederos desconocidos/no llamados a juicio?"><SiNo v={x.herederosNoLocalizados} on={(v) => set("herederosNoLocalizados", v)} /></Campo>
-              <Campo label="¿Testamento impugnado / nulidad en curso?"><SiNo v={x.testamentoImpugnado} on={(v) => set("testamentoImpugnado", v)} /></Campo>
-              <Campo label="¿Controversia abierta entre herederos?"><SiNo v={x.controversiaHerederos} on={(v) => set("controversiaHerederos", v)} /></Campo>
-              <Campo label="¿Adjudicación ya dictada/protocolizada?"><SiNo v={x.adjudicacionProtocolizada} on={(v) => set("adjudicacionProtocolizada", v)} /></Campo>
-              <Campo label="¿Heredero menor o ausente? (obliga judicial)"><SiNo v={x.herederoMenorOAusente} on={(v) => set("herederoMenorOAusente", v)} /></Campo>
-              <Campo label="¿Cónyuge con sociedad conyugal sin aclarar?"><SiNo v={x.conyugeSinAclarar} on={(v) => set("conyugeSinAclarar", v)} /></Campo>
-              <Campo label="¿Edictos con plazo corriendo?"><SiNo v={x.edictosCorriendo} on={(v) => set("edictosCorriendo", v)} /></Campo>
-              <Campo label="¿Un heredero negocia vender a un tercero?"><SiNo v={x.herederoVendeATercero} on={(v) => set("herederoVendeATercero", v)} /></Campo>
+              <Campo label="¿Falta de interés jurídico/legítimo?"><SiNo v={x.faltaInteres} on={(v) => set("faltaInteres", v)} /></Campo>
+              <Campo label="¿Cosa juzgada / acto firme?"><SiNo v={x.cosaJuzgada} on={(v) => set("cosaJuzgada", v)} /></Campo>
+              <Campo label="¿Suspensión otorgada?"><SiNo v={x.suspensionOtorgada} on={(v) => set("suspensionOtorgada", v)} /></Campo>
+              <Campo label="¿Acto claramente ilegal/viciado?"><SiNo v={x.actoIlegalClaro} on={(v) => set("actoIlegalClaro", v)} /></Campo>
+              <Campo label="¿Requiere asesoría externa (fiscal/laboral)?"><SiNo v={x.requiereExterno} on={(v) => set("requiereExterno", v)} /></Campo>
+              <Campo label="Plazo a mano (días háb., opcional)"><input type="number" className={inp} value={x.plazoManual} onChange={(e) => set("plazoManual", e.target.value)} placeholder="auto por tipo" /></Campo>
             </div>
             <Aviso r={r2} />
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Actos administrativos sobre el inmueble (contencioso)</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Campo label="¿Hay actos administrativos pendientes?"><SiNo v={x.hayActosAdmin} on={(v) => set("hayActosAdmin", v)} /></Campo>
+                <Campo label="¿Es crédito fiscal (predial/ISAI)?"><SiNo v={x.esCreditoFiscal} on={(v) => set("esCreditoFiscal", v)} /></Campo>
+                <Campo label="¿Es expropiación / uso de suelo?"><SiNo v={x.esExpropiacionUso} on={(v) => set("esExpropiacionUso", v)} /></Campo>
+                <Campo label="¿Juicio contencioso en curso?"><SiNo v={x.juicioEnCurso} on={(v) => set("juicioEnCurso", v)} /></Campo>
+              </div>
+              {cont && <div className="mt-3"><Aviso r={cont} /></div>}
+            </div>
           </div>
         )}
 
         {paso === 3 && (
           <div className="space-y-4">
-            <p className="text-base font-semibold">3 · Saneamiento · ¿es RECUPERABLE? + V_AAE</p>
+            <p className="text-base font-semibold">3 · Impacto sobre la garantía · ¿es RECUPERABLE? + V_AAE</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="¿Deudas/embargos del de cujus superan el valor?"><SiNo v={x.acreedoresSuperanValor} on={(v) => set("acreedoresSuperanValor", v)} /></Campo>
-              <Campo label="¿Los herederos aceptan ceder?"><SiNo v={x.herederosCeden} on={(v) => set("herederosCeden", v)} /></Campo>
-              <Campo label="¿Hipoteca vigente no negociable > valor?"><SiNo v={x.hipotecaNoNegociable} on={(v) => set("hipotecaNoNegociable", v)} /></Campo>
-              <Campo label="¿Impuestos sucesorios/ISR ya cuantificados?"><SiNo v={x.impuestosCuantificados} on={(v) => set("impuestosCuantificados", v)} /></Campo>
-              <Campo label="¿Cargas manejables?"><SiNo v={x.cargasManejables} on={(v) => set("cargasManejables", v)} /></Campo>
+              <Campo label="¿La afectación + defensa supera el valor?"><SiNo v={x.afectacionSuperaValor} on={(v) => set("afectacionSuperaValor", v)} /></Campo>
+              <Campo label="¿Condena firme por encima del bien?"><SiNo v={x.condenaFirmeArriba} on={(v) => set("condenaFirmeArriba", v)} /></Campo>
+              <Campo label="¿La contraparte cede sus derechos?"><SiNo v={x.contraparteCede} on={(v) => set("contraparteCede", v)} /></Campo>
+              <Campo label="¿Defendible (afectación menor al margen)?"><SiNo v={x.defendible} on={(v) => set("defendible", v)} /></Campo>
             </div>
-            <p className="pt-1 text-xs font-medium text-muted-foreground">V_AAE sucesorio (lo máximo a pagar al heredero)</p>
+            <p className="pt-1 text-xs font-medium text-muted-foreground">V_AAE administrativo</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Valor comercial"><input type="number" className={inp} value={x.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
-              <Campo label="Deudas del de cujus"><input type="number" className={inp} value={x.deudasDeCujus} onChange={(e) => set("deudasDeCujus", e.target.value)} /></Campo>
-              <Campo label="Hipoteca / gravámenes"><input type="number" className={inp} value={x.hipotecaGravamenes} onChange={(e) => set("hipotecaGravamenes", e.target.value)} /></Campo>
-              <Campo label="Predial / agua"><input type="number" className={inp} value={x.predialAgua} onChange={(e) => set("predialAgua", e.target.value)} /></Campo>
-              <Campo label="Impuestos (sucesorios/ISR/traslado)"><input type="number" className={inp} value={x.impuestos} onChange={(e) => set("impuestos", e.target.value)} /></Campo>
+              <Campo label="Condena / laudo / crédito fiscal"><input type="number" className={inp} value={x.condenaLaudoFiscal} onChange={(e) => set("condenaLaudoFiscal", e.target.value)} /></Campo>
+              <Campo label="Honorarios de defensa externa"><input type="number" className={inp} value={x.honorariosDefensa} onChange={(e) => set("honorariosDefensa", e.target.value)} /></Campo>
+              <Campo label="Accesorios"><input type="number" className={inp} value={x.accesorios} onChange={(e) => set("accesorios", e.target.value)} /></Campo>
               <Campo label="Meses de desenredo"><input type="number" className={inp} value={x.mesesDesenredo} onChange={(e) => set("mesesDesenredo", e.target.value)} /></Campo>
               <Campo label="Margen reservado (%)"><input type="number" className={inp} value={x.margenPct} onChange={(e) => set("margenPct", e.target.value)} /></Campo>
             </div>
             <div className={`rounded-lg border p-3 text-sm ${vaae.viable ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"}`}>
               <p className="font-semibold">V_AAE = {fmt(vaae.vaae)}</p>
               <p className="mt-1 text-[13px]">{vaae.detalle}</p>
-              <p className="mt-1 text-[11px] opacity-80">C_SAN {fmt(vaae.cSan)} · C_LIT {fmt(vaae.cLit)} · Margen {fmt(vaae.mR)}</p>
+              <p className="mt-1 text-[11px] opacity-80">C_AFE {fmt(vaae.cAfe)} · C_LIT {fmt(vaae.cLit)} · Margen {fmt(vaae.mR)}</p>
             </div>
             <Aviso r={r3} />
           </div>
@@ -340,24 +203,16 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
 
         {paso === 4 && (
           <div className="space-y-4">
-            <p className="text-base font-semibold">4 · Bloqueo legal (3 candados){esB ? " + candados Caso B" : ""}</p>
+            <p className="text-base font-semibold">4 · Bloqueo legal + SUSPENSIÓN</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="¿El heredero acepta firmar Poder Irrevocable?"><SiNo v={x.vendedorAceptaPoder} on={(v) => set("vendedorAceptaPoder", v)} /></Campo>
-              <Campo label="¿Cesión con cláusula suspensiva (Art. 1938)?"><SiNo v={x.cesionSuspensiva} on={(v) => set("cesionSuspensiva", v)} /></Campo>
-              <Campo label="¿Escrow (cuenta de custodia)?"><SiNo v={x.escrow} on={(v) => set("escrow", v)} /></Campo>
-              <Campo label="¿Poder General Irrevocable (Art. 2596)?"><SiNo v={x.poderIrrevocable} on={(v) => set("poderIrrevocable", v)} /></Campo>
+              <Campo label="¿Hay suspensión del acto reclamado?"><SiNo v={x.suspensionOtorgada} on={(v) => set("suspensionOtorgada", v)} /></Campo>
+              <Campo label="¿El remate/cancelación es inminente?"><SiNo v={x.remateInminente} on={(v) => set("remateInminente", v)} /></Campo>
+              <Campo label="¿La contraparte acepta firmar Poder Irrevocable?"><SiNo v={x.contraparteAceptaPoder} on={(v) => set("contraparteAceptaPoder", v)} /></Campo>
+              <Campo label="¿Cesión con cláusula suspensiva?"><SiNo v={x.cesionSuspensiva} on={(v) => set("cesionSuspensiva", v)} /></Campo>
+              <Campo label="¿Escrow (libera al resolverse a favor)?"><SiNo v={x.escrow} on={(v) => set("escrow", v)} /></Campo>
+              <Campo label="¿Poder Irrevocable con actos de dominio?"><SiNo v={x.poderIrrevocable} on={(v) => set("poderIrrevocable", v)} /></Campo>
               <Campo label="¿El dinero ya se entregó?"><SiNo v={x.dineroYaEntregado} on={(v) => set("dineroYaEntregado", v)} /></Campo>
             </div>
-            {esB && (
-              <>
-                <p className="pt-1 text-xs font-medium text-muted-foreground">Candados especiales del Caso B (cesión de derechos hereditarios)</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Campo label="¿El cedente ACEPTÓ la herencia?"><SiNo v={x.cedenteAceptoHerencia} on={(v) => set("cedenteAceptoHerencia", v)} /></Campo>
-                  <Campo label="¿Se notificó el derecho del tanto a coherederos (8 días)?"><SiNo v={x.derechoTantoNotificado} on={(v) => set("derechoTantoNotificado", v)} /></Campo>
-                  <Campo label="¿La cesión es en escritura pública?"><SiNo v={x.cesionEscrituraPublica} on={(v) => set("cesionEscrituraPublica", v)} /></Campo>
-                </div>
-              </>
-            )}
             <Aviso r={r4} />
           </div>
         )}
@@ -365,7 +220,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 5 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">5 · Dictamen y firmas</p>
-            <div className="space-y-2"><Aviso r={r1} /><Aviso r={r2} /><Aviso r={r3} /><Aviso r={r4} /></div>
+            <div className="space-y-2"><Aviso r={r1} /><Aviso r={r2} />{cont && <Aviso r={cont} />}<Aviso r={r3} /><Aviso r={r4} /></div>
             <div className={`rounded-lg border p-4 ${consolidado.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Veredicto consolidado: {consolidado.txt}</p>
               <p className="mt-1 text-xs opacity-90">{consolidado.detalle}</p>
@@ -379,84 +234,17 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
               <FirmaParte titulo="Elabora · abogado URRJ" valor={fElabora} onFirmar={(f) => setFElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
               <FirmaParte titulo="Valida · Director Legal" valor={fValida} onFirmar={(f) => setFValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
             </div>
-            <p className="text-sm font-medium">Decisión humana · ¿pasa para la compra de derechos hereditarios?</p>
-            {!dosFirmas && !decidido && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Faltan las dos firmas (Elabora + Valida) para poder decidir y para el PDF.</p>
-            )}
+            <p className="text-sm font-medium">Decisión humana · ¿pasa para la defensa/compra?</p>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => guardar("Sí pasa")} disabled={!dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> Sí pasa</button>
-              <button onClick={() => guardar("No pasa")} disabled={!dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
-              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={!dosFirmas || decidido} className="rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed">Pasa a UCP</button>
-              {decidido && (
-                <button onClick={() => setGuardado(null)} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Re-pre-dictaminar</button>
-              )}
+              <button onClick={() => guardar("Sí pasa")} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white"><Check className="h-4 w-4" /> Sí pasa</button>
+              <button onClick={() => guardar("No pasa")} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white"><X className="h-4 w-4" /> No pasa</button>
+              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} className="rounded-md border border-input px-4 py-2 text-sm hover:bg-muted">Pasa a UCP</button>
             </div>
-            {decidido && (
-              <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><Lock className="h-3.5 w-3.5" /> Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”.</p>
-            )}
-            {decidido && !/no pasa/i.test(guardado || "") && (
-              <Link to="/urrj" search={{ registral: true, exp: x.expediente || "", cliente: x.deudor || "", caso: x.caso_id || "" } as any} className="inline-flex w-fit items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0B1E3A" }}>
-                <ArrowRight className="h-4 w-4" /> Continuar con el registral
-              </Link>
-            )}
-            <div className="flex flex-wrap gap-2"><button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF</button><button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
+            <div><button onClick={() => descargarPDF("(borrador)")} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
-            {yaExiste && (
-              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <p className="font-semibold">Ya existe un pre-dictamen para este expediente{yaExiste.folio ? ` (folio ${yaExiste.folio})` : ""}.</p>
-                <p className="text-[13px]">No se crea otro para no duplicarlo. ¿Qué quieres hacer?</p>
-                <div className="flex flex-wrap gap-2">
-                  {(yaExiste.caso_id || x.caso_id) && (
-                    <Link to="/expediente" search={{ id: (yaExiste.caso_id || x.caso_id) as string, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
-                  )}
-                  <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
-                  <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Cancelar</button>
-                </div>
-              </div>
-            )}
-            {guardado && !/no pasa/i.test(guardado) && (
-              <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
-                <Mail className="h-4 w-4" /> Solicitar precio / enviar
-              </button>
-            )}
-            {verBanner && (
-              <BannerCorreo
-                key={`${destino}-${seed}`}
-                titulo="Enviar dictamen URRJ (Sucesorio)"
-                asuntoInicial={destino === "contabilidad" ? `Solicitud de precio — Dictamen URRJ (Sucesorio) ${consolidado.txt} · Exp. ${x.expediente || "—"}` : `Garantía lista para Comercial (Sucesorio) — ${consolidado.txt} · Exp. ${x.expediente || "—"}`}
-                mensajeInicial={[
-                  destino === "contabilidad" ? "Se solicita el precio para esta garantía (Sucesorio) ya dictaminada por URRJ." : "Garantía (Sucesorio) dictaminada y con precio; queda lista para Comercial.",
-                  "",
-                  `Resultado jurídico: ${consolidado.txt}`,
-                  `Expediente: ${x.expediente || "—"}`,
-                  "",
-                  resumenPrecio(precio),
-                ].join("\n")}
-                folio={x.expediente}
-                extra={
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => abrirDestino("contabilidad")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "contabilidad" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"}`}>1º Contabilidad · solicitar precio</button>
-                      <button onClick={() => precio.precioPiso.trim() && abrirDestino("comercial")} disabled={!precio.precioPiso.trim()} className={`rounded-md px-3 py-1.5 text-xs font-medium ${destino === "comercial" ? "bg-[color:var(--teal)] text-white" : "border border-input hover:bg-muted"} disabled:opacity-40`}>2º Comercial · con precio</button>
-                      {!precio.precioPiso.trim() && <span className="self-center text-[11px] text-muted-foreground">Comercial se habilita al poner el precio piso.</span>}
-                    </div>
-                    <BloquePrecioURRJ valor={precio} onChange={setPrecio} puedePrecioPiso={puedePrecioPiso} />
-                    <p className="text-[11px] text-muted-foreground">Al cambiar de destino o poner el precio, vuelve a tocar el botón del destino para actualizar el mensaje.</p>
-                  </div>
-                }
-                onCerrar={() => setVerBanner(false)}
-                onEnviado={() => registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "correo_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, vista_previa: `A ${destino} · Sucesorio · Exp. ${x.expediente || "—"}`, detalle: `Enviado a ${destino}` })}
-              />
-            )}
           </div>
         )}
       </div>
-
-      {(x.caso_id || x.expediente) && (
-        <div className="rounded-xl border border-border bg-card p-5">
-          <CronologiaURRJ casoId={x.caso_id || undefined} expediente={x.expediente || undefined} />
-        </div>
-      )}
 
       <div className="flex items-center justify-between">
         <button onClick={() => setPaso((p) => Math.max(0, p - 1))} disabled={paso === 0} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm disabled:opacity-40"><ArrowLeft className="h-4 w-4" /> Atrás</button>
