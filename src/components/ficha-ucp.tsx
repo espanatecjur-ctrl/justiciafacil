@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +96,26 @@ interface Props {
   tabInicial?: "requisitos" | "juridico" | "rppc" | "r2" | "final";
   onVolver: () => void;
   onGuardado: () => void;
+}
+
+// ---- Paneles de datos (mismo estilo que la ficha de URRJ) ----
+const NAVY_UCP = "#0B1E3A";
+function DatoUCP({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
+  const vacio = !valor || !String(valor).trim();
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">{vacio ? (importante ? <span className="text-red-600">falta</span> : "—") : valor}</span>
+    </div>
+  );
+}
+function SeccionUCP({ icon, titulo, children }: { icon: ReactNode; titulo: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY_UCP }}>{icon} {titulo}</p>
+      {children}
+    </div>
+  );
 }
 
 export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVolver, onGuardado }: Props) {
@@ -258,6 +278,25 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+
+      {/* Antecedente de la garantía + Estatus actual (igual que la ficha de URRJ) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SeccionUCP icon={<Landmark className="h-4 w-4 text-[color:var(--teal)]" />} titulo="Antecedente de la garantía">
+          <DatoUCP label="ID garantía" valor={caso.id} />
+          <DatoUCP label="No. de crédito" valor={caso.no_credito || caso.expediente} />
+          <DatoUCP label="Dirección de la garantía" valor={caso.direccion_garantia} importante />
+          <DatoUCP label="Cliente / deudor" valor={caso.cliente_nombre || caso.demandado} importante />
+          <DatoUCP label="Entidad" valor={caso.entidad} />
+        </SeccionUCP>
+
+        <SeccionUCP icon={<Scale className="h-4 w-4 text-[color:var(--teal)]" />} titulo="Estatus actual">
+          <DatoUCP label="Etapa actual" valor="Dictamen (UCP)" />
+          <DatoUCP label="Estatus general" valor={caso.estatus_general || "En proceso"} />
+          <DatoUCP label="Posición" valor={posSel} />
+          <DatoUCP label="Unidad" valor="UCP · Dictaminación" />
+          <DatoUCP label="Folio" valor={caso.folio} />
+        </SeccionUCP>
+      </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList className="max-w-full justify-start overflow-x-auto">
