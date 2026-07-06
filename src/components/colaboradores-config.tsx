@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { ROLES } from "@/lib/roles";
+import { cargarConfig, rolesCombinados, type RolCombinado } from "@/lib/roles-dinamicos";
 import { UserPlus, Pencil, Trash2, X, Upload, Loader2 } from "lucide-react";
 
 const NAVY = "#0B1E3A";
@@ -65,11 +66,16 @@ export function ColaboradoresConfig() {
   };
   useEffect(cargar, []);
 
+  const [rolesLista, setRolesLista] = useState<RolCombinado[]>(
+    () => ROLES.map((r) => ({ codigo: r.codigo, nombre: r.nombre, grupo: r.grupo, custom: false, veTodo: false })),
+  );
+  useEffect(() => { cargarConfig().then((c) => setRolesLista(rolesCombinados(c))); }, []);
+
   const nombreRol = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const r of ROLES) m[r.codigo] = r.codigo;
+    for (const r of rolesLista) m[r.codigo] = r.codigo;
     return m;
-  }, []);
+  }, [rolesLista]);
 
   const guardar = async () => {
     if (!editando?.nombre) { setError("El nombre es obligatorio."); return; }
@@ -196,7 +202,7 @@ export function ColaboradoresConfig() {
                 <Campo label="Rol">
                   <select value={editando.rol || ""} onChange={(e) => setEditando({ ...editando, rol: e.target.value })} className="w-full rounded-md border border-input px-3 py-2 text-sm">
                     <option value="">—</option>
-                    {ROLES.map((r) => <option key={r.codigo} value={r.codigo}>{r.codigo}</option>)}
+                    {rolesLista.map((r) => <option key={r.codigo} value={r.codigo}>{r.nombre} · {r.codigo}{r.custom ? " (nuevo)" : ""}</option>)}
                   </select>
                 </Campo>
                 <Campo label="Sede">
