@@ -13,6 +13,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { useNavigate } from "@tanstack/react-router";
 interface RefGarantia { id?: string; expediente?: string; direccion_garantia?: string; juzgado?: string; cliente_nombre?: string; deudor?: string; entidad?: string; }
 import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText } from "lucide-react";
+import { FichaURRJ } from "@/components/ficha-urrj";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -46,6 +47,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
   const [filas, setFilas] = useState<FilaDic[]>([]);
   const [cargando, setCargando] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
+  const [fichaSel, setFichaSel] = useState<Garantia | null>(null);
   const navigate = useNavigate();
 
   const cargarGarantias = async () => {
@@ -115,6 +117,13 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
 
   const recargar = () => { if (tab === "garantias") cargarGarantias(); else if (tab === "archivados") cargarDicts("archivados"); else if (tab === "eliminados") cargarDicts("eliminados"); };
 
+  // Ficha de la garantía: usa el FichaURRJ existente, que se alimenta del
+  // pre-dictamen jurídico y del dictamen registral por expediente O por caso_id
+  // (por eso abre aunque la garantía todavía no esté vinculada a un caso).
+  if (fichaSel) {
+    return <FichaURRJ garantia={fichaSel} onVolver={() => { setFichaSel(null); cargarGarantias(); }} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -146,7 +155,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
             <div className="divide-y divide-border">
               {garantias.map((g) => (
                 <div key={g.clave} className="flex items-center justify-between gap-3 p-3 hover:bg-muted/30">
-                  <button onClick={() => { if (g.id) navigate({ to: "/expediente", search: { id: g.id, origen: "urrj" } as any }); else alert("Esta garantía aún no está vinculada. Vincúlala primero."); }} className="min-w-0 flex-1 text-left">
+                  <button onClick={() => setFichaSel(g)} className="min-w-0 flex-1 text-left">
                     <p className="truncate text-sm font-semibold">{g.expediente || "Sin expediente"}</p>
                     <p className="truncate text-xs text-muted-foreground">{g.direccion_garantia || g.cliente_nombre || "—"}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
                   </button>
@@ -157,7 +166,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
                       <button onClick={() => setMenu(menu === g.clave ? null : g.clave)} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                       {menu === g.clave && (
                         <div className="absolute right-0 top-8 z-20 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
-                          <button onClick={() => { setMenu(null); if (g.id) navigate({ to: "/expediente", search: { id: g.id, origen: "urrj" } as any }); else alert("Esta garantía aún no está vinculada. Vincúlala primero."); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha</button>
+                          <button onClick={() => { setMenu(null); setFichaSel(g); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha</button>
                         </div>
                       )}
                     </div>
