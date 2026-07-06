@@ -35,6 +35,9 @@ export interface CasoJuridico {
   no_credito: string | null;
   expediente: string | null;
   expediente_validado?: boolean | null;
+  // Carpeta de Drive vinculada a este expediente/garantía
+  drive_carpeta_id?: string | null;
+  drive_carpeta_nombre?: string | null;
   juzgado: string | null;
   distrito_judicial: string | null;
   entidad: string | null;
