@@ -52,12 +52,13 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string }) {
+export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [yaExiste, setYaExiste] = useState<PredictamenExistente | null>(null);
+  const [ignorarBoletin, setIgnorarBoletin] = useState(false);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
   const [verBanner, setVerBanner] = useState(false);
   const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
@@ -194,6 +195,16 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 0 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">0 · Identificación y clasificación del caso</p>
+            {expedienteInicial && x.expediente && expedienteInicial !== x.expediente && !ignorarBoletin && (
+              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
+                <p className="text-[13px]">Boletín: <b>{expedienteInicial}</b>{deudorInicial ? ` · ${deudorInicial}` : ""} — Solicitud/registro: <b>{x.expediente}</b>. ¿Con cuál abro?</p>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { setX((p) => ({ ...p, expediente: expedienteInicial })); setIgnorarBoletin(true); }} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Usar el del boletín ({expedienteInicial})</button>
+                  <button onClick={() => setIgnorarBoletin(true)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Mantener el de la solicitud ({x.expediente})</button>
+                </div>
+              </div>
+            )}
             <Campo label="Caso de la cartera (opcional)">
               <select className={inp} value={x.caso_id} onChange={(e) => { const c = casos.find((y) => String(y.id) === e.target.value); setX((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: c?.juzgado || p.juzgado, ubicacion: c?.direccion_garantia || p.ubicacion })); checarExiste(c?.expediente || x.expediente, e.target.value); }}>
                 <option value="">— Escribir a mano —</option>
