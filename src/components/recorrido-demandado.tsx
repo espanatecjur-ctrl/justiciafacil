@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
@@ -164,31 +165,33 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar);
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
       registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Demandado · Decisión: ${decision}` });
       setGuardado("Pre-dictamen (Demandado) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
 
+  const construirDatosPDF = (decision: string): DatosPDF => ({
+    expediente: x.expediente, juzgado: x.juzgado, estado: x.estado, tipoJuicio: x.tipoJuicio, posicion: "Demandado",
+    ubicacion: x.ubicacion, deudor: x.deudor, quienCede: x.acreedor, queCede: "Derechos del demandado-vendedor",
+    dictamen: dictamen.txt,
+    riesgos: [
+      { nombre: "Extracción del expediente", r: r1 },
+      { nombre: "Legalidad procesal", r: r2 },
+      ...(avisoAdj ? [{ nombre: "Remate / adjudicación", r: avisoAdj }] : []),
+      { nombre: "Carta saldo", r: r3 },
+      { nombre: "Bloqueo legal", r: r4 },
+      { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No viable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
+    ],
+    intereses: { ordinarios: 0, moratorios: n(x.interesMoratorio), iva: 0, total: vaae.cLiq, usura: false },
+    admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
+    cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
+    boletines: hallazgos,
+  });
+
   const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
     const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
-    const urlPdf = await descargarPredictamenPDF({
-      expediente: x.expediente, juzgado: x.juzgado, estado: x.estado, tipoJuicio: x.tipoJuicio, posicion: "Demandado",
-      ubicacion: x.ubicacion, deudor: x.deudor, quienCede: x.acreedor, queCede: "Derechos del demandado-vendedor",
-      dictamen: dictamen.txt,
-      riesgos: [
-        { nombre: "Extracción del expediente", r: r1 },
-        { nombre: "Legalidad procesal", r: r2 },
-        ...(avisoAdj ? [{ nombre: "Remate / adjudicación", r: avisoAdj }] : []),
-        { nombre: "Carta saldo", r: r3 },
-        { nombre: "Bloqueo legal", r: r4 },
-        { nombre: "V_AAE (máximo a pagar)", r: { semaforo: vaae.viable ? "verde" : "rojo", etiqueta: vaae.viable ? "Viable" : "No viable", dato: fmt(vaae.vaae), detalle: vaae.detalle } },
-      ],
-      intereses: { ordinarios: 0, moratorios: n(x.interesMoratorio), iva: 0, total: vaae.cLiq, usura: false },
-      admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
-      cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
-      boletines: hallazgos,
-    }, modo);
+    const urlPdf = await descargarPredictamenPDF(construirDatosPDF(decision), modo);
     if (modo === "ver" && typeof urlPdf === "string") setPdfUrl(urlPdf);
   };
 
