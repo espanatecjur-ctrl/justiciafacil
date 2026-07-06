@@ -7,6 +7,7 @@ import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { SubJuicios } from "@/components/sub-juicios";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { VincularClienteModal } from "@/components/vincular-cliente";
@@ -478,7 +479,9 @@ function FichaExpedientePage() {
 
       {/* ============ MÓDULO SUB-JUICIOS (Parte 2) ============ */}
       {modulo === "subjuicios" && (
-        <Proximamente icon={<GitBranch className="h-4 w-4" />} titulo="Sub-juicios (juicios dentro del juicio)" nota="Aquí vas a registrar y ver los juicios internos ligados a esta garantía: amparos, prescripción, jurisdicción voluntaria, etc. Llega en la Parte 2." />
+        <div className="rounded-xl border border-border bg-card p-4">
+          <SubJuicios casoId={c.id} />
+        </div>
       )}
 
       {/* ============ MÓDULO DOCUMENTOS (Parte 3) ============ */}
