@@ -280,6 +280,10 @@ export function CarpetaDriveVinculada({
             {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             {puedeDrive && <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>}
+            <div className="relative w-44">
+              <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={filtroDoc} onChange={(e) => setFiltroDoc(e.target.value)} placeholder="Buscar documento…" className="h-8 pl-8 text-xs" />
+            </div>
           </div>
 
           {msgSincro && (
@@ -297,11 +301,6 @@ export function CarpetaDriveVinculada({
               <button onClick={() => cambiarModo("esta")} className={`inline-flex items-center gap-1 px-2.5 py-1 ${modoVista === "esta" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
                 <Folder className="h-3.5 w-3.5" /> Esta carpeta
               </button>
-            </div>
-            {/* Filtro instantáneo por nombre (busca también en subcarpetas cuando estás en "Todos") */}
-            <div className="relative min-w-[180px] flex-1">
-              <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input value={filtroDoc} onChange={(e) => setFiltroDoc(e.target.value)} placeholder="Filtrar documentos por nombre…" className="h-8 pl-8 text-xs" />
             </div>
             {/* Migas (solo al navegar) */}
             {modoVista === "esta" && rutaFicha.length > 0 && (
