@@ -7,6 +7,7 @@ import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { VincularClienteModal } from "@/components/vincular-cliente";
@@ -140,6 +141,7 @@ function FichaExpedientePage() {
   const [verVincular, setVerVincular] = useState(false);
   const [editAnt, setEditAnt] = useState(false);
   const [editEst, setEditEst] = useState(false);
+  const [verBoletin, setVerBoletin] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState<string | null>(null);
@@ -323,7 +325,7 @@ function FichaExpedientePage() {
           titulo="Estatus actual"
           falta={faltaEstatus}
           accion={
-            <button onClick={() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "" }); setErrorDatos(null); setEditEst(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+            <button onClick={() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "", actor: c.actor || "", demandado: c.demandado || "" }); setErrorDatos(null); setVerBoletin(false); setEditEst(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
               <PenLine className="h-3 w-3" /> Editar / validar
             </button>
           }
@@ -335,10 +337,36 @@ function FichaExpedientePage() {
               <Campo label="Prioridad"><input className={inp} value={form.prioridad} onChange={(e) => setForm({ ...form, prioridad: e.target.value })} placeholder="ALTA / MEDIA / BAJA" /></Campo>
               <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1393/2017" /></Campo>
               <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Primero Civil…" /></Campo>
+              <Campo label="Actor"><input className={inp} value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="Quien demanda" /></Campo>
+              <Campo label="Demandado"><input className={inp} value={form.demandado} onChange={(e) => setForm({ ...form, demandado: e.target.value })} placeholder="Contra quién" /></Campo>
+
+              {/* Robot del boletín: elige jurisdicción + juzgado, busca y rellena */}
+              <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
+                <button type="button" onClick={() => setVerBoletin((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold" style={{ color: TEAL }}>
+                  <Send className="h-3.5 w-3.5" /> {verBoletin ? "Ocultar buscador del boletín" : "Buscar en el boletín (jurisdicción, juzgado y expediente)"}
+                </button>
+                {verBoletin && (
+                  <div className="mt-2">
+                    <p className="mb-2 text-[11px] text-muted-foreground">Elige la jurisdicción y el juzgado, busca el expediente y dale <b>“Guardar hallazgos del boletín”</b>: se rellenan solos el expediente, el juzgado, el actor, el demandado y la última etapa. Luego revisa y dale <b>Guardar</b>.</p>
+                    <BuscadorBoletin
+                      expedienteInicial={form.expediente}
+                      onGuardarHallazgos={() => {}}
+                      onDatosBoletin={(d) => setForm((f) => ({
+                        ...f,
+                        expediente: d.expediente || f.expediente,
+                        juzgado: d.juzgado || f.juzgado,
+                        actor: d.actor || f.actor,
+                        demandado: d.demandado || f.demandado,
+                        etapa_actual: d.etapa || f.etapa_actual,
+                      }))}
+                    />
+                  </div>
+                )}
+              </div>
               <p className="text-[11px] text-muted-foreground">Con el expediente y el juzgado, el robot del Boletín ya puede seguir las actuaciones.</p>
               {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
               <div className="flex gap-2 pt-1">
-                <button onClick={() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado }, () => setEditEst(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                <button onClick={() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado, actor: form.actor, demandado: form.demandado }, () => setEditEst(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
                 <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
               </div>
             </div>
@@ -399,6 +427,7 @@ function FichaExpedientePage() {
         )}
       </Seccion>
 
+      {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
       {/* Documentos y movimientos (actuaciones, evidencias, tareas y documentos) */}
       <CarpetaDriveVinculada caso={c} onGuardar={(campos) => guardarDatos(campos, () => {})} />
 
