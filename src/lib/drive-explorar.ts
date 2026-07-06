@@ -123,6 +123,32 @@ export async function sincronizarCarpeta(casoId: string, carpetaId: string): Pro
   }
 }
 
+export interface ArchivoEncontrado {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink?: string | null;
+  carpeta?: string;
+}
+
+/** Normaliza texto para comparar: minúsculas, sin acentos, sin guiones/espacios/diagonales. */
+export function normaliza(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Búsqueda inteligente en Drive: carpetas y archivos que coincidan por nombre. */
+export async function buscarEnDrive(texto: string): Promise<{ ok: boolean; carpetas: Unidad[]; archivos: ArchivoEncontrado[]; error?: string }> {
+  try {
+    const d = await llamar<{ ok: boolean; carpetas?: Unidad[]; archivos?: ArchivoEncontrado[]; error?: string }>({ accion: "buscar", texto });
+    return { ok: !!d.ok, carpetas: d.carpetas || [], archivos: d.archivos || [], error: d.error };
+  } catch (e: any) {
+    return { ok: false, carpetas: [], archivos: [], error: String(e?.message || e) };
+  }
+}
+
 export function esCarpeta(it: ItemDrive): boolean {
   return it.mimeType === CARPETA_MIME;
 }
