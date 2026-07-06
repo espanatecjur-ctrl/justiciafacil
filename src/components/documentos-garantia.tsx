@@ -247,7 +247,7 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
                 <button onClick={() => setVer(null)} title="Cerrar" className="grid h-8 w-8 place-items-center rounded-md hover:bg-white/10"><X className="h-5 w-5" /></button>
               </div>
             </div>
-            <iframe src={urlPreview(ver.link, ver.drive_id)} title={ver.nombre || "Documento"} className="h-[70vh] w-full border-0 bg-muted" allow="autoplay" />
+            <iframe src={urlPreview(ver.link, ver.drive_id)} title={ver.nombre || "Documento"} className="h-[82vh] w-full border-0 bg-muted" allow="autoplay" />
           </div>
         </div>
       )}
