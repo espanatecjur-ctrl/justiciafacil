@@ -13,17 +13,29 @@ import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarCarpeta, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, type ItemDrive, type Sugerencia } from "@/lib/drive-explorar";
+import { cargarPermisosModulo, puedeAccion, type ModuloPerm } from "@/lib/permisos-acciones";
 import { type CasoJuridico } from "@/lib/supabase";
 
 export function CarpetaDriveVinculada({
   caso,
   onGuardar,
+  modulo,
 }: {
   caso: CasoJuridico;
   onGuardar: (campos: Record<string, string>) => void | Promise<void>;
+  modulo?: ModuloPerm;
 }) {
   const carpetaId = caso.drive_carpeta_id || "";
   const carpetaNombre = caso.drive_carpeta_nombre || "";
+
+  // ¿Este usuario puede vincular/cambiar carpetas? (los demás solo ven)
+  const [puedeVincular, setPuedeVincular] = useState(true);
+  useEffect(() => {
+    if (!modulo) { setPuedeVincular(true); return; }
+    cargarPermisosModulo(modulo)
+      .then((p) => setPuedeVincular(puedeAccion(p.acciones, "vincular_drive")))
+      .catch(() => setPuedeVincular(true));
+  }, [modulo]);
 
   const [eligiendo, setEligiendo] = useState(false);
   const [docs, setDocs] = useState<ItemDrive[]>([]);
@@ -81,7 +93,12 @@ export function CarpetaDriveVinculada({
       </div>
 
       {/* ---- SIN carpeta vinculada ---- */}
-      {!carpetaId && !eligiendo && (
+      {!carpetaId && !eligiendo && !puedeVincular && (
+        <div className="rounded-md border border-dashed border-input p-4 text-center text-sm text-muted-foreground">
+          Este expediente todavía no tiene una carpeta de Drive.
+        </div>
+      )}
+      {!carpetaId && !eligiendo && puedeVincular && (
         <div className="space-y-3">
           {/* Sugerencias por número (expediente / crédito / gar) */}
           {(cargSug || sugerencias.length > 0) && (
@@ -126,7 +143,7 @@ export function CarpetaDriveVinculada({
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800"><FolderCheck className="h-3 w-3" /> Vinculada</span>
             <span className="flex-1" />
             <button onClick={cargarDocs} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
-            <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>
+            {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>
           </div>
 
