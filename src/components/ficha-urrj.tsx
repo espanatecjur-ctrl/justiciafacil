@@ -148,7 +148,8 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
 
   useEffect(() => {
     const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos,created_at&${filtro}&order=created_at.desc&limit=50`, { headers })
+    // Solo el registro de ESTA área (URRJ). Lo que la Dirección mandó a otras áreas no se mezcla aquí.
+    fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos,created_at&${filtro}&area=eq.URRJ&order=created_at.desc&limit=50`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => {
         const todos: { nombre: string; url: string }[] = [];
