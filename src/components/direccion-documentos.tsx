@@ -328,8 +328,12 @@ function SelectorGarantiaBuscable({ casos, casoId, onElegir }: {
 
   const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const filtro = norm(q.trim());
+  const refDe = (c: CasoOpcion) => norm([
+    c.expediente, c.cliente_nombre, c.no_credito, c.direccion_garantia,
+    c.juzgado, c.entidad, c.unidad, c.gar_id, c.cliente_codigo, areaDeGarantia(c.unidad),
+  ].filter(Boolean).join(" "));
   const resultados = (filtro
-    ? casos.filter((c) => norm(`${c.expediente || ""} ${c.cliente_nombre || ""} ${c.unidad || ""} ${areaDeGarantia(c.unidad)}`).includes(filtro))
+    ? casos.filter((c) => refDe(c).includes(filtro))
     : casos
   ).slice(0, 40);
 
@@ -341,7 +345,7 @@ function SelectorGarantiaBuscable({ casos, casoId, onElegir }: {
         value={abierto ? q : (sel ? etiqueta(sel) : "")}
         onChange={(e) => { setQ(e.target.value); setAbierto(true); }}
         onFocus={() => { setQ(""); setAbierto(true); }}
-        placeholder="Escribe el nombre o expediente para buscar…"
+        placeholder="Busca por cliente, expediente, crédito, dirección…"
         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
       />
       {abierto && (
@@ -349,15 +353,19 @@ function SelectorGarantiaBuscable({ casos, casoId, onElegir }: {
           {resultados.length === 0 ? (
             <p className="px-3 py-2 text-xs text-muted-foreground">Sin coincidencias.</p>
           ) : (
-            resultados.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => { onElegir(c.id); setAbierto(false); setQ(""); }}
-                className={`block w-full truncate px-3 py-2 text-left text-sm hover:bg-muted ${c.id === casoId ? "bg-muted/60 font-medium" : ""}`}
-              >
-                {etiqueta(c)}
-              </button>
-            ))
+            resultados.map((c) => {
+              const sub = [c.no_credito ? `Créd. ${c.no_credito}` : "", c.direccion_garantia || ""].filter(Boolean).join(" · ");
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => { onElegir(c.id); setAbierto(false); setQ(""); }}
+                  className={`block w-full px-3 py-2 text-left hover:bg-muted ${c.id === casoId ? "bg-muted/60" : ""}`}
+                >
+                  <span className="block truncate text-sm">{etiqueta(c)}</span>
+                  {sub && <span className="block truncate text-[11px] text-muted-foreground">{sub}</span>}
+                </button>
+              );
+            })
           )}
         </div>
       )}
