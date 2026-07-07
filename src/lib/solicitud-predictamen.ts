@@ -32,8 +32,16 @@ export interface CasoOpcion {
   expediente?: string | null;
   cliente_nombre?: string | null;
   juzgado?: string | null;
+  unidad?: string | null;
   drive_carpeta_id?: string | null;
   drive_carpeta_nombre?: string | null;
+}
+
+/** Deriva el área (URRJ/UCP/UCM/UFC/UDP) de una garantía a partir de su unidad. */
+export function areaDeGarantia(unidad?: string | null): string {
+  const s = (unidad || "").toUpperCase();
+  for (const a of ["URRJ", "UCP", "UFC", "UDP", "UCM"]) if (s.includes(a)) return a;
+  return "UCM";
 }
 
 /** Sube un archivo al almacén y devuelve su nombre y URL pública. */
@@ -54,7 +62,7 @@ export async function casosParaSelector(): Promise<CasoOpcion[]> {
   try {
     return await sbSelect<CasoOpcion>(
       "caso_juridico",
-      "select=id,expediente,cliente_nombre,juzgado,drive_carpeta_id,drive_carpeta_nombre&order=expediente.asc&limit=1000",
+      "select=id,expediente,cliente_nombre,juzgado,unidad,drive_carpeta_id,drive_carpeta_nombre&order=expediente.asc&limit=1000",
     );
   } catch {
     return [];
