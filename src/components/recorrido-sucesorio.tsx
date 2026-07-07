@@ -144,7 +144,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
       registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Sucesorio · Decisión: ${decision}` });
       setGuardado("Pre-dictamen (Sucesorio) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
