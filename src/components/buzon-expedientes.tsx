@@ -158,7 +158,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
 
       <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
         {/* Lista izquierda */}
-        <div className="rounded-xl border border-border bg-card">
+        <div className="min-w-0 rounded-xl border border-border bg-card">
           <div className="border-b border-border p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -190,7 +190,7 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-border bg-card">
+        <div className="min-w-0 rounded-xl border border-border bg-card">
           {!selExp ? (
             <div className="grid h-full min-h-[300px] place-items-center p-8 text-center text-sm text-muted-foreground">
               <div><FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />Elige un expediente para ver su boletín e histórico.</div>
@@ -198,14 +198,14 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
           ) : (
             <div className="p-4">
               <div className="mb-3 border-b border-border pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-base font-bold text-[color:var(--teal)]">{selExp.exp}</p>
-                    {(selExp.c.actor || selExp.c.demandado) && <p className="mt-0.5 text-sm"><span className="font-semibold text-foreground">{selExp.c.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold text-foreground">{selExp.c.demandado || "—"}</span></p>}
-                    <p className="text-sm text-muted-foreground">{selExp.c.cliente_nombre || ""}{selExp.c.cliente_nombre ? " · " : ""}{selExp.c.materia || ""} · {selExp.c.juzgado || ""}</p>
-                    {selExp.c.nombre_juzgado && <p className="mt-0.5 text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="break-words text-base font-bold text-[color:var(--teal)]">{selExp.exp}</p>
+                    {(selExp.c.actor || selExp.c.demandado) && <p className="mt-0.5 break-words text-sm"><span className="font-semibold text-foreground">{selExp.c.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold text-foreground">{selExp.c.demandado || "—"}</span></p>}
+                    <p className="break-words text-sm text-muted-foreground">{selExp.c.cliente_nombre || ""}{selExp.c.cliente_nombre ? " · " : ""}{selExp.c.materia || ""} · {selExp.c.juzgado || ""}</p>
+                    {selExp.c.nombre_juzgado && <p className="mt-0.5 break-words text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
                   </div>
-                  <div className="flex shrink-0 gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 sm:shrink-0">
                     <button onClick={() => navigate({ to: "/expediente", search: { id: selExp.c.id, nueva: false } })} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white" style={{ background: "#0B1E3A" }}><FileText className="h-3.5 w-3.5" /> Abrir ficha</button>
                     <button onClick={() => setConfigBoletin(selExp.c)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><MapPin className="h-3.5 w-3.5" /> {selExp.c.cve_juzgado ? "Juzgado ✓" : "Asignar juzgado"}</button>
                     <button onClick={() => setAgregar(true)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-3.5 w-3.5" /> Agregar acuerdo</button>
