@@ -21,6 +21,7 @@ import {
 import {
   Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen, Eye,
   MoreVertical, UserCheck, Upload, CheckCircle2, FileText,
+  Trash2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ucp")({
@@ -185,7 +186,19 @@ function UCP() {
     return { ...REQ_VACIOS(), ...(d?.requisitos || {}) };
   };
 
-  const baseUCP = useMemo(() => casos.filter((c) => normArea(c.unidad) !== "UDP"), [casos]);
+  const moverPapelera = async (c: CasoJuridico) => {
+    if (!confirm(`¿Mover a la papelera el expediente ${c.expediente || "(sin expediente)"}?\n\nSale de la lista de UCP. Se puede recuperar después.`)) return;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ archivado: true }),
+      });
+      cargar();
+    } catch { alert("No se pudo mover a la papelera."); }
+  };
+
+  const baseUCP = useMemo(() => casos.filter((c) => normArea(c.unidad) !== "UDP" && !c.archivado), [casos]);
 
   const stats = useMemo(() => {
     const elegibles = baseUCP.filter((c) => c.id && predPorCaso[c.id]);
@@ -516,6 +529,8 @@ function UCP() {
             <Item icon={FileText} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Escoger boletín judicial</Item>
             <div className="my-1 border-t border-border" />
             <Item icon={CheckCircle2} disabled={!puedo("terminar")} title={puedo("terminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Dar por terminado</Item>
+            <div className="my-1 border-t border-border" />
+            <Item icon={Trash2} danger disabled={!puedo("papelera")} title={puedo("papelera") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); moverPapelera(c); }}>Mover a la papelera</Item>
           </div>
         );
       })()}
