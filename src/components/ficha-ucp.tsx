@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { getAuth } from "@/lib/auth";
+import { registrarEvento } from "@/lib/cronologia-caso";
 import { DictaminadorPosicionUCP, type VistaPosicionUCP } from "@/components/dictaminador-posicion-ucp";
 import { type ResultadosActorUCP } from "@/components/recorrido-actor-ucp";
 import { SeccionRPPC } from "@/components/seccion-rppc";
@@ -221,6 +222,7 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       setHitos(hitosCalculados);
       onGuardado();
+      registrarEvento({ caso_id: caso.id, expediente: caso.expediente, area: "UCP", tipo: "dictamen", texto: "Dictamen jurídico: " + veredicto.txt });
       // Si el dictamen jurídico salió POSITIVO, se prepara el correo para
       // solicitar los documentos obligatorios de este paso (juzgado + RPPC).
       if (veredicto.txt === "POSITIVO") setVerCorreoDocs(true);
