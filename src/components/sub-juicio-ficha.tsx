@@ -197,7 +197,7 @@ export function SubJuicioFicha({ sub, onVolver }: { sub: SubJuicioRow; onVolver:
               // y su propia lista de documentos (por expediente), aparte del principal.
               id: undefined,
               gar_id: `SUB-${row.id}`,
-              expediente: row.expediente,
+              expediente: `SUB-${row.id}`,
               juzgado: row.juzgado,
               nombre_juzgado: null,
               entidad: row.entidad,
