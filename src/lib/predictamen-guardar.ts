@@ -55,7 +55,35 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
   } catch { return null; }
 }
 
-export async function guardarPredictamen(payload: any, precargar?: Precarga | null, datosPDF?: any): Promise<string | null> {
+// Regla de oro (URRJ): no se pueden crear garantías repetidas.
+// Bloquea si el crédito, expediente, dirección o cliente ya existe en otra
+// garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
+const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+export async function motivoRepetidoURRJ(payload: any): Promise<string | null> {
+  const cred = normRO(payload?.datos?.numeroCredito);
+  const exp = normRO(payload?.expediente);
+  const dir = normRO(payload?.datos?.ubicacion);
+  const cli = normRO(payload?.datos?.deudor);
+  if (!cred && !exp && !dir && !cli) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=expediente,datos&vigente=eq.true&en_papelera=eq.false&limit=1000`, { headers });
+    const rows: any[] = r.ok ? await r.json() : [];
+    for (const x of rows) {
+      if (cred && cred === normRO(x?.datos?.numeroCredito)) return `el número de crédito "${payload.datos.numeroCredito}"`;
+      if (exp && exp === normRO(x?.expediente)) return `el expediente "${payload.expediente}"`;
+      if (dir && dir === normRO(x?.datos?.ubicacion)) return `la dirección "${payload.datos.ubicacion}"`;
+      if (cli && cli === normRO(x?.datos?.deudor)) return `el cliente "${payload.datos.deudor}"`;
+    }
+  } catch { /* si falla la consulta, no bloqueamos el guardado */ }
+  return null;
+}
+
+export async function guardarPredictamen(payload: any, precargar?: Precarga | null, datosPDF?: any, opts?: { reglaOroURRJ?: boolean }): Promise<string | null> {
+  // Regla de oro: solo al crear una garantía NUEVA (no al re-dictaminar).
+  if (opts?.reglaOroURRJ && !precargar) {
+    const motivo = await motivoRepetidoURRJ(payload);
+    if (motivo) throw new Error(`REGLA DE ORO (URRJ): ya existe una garantía con ${motivo}. No se pueden subir repetidos.`);
+  }
   const version = precargar ? (precargar.version || 1) + 1 : 1;
   let cambiosTxt: string | null = null;
   if (precargar) {
