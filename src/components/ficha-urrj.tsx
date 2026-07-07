@@ -409,7 +409,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
           ) : (
             <>
               <Dato label="ID garantía" valor={g.id} />
-              <Dato label="No. de crédito" valor={g.expediente} />
+              <Dato label="No. de crédito" valor={predJur?.datos?.numeroCredito || (g as any).no_credito || (g as any).credito} importante />
               <Dato label="Dirección de la garantía" valor={g.direccion_garantia || predJur?.datos?.ubicacion} importante />
               <Dato label="Cliente / deudor" valor={g.cliente_nombre || g.deudor || predJur?.datos?.deudor} importante />
               <Dato label="Entidad" valor={g.entidad || predJur?.datos?.estado} />
