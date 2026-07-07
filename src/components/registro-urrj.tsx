@@ -31,6 +31,7 @@ interface Garantia extends RefGarantia {
   predId?: string;
   posicion?: string;
   pasaUcp?: boolean;
+  credito?: string;
 }
 
 interface FilaDic {
@@ -118,7 +119,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
         const g: Garantia = mapa.get(k) || { clave: k, id: p.caso_id || undefined, expediente: p.expediente || "", direccion_garantia: p.datos?.ubicacion || "", juzgado: p.datos?.juzgado || "", deudor: p.datos?.deudor || "", entidad: p.datos?.estado || "", cliente_nombre: p.datos?.deudor || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
         g.nJur++;
         if (!g.ultimaFecha || String(p.created_at) > g.ultimaFecha) { g.ultimaFecha = p.created_at; g.ultimoResultado = p.dictamen_final || p.dictamen_sugerido || ""; }
-        if (!g.predId) { g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; }
+        if (!g.predId) { g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; (g as any).credito = p.datos?.numeroCredito || ""; }
         if (!g.id && p.caso_id) g.id = p.caso_id;
         mapa.set(k, g);
       }
@@ -218,7 +219,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
                       {g.pasaUcp && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800" title="Ya marcada para UCP">→ UCP</span>}
                       {faltaValidar(g) && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-800" title="Faltan datos: dirección, cliente o posición"><AlertTriangle className="h-3 w-3" /> Validar datos</span>}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">{g.direccion_garantia || g.cliente_nombre || "—"}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
+                    <p className="truncate text-xs text-muted-foreground">{g.credito ? <span className="font-medium text-foreground">Créd. {g.credito}</span> : null}{g.credito && (g.direccion_garantia || g.cliente_nombre) ? " · " : ""}{g.direccion_garantia || g.cliente_nombre || (g.credito ? "" : "—")}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
                   </button>
                   <div className="flex items-center gap-2">
                     <span className="shrink-0 rounded-full bg-[color:var(--teal)]/10 px-2 py-0.5 text-[10px] font-medium text-[color:var(--teal)]">{g.nJur} jur · {g.nReg} reg</span>
