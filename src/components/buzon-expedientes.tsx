@@ -198,14 +198,14 @@ export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
           ) : (
             <div className="p-4">
               <div className="mb-3 border-b border-border pb-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-col gap-2">
                   <div className="min-w-0">
                     <p className="break-words text-base font-bold text-[color:var(--teal)]">{selExp.exp}</p>
                     {(selExp.c.actor || selExp.c.demandado) && <p className="mt-0.5 break-words text-sm"><span className="font-semibold text-foreground">{selExp.c.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold text-foreground">{selExp.c.demandado || "—"}</span></p>}
                     <p className="break-words text-sm text-muted-foreground">{selExp.c.cliente_nombre || ""}{selExp.c.cliente_nombre ? " · " : ""}{selExp.c.materia || ""} · {selExp.c.juzgado || ""}</p>
                     {selExp.c.nombre_juzgado && <p className="mt-0.5 break-words text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
                   </div>
-                  <div className="flex flex-wrap gap-1.5 sm:shrink-0">
+                  <div className="flex flex-wrap gap-1.5">
                     <button onClick={() => navigate({ to: "/expediente", search: { id: selExp.c.id, nueva: false } })} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white" style={{ background: "#0B1E3A" }}><FileText className="h-3.5 w-3.5" /> Abrir ficha</button>
                     <button onClick={() => setConfigBoletin(selExp.c)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><MapPin className="h-3.5 w-3.5" /> {selExp.c.cve_juzgado ? "Juzgado ✓" : "Asignar juzgado"}</button>
                     <button onClick={() => setAgregar(true)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-3.5 w-3.5" /> Agregar acuerdo</button>
