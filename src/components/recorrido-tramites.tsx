@@ -84,7 +84,7 @@ export function RecorridoTramites({ casos, onVolver, precargar, puedeFirmarElabo
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar);
+      await guardarPredictamen(payload, precargar, undefined, { reglaOroURRJ: true });
       setGuardado("Pre-dictamen (Trámite) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
