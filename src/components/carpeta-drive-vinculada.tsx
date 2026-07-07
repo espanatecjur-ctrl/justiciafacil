@@ -14,7 +14,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -228,6 +228,23 @@ export function CarpetaDriveVinculada({
     await onGuardar({ drive_carpeta_id: res.carpetaId, drive_carpeta_nombre: res.nombre || nuevoNombre });
     setEligiendo(false);
   };
+
+  // "Traer seleccionados" → varios documentos a la carpeta vinculada (uno por uno, con progreso).
+  const traerArchivosAqui = async (items: { id: string; name: string }[]) => {
+    if (!carpetaId) { setMsgTraer("Primero vincula o crea una carpeta para este expediente."); return; }
+    if (!items.length) return;
+    setTrayendo(true); setMsgTraer(null);
+    let ok = 0; const fallos: string[] = [];
+    for (let i = 0; i < items.length; i++) {
+      setMsgTraer(`Trayendo ${i + 1} de ${items.length}…`);
+      const res = await traerArchivo(items[i].id, carpetaId);
+      if (res.ok) ok++; else fallos.push(items[i].name);
+    }
+    setTrayendo(false);
+    setMsgTraer(`Listo: ${ok} traído${ok === 1 ? "" : "s"}${fallos.length ? ` · ${fallos.length} con aviso` : " ✅"}`);
+    refrescar();
+  };
+
   const crearYVincular = async () => {
     setCreando(true); setErrorCrear(null);
     const r = await crearCarpetaDrive(area || "UCM", caso);
@@ -489,7 +506,7 @@ export function CarpetaDriveVinculada({
               {trayendo ? <><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Trayendo la carpeta a tu área (puede tardar)…</> : msgTraer}
             </div>
           )}
-          <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={elegir} onTraerCarpeta={traerAMiArea} />
+          <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={elegir} onTraerCarpeta={traerAMiArea} onTraerArchivos={traerArchivosAqui} />
         </div>
       )}
 
