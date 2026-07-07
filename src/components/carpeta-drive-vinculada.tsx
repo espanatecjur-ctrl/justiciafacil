@@ -14,7 +14,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -198,7 +198,36 @@ export function CarpetaDriveVinculada({
     setEligiendo(false);
   };
 
-  // Crea una carpeta nueva para este expediente y la deja vinculada.
+  // "Traer a mi área": revisa duplicado, MUEVE a la carpeta del área (renombrada) y la vincula.
+  const [trayendo, setTrayendo] = useState(false);
+  const [msgTraer, setMsgTraer] = useState<string | null>(null);
+  const traerAMiArea = async (id: string, _nombre: string) => {
+    setTrayendo(true); setMsgTraer(null); setDupAviso(null);
+    // 1) ¿ya está en otro expediente?
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente&drive_carpeta_id=eq.${encodeURIComponent(id)}&id=neq.${encodeURIComponent(caso.id)}`, { headers: hdrs });
+      const usados = r.ok ? await r.json() : [];
+      if (Array.isArray(usados) && usados.length > 0) {
+        setMsgTraer(`⚠️ Esa carpeta ya está en el expediente ${usados[0].expediente || usados[0].id}.`);
+        setTrayendo(false);
+        return;
+      }
+    } catch { /* si falla, seguimos */ }
+    // 2) nombre nuevo: garantía + expediente
+    const nuevoNombre = `${nombreGarantia(caso)}${caso.expediente ? " — " + caso.expediente : ""}`.trim();
+    const res = await traerCarpetaAArea(id, area || "UCM", nuevoNombre);
+    setTrayendo(false);
+    if (res.requiereCopia) {
+      setMsgTraer("Esta carpeta está en otra Unidad — se necesita COPIAR (Paso 2, que haremos después). Por ahora solo funciona con carpetas dentro de Justiciafacil.");
+      return;
+    }
+    if (!res.ok || !res.carpetaId) {
+      setMsgTraer("⚠️ " + (res.error || "No se pudo traer la carpeta."));
+      return;
+    }
+    await onGuardar({ drive_carpeta_id: res.carpetaId, drive_carpeta_nombre: res.nombre || nuevoNombre });
+    setEligiendo(false);
+  };
   const crearYVincular = async () => {
     setCreando(true); setErrorCrear(null);
     const r = await crearCarpetaDrive(area || "UCM", caso);
@@ -455,7 +484,12 @@ export function CarpetaDriveVinculada({
             {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
           </div>
 
-          <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={elegir} />
+          {(trayendo || msgTraer) && (
+            <div className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3 text-xs text-[color:var(--teal)]">
+              {trayendo ? <><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Trayendo la carpeta a tu área (puede tardar)…</> : msgTraer}
+            </div>
+          )}
+          <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={elegir} onTraerCarpeta={traerAMiArea} />
         </div>
       )}
 
