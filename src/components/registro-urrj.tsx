@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { useNavigate } from "@tanstack/react-router";
 interface RefGarantia { id?: string; expediente?: string; direccion_garantia?: string; juzgado?: string; cliente_nombre?: string; deudor?: string; entidad?: string; }
-import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText } from "lucide-react";
+import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText, AlertTriangle } from "lucide-react";
 import { FichaURRJ } from "@/components/ficha-urrj";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -48,6 +48,20 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
   const [cargando, setCargando] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const [fichaSel, setFichaSel] = useState<Garantia | null>(null);
+
+  // direcciones repetidas (para marcar ⚠️ en las filas) — lee la vista v_garantia_repetida
+  const [repetidos, setRepetidos] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    fetch(`${SUPABASE_URL}/rest/v1/v_garantia_repetida?select=id,expediente`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((rows: any[]) => {
+        const s = new Set<string>();
+        for (const x of rows || []) { if (x.id) s.add(String(x.id)); if (x.expediente) s.add(String(x.expediente)); }
+        setRepetidos(s);
+      })
+      .catch(() => setRepetidos(new Set()));
+  }, []);
+  const esRepetido = (g: Garantia) => (g.id && repetidos.has(String(g.id))) || (g.expediente && repetidos.has(String(g.expediente)));
   const navigate = useNavigate();
 
   const cargarGarantias = async () => {
@@ -156,7 +170,10 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
               {garantias.map((g) => (
                 <div key={g.clave} className="flex items-center justify-between gap-3 p-3 hover:bg-muted/30">
                   <button onClick={() => setFichaSel(g)} className="min-w-0 flex-1 text-left">
-                    <p className="truncate text-sm font-semibold">{g.expediente || "Sin expediente"}</p>
+                    <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                      {g.expediente || "Sin expediente"}
+                      {esRepetido(g) && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800" title="Dirección repetida en otro expediente — validar"><AlertTriangle className="h-3 w-3" /> Repetido</span>}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{g.direccion_garantia || g.cliente_nombre || "—"}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
                   </button>
                   <div className="flex items-center gap-2">
