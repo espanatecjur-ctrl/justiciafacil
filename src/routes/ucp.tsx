@@ -186,6 +186,18 @@ function UCP() {
     return { ...REQ_VACIOS(), ...(d?.requisitos || {}) };
   };
 
+  const darPorTerminado = async (c: CasoJuridico) => {
+    if (!confirm(`¿Dar por TERMINADO el expediente ${c.expediente || "(sin expediente)"}?\n\nSe marca como terminado y se queda en su área (no se mueve a otra).`)) return;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ terminado: true }),
+      });
+      cargar();
+    } catch { alert("No se pudo marcar como terminado."); }
+  };
+  
   const moverPapelera = async (c: CasoJuridico) => {
     if (!confirm(`¿Mover a la papelera el expediente ${c.expediente || "(sin expediente)"}?\n\nSale de la lista de UCP. Se puede recuperar después.`)) return;
     try {
@@ -469,6 +481,7 @@ function UCP() {
                       <TableCell className="text-xs">{d ? `${reqCuenta(r)}/7` : "—"}</TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
+                          {(c as any).terminado && <Badge variant="outline" className="w-fit border-emerald-300 bg-emerald-100 text-emerald-800 text-[10px] font-semibold">✓ Terminado</Badge>}
                           {info && <Badge variant="outline" className={`border ${info.cls} w-fit`}>{info.label}</Badge>}
                           {d && <Badge variant="outline" className={`border ${VEREDICTO_CLS[ver] || ""} w-fit text-[10px]`}>{ver}</Badge>}
                           {d && <Badge variant="outline" className={`w-fit border text-[10px] ${firmasUCP(d) >= 5 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border text-muted-foreground"}`}>✍ {firmasUCP(d)}/5 firmas</Badge>}
@@ -528,7 +541,7 @@ function UCP() {
             <Item icon={Upload} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Subir actuaciones</Item>
             <Item icon={FileText} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Escoger boletín judicial</Item>
             <div className="my-1 border-t border-border" />
-            <Item icon={CheckCircle2} disabled={!puedo("terminar")} title={puedo("terminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Dar por terminado</Item>
+            <Item icon={CheckCircle2} disabled={!puedo("terminar")} title={puedo("terminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); darPorTerminado(c); }}>Dar por terminado</Item>
             <div className="my-1 border-t border-border" />
             <Item icon={Trash2} danger disabled={!puedo("papelera")} title={puedo("papelera") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); moverPapelera(c); }}>Mover a la papelera</Item>
           </div>
