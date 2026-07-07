@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, type ElementType } from "react";
 import {
   HardDrive, Folder, FileText, Search, RefreshCw, ChevronRight,
   ExternalLink, Maximize2, Link2, Loader2, AlertTriangle, Copy, Home,
-  LayoutGrid, List as ListIcon, FolderCheck,
+  LayoutGrid, List as ListIcon, FolderCheck, CheckSquare, Square, X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import {
 
 type Miga = { id: string; name: string };
 
-export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onTraerCarpeta }: { mostrarEncabezado?: boolean; onElegirCarpeta?: (id: string, nombre: string) => void; onTraerCarpeta?: (id: string, nombre: string) => void }) {
+export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onTraerCarpeta, onTraerArchivos }: { mostrarEncabezado?: boolean; onElegirCarpeta?: (id: string, nombre: string) => void; onTraerCarpeta?: (id: string, nombre: string) => void; onTraerArchivos?: (items: { id: string; name: string }[]) => void }) {
   const [unidades, setUnidades] = useState<Unidad[]>([]);
   const [correoSA, setCorreoSA] = useState("");
   const [cargUnidades, setCargUnidades] = useState(true);
@@ -37,6 +37,17 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onT
   const [modo, setModo] = useState<"grid" | "lista">("grid");
   const [docSel, setDocSel] = useState<ItemDrive | null>(null);
   const [copiado, setCopiado] = useState(false);
+
+  // modo selección de documentos (palomitas) para "Traer seleccionados"
+  const [seleccionando, setSeleccionando] = useState(false);
+  const [seleccion, setSeleccion] = useState<Record<string, string>>({});
+  const estaSel = (id: string) => id in seleccion;
+  const toggleSel = (a: { id: string; name: string }) => setSeleccion((p) => { const n = { ...p }; if (n[a.id]) delete n[a.id]; else n[a.id] = a.name; return n; });
+  const nSel = Object.keys(seleccion).length;
+  const salirSeleccion = () => { setSeleccionando(false); setSeleccion({}); };
+  const traerSeleccionados = () => {
+    if (onTraerArchivos && nSel > 0) { onTraerArchivos(Object.entries(seleccion).map(([id, name]) => ({ id, name }))); salirSeleccion(); }
+  };
 
   // buscador inteligente (filtra Unidades al instante + busca dentro bajo botón)
   const [busq, setBusq] = useState("");
@@ -141,8 +152,22 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onT
           <button onClick={ruta.length ? () => irMiga(ruta.length - 1) : cargarUnidades} className="inline-flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted">
             <RefreshCw className="h-3.5 w-3.5" /> Actualizar
           </button>
+          {onTraerArchivos && (seleccionando
+            ? <button onClick={salirSeleccion} className="inline-flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
+            : <button onClick={() => setSeleccionando(true)} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2.5 py-1.5 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><CheckSquare className="h-3.5 w-3.5" /> Seleccionar</button>
+          )}
         </div>
       </div>
+
+      {/* Barra de acción cuando estás seleccionando documentos */}
+      {seleccionando && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 px-3 py-2">
+          <span className="text-xs font-medium text-[color:var(--teal)]">{nSel} seleccionado{nSel === 1 ? "" : "s"}</span>
+          <button onClick={traerSeleccionados} disabled={nSel === 0} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "#0C5C46" }}>
+            <FolderCheck className="h-3.5 w-3.5" /> Traer seleccionados
+          </button>
+        </div>
+      )}
 
       {/* Buscador inteligente (arriba, prominente) */}
       {ruta.length === 0 && (
@@ -191,6 +216,7 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onT
                                 {a.carpeta ? <p className="truncate text-[10px] text-muted-foreground">📁 en: {a.carpeta}</p> : null}
                               </div>
                               <button onClick={() => setDocSel({ id: a.id, name: a.name, mimeType: a.mimeType, webViewLink: a.webViewLink })} className="shrink-0 text-[color:var(--teal)] hover:underline" title="Vista previa"><Maximize2 className="h-4 w-4" /></button>
+                              {seleccionando && <button onClick={() => toggleSel({ id: a.id, name: a.name })} className="shrink-0 text-[color:var(--teal)]" title={estaSel(a.id) ? "Quitar" : "Elegir"}>{estaSel(a.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}</button>}
                             </div>
                           ))}
                         </div>
@@ -356,7 +382,9 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onT
                         </button>
                         <div className="flex items-center justify-between px-3 py-1.5">
                           <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                          {a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
+                          {seleccionando
+                            ? <button onClick={() => toggleSel(a)} className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--teal)]">{estaSel(a.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />} {estaSel(a.id) ? "Quitar" : "Elegir"}</button>
+                            : a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
                         </div>
                       </div>
                     ))}
@@ -379,6 +407,7 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onT
                       <button onClick={() => setDocSel(a)} className="min-w-0 flex-1 truncate text-left hover:underline" title={a.name}>{a.name}</button>
                       <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tipoLegible(a.mimeType)}</span>
                       <button onClick={() => setDocSel(a)} className="shrink-0 text-[color:var(--teal)] hover:underline" title="Vista previa"><Maximize2 className="h-4 w-4" /></button>
+                      {seleccionando && <button onClick={() => toggleSel(a)} className="shrink-0 text-[color:var(--teal)]" title={estaSel(a.id) ? "Quitar" : "Elegir"}>{estaSel(a.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}</button>}
                       {a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="shrink-0 text-muted-foreground hover:text-foreground" title="Abrir en Drive"><ExternalLink className="h-4 w-4" /></a>}
                     </div>
                   ))}
