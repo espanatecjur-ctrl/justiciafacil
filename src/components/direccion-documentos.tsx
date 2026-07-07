@@ -7,6 +7,7 @@ import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarTodo, esCarpeta, previewDeId } from "@/lib/drive-explorar";
 import {
   casosParaSelector, subirDocPredictamen, crearSolicitudPredictamen, listarSolicitudesPredictamen,
+  vincularCarpetaAGarantia,
   type CasoOpcion, type DocRef, type SolicitudPredictamen,
 } from "@/lib/solicitud-predictamen";
 
@@ -100,7 +101,12 @@ export function DireccionDocumentos() {
     });
     setEnviando(false);
     if (r.ok) {
-      setMsg("Enviado a pre-dictaminar ✓");
+      // Si escogió una carpeta de Drive, la reflejamos en la ficha de la garantía (la vinculamos).
+      const conCarpeta = !!carpetaSel;
+      if (carpetaSel) {
+        await vincularCarpetaAGarantia(casoId, carpetaSel.id, carpetaSel.nombre);
+      }
+      setMsg(conCarpeta ? "Enviado ✓ · carpeta reflejada en la garantía" : "Enviado a pre-dictaminar ✓");
       setCasoId(""); setNota(""); setDocs([]);
       setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null);
       recargar();
