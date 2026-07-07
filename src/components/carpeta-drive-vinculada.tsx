@@ -214,6 +214,12 @@ export function CarpetaDriveVinculada({
   const pag = Math.min(pagina, totalPag - 1);
   const docsPag = docsFiltrados.slice(pag * PAGE, pag * PAGE + PAGE);
 
+  // Indicador de sincronización (cálculo rápido): cuántos de los documentos vistos ya tienen copia
+  const totalDocs = docs.length;
+  const copiadosDocs = docs.filter((d) => copias[d.id]).length;
+  const faltanSincro = Math.max(0, totalDocs - copiadosDocs);
+  const colorSincro = totalDocs === 0 ? "gris" : faltanSincro === 0 ? "verde" : copiadosDocs === 0 ? "gris" : "amarillo";
+
   // firma los enlaces de las copias visibles (las que ya están en el almacén)
   useEffect(() => {
     const faltan = docsPag
@@ -295,6 +301,15 @@ export function CarpetaDriveVinculada({
             <FolderCheck className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
             <span className="min-w-0 truncate text-sm font-medium" title={carpetaNombre}>{carpetaNombre || "Carpeta vinculada"}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800"><FolderCheck className="h-3 w-3" /> Vinculada</span>
+            {totalDocs > 0 && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorSincro === "verde" ? "bg-emerald-100 text-emerald-800" : colorSincro === "amarillo" ? "bg-amber-100 text-amber-800" : "bg-muted text-muted-foreground"}`}
+                title={colorSincro === "verde" ? "Todo copiado al sistema · este expediente ya no depende de Drive" : `Faltan ${faltanSincro} por sincronizar`}
+              >
+                <span className={`h-2 w-2 rounded-full ${colorSincro === "verde" ? "bg-emerald-500" : colorSincro === "amarillo" ? "bg-amber-500" : "bg-gray-400"}`} />
+                {colorSincro === "verde" ? "Todo en el sistema" : `Sincronizado ${copiadosDocs}/${totalDocs}`}
+              </span>
+            )}
             <span className="flex-1" />
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
             {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
