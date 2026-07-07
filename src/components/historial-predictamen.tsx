@@ -152,7 +152,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
               <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
             ) : filtradas.map((f) => (
               <tr key={f.id} className="border-b border-border/60 hover:bg-muted/40">
-                <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => abrirFicha(f)}>{f.folio || "—"}</td>
+                <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => (onVerFichaVieja ? onVerFichaVieja(f) : abrirFicha(f))}>{f.folio || "—"}</td>
                 <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${POS_COLOR[f.posicion || ""] || "bg-muted"}`}>{f.posicion || "—"}</span>{f.terminado && <span className="ml-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">TERMINADO</span>}</td>
                 <td className="max-w-[220px] truncate px-3 py-2">{dir(f)}</td>
                 <td className="px-3 py-2">{f.expediente || "—"}</td>
