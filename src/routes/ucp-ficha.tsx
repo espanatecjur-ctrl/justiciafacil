@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle,
+  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send,
 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
@@ -10,6 +10,8 @@ import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { VincularClienteModal } from "@/components/vincular-cliente";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -21,6 +23,7 @@ const NAVY = "#0B1E3A";
 const AZUL = "#0C447C"; // color de UCP
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
 
 type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "boletin";
 
@@ -33,6 +36,15 @@ const fmtFecha = (s: string | null) => {
   return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
 };
 
+function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 block text-[11px] text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 function DatoUCP({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
   const vacio = !valor || !String(valor).trim();
   return (
@@ -43,10 +55,13 @@ function DatoUCP({ label, valor, importante }: { label: string; valor?: string |
   );
 }
 
-function SeccionUCP({ icon, titulo, children }: { icon: React.ReactNode; titulo: string; children: React.ReactNode }) {
+function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode; titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <p className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+        {accion}
+      </div>
       {children}
     </div>
   );
@@ -60,6 +75,15 @@ function UCPFicha() {
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modulo, setModulo] = useState<Modulo>("general");
+
+  // edición (igual que UCM)
+  const [editAnt, setEditAnt] = useState(false);
+  const [editEst, setEditEst] = useState(false);
+  const [verBoletin, setVerBoletin] = useState(false);
+  const [verVincular, setVerVincular] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [errorDatos, setErrorDatos] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -78,11 +102,21 @@ function UCPFicha() {
       .finally(() => setCargando(false));
   }, [id]);
 
-  const guardarCampos = async (campos: Record<string, string>) => {
+  const guardarDatos = async (campos: Record<string, string>, cerrar: () => void) => {
     if (!c) return;
-    await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(campos) });
-    setC({ ...c, ...(campos as any) });
+    setGuardando(true); setErrorDatos(null);
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
+        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(campos),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      setC({ ...c, ...(campos as any) });
+      cerrar();
+    } catch {
+      setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
+    } finally { setGuardando(false); }
   };
+  const guardarCampos = (campos: Record<string, string>) => guardarDatos(campos, () => {});
 
   // arma y descarga el PDF del dictamen usando la función que ya existe
   const armarFirmas = () => {
@@ -130,6 +164,17 @@ function UCPFicha() {
     { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
   ];
 
+  const btnEditar = (onClick: () => void) => (
+    <button onClick={onClick} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>
+      <PenLine className="h-3 w-3" /> Editar / validar
+    </button>
+  );
+  const btnGuardar = (onClick: () => void) => (
+    <button onClick={onClick} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: AZUL }}>
+      {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar
+    </button>
+  );
+
   return (
     <div className="space-y-4">
       {/* barra superior */}
@@ -164,21 +209,97 @@ function UCPFicha() {
         <div className="space-y-4">
           <LineaVidaAreas caso={c} />
           <div className="grid gap-4 lg:grid-cols-2">
-            <SeccionUCP icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />} titulo="Antecedente de la garantía">
-              <DatoUCP label="ID garantía" valor={(c as any).gar_id} />
-              <DatoUCP label="No. de crédito" valor={c.no_credito} importante />
-              <DatoUCP label="Dirección de la garantía" valor={c.direccion_garantia} importante />
-              <DatoUCP label="Cliente / deudor" valor={c.cliente_nombre || c.demandado} importante />
-              <DatoUCP label="Entidad" valor={c.entidad} />
-              <DatoUCP label="Tipo de proceso" valor={c.tipo_proceso} />
+            {/* Antecedente de la garantía (editable) */}
+            <SeccionUCP
+              icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
+              titulo="Antecedente de la garantía"
+              accion={!editAnt ? btnEditar(() => { setForm({ no_credito: c.no_credito || "", direccion_garantia: c.direccion_garantia || "", entidad: c.entidad || "" }); setErrorDatos(null); setEditAnt(true); }) : undefined}
+            >
+              {editAnt ? (
+                <div className="space-y-2">
+                  <Campo label="No. de crédito"><input className={inp} value={form.no_credito} onChange={(e) => setForm({ ...form, no_credito: e.target.value })} /></Campo>
+                  <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
+                  <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
+                  <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
+                    <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{c.cliente_nombre || c.cliente_codigo || "sin vincular"}</b></span>
+                    <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"} cliente</button>
+                  </div>
+                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+                  <div className="flex gap-2 pt-1">
+                    {btnGuardar(() => guardarDatos({ no_credito: form.no_credito, direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false)))}
+                    <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <DatoUCP label="ID garantía" valor={(c as any).gar_id} />
+                  <DatoUCP label="No. de crédito" valor={c.no_credito} importante />
+                  <DatoUCP label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+                  <div className="flex items-center justify-between gap-2">
+                    <DatoUCP label="Cliente / deudor" valor={c.cliente_nombre || c.demandado} importante />
+                    <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}</button>
+                  </div>
+                  <DatoUCP label="Entidad" valor={c.entidad} />
+                  <DatoUCP label="Tipo de proceso" valor={c.tipo_proceso} />
+                </>
+              )}
             </SeccionUCP>
-            <SeccionUCP icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />} titulo="Estatus actual">
-              <DatoUCP label="Etapa actual" valor={c.etapa_actual || "Dictamen (UCP)"} />
-              <DatoUCP label="Estatus general" valor={c.estatus_general} importante />
-              <DatoUCP label="Prioridad" valor={c.prioridad} />
-              <DatoUCP label="No. de expediente / juicio" valor={c.expediente} />
-              <DatoUCP label="No. de juzgado" valor={c.juzgado} />
-              <DatoUCP label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
+
+            {/* Estatus actual (editable + robotsito) */}
+            <SeccionUCP
+              icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />}
+              titulo="Estatus actual"
+              accion={!editEst ? btnEditar(() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "", actor: c.actor || "", demandado: c.demandado || "" }); setErrorDatos(null); setVerBoletin(false); setEditEst(true); }) : undefined}
+            >
+              {editEst ? (
+                <div className="space-y-2">
+                  <Campo label="Etapa actual"><input className={inp} value={form.etapa_actual} onChange={(e) => setForm({ ...form, etapa_actual: e.target.value })} /></Campo>
+                  <Campo label="Estatus general"><input className={inp} value={form.estatus_general} onChange={(e) => setForm({ ...form, estatus_general: e.target.value })} /></Campo>
+                  <Campo label="Prioridad"><input className={inp} value={form.prioridad} onChange={(e) => setForm({ ...form, prioridad: e.target.value })} placeholder="ALTA / MEDIA / BAJA" /></Campo>
+                  <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1593/2008" /></Campo>
+                  <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Segundo…" /></Campo>
+                  <Campo label="Actor"><input className={inp} value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="Quien demanda" /></Campo>
+                  <Campo label="Demandado"><input className={inp} value={form.demandado} onChange={(e) => setForm({ ...form, demandado: e.target.value })} placeholder="Contra quién" /></Campo>
+
+                  {/* Robotsito del boletín */}
+                  <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
+                    <button type="button" onClick={() => setVerBoletin((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold" style={{ color: AZUL }}>
+                      <Send className="h-3.5 w-3.5" /> {verBoletin ? "Ocultar buscador del boletín" : "Buscar en el boletín (jurisdicción, juzgado y expediente)"}
+                    </button>
+                    {verBoletin && (
+                      <div className="mt-2">
+                        <p className="mb-2 text-[11px] text-muted-foreground">Elige la jurisdicción y el juzgado, busca el expediente y dale <b>“Guardar hallazgos del boletín”</b>: se rellenan solos. Luego revisa y dale <b>Guardar</b>.</p>
+                        <BuscadorBoletin
+                          expedienteInicial={form.expediente}
+                          onGuardarHallazgos={() => {}}
+                          onDatosBoletin={(d) => setForm((f) => ({
+                            ...f,
+                            expediente: d.expediente || f.expediente,
+                            juzgado: d.juzgado || f.juzgado,
+                            actor: d.actor || f.actor,
+                            demandado: d.demandado || f.demandado,
+                            etapa_actual: d.etapa || f.etapa_actual,
+                          }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+                  <div className="flex gap-2 pt-1">
+                    {btnGuardar(() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado, actor: form.actor, demandado: form.demandado }, () => setEditEst(false)))}
+                    <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <DatoUCP label="Etapa actual" valor={c.etapa_actual} importante />
+                  <DatoUCP label="Estatus general" valor={c.estatus_general} importante />
+                  <DatoUCP label="Prioridad" valor={c.prioridad} />
+                  <DatoUCP label="No. de expediente / juicio" valor={c.expediente} />
+                  <DatoUCP label="No. de juzgado" valor={c.juzgado} />
+                  <DatoUCP label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
+                </>
+              )}
             </SeccionUCP>
           </div>
 
@@ -241,6 +362,8 @@ function UCPFicha() {
       {modulo === "boletin" && (
         <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} />
       )}
+
+      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setC({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_id: cl.id }); setVerVincular(false); }} />}
     </div>
   );
 }
