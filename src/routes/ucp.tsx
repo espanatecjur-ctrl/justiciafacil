@@ -394,6 +394,77 @@ function UCP() {
     );
   }
 
+  // ----- helpers de render compartidos entre la tabla (desktop) y las tarjetas (móvil) -----
+  const derivar = (c: CasoJuridico) => {
+    const elegible = !!(c.id && predPorCaso[c.id]);
+    const d = dictPorCaso[c.id];
+    const r = reqDe(c.id);
+    const estadoKey = !d ? "sin_abrir" : d.estado === "etapa_b" ? "etapa_b" : (reqCompletos(r) ? "borrador" : "requisitos");
+    const info = ESTADO_INFO[estadoKey];
+    const ver = d?.veredicto || "PENDIENTE";
+    return { elegible, d, r, info, ver };
+  };
+
+  const avisoSinAvance = (c: CasoJuridico) =>
+    (c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA)
+      ? <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>⚠ {diasAvance[c.id] >= 9999 ? "sin avances" : `${diasAvance[c.id]}d sin avance`}</span>
+      : null;
+
+  const areaBadge = (c: CasoJuridico, d?: DictamenRow) => {
+    const a = areaActual(c, d);
+    return (
+      <div className="flex flex-col">
+        <Badge variant="outline" className={`w-fit border ${AREA_INFO[a] || "bg-muted text-muted-foreground border-border"}`}>{a || "—"}{d?.estado === "etapa_b" ? " · antecedente" : ""}</Badge>
+        {c.encargado_unidad && <span className="mt-0.5 text-[10px] text-muted-foreground">{c.encargado_unidad}</span>}
+      </div>
+    );
+  };
+
+  const preDictamenCell = (elegible: boolean) => elegible
+    ? <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"><Scale className="h-3 w-3" /> POSITIVO</Badge>
+    : <span className="text-xs text-muted-foreground">Pendiente URRJ</span>;
+
+  const dupBadge = (c: CasoJuridico) => {
+    const dr = (c as any).dup_resolucion;
+    if (dr?.estado === "conservar") {
+      return (
+        <button type="button" onClick={(e) => { e.stopPropagation(); abrirDup(c); }} className="text-left" title={`Duplicado revisado — se conserva.\nMotivo: ${dr.nota || "—"}\nPor: ${dr.por || "—"}`}>
+          <Badge variant="outline" className="cursor-pointer border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-semibold hover:bg-emerald-100">✓ Duplicado revisado</Badge>
+        </button>
+      );
+    }
+    if (coincidencias[c.id] > 0) {
+      return (
+        <button type="button" onClick={(e) => { e.stopPropagation(); abrirDup(c); }} className="text-left" title="Comparte garantía, dirección, expediente o cliente con otro(s). Clic para decidir: conservar las dos o eliminar una.">
+          <Badge variant="outline" className="cursor-pointer border-amber-300 bg-amber-100 text-amber-800 text-[10px] font-semibold hover:bg-amber-200">🔁 Repetido ({coincidencias[c.id]}) · resolver</Badge>
+        </button>
+      );
+    }
+    return null;
+  };
+
+  const badgesEstado = (c: CasoJuridico, d: DictamenRow | undefined, ver: string, info: any) => (
+    <div className="flex flex-wrap gap-1">
+      {(c as any).terminado && <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800 text-[10px] font-semibold">✓ Terminado</Badge>}
+      {info && <Badge variant="outline" className={`border ${info.cls}`}>{info.label}</Badge>}
+      {d && <Badge variant="outline" className={`border ${VEREDICTO_CLS[ver] || ""} text-[10px]`}>{ver}</Badge>}
+      {d && <Badge variant="outline" className={`border text-[10px] ${firmasUCP(d) >= 5 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border text-muted-foreground"}`}>✍ {firmasUCP(d)}/5 firmas</Badge>}
+      {dupBadge(c)}
+      {!c.drive_carpeta_id && <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700 text-[10px] font-medium" title="No tiene carpeta de Drive vinculada">📁 Sin Drive</Badge>}
+    </div>
+  );
+
+  const menuBtn = (c: CasoJuridico) => {
+    const cargandoFila = abriendo === c.id;
+    return (
+      <div className="relative shrink-0" data-menu-ucp>
+        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); const rr = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenuUCP(menuUCP?.id === c.id ? null : { id: c.id, x: rr.right, y: rr.bottom }); }}>
+          {cargandoFila ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+        </Button>
+      </div>
+    );
+  };
+
   // ----- registro -----
   return (
     <div className="space-y-6">
@@ -515,7 +586,8 @@ function UCP() {
         </Card>
       ) : (
         <Card className="legal-card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Desktop: tabla completa */}
+          <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -531,79 +603,64 @@ function UCP() {
               </TableHeader>
               <TableBody>
                 {visibles.map((c) => {
-                  const elegible = !!(c.id && predPorCaso[c.id]);
-                  const d = dictPorCaso[c.id];
-                  const r = reqDe(c.id);
-                  const reqOK = !!d && reqCompletos(r);
-                  const estadoKey = !d ? "sin_abrir" : d.estado === "etapa_b" ? "etapa_b" : (reqCompletos(r) ? "borrador" : "requisitos");
-                  const info = ESTADO_INFO[estadoKey];
-                  const ver = d?.veredicto || "PENDIENTE";
-                  const cargandoFila = abriendo === c.id;
+                  const { elegible, d, r, info, ver } = derivar(c);
                   return (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.expediente || "—"}<div className="text-xs font-normal text-muted-foreground">{c.juzgado || ""}</div>{c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (<span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>⚠ {diasAvance[c.id] >= 9999 ? "sin avances" : `${diasAvance[c.id]}d sin avance`}</span>)}</TableCell>
+                      <TableCell className="font-medium">{c.expediente || "—"}<div className="text-xs font-normal text-muted-foreground">{c.juzgado || ""}</div>{avisoSinAvance(c) && <div className="mt-0.5">{avisoSinAvance(c)}</div>}</TableCell>
                       <TableCell className="max-w-[200px] text-xs">{c.direccion_garantia || "—"}<div className="text-muted-foreground">{c.entidad || ""}</div></TableCell>
                       <TableCell className="text-xs">{c.cliente_nombre || c.cliente_codigo || "—"}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          const a = areaActual(c, d);
-                          return (
-                            <div className="flex flex-col">
-                              <Badge variant="outline" className={`w-fit border ${AREA_INFO[a] || "bg-muted text-muted-foreground border-border"}`}>
-                                {a || "—"}{d?.estado === "etapa_b" ? " · antecedente" : ""}
-                              </Badge>
-                              {c.encargado_unidad && <span className="mt-0.5 text-[10px] text-muted-foreground">{c.encargado_unidad}</span>}
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        {elegible
-                          ? <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"><Scale className="h-3 w-3" /> POSITIVO</Badge>
-                          : <span className="text-xs text-muted-foreground">Pendiente URRJ</span>}
-                      </TableCell>
+                      <TableCell>{areaBadge(c, d)}</TableCell>
+                      <TableCell>{preDictamenCell(elegible)}</TableCell>
                       <TableCell className="text-xs">{d ? `${reqCuenta(r)}/7` : "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {(c as any).terminado && <Badge variant="outline" className="w-fit border-emerald-300 bg-emerald-100 text-emerald-800 text-[10px] font-semibold">✓ Terminado</Badge>}
-                          {info && <Badge variant="outline" className={`border ${info.cls} w-fit`}>{info.label}</Badge>}
-                          {d && <Badge variant="outline" className={`border ${VEREDICTO_CLS[ver] || ""} w-fit text-[10px]`}>{ver}</Badge>}
-                          {d && <Badge variant="outline" className={`w-fit border text-[10px] ${firmasUCP(d) >= 5 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border text-muted-foreground"}`}>✍ {firmasUCP(d)}/5 firmas</Badge>}
-                          {(() => {
-                            const dr = (c as any).dup_resolucion;
-                            if (dr?.estado === "conservar") {
-                              return (
-                                <button type="button" onClick={(e) => { e.stopPropagation(); abrirDup(c); }} className="w-fit text-left" title={`Duplicado revisado — se conserva.\nMotivo: ${dr.nota || "—"}\nPor: ${dr.por || "—"}`}>
-                                  <Badge variant="outline" className="w-fit cursor-pointer border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-semibold hover:bg-emerald-100">✓ Duplicado revisado</Badge>
-                                </button>
-                              );
-                            }
-                            if (coincidencias[c.id] > 0) {
-                              return (
-                                <button type="button" onClick={(e) => { e.stopPropagation(); abrirDup(c); }} className="w-fit text-left" title="Comparte garantía, dirección, expediente o cliente con otro(s). Clic para decidir: conservar las dos o eliminar una.">
-                                  <Badge variant="outline" className="w-fit cursor-pointer border-amber-300 bg-amber-100 text-amber-800 text-[10px] font-semibold hover:bg-amber-200">🔁 Repetido ({coincidencias[c.id]}) · resolver</Badge>
-                                </button>
-                              );
-                            }
-                            return null;
-                          })()}
-                          {!c.drive_carpeta_id && <Badge variant="outline" className="w-fit border-slate-300 bg-slate-100 text-slate-700 text-[10px] font-medium" title="No tiene carpeta de Drive vinculada">📁 Sin Drive</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end">
-                          <div className="relative" data-menu-ucp>
-                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenuUCP(menuUCP?.id === c.id ? null : { id: c.id, x: r.right, y: r.bottom }); }}>
-                              {cargandoFila ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </div>
-                      </TableCell>
+                      <TableCell>{badgesEstado(c, d, ver, info)}</TableCell>
+                      <TableCell><div className="flex items-center justify-end">{menuBtn(c)}</div></TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Móvil: tarjetas apiladas (para que no se corte en pantallas chicas) */}
+          <div className="divide-y divide-border md:hidden">
+            {visibles.map((c) => {
+              const { elegible, d, r, info, ver } = derivar(c);
+              return (
+                <div key={c.id} className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold">{c.expediente || "—"}</p>
+                      {c.juzgado && <p className="break-words text-[11px] text-muted-foreground">{c.juzgado}</p>}
+                    </div>
+                    {menuBtn(c)}
+                  </div>
+                  {avisoSinAvance(c) && <div className="mt-1.5">{avisoSinAvance(c)}</div>}
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                    <div className="col-span-2">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Garantía</span>
+                      <p className="break-words">{c.direccion_garantia || "—"}{c.entidad ? <span className="text-muted-foreground"> · {c.entidad}</span> : null}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Cliente</span>
+                      <p className="break-words">{c.cliente_nombre || c.cliente_codigo || "—"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Área actual</span>
+                      <div className="mt-0.5">{areaBadge(c, d)}</div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Pre-dictamen</span>
+                      <div className="mt-0.5">{preDictamenCell(elegible)}</div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Requisitos</span>
+                      <p className="mt-0.5">{d ? `${reqCuenta(r)}/7` : "—"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2">{badgesEstado(c, d, ver, info)}</div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
