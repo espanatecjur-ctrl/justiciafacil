@@ -13,7 +13,10 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
-import { BotonCarpetaDrive } from "@/components/boton-carpeta-drive";
+import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
+import { SubJuicios } from "@/components/sub-juicios";
+import { BoletinExpediente } from "@/components/boletin-expediente";
+import { LayoutGrid, GitBranch, FolderOpen, Megaphone } from "lucide-react";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { DictamenRegistral } from "@/components/dictamen-registral";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
@@ -27,7 +30,7 @@ import { VincularClienteModal } from "@/components/vincular-cliente";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
-const PURPLE = "#7A4FB0";
+const PURPLE = "#0F6E6E";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
 export interface RefGarantia {
@@ -104,6 +107,20 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [form, setForm] = useState<Record<string, string>>({});
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState<string | null>(null);
+
+  // pestañas superiores (como UCM): general / sub-juicios / documentos / boletín
+  const [modulo, setModulo] = useState<"general" | "subjuicios" | "documentos" | "boletin">("general");
+  const [acuerdos, setAcuerdos] = useState<any[]>([]);
+  const [cargandoAc, setCargandoAc] = useState(false);
+  useEffect(() => {
+    if (!garantia.expediente) { setAcuerdos([]); return; }
+    setCargandoAc(true);
+    fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(garantia.expediente)}&order=fecha_acuerdo.desc&limit=200`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((rows: any[]) => setAcuerdos(rows || []))
+      .catch(() => setAcuerdos([]))
+      .finally(() => setCargandoAc(false));
+  }, [garantia.expediente]);
 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
 
@@ -323,11 +340,10 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
           <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: PURPLE }}>URRJ</span>
           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${fase.cls}`}>{fase.txt}</span>
         </div>
-        <BotonCarpetaDrive area="URRJ" caso={casoLV} />
       </div>
 
       {/* Encabezado */}
-      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${TEAL})` }}>
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${PURPLE})` }}>
         <p className="text-xs uppercase tracking-wider text-white/60">Ficha del expediente · URRJ</p>
         <h1 className="mt-0.5 text-2xl font-bold">{garantia.expediente || garantia.direccion_garantia || "Garantía"}</h1>
         <p className="mt-1 text-sm text-white/85">
@@ -341,6 +357,25 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         <p className="mt-2 text-xs text-white/70">{garantia.juzgado || "Juzgado sin asignar"}</p>
       </div>
 
+      {/* Pestañas (como UCM) */}
+      <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        {([
+          { k: "general", t: "General", icon: LayoutGrid },
+          { k: "subjuicios", t: "Sub-juicios", icon: GitBranch },
+          { k: "documentos", t: "Documentos", icon: FolderOpen },
+          { k: "boletin", t: "Boletín", icon: Megaphone },
+        ] as const).map(({ k, t, icon: Icon }) => (
+          <button key={k} onClick={() => setModulo(k)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${modulo === k ? "text-white" : "text-muted-foreground hover:bg-muted"}`}
+            style={modulo === k ? { background: PURPLE } : undefined}>
+            <Icon className="h-4 w-4" /> {t}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== GENERAL ===== */}
+      {modulo === "general" && (
+      <div className="space-y-4">
       {/* Línea de vida: recorrido por áreas */}
       <LineaVidaAreas caso={casoLV} />
 
@@ -532,8 +567,33 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         </div>
       </Seccion>
 
-      {/* Documentos y movimientos */}
-      <DocumentosGarantia area="URRJ" caso={casoLV} />
+      </div>
+      )}
+
+      {/* ===== SUB-JUICIOS ===== */}
+      {modulo === "subjuicios" && <SubJuicios casoId={garantia.id || ""} />}
+
+      {/* ===== DOCUMENTOS (Drive + movimientos) ===== */}
+      {modulo === "documentos" && (
+        <div className="space-y-4">
+          <CarpetaDriveVinculada
+            caso={casoLV}
+            area="URRJ"
+            onGuardar={(campos) => guardarDatos(campos as Partial<RefGarantia>, () => {})}
+          />
+          <DocumentosGarantia area="URRJ" caso={casoLV} />
+        </div>
+      )}
+
+      {/* ===== BOLETÍN ===== */}
+      {modulo === "boletin" && (
+        <BoletinExpediente
+          acuerdos={acuerdos}
+          expediente={garantia.expediente || ""}
+          sinJuzgado={!garantia.juzgado}
+          cargando={cargandoAc}
+        />
+      )}
     </div>
   );
 }
