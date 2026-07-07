@@ -12,6 +12,8 @@ import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { VincularClienteModal } from "@/components/vincular-cliente";
+import { CronologiaCaso } from "@/components/cronologia-caso";
+import { registrarEvento } from "@/lib/cronologia-caso";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -84,6 +86,7 @@ function UCPFicha() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
   const [errorDatos, setErrorDatos] = useState<string | null>(null);
+  const [recargaCron, setRecargaCron] = useState(0);
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -111,6 +114,8 @@ function UCPFicha() {
       });
       if (!r.ok) throw new Error(String(r.status));
       setC({ ...c, ...(campos as any) });
+      registrarEvento({ caso_id: c.id, expediente: c.expediente, area: "UCP", tipo: "cambio", texto: "Se actualizó: " + Object.keys(campos).join(", ") });
+      setRecargaCron((n) => n + 1);
       cerrar();
     } catch {
       setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
@@ -316,6 +321,9 @@ function UCPFicha() {
               <p className="text-sm text-muted-foreground">Sin actuaciones todavía. El robot revisa el boletín todos los días a las 9:00 AM.</p>
             )}
           </SeccionUCP>
+
+          {/* Cronología del expediente (compartida entre áreas) */}
+          <CronologiaCaso casoId={c.id} expediente={c.expediente} recargaId={recargaCron} />
         </div>
       )}
 
