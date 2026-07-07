@@ -188,6 +188,20 @@ export async function firmarCopias(paths: string[]): Promise<Record<string, stri
   }
 }
 
+/** Trae una carpeta suelta a la carpeta de su área (Paso 1: mover + renombrar). */
+export async function traerCarpetaAArea(carpetaId: string, area: string, nuevoNombre: string): Promise<{ ok: boolean; carpetaId?: string; nombre?: string; requiereCopia?: boolean; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/traer-carpeta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carpetaId, area, nuevoNombre }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
 export function esCarpeta(it: ItemDrive): boolean {
   return it.mimeType === CARPETA_MIME;
 }
