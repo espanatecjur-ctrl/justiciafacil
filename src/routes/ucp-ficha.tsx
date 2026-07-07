@@ -15,6 +15,7 @@ import { VincularClienteModal } from "@/components/vincular-cliente";
 import { CronologiaCaso } from "@/components/cronologia-caso";
 import { registrarEvento } from "@/lib/cronologia-caso";
 import { TraspasoArea } from "@/components/traspaso-area";
+import { BannerCoincidencias } from "@/components/banner-coincidencias";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -213,6 +214,7 @@ function UCPFicha() {
       {/* ============ GENERAL ============ */}
       {modulo === "general" && (
         <div className="space-y-4">
+          <BannerCoincidencias caso={c} onNavegar={(nid) => navigate({ to: "/ucp-ficha", search: { id: nid } as any })} />
           <TraspasoArea caso={c} area="UCP" onGuardarCarpeta={guardarCampos} onTraspaso={() => navigate({ to: "/ucp" })} />
           <LineaVidaAreas caso={c} />
           <div className="grid gap-4 lg:grid-cols-2">
