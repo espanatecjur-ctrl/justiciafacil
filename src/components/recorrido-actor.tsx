@@ -294,7 +294,7 @@ export function RecorridoActor({
       firma_valida: firmaValida?.nombre || null, firma_valida_fecha: firmaValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
       registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: `Decisión: ${decision}` });
       setGuardado(`Pre-dictamen guardado: ${decision}`);
     } catch (e: any) {
