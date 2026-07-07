@@ -12,6 +12,8 @@ import { listarSolicitudesPredictamen, type SolicitudPredictamen } from "@/lib/s
 export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: SolicitudPredictamen) => void }) {
   const [lista, setLista] = useState<SolicitudPredictamen[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [verTodas, setVerTodas] = useState(false);
+  const visibles = verTodas ? lista : lista.slice(0, 3);
 
   const cargar = () => {
     setCargando(true);
@@ -40,7 +42,7 @@ export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: Solicitu
         </div>
       ) : (
         <div className="mt-3 divide-y divide-border">
-          {lista.map((s) => (
+          {visibles.map((s) => (
             <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold">
@@ -63,6 +65,11 @@ export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: Solicitu
               </button>
             </div>
           ))}
+          {lista.length > 3 && (
+            <button onClick={() => setVerTodas((v) => !v)} className="w-full py-2 text-center text-xs font-medium text-[color:var(--teal)] hover:underline">
+              {verTodas ? "Ver menos" : `Ver todas (${lista.length})`}
+            </button>
+          )}
         </div>
       )}
     </div>
