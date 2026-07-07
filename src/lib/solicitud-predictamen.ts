@@ -32,6 +32,8 @@ export interface CasoOpcion {
   expediente?: string | null;
   cliente_nombre?: string | null;
   juzgado?: string | null;
+  drive_carpeta_id?: string | null;
+  drive_carpeta_nombre?: string | null;
 }
 
 /** Sube un archivo al almacén y devuelve su nombre y URL pública. */
@@ -52,7 +54,7 @@ export async function casosParaSelector(): Promise<CasoOpcion[]> {
   try {
     return await sbSelect<CasoOpcion>(
       "caso_juridico",
-      "select=id,expediente,cliente_nombre,juzgado&order=expediente.asc&limit=1000",
+      "select=id,expediente,cliente_nombre,juzgado,drive_carpeta_id,drive_carpeta_nombre&order=expediente.asc&limit=1000",
     );
   } catch {
     return [];
