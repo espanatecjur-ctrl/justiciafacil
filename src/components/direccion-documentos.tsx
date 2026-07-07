@@ -127,15 +127,7 @@ export function DireccionDocumentos() {
         <div className="mt-4 grid gap-3">
           <div>
             <label className="text-[11px] font-medium text-muted-foreground">Garantía / expediente</label>
-            <select value={casoId} onChange={(e) => cambiarCaso(e.target.value)}
-              className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-              <option value="">— Escoge —</option>
-              {casos.map((c) => (
-                <option key={c.id} value={c.id}>
-                  [{areaDeGarantia(c.unidad)}] {c.expediente || "s/exp"}{c.cliente_nombre ? ` · ${c.cliente_nombre}` : ""}
-                </option>
-              ))}
-            </select>
+            <SelectorGarantiaBuscable casos={casos} casoId={casoId} onElegir={cambiarCaso} />
           </div>
 
           {caso && (
@@ -308,6 +300,65 @@ export function DireccionDocumentos() {
               <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={usarCarpeta} />
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Selector de garantía BUSCABLE — escribes nombre o expediente
+// y filtra las coincidencias (en vez de un dropdown largo).
+// ============================================================
+function SelectorGarantiaBuscable({ casos, casoId, onElegir }: {
+  casos: CasoOpcion[];
+  casoId: string;
+  onElegir: (id: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const sel = casos.find((c) => c.id === casoId);
+
+  useEffect(() => {
+    const cerrar = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false); };
+    document.addEventListener("mousedown", cerrar);
+    return () => document.removeEventListener("mousedown", cerrar);
+  }, []);
+
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const filtro = norm(q.trim());
+  const resultados = (filtro
+    ? casos.filter((c) => norm(`${c.expediente || ""} ${c.cliente_nombre || ""} ${c.unidad || ""} ${areaDeGarantia(c.unidad)}`).includes(filtro))
+    : casos
+  ).slice(0, 40);
+
+  const etiqueta = (c: CasoOpcion) => `[${areaDeGarantia(c.unidad)}] ${c.expediente || "s/exp"}${c.cliente_nombre ? ` · ${c.cliente_nombre}` : ""}`;
+
+  return (
+    <div ref={ref} className="relative mt-0.5">
+      <input
+        value={abierto ? q : (sel ? etiqueta(sel) : "")}
+        onChange={(e) => { setQ(e.target.value); setAbierto(true); }}
+        onFocus={() => { setQ(""); setAbierto(true); }}
+        placeholder="Escribe el nombre o expediente para buscar…"
+        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+      />
+      {abierto && (
+        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-input bg-background shadow-lg">
+          {resultados.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Sin coincidencias.</p>
+          ) : (
+            resultados.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => { onElegir(c.id); setAbierto(false); setQ(""); }}
+                className={`block w-full truncate px-3 py-2 text-left text-sm hover:bg-muted ${c.id === casoId ? "bg-muted/60 font-medium" : ""}`}
+              >
+                {etiqueta(c)}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
