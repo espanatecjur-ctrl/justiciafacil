@@ -20,7 +20,7 @@ import {
 
 type Miga = { id: string; name: string };
 
-export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: { mostrarEncabezado?: boolean; onElegirCarpeta?: (id: string, nombre: string) => void }) {
+export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta, onTraerCarpeta }: { mostrarEncabezado?: boolean; onElegirCarpeta?: (id: string, nombre: string) => void; onTraerCarpeta?: (id: string, nombre: string) => void }) {
   const [unidades, setUnidades] = useState<Unidad[]>([]);
   const [correoSA, setCorreoSA] = useState("");
   const [cargUnidades, setCargUnidades] = useState(true);
@@ -257,6 +257,11 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: {
                           <FolderCheck className="h-3.5 w-3.5" /> Usar
                         </button>
                       )}
+                      {onTraerCarpeta && (
+                        <button onClick={() => onTraerCarpeta(u.id, u.name)} title="Mover/copiar a mi área y renombrar" className="mr-1 inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-white" style={{ background: "#0C5C46" }}>
+                          Traer
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -300,6 +305,11 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: {
                   <FolderCheck className="h-4 w-4" /> Usar esta carpeta: {ruta[ruta.length - 1].name}
                 </button>
               )}
+              {onTraerCarpeta && ruta.length > 0 && (
+                <button onClick={() => { const u = ruta[ruta.length - 1]; onTraerCarpeta(u.id, u.name); }} className="flex w-full items-center justify-center gap-2 rounded-md border border-[color:var(--teal)]/50 px-4 py-2 text-sm font-semibold text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">
+                  Traer esta carpeta a mi área: {ruta[ruta.length - 1].name}
+                </button>
+              )}
 
               {/* Subcarpetas */}
               {carpetas.length > 0 && (
@@ -313,6 +323,11 @@ export function ExploradorDrive({ mostrarEncabezado = true, onElegirCarpeta }: {
                       {onElegirCarpeta && (
                         <button onClick={() => onElegirCarpeta(cp.id, cp.name)} title="Usar esta carpeta" className="mr-1 inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">
                           <FolderCheck className="h-3.5 w-3.5" /> Usar
+                        </button>
+                      )}
+                      {onTraerCarpeta && (
+                        <button onClick={() => onTraerCarpeta(cp.id, cp.name)} title="Mover/copiar a mi área y renombrar" className="mr-1 inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-white" style={{ background: "#0C5C46" }}>
+                          Traer
                         </button>
                       )}
                     </div>
