@@ -236,6 +236,12 @@ function UCP() {
     if (modo === "recientes") {
       lista = [...lista].sort((a, b) => String((b as any).created_at || "").localeCompare(String((a as any).created_at || "")));
     }
+    // UCM al final (orden estable: respeta el orden previo dentro de cada grupo)
+    lista = [...lista].sort((a, b) => {
+      const ua = areaActual(a, dictPorCaso[a.id]) === "UCM" ? 1 : 0;
+      const ub = areaActual(b, dictPorCaso[b.id]) === "UCM" ? 1 : 0;
+      return ua - ub;
+    });
     return lista;
   }, [baseUCP, predPorCaso, dictPorCaso, modo, busca]);
 
