@@ -1,259 +1,311 @@
 import { useEffect, useMemo, useState } from "react";
-import { sbSelect } from "@/lib/supabase";
-import { type BoletinJuzgado } from "@/components/config-boletin";
-import { cargarJuzgadosJalisco, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
-import { Search, Loader2 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { sbSelect, type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import type { AcuerdoJudicial } from "@/components/robot-boletines";
+import { Search, FileText, Clock, Bell, Plus, Check, CheckCheck, X, Loader2, MapPin, Eye } from "lucide-react";
+import { ConfigBoletinModal } from "@/components/config-boletin";
+import { MiniMovimientos } from "@/components/mini-movimientos";
 
-// URL del robot en Google Cloud Run (consulta en vivo el boletín, NO guarda nada)
-const ROBOT = "https://robot-boletin-699470444450.us-central1.run.app";
+const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
+const TIPOS_ACUERDO = ["Boletín", "Amparo", "Exhorto", "Edicto", "Almoneda", "RPP", "Otro"];
 
-// Órganos de La Paz, Baja California Sur (boletín del PJEBCS)
-const BCS_ORGANOS = [
-  "Juzgado Primero de Primera Instancia en el Ramo Civil",
-  "Juzgado Segundo de Primera Instancia en el Ramo Civil",
-  "Juzgado Primero de Primera Instancia en el Ramo Mercantil",
-  "Juzgado Segundo de Primera Instancia en el Ramo Mercantil",
-  "Juzgado Tercero de Primera Instancia en el Ramo Mercantil",
-  "Juzgado Primero de Primera Instancia en el Ramo Familiar",
-  "Juzgado Segundo de Primera Instancia en el Ramo Familiar",
-  "Juzgado Tercero de Primera Instancia en el Ramo Familiar",
-  "Juzgado Cuarto de Primera Instancia en el Ramo Familiar",
-  "Primera Sala Unitaria en Materia Civil",
-  "Segunda Sala Unitaria en Materia Civil",
-  "Tercera Sala Unitaria Civil y de Justicia Administrativa (Materia Civil)",
-];
+// Semáforo de frescura: 🟢 <7 días · 🟡 7-20 · 🔴 >20 · gris sin movimientos
+function frescura(dias: number | null) {
+  if (dias === null) return { color: "#9CA3AF", label: "Sin movimientos", chip: "bg-muted text-muted-foreground" };
+  if (dias < 7) return { color: "#0C5C46", label: `Hace ${dias} día${dias === 1 ? "" : "s"}`, chip: "bg-emerald-100 text-emerald-800" };
+  if (dias <= 20) return { color: "#C2A24C", label: `Hace ${dias} días`, chip: "bg-amber-100 text-amber-800" };
+  return { color: "#DC2626", label: `Hace ${dias} días`, chip: "bg-red-100 text-red-700" };
+}
+// Lee una fecha "YYYY-MM-DD" como fecha LOCAL (sin brincar de día por zona horaria)
+const parseLocal = (fecha?: string | null): Date | null => {
+  if (!fecha) return null;
+  const m = String(fecha).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(fecha);
+};
+const fmtFecha = (fecha?: string | null) => {
+  const d = parseLocal(fecha);
+  return d ? d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+};
+const diasDesde = (fecha?: string | null) => { const d = parseLocal(fecha); return d ? Math.floor((Date.now() - d.getTime()) / 86400000) : null; };
+const esHoy = (fecha?: string | null) => { const d = parseLocal(fecha); return !!d && d.toDateString() === new Date().toDateString(); };
 
-type Acuerdo = { fecha: string; expediente: string; actor?: string; demandado?: string; etapa?: string; notificacion?: string; acuerdo: string };
-type Resp = { ok: boolean; acuerdos?: Acuerdo[]; motivo?: string };
-
-// Muestra "2026-03-19" como "19/03/2026" sin brincar de día por zona horaria
-const fmt = (s?: string) => {
-  if (!s) return "—";
-  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+const TIPO_COLOR: Record<string, string> = {
+  Boletín: "bg-blue-100 text-blue-700", Amparo: "bg-purple-100 text-purple-700", Exhorto: "bg-cyan-100 text-cyan-700",
+  Edicto: "bg-orange-100 text-orange-700", Almoneda: "bg-rose-100 text-rose-700", RPP: "bg-teal-100 text-teal-700",
 };
 
-const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
-
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string }) => void } = {}) {
-  const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
-  const [cat, setCat] = useState<BoletinJuzgado[]>([]);
-  const [distrito, setDistrito] = useState("");
-  const [juzgado, setJuzgado] = useState("");
-  const [orgBCS, setOrgBCS] = useState(BCS_ORGANOS[1]); // Segundo Civil por defecto
-  const [jalJudges, setJalJudges] = useState<JuzgadoJAL[]>([]);
-  const [jalCode, setJalCode] = useState("");
-  const [exp, setExp] = useState(expedienteInicial);
-  const [cargando, setCargando] = useState(false);
-  const [res, setRes] = useState<Resp | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [agregado, setAgregado] = useState(false);
-
+export function BuzonExpedientes({ casos }: { casos: CasoJuridico[] }) {
+  const navigate = useNavigate();
+  const [acuerdos, setAcuerdos] = useState<AcuerdoJudicial[]>([]);
+  const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [agregar, setAgregar] = useState(false);
+  const [configBoletin, setConfigBoletin] = useState<CasoJuridico | null>(null);
+  const [patches, setPatches] = useState<Record<string, Partial<CasoJuridico>>>({});
+  const [fColor, setFColor] = useState<"todos" | "verde" | "amarillo" | "rojo" | "sin">("todos");
+  const [fTipo, setFTipo] = useState("todos");
+  const [fArea, setFArea] = useState("todos");
+  const [soloNoLeidos, setSoloNoLeidos] = useState(false);
+  const [orden, setOrden] = useState<"urgencia" | "reciente">("urgencia");
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => { setPagina(0); }, [q, fColor, fTipo, fArea, soloNoLeidos, orden]);
+  const [ultimaCorrida, setUltimaCorrida] = useState<{ corrida_at: string; total_expedientes: number | null; fuente: string | null } | null>(null);
   useEffect(() => {
-    sbSelect<BoletinJuzgado>("boletin_juzgado", "select=*&order=nombre_distrito,nombre_juzgado&limit=2000")
-      .then((d) => setCat(d || [])).catch(() => {});
-    cargarJuzgadosJalisco().then(setJalJudges).catch(() => {});
+    sbSelect<any>("robot_log", "select=corrida_at,total_expedientes,fuente&order=corrida_at.desc&limit=1").then((d) => setUltimaCorrida(d?.[0] ?? null)).catch(() => {});
   }, []);
 
-  const distritos = useMemo(() => Array.from(new Set(cat.map((c) => c.nombre_distrito))).sort(), [cat]);
-  const juzgados = useMemo(() => cat.filter((c) => c.nombre_distrito === distrito), [cat, distrito]);
+  const cargar = () => sbSelect<AcuerdoJudicial>("acuerdo_judicial", "select=*&order=fecha_acuerdo.desc&limit=1000").then(setAcuerdos).catch(() => setAcuerdos([]));
+  useEffect(() => { cargar(); }, []);
 
-  const buscar = async () => {
-    if (!exp.trim()) { setErr("Escribe el número de expediente (ej. 448/2024)."); return; }
-    let url = "";
-    if (estado === "sinaloa") {
-      if (!distrito || !juzgado) { setErr("Completa jurisdicción y juzgado."); return; }
-      const jz = juzgado.split(",")[0];
-      url = `${ROBOT}/probar?exp=${encodeURIComponent(exp.trim())}&distrito=${encodeURIComponent(distrito)}&juzgado=${encodeURIComponent(jz)}`;
-    } else if (estado === "bcs") {
-      if (!orgBCS) { setErr("Elige el juzgado de La Paz."); return; }
-      url = `${ROBOT}/bcs-buscar?exp=${encodeURIComponent(exp.trim())}&juzgado=${encodeURIComponent(orgBCS)}`;
-    } else {
-      if (!jalCode) { setErr("Elige el juzgado de Jalisco."); return; }
-      const esForaneo = jalJudges.find((j) => j.code === jalCode)?.foraneo;
-      const endpoint = esForaneo ? "jalf-leer" : "jal-leer";
-      url = `${ROBOT}/${endpoint}?exp=${encodeURIComponent(exp.trim())}&judged=${encodeURIComponent(jalCode)}`;
+  const marcarLeido = async (id: string) => {
+    await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?id=eq.${id}`, { method: "PATCH", headers: wHeaders, body: JSON.stringify({ leido: true }) });
+    setAcuerdos((p) => p.map((a) => a.id === id ? { ...a, leido: true } : a));
+  };
+  const marcarTodosLeidos = async (exp: string) => {
+    await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?expediente=eq.${encodeURIComponent(exp)}&leido=eq.false`, { method: "PATCH", headers: wHeaders, body: JSON.stringify({ leido: true }) });
+    setAcuerdos((p) => p.map((a) => (a.expediente || "").trim() === exp ? { ...a, leido: true } : a));
+  };
+
+  // acuerdos por expediente
+  const porExp = useMemo(() => {
+    const m: Record<string, AcuerdoJudicial[]> = {};
+    for (const a of acuerdos) { const k = (a.expediente || "").trim(); if (!k) continue; (m[k] ||= []).push(a); }
+    return m;
+  }, [acuerdos]);
+
+  const filas = useMemo(() => {
+    const arr = casos.map((c0) => {
+      const c = patches[c0.id] ? { ...c0, ...patches[c0.id] } : c0;
+      const exp = (c.expediente || "").trim();
+      const acs = porExp[exp] || [];
+      const ultima = acs[0]?.fecha_acuerdo ?? null;
+      const dias = diasDesde(ultima);
+      return { c, exp, acs, ultima, dias, hoy: acs.some((a) => esHoy(a.fecha_acuerdo)), noLeidos: acs.filter((a) => a.leido === false).length };
+    });
+    const colorDe = (d: number | null) => d === null ? "sin" : d < 7 ? "verde" : d <= 20 ? "amarillo" : "rojo";
+    const areaDe = (u?: string | null) => { const s = (u || "").toUpperCase(); if (s.includes("UDP")) return "UDP"; if (s.includes("URRJ")) return "URRJ"; if (s.includes("UCP")) return "UCP"; return "UCM"; };
+    const t = q.trim().toLowerCase();
+    let f = arr.filter((x) => {
+      if (t && !`${x.exp} ${x.c.cliente_nombre || ""} ${x.c.juzgado || ""} ${x.c.materia || ""} ${x.c.actor || ""} ${x.c.demandado || ""}`.toLowerCase().includes(t)) return false;
+      if (fArea !== "todos" && areaDe(x.c.unidad) !== fArea) return false;
+      if (fColor !== "todos" && colorDe(x.dias) !== fColor) return false;
+      if (soloNoLeidos && x.noLeidos === 0) return false;
+      if (fTipo !== "todos" && !x.acs.some((a) => a.tipo_acuerdo === fTipo)) return false;
+      return true;
+    });
+    if (orden === "urgencia") f = f.sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
+    else f = f.sort((a, b) => (parseLocal(b.ultima)?.getTime() ?? 0) - (parseLocal(a.ultima)?.getTime() ?? 0));
+    return f;
+  }, [casos, porExp, q, fColor, fTipo, fArea, soloNoLeidos, orden, patches]);
+
+  const conteo = useMemo(() => {
+    let v = 0, am = 0, r = 0, s = 0, hoy = 0;
+    for (const c of casos) {
+      const acs = porExp[(c.expediente || "").trim()] || [];
+      const d = diasDesde(acs[0]?.fecha_acuerdo ?? null);
+      if (d === null) s++; else if (d < 7) v++; else if (d <= 20) am++; else r++;
+      if (acs.some((a) => esHoy(a.fecha_acuerdo))) hoy++;
     }
-    setErr(null); setCargando(true); setRes(null);
+    return { v, am, r, s, hoy };
+  }, [casos, porExp]);
+
+  const selExp = filas.find((f) => f.c.id === sel);
+
+  const porPagina = 20;
+  const totalPag = Math.max(1, Math.ceil(filas.length / porPagina));
+  const pag = Math.min(pagina, totalPag - 1);
+  const filasPag = filas.slice(pag * porPagina, pag * porPagina + porPagina);
+
+  return (
+    <div className="space-y-3">
+      {ultimaCorrida && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          🤖 Última revisión del robot: <b className="text-foreground">{new Date(ultimaCorrida.corrida_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</b>
+          {ultimaCorrida.fuente === "PRUEBA" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">modo prueba</span>}
+          {ultimaCorrida.total_expedientes != null && <span>· {ultimaCorrida.total_expedientes} expedientes revisados</span>}
+        </div>
+      )}
+      {/* Mini dashboard de salud (clicable) */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {([["todos", "Todos", "bg-muted text-foreground", filas.length], ["verde", `🟢 ${conteo.v} al día`, "bg-emerald-100 text-emerald-800", conteo.v], ["amarillo", `🟡 ${conteo.am} por revisar`, "bg-amber-100 text-amber-800", conteo.am], ["rojo", `🔴 ${conteo.r} sin avance`, "bg-red-100 text-red-700", conteo.r], ["sin", `⚪ ${conteo.s} sin movimientos`, "bg-muted text-muted-foreground", conteo.s]] as const).map(([k, label, cls]) => (
+          <button key={k} onClick={() => setFColor(k as any)} className={`rounded-full px-3 py-1 font-medium transition-all ${cls} ${fColor === k ? "ring-2 ring-[color:var(--teal)] ring-offset-1" : "opacity-80 hover:opacity-100"}`}>{label}</button>
+        ))}
+        {conteo.hoy > 0 && <span className="rounded-full bg-blue-100 px-3 py-1 font-medium text-blue-700"><Bell className="mr-1 inline h-3 w-3" />{conteo.hoy} hoy</span>}
+      </div>
+
+      {/* Barra de filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={fArea} onChange={(e) => setFArea(e.target.value)} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs">
+          <option value="todos">Todas las áreas</option>
+          <option value="UCP">UCP</option>
+          <option value="URRJ">URRJ</option>
+          <option value="UCM">UCM</option>
+          <option value="UDP">UDP</option>
+        </select>
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs">
+          <option value="todos">Todos los tipos</option>
+          {TIPOS_ACUERDO.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button onClick={() => setSoloNoLeidos((v) => !v)} className={`rounded-md border px-3 py-1.5 text-xs ${soloNoLeidos ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Solo con no leídos</button>
+        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+          Orden:
+          <button onClick={() => setOrden("urgencia")} className={`rounded-md border px-2.5 py-1.5 ${orden === "urgencia" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Por urgencia</button>
+          <button onClick={() => setOrden("reciente")} className={`rounded-md border px-2.5 py-1.5 ${orden === "reciente" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Reciente</button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
+        {/* Lista izquierda */}
+        <div className="min-w-0 rounded-xl border border-border bg-card">
+          <div className="border-b border-border p-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar expediente…" className="w-full rounded-md border border-input bg-background pl-8 pr-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div className="max-h-[560px] overflow-auto p-2">
+            {filas.length === 0 ? <p className="p-4 text-center text-sm text-muted-foreground">Sin expedientes.</p> : filasPag.map((f) => {
+              const activo = f.c.id === sel;
+              return (
+                <div key={f.c.id} onClick={() => navigate({ to: "/expediente", search: { id: f.c.id, nueva: false } })} className={`mb-1 flex w-full cursor-pointer items-start gap-2.5 rounded-lg p-2.5 text-left transition-colors ${activo ? "bg-[color:var(--teal)]/10 ring-1 ring-[color:var(--teal)]/30" : "hover:bg-muted/50"}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[color:var(--teal)]">{f.exp || "— sin expediente —"}</p>
+                    <p className="truncate text-xs text-muted-foreground">{[f.c.materia, f.c.via_procesal].filter(Boolean).join(" · ") || "—"}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{f.c.juzgado || "—"}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{[f.c.entidad, f.c.etapa_actual].filter(Boolean).join(" · ") || "—"}</p>
+                    {(f.c.actor || f.c.demandado) && <p className="truncate text-[11px] text-muted-foreground"><span className="font-medium text-foreground">{f.c.actor || "—"}</span> vs. <span className="font-medium text-foreground">{f.c.demandado || "—"}</span></p>}
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setSel(f.c.id); }} title="Ver boletín aquí mismo" className="mt-0.5 shrink-0 rounded-md border border-input p-1 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                </div>
+              );
+            })}
+          </div>
+          {filas.length > porPagina && (
+            <div className="flex items-center justify-between gap-2 border-t border-border p-2 text-xs">
+              <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={pag === 0} className="rounded-md border border-input px-2.5 py-1.5 disabled:opacity-40 hover:bg-muted">← Anterior</button>
+              <span className="text-muted-foreground">Página {pag + 1} de {totalPag} · {filas.length} exp.</span>
+              <button onClick={() => setPagina((p) => Math.min(totalPag - 1, p + 1))} disabled={pag >= totalPag - 1} className="rounded-md border border-input px-2.5 py-1.5 disabled:opacity-40 hover:bg-muted">Siguiente →</button>
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 rounded-xl border border-border bg-card">
+          {!selExp ? (
+            <div className="grid h-full min-h-[300px] place-items-center p-8 text-center text-sm text-muted-foreground">
+              <div><FileText className="mx-auto mb-2 h-8 w-8 opacity-40" />Elige un expediente para ver su boletín e histórico.</div>
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="mb-3 border-b border-border pb-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="break-words text-base font-bold text-[color:var(--teal)]">{selExp.exp}</p>
+                    {(selExp.c.actor || selExp.c.demandado) && <p className="mt-0.5 break-words text-sm"><span className="font-semibold text-foreground">{selExp.c.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold text-foreground">{selExp.c.demandado || "—"}</span></p>}
+                    <p className="break-words text-sm text-muted-foreground">{selExp.c.cliente_nombre || ""}{selExp.c.cliente_nombre ? " · " : ""}{selExp.c.materia || ""} · {selExp.c.juzgado || ""}</p>
+                    {selExp.c.nombre_juzgado && <p className="mt-0.5 break-words text-xs text-[color:var(--teal)]"><MapPin className="mr-1 inline h-3 w-3" />Boletín: {selExp.c.nombre_juzgado} (distrito {selExp.c.cve_distrito}, juzgado {selExp.c.cve_juzgado})</p>}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 sm:shrink-0">
+                    <button onClick={() => navigate({ to: "/expediente", search: { id: selExp.c.id, nueva: false } })} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white" style={{ background: "#0B1E3A" }}><FileText className="h-3.5 w-3.5" /> Abrir ficha</button>
+                    <button onClick={() => setConfigBoletin(selExp.c)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><MapPin className="h-3.5 w-3.5" /> {selExp.c.cve_juzgado ? "Juzgado ✓" : "Asignar juzgado"}</button>
+                    <button onClick={() => setAgregar(true)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-3.5 w-3.5" /> Agregar acuerdo</button>
+                    {selExp.noLeidos > 0 && <button onClick={() => marcarTodosLeidos(selExp.exp)} className="flex items-center gap-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"><CheckCheck className="h-3.5 w-3.5" /> Marcar todos leídos</button>}
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${frescura(selExp.dias).chip}`}><Clock className="mr-1 inline h-3 w-3" />{frescura(selExp.dias).label}</span>
+                  {selExp.dias !== null && selExp.dias > 20 && <span className="text-xs font-medium text-red-700">⚠ Sin avance: conviene presentar promoción impulsora.</span>}
+                </div>
+              </div>
+
+              {selExp.acs.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">Sin acuerdos registrados todavía.<br />El robot (9 AM) o el buzón manual los irán llenando.</div>
+              ) : (
+                <div className="space-y-2">
+                  {selExp.acs.map((a) => (
+                    <div key={a.id} className={`rounded-lg border p-3 ${a.leido === false ? "border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5" : "border-border"}`}>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {a.tipo_acuerdo && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TIPO_COLOR[a.tipo_acuerdo] || "bg-muted text-muted-foreground"}`}>{a.tipo_acuerdo}</span>}
+                          {a.urgente && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">URGENTE</span>}
+                          {a.leido === false && <span className="rounded-full bg-[color:var(--teal)] px-2 py-0.5 text-[10px] font-semibold text-white">NUEVO</span>}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{fmtFecha(a.fecha_acuerdo)}</span>
+                      </div>
+                      <p className="text-sm">{a.texto || "(sin texto)"}</p>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-[10px] text-muted-foreground">{a.origen === "robot" ? "🤖 robot" : "✍️ manual"}</span>
+                        {a.leido === false && <button onClick={() => marcarLeido(a.id)} className="flex items-center gap-1 text-[11px] text-[color:var(--teal)] hover:underline"><Check className="h-3 w-3" /> Marcar leído</button>}
+                      </div>
+                    </div>
+                 ))}
+                </div>
+              )}
+
+              <MiniMovimientos caso={selExp.c} />
+            </div>
+          )}
+        </div>
+      </div>
+      {agregar && selExp && <AgregarAcuerdoModal expediente={selExp.exp} juzgado={selExp.c.juzgado} entidad={selExp.c.entidad} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargar(); }} />}
+      {configBoletin && <ConfigBoletinModal caso={configBoletin} onClose={() => setConfigBoletin(null)} onGuardado={() => { const id = configBoletin.id; setConfigBoletin(null); sbSelect<CasoJuridico>("caso_juridico", `select=cve_distrito,cve_juzgado,nombre_juzgado&id=eq.${id}`).then((d) => { if (d?.[0]) setPatches((p) => ({ ...p, [id]: d[0] })); }).catch(() => {}); }} />}
+    </div>
+  );
+}
+
+function AgregarAcuerdoModal({ expediente, juzgado, entidad, onClose, onGuardado }: { expediente: string; juzgado?: string | null; entidad?: string | null; onClose: () => void; onGuardado: () => void }) {
+  const [tipo, setTipo] = useState("Boletín");
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [texto, setTexto] = useState("");
+  const [urgente, setUrgente] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const guardar = async () => {
+    if (!texto.trim()) { setError("Escribe el texto del acuerdo."); return; }
+    setGuardando(true); setError(null);
     try {
-      const r = await fetch(url);
-      setRes(await r.json());
-    } catch {
-      setErr("No se pudo conectar con el robot. Intenta de nuevo en un momento.");
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  const acuerdos = res?.acuerdos || [];
-  const party = acuerdos[0];
-  const esAmparo = (a: Acuerdo) => resaltarAmparo && RE_AMPARO.test(`${a.acuerdo || ""} ${a.etapa || ""} ${a.notificacion || ""}`);
-  const acuerdosAmparo = resaltarAmparo ? acuerdos.filter(esAmparo) : [];
-  const notaAmparo = () => {
-    const lineas = acuerdosAmparo.map((a) => `- ${fmt(a.fecha)} · ${a.acuerdo || ""}`).join("\n");
-    return `Amparo detectado en boletín (exp. ${party?.expediente || exp}):\n${lineas}`;
-  };
-  const [guardadoGen, setGuardadoGen] = useState(false);
-  const notaGeneral = () => {
-    const cab = `Boletín (exp. ${party?.expediente || exp})${party?.actor || party?.demandado ? ` · ${party?.actor || "—"} vs. ${party?.demandado || "—"}` : ""}:`;
-    const lineas = acuerdos.slice(0, 12).map((a) => `- ${fmt(a.fecha)} · ${(a.etapa || "").trim()} ${a.acuerdo || ""}`.replace(/ +/g, " ").trim()).join("\n");
-    return `${cab}\n${lineas}`;
-  };
-  const juzgadoLabel = () => {
-    if (estado === "sinaloa") return juzgado || "";
-    if (estado === "bcs") return orgBCS ? `${orgBCS}, La Paz` : "";
-    if (estado === "jalisco") return jalJudges.find((j) => j.code === jalCode)?.name || "";
-    return "";
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, {
+        method: "POST", headers: wHeaders,
+        body: JSON.stringify({ expediente, juzgado: juzgado || null, entidad: entidad || "Sinaloa", fecha_acuerdo: fecha || null, tipo_acuerdo: tipo, texto: texto.trim(), urgente, leido: false, origen: "manual" }),
+      });
+      if (!res.ok) throw new Error(`Supabase ${res.status}`);
+      onGuardado();
+    } catch (e: any) { setError(e.message); } finally { setGuardando(false); }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="mb-3 text-xs text-muted-foreground">
-          Consulta cualquier expediente en el boletín del Tribunal (búsqueda en vivo, no guarda nada).
-          Se busca por número de expediente dentro de un juzgado; el actor y demandado aparecen en los resultados.
-        </p>
-
-        {/* Selector de estado */}
-        <div className="mb-3 flex flex-col gap-1 rounded-lg border border-border p-0.5 sm:inline-flex sm:flex-row">
-          <button
-            onClick={() => { setEstado("sinaloa"); setRes(null); setErr(null); }}
-            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "sinaloa" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
-          >Sinaloa</button>
-          <button
-            onClick={() => { setEstado("bcs"); setRes(null); setErr(null); }}
-            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "bcs" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
-          >Baja California Sur (La Paz)</button>
-          <button
-            onClick={() => { setEstado("jalisco"); setRes(null); setErr(null); }}
-            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "jalisco" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
-          >Jalisco (ZMG)</button>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md overflow-hidden rounded-xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 text-white" style={{ background: "#0B1E3A" }}>
+          <p className="font-semibold">Agregar acuerdo · {expediente}</p>
+          <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
-
-        {estado === "sinaloa" ? (
-          <div className="grid gap-2 sm:grid-cols-3">
+        <div className="space-y-3 p-4">
+          {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium">Jurisdicción</label>
-              <select className={inp} value={distrito} onChange={(e) => { setDistrito(e.target.value); setJuzgado(""); }}>
-                <option value="">Selecciona…</option>
-                {distritos.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tipo</label>
+              <select className={inp} value={tipo} onChange={(e) => setTipo(e.target.value)}>{TIPOS_ACUERDO.map((t) => <option key={t}>{t}</option>)}</select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium">Juzgado</label>
-              <select className={inp} value={juzgado} onChange={(e) => setJuzgado(e.target.value)} disabled={!distrito}>
-                <option value="">Selecciona…</option>
-                {juzgados.map((j) => <option key={j.cve_juzgado} value={j.nombre_juzgado}>{j.nombre_juzgado}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">N° de expediente</label>
-              <input className={inp} value={exp} onChange={(e) => setExp(e.target.value)} placeholder="ej. 575/2022" onKeyDown={(e) => { if (e.key === "Enter") buscar(); }} />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Fecha del acuerdo</label>
+              <input type="date" className={inp} value={fecha} onChange={(e) => setFecha(e.target.value)} />
             </div>
           </div>
-        ) : estado === "bcs" ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium">Juzgado / Órgano (La Paz)</label>
-              <select className={inp} value={orgBCS} onChange={(e) => setOrgBCS(e.target.value)}>
-                {BCS_ORGANOS.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">N° de expediente</label>
-              <input className={inp} value={exp} onChange={(e) => setExp(e.target.value)} placeholder="ej. 448/2024" onKeyDown={(e) => { if (e.key === "Enter") buscar(); }} />
-            </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Texto del acuerdo</label>
+            <textarea rows={4} className={inp} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Ej. Se admite la promoción y se señala fecha para…" />
           </div>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium">Juzgado (Jalisco · ZMG)</label>
-              <select className={inp} value={jalCode} onChange={(e) => setJalCode(e.target.value)} disabled={!jalJudges.length}>
-                <option value="">{jalJudges.length ? "Selecciona…" : "Cargando juzgados…"}</option>
-                <optgroup label="Zona Metropolitana (Guadalajara)">
-                  {jalJudges.filter((j) => !j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
-                </optgroup>
-                <optgroup label="Foráneos (municipios)">
-                  {jalJudges.filter((j) => j.foraneo).map((j) => <option key={j.code} value={j.code}>{j.name} [{j.code}]</option>)}
-                </optgroup>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium">N° de expediente</label>
-              <input className={inp} value={exp} onChange={(e) => setExp(e.target.value)} placeholder="ej. 60/2014" onKeyDown={(e) => { if (e.key === "Enter") buscar(); }} />
-            </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={urgente} onChange={(e) => setUrgente(e.target.checked)} /> Marcar como urgente</label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
+            <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar acuerdo"}
+            </button>
           </div>
-        )}
-
-        {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-
-        <button onClick={buscar} disabled={cargando} className="mt-3 flex items-center gap-2 rounded-md bg-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-          {cargando ? <><Loader2 className="h-4 w-4 animate-spin" /> Consultando el boletín del Tribunal…</> : <><Search className="h-4 w-4" /> Buscar</>}
-        </button>
-        {cargando && <p className="mt-2 text-xs text-muted-foreground">El robot está abriendo el boletín y leyendo el expediente. Suele tardar entre 15 y 50 segundos — déjalo trabajar, no recargues la página.</p>}
+        </div>
       </div>
-
-      {res && (
-        <div className="rounded-xl border border-border bg-card p-4">
-          {acuerdos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No se encontraron acuerdos para ese expediente en ese juzgado{res.motivo ? ` (${res.motivo})` : ""}.
-              Verifica el número, el juzgado y la jurisdicción.
-            </p>
-          ) : (
-            <>
-              <div className="mb-3 border-b border-border pb-2">
-                <p className="break-words text-base font-bold text-[color:var(--teal)]">{party?.expediente} · {acuerdos.length} acuerdos</p>
-                {(party?.actor || party?.demandado) && (
-                  <p className="break-words text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
-                )}
-                {onGuardarHallazgos && acuerdos.length > 0 && (
-                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined }); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? "Hallazgos guardados ✓" : "Guardar hallazgos del boletín"}</button>
-                )}
-              </div>
-              {resaltarAmparo && acuerdosAmparo.length > 0 && (
-                <div className="mb-2 rounded-lg border border-orange-300 bg-orange-50 p-2.5 text-xs text-orange-800">
-                  <b>{acuerdosAmparo.length}</b> acuerdo(s) mencionan <b>amparo / suspensión / Distrito</b>. Revísalos: pueden afectar la compra de la cesión.
-                  {onHallazgoAmparo && (
-                    <button
-                      type="button"
-                      disabled={agregado}
-                      onClick={() => { onHallazgoAmparo(notaAmparo()); setAgregado(true); }}
-                      className="mt-2 block rounded-md bg-orange-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-60"
-                    >
-                      {agregado ? "Agregado al dictamen" : "Agregar hallazgo al dictamen"}
-                    </button>
-                  )}
-                </div>
-              )}
-              {resaltarAmparo && acuerdos.length > 0 && acuerdosAmparo.length === 0 && (
-                <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2.5 text-xs text-muted-foreground">
-                  No se detectaron acuerdos que mencionen amparo en el expediente local (recuerda que el amparo federal puede no reflejarse aquí).
-                </div>
-              )}
-              <div className="space-y-2">
-                {acuerdos.map((a, i) => {
-                  const amp = esAmparo(a);
-                  return (
-                  <div key={i} className={`rounded-lg border p-3 ${amp ? "border-orange-300 bg-orange-50" : "border-border"}`}>
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        {a.etapa ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{a.etapa}</span> : <span />}
-                        {amp && <span className="rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-900">AMPARO</span>}
-                      </div>
-                      <span className="text-xs text-muted-foreground">{fmt(a.fecha)}</span>
-                    </div>
-                    <p className="break-words text-sm">{a.acuerdo}</p>
-                    {a.notificacion && <p className="mt-0.5 break-words text-[11px] text-muted-foreground">Notificación: {a.notificacion}</p>}
-                  </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
