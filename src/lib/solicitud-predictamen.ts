@@ -76,6 +76,24 @@ export async function crearSolicitudPredictamen(
   }
 }
 
+/** Refleja una carpeta de Drive en la garantía (la vincula) para que aparezca en su ficha. */
+export async function vincularCarpetaAGarantia(
+  casoId: string,
+  carpetaId: string,
+  carpetaNombre: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${casoId}`, {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=minimal" },
+      body: JSON.stringify({ drive_carpeta_id: carpetaId, drive_carpeta_nombre: carpetaNombre }),
+    });
+    return { ok: res.ok, error: res.ok ? undefined : `Supabase ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e) };
+  }
+}
+
 export async function listarSolicitudesPredictamen(estado?: string): Promise<SolicitudPredictamen[]> {
   try {
     const filtro = estado ? `&estado=eq.${estado}` : "";
