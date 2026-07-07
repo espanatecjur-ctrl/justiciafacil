@@ -620,13 +620,13 @@ function UCP() {
 
       {/* mini banner: resolver garantías repetidas (conservar las dos o eliminar una, con motivo) */}
       <Dialog open={!!dupModal} onOpenChange={(o) => { if (!o) setDupModal(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg max-h-[88vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Copy className="h-4 w-4 text-amber-600" /> Garantías repetidas</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-base"><Copy className="h-4 w-4 shrink-0 text-amber-600" /> Garantías repetidas</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-1">
-            <p className="text-xs text-muted-foreground">
-              Estas garantías comparten <b>expediente, dirección, cliente o folio</b>. Marca cuál se queda y cuál se elimina, y escribe el motivo. Lo que elimines se manda a la papelera con su nota (se puede recuperar).
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Comparten <b>expediente, dirección, cliente o folio</b>. Marca cuál se queda y cuál se elimina, y escribe el motivo. Lo que elimines se manda a la papelera con su nota (se puede recuperar).
             </p>
 
             <div className="space-y-2">
@@ -636,17 +636,17 @@ function UCP() {
                 const dec = dupDecision[id] || "conservar";
                 return (
                   <div key={id} className={`rounded-md border p-2.5 ${dec === "eliminar" ? "border-red-200 bg-red-50/60" : "border-emerald-200 bg-emerald-50/50"}`}>
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 text-xs">
-                        <p className="font-semibold">{c.expediente || "(sin expediente)"}</p>
-                        <p className="truncate text-muted-foreground">{c.direccion_garantia || "sin dirección"}</p>
-                        <p className="text-muted-foreground">{c.cliente_nombre || c.cliente_codigo || "sin cliente"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+                        <p className="break-words font-semibold">{c.expediente || "(sin expediente)"}</p>
+                        <p className="break-words text-muted-foreground">{c.direccion_garantia || "sin dirección"}</p>
+                        <p className="break-words text-muted-foreground">{c.cliente_nombre || c.cliente_codigo || "sin cliente"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
                       </div>
-                      <div className="flex shrink-0 overflow-hidden rounded-md border border-input">
+                      <div className="flex shrink-0 self-start overflow-hidden rounded-md border border-input">
                         <button type="button" onClick={() => setDupDecision((p) => ({ ...p, [id]: "conservar" }))}
-                          className={`px-2.5 py-1 text-[11px] font-medium ${dec === "conservar" ? "bg-emerald-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>Se queda</button>
+                          className={`flex-1 px-3 py-1.5 text-[11px] font-medium sm:flex-none ${dec === "conservar" ? "bg-emerald-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>Se queda</button>
                         <button type="button" onClick={() => setDupDecision((p) => ({ ...p, [id]: "eliminar" }))}
-                          className={`px-2.5 py-1 text-[11px] font-medium ${dec === "eliminar" ? "bg-red-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>Eliminar</button>
+                          className={`flex-1 border-l border-input px-3 py-1.5 text-[11px] font-medium sm:flex-none ${dec === "eliminar" ? "bg-red-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>Eliminar</button>
                       </div>
                     </div>
                   </div>
@@ -657,12 +657,13 @@ function UCP() {
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-medium text-muted-foreground">Motivo (por qué se quedan las dos o por qué se elimina) *</span>
               <Textarea rows={3} value={dupNota} onChange={(e) => setDupNota(e.target.value)}
-                placeholder="Ej: Son el mismo inmueble cargado dos veces, se conserva el de expediente 82/26. / Se quedan las dos porque son garantías distintas del mismo cliente." />
+                className="text-sm"
+                placeholder="Ej: Es el mismo inmueble cargado dos veces, se conserva el de exp. 82/26. / Se quedan las dos porque son garantías distintas del mismo cliente." />
             </label>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDupModal(null)} disabled={guardandoDup}>Cancelar</Button>
-            <Button onClick={guardarDup} disabled={guardandoDup}>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setDupModal(null)} disabled={guardandoDup}>Cancelar</Button>
+            <Button className="w-full sm:w-auto" onClick={guardarDup} disabled={guardandoDup}>
               {guardandoDup ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               <span className="ml-1">Guardar decisión</span>
             </Button>
