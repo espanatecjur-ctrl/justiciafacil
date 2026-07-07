@@ -110,20 +110,6 @@ export function textosDeCaso(caso: { expediente?: string | null; no_credito?: st
   return Array.from(set);
 }
 
-/** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema. */
-export async function sincronizarCarpeta(casoId: string, carpetaId: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
-  try {
-    const r = await fetch("/.netlify/functions/sincronizar-drive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ casoId, carpetaId }),
-    });
-    return await r.json();
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
-  }
-}
-
 export interface ArchivoEncontrado {
   id: string;
   name: string;
@@ -147,6 +133,20 @@ export async function buscarEnDrive(texto: string): Promise<{ ok: boolean; carpe
     return { ok: !!d.ok, carpetas: d.carpetas || [], archivos: d.archivos || [], error: d.error };
   } catch (e: any) {
     return { ok: false, carpetas: [], archivos: [], error: String(e?.message || e) };
+  }
+}
+
+/** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema. */
+export async function sincronizarCarpeta(casoId: string, carpetaId: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/sincronizar-drive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ casoId, carpetaId }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
   }
 }
 
@@ -188,6 +188,34 @@ export async function firmarCopias(paths: string[]): Promise<Record<string, stri
   }
 }
 
+/** Trae una carpeta suelta a la carpeta de su área (Paso 1: mover + renombrar). */
+export async function traerCarpetaAArea(carpetaId: string, area: string, nuevoNombre: string): Promise<{ ok: boolean; carpetaId?: string; nombre?: string; requiereCopia?: boolean; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/traer-carpeta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carpetaId, area, nuevoNombre }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/** Trae un documento suelto a la carpeta vinculada (mueve o copia según dónde esté). */
+export async function traerArchivo(archivoId: string, carpetaDestino: string): Promise<{ ok: boolean; accion?: string; name?: string; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/traer-archivo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archivoId, carpetaDestino }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
 export function esCarpeta(it: ItemDrive): boolean {
   return it.mimeType === CARPETA_MIME;
 }
@@ -209,23 +237,4 @@ export function tipoLegible(mime: string): string {
   if (m.includes("video")) return "Video";
   if (m.includes("text")) return "Texto";
   return "Archivo";
-}
-
-// Trae (mueve) una carpeta de Drive a la carpeta del área, con nombre nuevo.
-// Backend: /.netlify/functions/traer-carpeta  ->  { ok, movida, carpetaId, nombre } | { ok:false, requiereCopia }
-export async function traerCarpetaAArea(
-  carpetaId: string,
-  area: string,
-  nuevoNombre: string,
-): Promise<{ ok: boolean; movida?: boolean; carpetaId?: string; nombre?: string; requiereCopia?: boolean; error?: string }> {
-  try {
-    const r = await fetch("/.netlify/functions/traer-carpeta", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ carpetaId, area, nuevoNombre }),
-    });
-    return await r.json();
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message || e) };
-  }
 }
