@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { useNavigate } from "@tanstack/react-router";
 interface RefGarantia { id?: string; expediente?: string; direccion_garantia?: string; juzgado?: string; cliente_nombre?: string; deudor?: string; entidad?: string; }
-import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText, AlertTriangle } from "lucide-react";
+import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText, AlertTriangle, ArrowRightCircle } from "lucide-react";
 import { FichaURRJ } from "@/components/ficha-urrj";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -28,6 +28,9 @@ interface Garantia extends RefGarantia {
   nReg: number;
   ultimoResultado: string;
   ultimaFecha: string;
+  predId?: string;
+  posicion?: string;
+  pasaUcp?: boolean;
 }
 
 interface FilaDic {
@@ -62,28 +65,66 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
       .catch(() => setRepetidos(new Set()));
   }, []);
   const esRepetido = (g: Garantia) => (g.id && repetidos.has(String(g.id))) || (g.expediente && repetidos.has(String(g.expediente)));
+
+  // expedientes que ya están en UCP (para el indicador "También en UCP")
+  const [expsUCP, setExpsUCP] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=expediente,unidad&expediente=not.is.null`, { headers })
+      .then((r) => r.ok ? r.json() : [])
+      .then((rows: any[]) => {
+        const s = new Set<string>();
+        for (const c of rows || []) {
+          const u = String(c.unidad || "").toUpperCase();
+          const esUCP = u.includes("UCP") || u.trim() === ""; // UCP o entrada (por defecto UCP)
+          if (esUCP && c.expediente) s.add(String(c.expediente).trim());
+        }
+        setExpsUCP(s);
+      })
+      .catch(() => setExpsUCP(new Set()));
+  }, []);
+  const enUCP = (g: Garantia) => !!(g.expediente && expsUCP.has(String(g.expediente).trim()));
+  const faltaValidar = (g: Garantia) => !g.direccion_garantia?.trim() || !g.cliente_nombre?.trim() || !g.posicion?.trim();
+
+  // Pasar a UCP: marca el pre-dictamen como pasa_a_ucp = true (reversible). Pide confirmación.
+  const [pasando, setPasando] = useState<string | null>(null);
+  const pasarAUCP = async (g: Garantia) => {
+    if (!g.predId) { alert("Esta garantía no tiene pre-dictamen para pasar."); return; }
+    if (!confirm(`¿Pasar a UCP el expediente ${g.expediente || "s/e"}? Aparecerá en la lista de UCP. (Se puede revertir.)`)) return;
+    setPasando(g.clave); setMenu(null);
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${g.predId}`, {
+        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ pasa_a_ucp: true }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      await cargarGarantias();
+    } catch {
+      alert("No se pudo pasar a UCP. Intenta de nuevo.");
+    } finally { setPasando(null); }
+  };
   const navigate = useNavigate();
 
   const cargarGarantias = async () => {
     setCargando(true);
     try {
       const [preds, regs] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,expediente,posicion,dictamen_final,dictamen_sugerido,datos,created_at&en_papelera=eq.false&terminado=eq.false&order=created_at.desc&limit=500`, { headers }).then((x) => x.ok ? x.json() : []),
+        fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,expediente,posicion,dictamen_final,dictamen_sugerido,pasa_a_ucp,datos,created_at&en_papelera=eq.false&terminado=eq.false&order=created_at.desc&limit=500`, { headers }).then((x) => x.ok ? x.json() : []),
         fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=id,expediente,acreditado,resultado,datos,created_at&en_papelera=eq.false&terminado=eq.false&order=created_at.desc&limit=500`, { headers }).then((x) => x.ok ? x.json() : []),
       ]);
       const mapa = new Map<string, Garantia>();
       const clave = (exp?: string, caso?: string) => (exp && exp.trim()) ? "exp:" + exp.trim() : caso ? "caso:" + caso : "s/e";
       for (const p of preds) {
         const k = clave(p.expediente, p.caso_id);
-        const g = mapa.get(k) || { clave: k, id: p.caso_id || undefined, expediente: p.expediente || "", direccion_garantia: p.datos?.ubicacion || "", juzgado: p.datos?.juzgado || "", deudor: p.datos?.deudor || "", entidad: p.datos?.estado || "", cliente_nombre: p.datos?.deudor || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
+        const g: Garantia = mapa.get(k) || { clave: k, id: p.caso_id || undefined, expediente: p.expediente || "", direccion_garantia: p.datos?.ubicacion || "", juzgado: p.datos?.juzgado || "", deudor: p.datos?.deudor || "", entidad: p.datos?.estado || "", cliente_nombre: p.datos?.deudor || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
         g.nJur++;
         if (!g.ultimaFecha || String(p.created_at) > g.ultimaFecha) { g.ultimaFecha = p.created_at; g.ultimoResultado = p.dictamen_final || p.dictamen_sugerido || ""; }
+        if (!g.predId) { g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; }
         if (!g.id && p.caso_id) g.id = p.caso_id;
         mapa.set(k, g);
       }
       for (const r of regs) {
         const k = clave(r.expediente);
-        const g = mapa.get(k) || { clave: k, expediente: r.expediente || "", direccion_garantia: "", cliente_nombre: r.acreditado || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
+        const g: Garantia = mapa.get(k) || { clave: k, expediente: r.expediente || "", direccion_garantia: "", cliente_nombre: r.acreditado || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
         g.nReg++;
         if (!g.ultimaFecha || String(r.created_at) > g.ultimaFecha) { g.ultimaFecha = r.created_at; g.ultimoResultado = r.resultado || g.ultimoResultado; }
         mapa.set(k, g);
@@ -170,9 +211,12 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
               {garantias.map((g) => (
                 <div key={g.clave} className="flex items-center justify-between gap-3 p-3 hover:bg-muted/30">
                   <button onClick={() => setFichaSel(g)} className="min-w-0 flex-1 text-left">
-                    <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                    <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-semibold">
                       {g.expediente || "Sin expediente"}
-                      {esRepetido(g) && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800" title="Dirección repetida en otro expediente — validar"><AlertTriangle className="h-3 w-3" /> Repetido</span>}
+                      {esRepetido(g) && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800" title="Dirección repetida en otro expediente"><AlertTriangle className="h-3 w-3" /> Repetido</span>}
+                      {enUCP(g) && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800" title="Este expediente también existe en UCP">También en UCP</span>}
+                      {g.pasaUcp && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800" title="Ya marcada para UCP">→ UCP</span>}
+                      {faltaValidar(g) && <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-800" title="Faltan datos: dirección, cliente o posición"><AlertTriangle className="h-3 w-3" /> Validar datos</span>}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">{g.direccion_garantia || g.cliente_nombre || "—"}{g.entidad ? " · " + g.entidad : ""} · {fdate(g.ultimaFecha)}</p>
                   </button>
@@ -182,8 +226,9 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
                     <div className="relative">
                       <button onClick={() => setMenu(menu === g.clave ? null : g.clave)} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                       {menu === g.clave && (
-                        <div className="absolute right-0 top-8 z-20 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+                        <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-border bg-white py-1 shadow-lg">
                           <button onClick={() => { setMenu(null); setFichaSel(g); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha</button>
+                          {!g.pasaUcp && <button onClick={() => pasarAUCP(g)} disabled={pasando === g.clave} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[color:var(--teal)] hover:bg-muted disabled:opacity-50">{pasando === g.clave ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightCircle className="h-4 w-4" />} Pasar a UCP</button>}
                         </div>
                       )}
                     </div>
