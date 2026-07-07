@@ -370,6 +370,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${modulo === k ? "text-white" : "text-muted-foreground hover:bg-muted"}`}
             style={modulo === k ? { background: PURPLE } : undefined}>
             <Icon className="h-4 w-4" /> {t}
+            {k === "documentos" && docs.length > 0 && (
+              <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${modulo === k ? "bg-white/25 text-white" : "bg-[color:var(--teal)]/15 text-[color:var(--teal)]"}`}>{docs.length}</span>
+            )}
           </button>
         ))}
       </div>
