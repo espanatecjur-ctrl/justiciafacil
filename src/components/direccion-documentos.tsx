@@ -7,7 +7,7 @@ import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarTodo, esCarpeta, previewDeId } from "@/lib/drive-explorar";
 import {
   casosParaSelector, subirDocPredictamen, crearSolicitudPredictamen, listarSolicitudesPredictamen,
-  vincularCarpetaAGarantia,
+  vincularCarpetaAGarantia, areaDeGarantia,
   type CasoOpcion, type DocRef, type SolicitudPredictamen,
 } from "@/lib/solicitud-predictamen";
 
@@ -132,7 +132,7 @@ export function DireccionDocumentos() {
               <option value="">— Escoge —</option>
               {casos.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.expediente || "s/exp"}{c.cliente_nombre ? ` · ${c.cliente_nombre}` : ""}
+                  [{areaDeGarantia(c.unidad)}] {c.expediente || "s/exp"}{c.cliente_nombre ? ` · ${c.cliente_nombre}` : ""}
                 </option>
               ))}
             </select>
@@ -140,6 +140,7 @@ export function DireccionDocumentos() {
 
           {caso && (
             <p className="text-xs text-muted-foreground">
+              <span className="mr-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-foreground">Área actual: {areaDeGarantia(caso.unidad)}</span>
               {caso.cliente_nombre ? <>Cliente: <b>{caso.cliente_nombre}</b> · </> : null}{caso.juzgado || "Sin juzgado"}
             </p>
           )}
