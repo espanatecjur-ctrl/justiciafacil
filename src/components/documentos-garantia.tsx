@@ -3,6 +3,7 @@ import { Folder, Plus, Eye, Download, X, Loader2, FileText, Image as ImageIcon, 
 import { type CasoJuridico } from "@/lib/supabase";
 import { listarDocumentos, editarMovimiento, moverPapelera, type DocumentoGarantia, type DatosMovimiento } from "@/lib/drive";
 import { AgregarMovimientoModal } from "@/components/agregar-movimiento";
+import { registrarEvento } from "@/lib/cronologia-caso";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -225,7 +226,11 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
       {agregar && (
         <AgregarMovimientoModal area={area} caso={caso}
           onClose={() => setAgregar(false)}
-          onCreado={(doc) => { setDocs((p) => [doc, ...p]); setAgregar(false); }} />
+          onCreado={(doc) => {
+            setDocs((p) => [doc, ...p]); setAgregar(false);
+            const et: Record<string, string> = { documento: "Documento", actuacion: "Actuación", evidencia: "Evidencia", tarea: "Tarea" };
+            registrarEvento({ caso_id: caso.id, expediente: caso.expediente, area, tipo: (doc as any).tipo === "actuacion" ? "actuacion" : "documento", texto: `${et[(doc as any).tipo] || "Movimiento"} agregado: ${(doc as any).nombre || (doc as any).nota || ""}`.trim() });
+          }} />
       )}
 
       {editar && (
