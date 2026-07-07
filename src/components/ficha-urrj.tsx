@@ -16,6 +16,7 @@ import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
+import { IndicadorRepetido } from "@/components/indicador-repetido";
 import { LayoutGrid, GitBranch, FolderOpen, Megaphone } from "lucide-react";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { DictamenRegistral } from "@/components/dictamen-registral";
@@ -376,6 +377,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       {/* ===== GENERAL ===== */}
       {modulo === "general" && (
       <div className="space-y-4">
+      <IndicadorRepetido casoId={garantia.id || ""} />
       {/* Línea de vida: recorrido por áreas */}
       <LineaVidaAreas caso={casoLV} />
 
