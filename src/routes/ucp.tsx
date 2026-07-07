@@ -11,7 +11,9 @@ import {
 import {
   Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { correoActual } from "@/lib/auth";
 import { cargarPermisosModulo, puedeAccion } from "@/lib/permisos-acciones";
 import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import {
@@ -21,7 +23,7 @@ import {
 import {
   Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen, Eye,
   MoreVertical, UserCheck, Upload, CheckCircle2, FileText,
-  Trash2,
+  Trash2, Copy,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ucp")({
@@ -92,7 +94,9 @@ function UCP() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [permUCP, setPermUCP] = useState<string[]>([]);
+  const [miCorreo, setMiCorreo] = useState<string>("");
   useEffect(() => { cargarPermisosModulo("ucp").then((p) => setPermUCP(p.acciones)).catch(() => {}); }, []);
+  useEffect(() => { correoActual().then((c) => setMiCorreo(c || "")).catch(() => {}); }, []);
   const puedo = (a: string) => puedeAccion(permUCP, a);
 
   const [modo, setModo] = useState<"dictaminables" | "todas" | "recientes">("dictaminables");
@@ -102,6 +106,12 @@ function UCP() {
   const [abriendo, setAbriendo] = useState<string | null>(null);
   // menú de 3 puntitos por fila
   const [menuUCP, setMenuUCP] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  // resolución de garantías repetidas (mini banner: conservar todas o eliminar, con motivo)
+  const [dupModal, setDupModal] = useState<string[] | null>(null);        // ids del grupo de repetidas
+  const [dupDecision, setDupDecision] = useState<Record<string, "conservar" | "eliminar">>({});
+  const [dupNota, setDupNota] = useState("");
+  const [guardandoDup, setGuardandoDup] = useState(false);
 
   // alta de garantía (folios capturados a mano; después se conectan a SIGA)
   const [dlg, setDlg] = useState(false);
@@ -212,12 +222,12 @@ function UCP() {
 
   // Coincidencias: casos que comparten gar_id, dirección, expediente o cliente con otro(s).
   // Sirve para detectar garantías reasignadas, clientes con varios juicios o cambios de garantía.
-  const coincidencias = useMemo(() => {
+  const dupInfo = useMemo(() => {
     const norm = (s: any) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
     const buckets: Record<string, string[]> = {};
     const push = (key: string, id: string) => { (buckets[key] ||= []).push(id); };
     for (const c of casos) {
-      if (!c.id) continue;
+      if (!c.id || c.archivado) continue; // las que ya se movieron a papelera no cuentan como repetidas
       const g = norm((c as any).gar_id); if (g.length >= 3) push("g:" + g, c.id);
       const dir = norm(c.direccion_garantia); if (dir.length >= 6) push("d:" + dir, c.id);
       const exp = norm(c.expediente); if (exp.length >= 3) push("e:" + exp, c.id);
@@ -229,9 +239,54 @@ function UCP() {
       if (ids.length > 1) for (const id of ids) { const s = (rel[id] ||= new Set<string>()); for (const o of ids) if (o !== id) s.add(o); }
     }
     const cuenta: Record<string, number> = {};
-    for (const id in rel) cuenta[id] = rel[id].size;
-    return cuenta;
+    const grupo: Record<string, string[]> = {};
+    for (const id in rel) { cuenta[id] = rel[id].size; grupo[id] = Array.from(rel[id]); }
+    return { cuenta, grupo };
   }, [casos]);
+  const coincidencias = dupInfo.cuenta;
+  const dupGrupo = dupInfo.grupo;
+
+  // abre el mini banner de resolución para el grupo de repetidas de este caso
+  const abrirDup = (c: CasoJuridico) => {
+    const ids = Array.from(new Set([c.id, ...(dupGrupo[c.id] || [])])).filter(Boolean) as string[];
+    const dec: Record<string, "conservar" | "eliminar"> = {};
+    for (const id of ids) dec[id] = "conservar";
+    // si ya hay una resolución previa, la precargamos
+    for (const id of ids) {
+      const prev = (casos.find((x) => x.id === id) as any)?.dup_resolucion;
+      if (prev?.estado) dec[id] = prev.estado;
+    }
+    const notaPrev = (c as any).dup_resolucion?.nota || "";
+    setDupDecision(dec);
+    setDupNota(notaPrev);
+    setDupModal(ids);
+  };
+
+  const guardarDup = async () => {
+    if (!dupModal) return;
+    if (!dupNota.trim()) { alert("Escribe el motivo: por qué se quedan las dos o por qué se elimina una."); return; }
+    const aEliminar = dupModal.filter((id) => dupDecision[id] === "eliminar");
+    if (aEliminar.length && !puedo("papelera")) { alert("Tu rol no tiene permiso para eliminar (mover a papelera)."); return; }
+    if (aEliminar.length >= dupModal.length) { alert("No puedes eliminar todas. Debe quedar al menos una garantía."); return; }
+    setGuardandoDup(true);
+    const fecha = new Date().toISOString();
+    const por = miCorreo || "—";
+    try {
+      for (const id of dupModal) {
+        const estado = dupDecision[id];
+        const body: any = { dup_resolucion: { estado, nota: dupNota.trim(), fecha, por } };
+        if (estado === "eliminar") body.archivado = true; // se va a la papelera con su motivo registrado
+        await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+      setDupModal(null);
+      cargar();
+    } catch { alert("No se pudo guardar la decisión."); }
+    finally { setGuardandoDup(false); }
+  };
 
   const baseUCP = useMemo(() => casos.filter((c) => normArea(c.unidad) !== "UDP" && !c.archivado), [casos]);
 
@@ -514,7 +569,24 @@ function UCP() {
                           {info && <Badge variant="outline" className={`border ${info.cls} w-fit`}>{info.label}</Badge>}
                           {d && <Badge variant="outline" className={`border ${VEREDICTO_CLS[ver] || ""} w-fit text-[10px]`}>{ver}</Badge>}
                           {d && <Badge variant="outline" className={`w-fit border text-[10px] ${firmasUCP(d) >= 5 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-border text-muted-foreground"}`}>✍ {firmasUCP(d)}/5 firmas</Badge>}
-                          {coincidencias[c.id] > 0 && <Badge variant="outline" className="w-fit border-amber-300 bg-amber-100 text-amber-800 text-[10px] font-semibold" title="Comparte garantía, dirección, expediente o cliente con otro(s)">🔁 Repetido ({coincidencias[c.id]})</Badge>}
+                          {(() => {
+                            const dr = (c as any).dup_resolucion;
+                            if (dr?.estado === "conservar") {
+                              return (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); abrirDup(c); }} className="w-fit text-left" title={`Duplicado revisado — se conserva.\nMotivo: ${dr.nota || "—"}\nPor: ${dr.por || "—"}`}>
+                                  <Badge variant="outline" className="w-fit cursor-pointer border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-semibold hover:bg-emerald-100">✓ Duplicado revisado</Badge>
+                                </button>
+                              );
+                            }
+                            if (coincidencias[c.id] > 0) {
+                              return (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); abrirDup(c); }} className="w-fit text-left" title="Comparte garantía, dirección, expediente o cliente con otro(s). Clic para decidir: conservar las dos o eliminar una.">
+                                  <Badge variant="outline" className="w-fit cursor-pointer border-amber-300 bg-amber-100 text-amber-800 text-[10px] font-semibold hover:bg-amber-200">🔁 Repetido ({coincidencias[c.id]}) · resolver</Badge>
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
                           {!c.drive_carpeta_id && <Badge variant="outline" className="w-fit border-slate-300 bg-slate-100 text-slate-700 text-[10px] font-medium" title="No tiene carpeta de Drive vinculada">📁 Sin Drive</Badge>}
                         </div>
                       </TableCell>
@@ -545,6 +617,58 @@ function UCP() {
           </div>
         </div>
       )}
+
+      {/* mini banner: resolver garantías repetidas (conservar las dos o eliminar una, con motivo) */}
+      <Dialog open={!!dupModal} onOpenChange={(o) => { if (!o) setDupModal(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Copy className="h-4 w-4 text-amber-600" /> Garantías repetidas</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-1">
+            <p className="text-xs text-muted-foreground">
+              Estas garantías comparten <b>expediente, dirección, cliente o folio</b>. Marca cuál se queda y cuál se elimina, y escribe el motivo. Lo que elimines se manda a la papelera con su nota (se puede recuperar).
+            </p>
+
+            <div className="space-y-2">
+              {(dupModal || []).map((id) => {
+                const c = casos.find((x) => x.id === id);
+                if (!c) return null;
+                const dec = dupDecision[id] || "conservar";
+                return (
+                  <div key={id} className={`rounded-md border p-2.5 ${dec === "eliminar" ? "border-red-200 bg-red-50/60" : "border-emerald-200 bg-emerald-50/50"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 text-xs">
+                        <p className="font-semibold">{c.expediente || "(sin expediente)"}</p>
+                        <p className="truncate text-muted-foreground">{c.direccion_garantia || "sin dirección"}</p>
+                        <p className="text-muted-foreground">{c.cliente_nombre || c.cliente_codigo || "sin cliente"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+                      </div>
+                      <div className="flex shrink-0 overflow-hidden rounded-md border border-input">
+                        <button type="button" onClick={() => setDupDecision((p) => ({ ...p, [id]: "conservar" }))}
+                          className={`px-2.5 py-1 text-[11px] font-medium ${dec === "conservar" ? "bg-emerald-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>Se queda</button>
+                        <button type="button" onClick={() => setDupDecision((p) => ({ ...p, [id]: "eliminar" }))}
+                          className={`px-2.5 py-1 text-[11px] font-medium ${dec === "eliminar" ? "bg-red-600 text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}>Eliminar</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">Motivo (por qué se quedan las dos o por qué se elimina) *</span>
+              <Textarea rows={3} value={dupNota} onChange={(e) => setDupNota(e.target.value)}
+                placeholder="Ej: Son el mismo inmueble cargado dos veces, se conserva el de expediente 82/26. / Se quedan las dos porque son garantías distintas del mismo cliente." />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDupModal(null)} disabled={guardandoDup}>Cancelar</Button>
+            <Button onClick={guardarDup} disabled={guardandoDup}>
+              {guardandoDup ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <span className="ml-1">Guardar decisión</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* menú flotante de acciones (3 puntitos) */}
       {menuUCP && (() => {
