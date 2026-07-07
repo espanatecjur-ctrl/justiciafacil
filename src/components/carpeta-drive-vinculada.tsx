@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import {
   HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
   Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
-  Folder, ChevronRight, Home, Layers, AlertTriangle,
+  Folder, ChevronRight, Home, Layers, AlertTriangle, CheckSquare, Square, Download,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
@@ -19,6 +19,29 @@ import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+
+// Carga JSZip desde CDN solo cuando se necesita (para armar los .zip).
+async function cargarJSZip(): Promise<any> {
+  const w = window as any;
+  if (w.JSZip) return w.JSZip;
+  await new Promise<void>((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    s.onload = () => res();
+    s.onerror = () => rej(new Error("No se pudo cargar el compresor ZIP."));
+    document.head.appendChild(s);
+  });
+  return w.JSZip;
+}
+
+// Dispara la descarga de un blob con un nombre dado.
+function bajarBlob(blob: Blob, nombre: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 const hdrs = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
@@ -144,6 +167,89 @@ export function CarpetaDriveVinculada({
     const folder = modoVista === "esta" ? (rutaFicha[rutaFicha.length - 1]?.id || carpetaId) : carpetaId;
     cargarDocs(modoVista, folder);
   };
+
+  // ----- Selección + descarga (1 doc = archivo; 2+ = ZIP; carpeta = ZIP) -----
+  const [selDocs, setSelDocs] = useState<Record<string, string>>({});
+  const [selModo, setSelModo] = useState(false);
+  const [descargando, setDescargando] = useState(false);
+  const [msgDescarga, setMsgDescarga] = useState<string | null>(null);
+  const estaSelDoc = (id: string) => id in selDocs;
+  const toggleSelDoc = (a: ItemDrive) => setSelDocs((p) => { const n = { ...p }; if (n[a.id]) delete n[a.id]; else n[a.id] = a.name; return n; });
+  const salirSel = () => { setSelModo(false); setSelDocs({}); };
+  const nSelDocs = Object.keys(selDocs).length;
+  const nombreZipExp = `${nombreGarantia(caso)}${caso.expediente ? " - " + caso.expediente : ""}`.replace(/[\\/:*?"<>|]/g, "-").trim() || "documentos";
+
+  // Baja una lista de documentos (por id). 1 = archivo directo; 2+ = ZIP con nombreZip.
+  const descargarLista = async (ids: string[], nombreZip: string) => {
+    const conCopia = ids.filter((id) => copias[id]);
+    const sinCopia = ids.length - conCopia.length;
+    if (conCopia.length === 0) { setMsgDescarga("Ninguno está sincronizado. Dale 'Sincronizar documentos' primero."); return; }
+    setDescargando(true); setMsgDescarga(sinCopia > 0 ? `${sinCopia} sin sincronizar se omitirán…` : "Preparando descarga…");
+    try {
+      const urls = await firmarCopias(conCopia.map((id) => copias[id].storage_path));
+      if (conCopia.length === 1) {
+        const id = conCopia[0];
+        const u = urls[copias[id].storage_path];
+        if (!u) throw new Error("No se pudo preparar el enlace.");
+        const resp = await fetch(u);
+        bajarBlob(await resp.blob(), copias[id].nombre || "documento");
+      } else {
+        const JSZip = await cargarJSZip();
+        const zip = new JSZip();
+        for (let i = 0; i < conCopia.length; i++) {
+          const id = conCopia[i];
+          setMsgDescarga(`Comprimiendo ${i + 1} de ${conCopia.length}…`);
+          const u = urls[copias[id].storage_path];
+          if (!u) continue;
+          const resp = await fetch(u);
+          zip.file(copias[id].nombre || `doc-${i + 1}`, await resp.blob());
+        }
+        setMsgDescarga("Generando ZIP…");
+        const blob = await zip.generateAsync({ type: "blob" });
+        bajarBlob(blob, nombreZip.endsWith(".zip") ? nombreZip : nombreZip + ".zip");
+      }
+      setMsgDescarga(sinCopia > 0 ? `Descarga lista · ${sinCopia} omitido(s) por no estar sincronizados.` : "Descarga lista ✅");
+      salirSel();
+    } catch (e: any) {
+      setMsgDescarga("⚠️ " + String(e?.message || e));
+    } finally {
+      setDescargando(false);
+    }
+  };
+
+  const descargarSeleccionDocs = () => descargarLista(Object.keys(selDocs), nombreZipExp);
+
+  // Descarga una subcarpeta completa (todo lo de adentro, incl. subcarpetas) en un ZIP.
+  const descargarSubcarpeta = async (folderId: string, folderName: string) => {
+    setDescargando(true); setMsgDescarga("Leyendo la carpeta…");
+    try {
+      const r = await listarTodo(folderId);
+      const archivos = (r.items || []).filter((it) => !esCarpeta(it) && copias[it.id]);
+      if (archivos.length === 0) { setMsgDescarga("Esa carpeta no tiene documentos sincronizados."); setDescargando(false); return; }
+      const urls = await firmarCopias(archivos.map((a) => copias[a.id].storage_path));
+      const JSZip = await cargarJSZip();
+      const zip = new JSZip();
+      for (let i = 0; i < archivos.length; i++) {
+        const a = archivos[i];
+        setMsgDescarga(`Comprimiendo ${i + 1} de ${archivos.length}…`);
+        const u = urls[copias[a.id].storage_path];
+        if (!u) continue;
+        const resp = await fetch(u);
+        const ruta = (a.ruta || "").replace(/[\\:*?"<>|]/g, "-");
+        zip.file((ruta ? ruta + "/" : "") + (copias[a.id].nombre || a.name), await resp.blob());
+      }
+      setMsgDescarga("Generando ZIP…");
+      const blob = await zip.generateAsync({ type: "blob" });
+      const limpio = folderName.replace(/[\\/:*?"<>|]/g, "-").trim() || "carpeta";
+      bajarBlob(blob, limpio + ".zip");
+      setMsgDescarga("Descarga lista ✅");
+    } catch (e: any) {
+      setMsgDescarga("⚠️ " + String(e?.message || e));
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   const cambiarModo = (modo: "todos" | "esta") => {
     setModoVista(modo);
     setRutaFicha([{ id: carpetaId, name: carpetaNombre || "Carpeta" }]);
@@ -360,6 +466,10 @@ export function CarpetaDriveVinculada({
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
             {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
+            {docs.length > 0 && (selModo
+              ? <button onClick={salirSel} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
+              : <button onClick={() => setSelModo(true)} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><CheckSquare className="h-3.5 w-3.5" /> Seleccionar</button>
+            )}
             {puedeDrive && <a href={`https://drive.google.com/drive/folders/${carpetaId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><ExternalLink className="h-3.5 w-3.5" /> Abrir en Drive</a>}
             <div className="relative w-44">
               <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -370,6 +480,20 @@ export function CarpetaDriveVinculada({
           {msgSincro && (
             <div className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)]/5 px-3 py-1.5 text-xs text-[color:var(--teal)]">
               <CheckCircle2 className="h-3.5 w-3.5" /> {msgSincro}
+            </div>
+          )}
+
+          {selModo && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 px-3 py-2">
+              <span className="text-xs font-medium text-[color:var(--teal)]">{nSelDocs} seleccionado{nSelDocs === 1 ? "" : "s"}</span>
+              <button onClick={descargarSeleccionDocs} disabled={nSelDocs === 0 || descargando} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" style={{ background: "#0C5C46" }}>
+                {descargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Descargar seleccionados
+              </button>
+            </div>
+          )}
+          {msgDescarga && (
+            <div className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)]/5 px-3 py-1.5 text-xs text-[color:var(--teal)]">
+              {descargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} {msgDescarga}
             </div>
           )}
 
@@ -402,10 +526,13 @@ export function CarpetaDriveVinculada({
           {modoVista === "esta" && subcarpetas.length > 0 && (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {subcarpetas.map((c) => (
-                <button key={c.id} onClick={() => entrarSubFicha(c)} className="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-left text-sm hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-                  <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-                  <span className="min-w-0 truncate">{c.name}</span>
-                </button>
+                <div key={c.id} className="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm hover:border-[color:var(--teal)]">
+                  <button onClick={() => entrarSubFicha(c)} className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-[color:var(--teal)]">
+                    <Folder className="h-4 w-4 shrink-0 text-amber-500" />
+                    <span className="min-w-0 truncate">{c.name}</span>
+                  </button>
+                  <button onClick={() => descargarSubcarpeta(c.id, c.name)} disabled={descargando} title="Descargar esta carpeta (ZIP)" className="inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-50"><Download className="h-3.5 w-3.5" /> ZIP</button>
+                </div>
               ))}
             </div>
           )}
@@ -431,7 +558,9 @@ export function CarpetaDriveVinculada({
                 {docsPag.map((a) => (
                   <div key={a.id} className="overflow-hidden rounded-lg border border-border bg-white">
                     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                      <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
+                      {selModo
+                        ? <button onClick={() => toggleSelDoc(a)} className="shrink-0 text-[color:var(--teal)]" title={estaSelDoc(a.id) ? "Quitar" : "Elegir"}>{estaSelDoc(a.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}</button>
+                        : <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-medium" title={a.name}>{a.name}</p>
                         {modoVista === "todos" && a.ruta ? <p className="truncate text-[10px] text-muted-foreground" title={a.ruta}>📁 {a.ruta}</p> : null}
