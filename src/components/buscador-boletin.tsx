@@ -116,18 +116,18 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
         </p>
 
         {/* Selector de estado */}
-        <div className="mb-3 inline-flex rounded-lg border border-border p-0.5">
+        <div className="mb-3 flex flex-col gap-1 rounded-lg border border-border p-0.5 sm:inline-flex sm:flex-row">
           <button
             onClick={() => { setEstado("sinaloa"); setRes(null); setErr(null); }}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "sinaloa" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "sinaloa" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
           >Sinaloa</button>
           <button
             onClick={() => { setEstado("bcs"); setRes(null); setErr(null); }}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "bcs" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "bcs" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
           >Baja California Sur (La Paz)</button>
           <button
             onClick={() => { setEstado("jalisco"); setRes(null); setErr(null); }}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "jalisco" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${estado === "jalisco" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}
           >Jalisco (ZMG)</button>
         </div>
 
@@ -204,9 +204,9 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
           ) : (
             <>
               <div className="mb-3 border-b border-border pb-2">
-                <p className="text-base font-bold text-[color:var(--teal)]">{party?.expediente} · {acuerdos.length} acuerdos</p>
+                <p className="break-words text-base font-bold text-[color:var(--teal)]">{party?.expediente} · {acuerdos.length} acuerdos</p>
                 {(party?.actor || party?.demandado) && (
-                  <p className="text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
+                  <p className="break-words text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
                 )}
                 {onGuardarHallazgos && acuerdos.length > 0 && (
                   <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined }); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? "Hallazgos guardados ✓" : "Guardar hallazgos del boletín"}</button>
@@ -244,8 +244,8 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
                       </div>
                       <span className="text-xs text-muted-foreground">{fmt(a.fecha)}</span>
                     </div>
-                    <p className="text-sm">{a.acuerdo}</p>
-                    {a.notificacion && <p className="mt-0.5 text-[11px] text-muted-foreground">Notificación: {a.notificacion}</p>}
+                    <p className="break-words text-sm">{a.acuerdo}</p>
+                    {a.notificacion && <p className="mt-0.5 break-words text-[11px] text-muted-foreground">Notificación: {a.notificacion}</p>}
                   </div>
                   );
                 })}
