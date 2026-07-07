@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, X, Loader2, Check, Send, Paperclip } from "lucide-react";
+import { Upload, FileText, X, Loader2, Check, Send, Paperclip, HardDrive, FolderCheck, Folder } from "lucide-react";
 import { usuarioActualEtiqueta } from "@/lib/auth";
+import { ExploradorDrive } from "@/components/explorador-drive";
+import { listarTodo, esCarpeta, previewDeId } from "@/lib/drive-explorar";
 import {
   casosParaSelector, subirDocPredictamen, crearSolicitudPredictamen, listarSolicitudesPredictamen,
   type CasoOpcion, type DocRef, type SolicitudPredictamen,
@@ -20,6 +22,13 @@ export function DireccionDocumentos() {
   const [msg, setMsg] = useState<string | null>(null);
   const [lista, setLista] = useState<SolicitudPredictamen[]>([]);
   const inputFile = useRef<HTMLInputElement>(null);
+
+  // --- Escoger una carpeta de Drive (en vez de subir archivo por archivo) ---
+  const [carpetaSel, setCarpetaSel] = useState<{ id: string; nombre: string } | null>(null);
+  const [docsCarpeta, setDocsCarpeta] = useState<DocRef[]>([]);
+  const [cargandoCarpeta, setCargandoCarpeta] = useState(false);
+  const [errCarpeta, setErrCarpeta] = useState<string | null>(null);
+  const [exploradorAbierto, setExploradorAbierto] = useState(false);
 
   const recargar = () => listarSolicitudesPredictamen("pendiente").then(setLista);
   useEffect(() => { casosParaSelector().then(setCasos); recargar(); }, []);
@@ -42,10 +51,38 @@ export function DireccionDocumentos() {
     if (inputFile.current) inputFile.current.value = "";
   };
 
+  // Cuando cambia la garantía, se limpia la carpeta escogida (para no mezclar contextos).
+  const cambiarCaso = (id: string) => {
+    setCasoId(id);
+    setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null);
+  };
+
+  // Lee TODOS los documentos de una carpeta de Drive (recursivo) y los deja
+  // listos como referencias {nombre, url} — igual que los archivos subidos.
+  const usarCarpeta = async (id: string, nombre: string) => {
+    setExploradorAbierto(false);
+    setCarpetaSel({ id, nombre });
+    setDocsCarpeta([]);
+    setErrCarpeta(null);
+    setCargandoCarpeta(true);
+    const r = await listarTodo(id);
+    if (!r.ok) {
+      setErrCarpeta(r.error || "No se pudo leer la carpeta de Drive.");
+      setCargandoCarpeta(false);
+      return;
+    }
+    const archivos = r.items.filter((it) => !esCarpeta(it));
+    setDocsCarpeta(archivos.map((it) => ({ nombre: it.name, url: previewDeId(it.id) })));
+    setCargandoCarpeta(false);
+  };
+
+  const quitarCarpeta = () => { setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null); };
+
   const enviar = async () => {
     if (!casoId) { setMsg("Escoge la garantía / expediente."); return; }
     if (!area) { setMsg("Escoge el área a la que van los documentos."); return; }
-    if (!docs.length) { setMsg("Sube al menos un documento."); return; }
+    const todos = [...docs, ...docsCarpeta];
+    if (!todos.length) { setMsg("Sube archivos o escoge una carpeta de Drive."); return; }
     setEnviando(true);
     setMsg(null);
     const quien = await usuarioActualEtiqueta();
@@ -58,13 +95,14 @@ export function DireccionDocumentos() {
       area,
       tipo_dictamen: usaTipo ? tipoDictamen : null,
       nota: nota || null,
-      documentos: docs,
+      documentos: todos,
       solicitado_por: quien,
     });
     setEnviando(false);
     if (r.ok) {
       setMsg("Enviado a pre-dictaminar ✓");
       setCasoId(""); setNota(""); setDocs([]);
+      setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null);
       recargar();
     } else {
       setMsg("No se pudo enviar: " + (r.error || "") + " (¿corriste el SQL de solicitud_predictamen?)");
@@ -83,7 +121,7 @@ export function DireccionDocumentos() {
         <div className="mt-4 grid gap-3">
           <div>
             <label className="text-[11px] font-medium text-muted-foreground">Garantía / expediente</label>
-            <select value={casoId} onChange={(e) => setCasoId(e.target.value)}
+            <select value={casoId} onChange={(e) => cambiarCaso(e.target.value)}
               className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
               <option value="">— Escoge —</option>
               {casos.map((c) => (
@@ -150,6 +188,68 @@ export function DireccionDocumentos() {
             )}
           </div>
 
+          {/* ---- o escoger una carpeta de Drive ---- */}
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+              <span className="h-px flex-1 bg-border" /> o escoge una carpeta de Drive <span className="h-px flex-1 bg-border" />
+            </div>
+
+            {!carpetaSel ? (
+              <div className="flex flex-wrap gap-2">
+                {caso?.drive_carpeta_id && (
+                  <button
+                    onClick={() => usarCarpeta(caso.drive_carpeta_id!, caso.drive_carpeta_nombre || "Carpeta de la garantía")}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 px-3 py-2 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"
+                  >
+                    <FolderCheck className="h-4 w-4" /> Usar la carpeta de la garantía
+                    <span className="max-w-[180px] truncate font-normal opacity-80">· {caso.drive_carpeta_nombre || "vinculada"}</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setExploradorAbierto(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input bg-white px-3 py-2 text-xs font-medium hover:bg-muted"
+                >
+                  <HardDrive className="h-4 w-4" /> {caso?.drive_carpeta_id ? "Escoger otra carpeta de Drive" : "Escoger carpeta de Drive"}
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Folder className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[color:var(--teal)]">{carpetaSel.nombre}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {cargandoCarpeta
+                          ? "Leyendo documentos de la carpeta…"
+                          : errCarpeta
+                            ? errCarpeta
+                            : `${docsCarpeta.length} documento(s) listos para mandar`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {cargandoCarpeta && <Loader2 className="h-4 w-4 animate-spin text-[color:var(--teal)]" />}
+                    <button onClick={() => setExploradorAbierto(true)} className="rounded px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted" title="Cambiar carpeta">cambiar</button>
+                    <button onClick={quitarCarpeta} className="rounded p-1 text-muted-foreground hover:bg-muted" title="Quitar carpeta"><X className="h-4 w-4" /></button>
+                  </div>
+                </div>
+                {!cargandoCarpeta && docsCarpeta.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {docsCarpeta.map((d, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[11px] text-muted-foreground">
+                        <FileText className="h-3 w-3" /> <span className="max-w-[160px] truncate">{d.nombre}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {!cargandoCarpeta && !errCarpeta && docsCarpeta.length === 0 && (
+                  <p className="mt-2 text-[11px] text-amber-700">Esta carpeta no tiene documentos (solo subcarpetas o está vacía).</p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={enviando || subiendo} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
               <Send className="h-4 w-4 mr-1.5" /> {enviando ? "Enviando…" : "Enviar a pre-dictaminar"}
@@ -185,6 +285,24 @@ export function DireccionDocumentos() {
           </div>
         )}
       </Card>
+
+      {/* Modal: explorador de Drive para escoger la carpeta */}
+      {exploradorAbierto && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setExploradorAbierto(false)}>
+          <div className="my-6 w-full max-w-3xl rounded-xl border border-border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h3 className="flex items-center gap-2 font-display text-base font-semibold">
+                <HardDrive className="h-5 w-5 text-[color:var(--teal)]" /> Escoge la carpeta de Drive
+              </h3>
+              <button onClick={() => setExploradorAbierto(false)} className="rounded p-1 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="px-4 pt-3 text-xs text-muted-foreground">Entra a la carpeta que quieras mandar y dale <b>“Usar”</b>. Se leerán todos sus documentos (incluidas subcarpetas).</p>
+            <div className="max-h-[70vh] overflow-y-auto p-4">
+              <ExploradorDrive mostrarEncabezado={false} onElegirCarpeta={usarCarpeta} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
