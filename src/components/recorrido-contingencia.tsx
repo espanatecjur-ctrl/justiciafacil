@@ -94,7 +94,7 @@ export function RecorridoContingencia({ casos, onVolver, precargar, puedeFirmarE
       firma_valida: fValida?.nombre || null, firma_valida_fecha: fValida?.fecha || null,
     };
     try {
-      await guardarPredictamen(payload, precargar, construirDatosPDF(decision));
+      await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
       setGuardado("Pre-dictamen (Contingencia) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
   };
