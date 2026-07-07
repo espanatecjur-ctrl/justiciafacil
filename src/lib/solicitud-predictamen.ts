@@ -33,6 +33,11 @@ export interface CasoOpcion {
   cliente_nombre?: string | null;
   juzgado?: string | null;
   unidad?: string | null;
+  no_credito?: string | null;
+  direccion_garantia?: string | null;
+  entidad?: string | null;
+  gar_id?: string | null;
+  cliente_codigo?: string | null;
   drive_carpeta_id?: string | null;
   drive_carpeta_nombre?: string | null;
 }
@@ -62,7 +67,7 @@ export async function casosParaSelector(): Promise<CasoOpcion[]> {
   try {
     return await sbSelect<CasoOpcion>(
       "caso_juridico",
-      "select=id,expediente,cliente_nombre,juzgado,unidad,drive_carpeta_id,drive_carpeta_nombre&order=expediente.asc&limit=1000",
+      "select=id,expediente,cliente_nombre,juzgado,unidad,no_credito,direccion_garantia,entidad,gar_id,cliente_codigo,drive_carpeta_id,drive_carpeta_nombre&order=expediente.asc&limit=1000",
     );
   } catch {
     return [];
