@@ -8,6 +8,7 @@ import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { SubJuicios } from "@/components/sub-juicios";
+import { IndicadorRepetido } from "@/components/indicador-repetido";
 import { BoletinExpediente } from "@/components/boletin-expediente";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
@@ -275,6 +276,7 @@ function FichaExpedientePage() {
       {/* ============ MÓDULO GENERAL (todo lo de siempre) ============ */}
       {modulo === "general" && (
         <div className="space-y-4">
+          <IndicadorRepetido casoId={c.id || ""} />
           {/* Línea de vida: recorrido por áreas (URRJ→SVT→UCP→UFC→UCM) */}
           <LineaVidaAreas caso={c} />
 
