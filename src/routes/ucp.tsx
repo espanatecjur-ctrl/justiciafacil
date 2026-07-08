@@ -231,8 +231,11 @@ function UCP() {
         body: JSON.stringify({ p_caso_id: c.id }),
       });
       if (!r.ok) throw new Error(`Supabase ${r.status} — revisa que la función mandar_a_ucm exista`);
+      const nuevoId = await r.json();
       cargar();
-      alert("Listo: ya está en UCM como pendiente de formalización.");
+      if (typeof nuevoId === "string" && confirm("Listo: ya está en UCM como pendiente de formalización.\n\n¿Abrir su ficha de UCM ahora?")) {
+        navigate({ to: "/ucm-ficha", search: { id: nuevoId } as any });
+      }
     } catch (e: any) {
       alert("No se pudo mandar a UCM: " + e.message);
     }
