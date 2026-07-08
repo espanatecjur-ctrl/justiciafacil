@@ -14,6 +14,11 @@ export const ESTADOS_CONTRATO = ["generado", "archivado", "papelera"] as const;
 
 /** Prefijo del folio según el tipo de documento. */
 export const PREFIJO_FOLIO: Record<string, string> = {
+  cesion_adjudicataria: "CES",
+  instruccion_notarial_diipa: "INS",
+  solicitud_cotizacion_diipa: "SOL",
+  oficio_servicios_diipa: "OFI",
+  cotizacion_marco_diipa: "COT",
   carta_cambio: "CC",
   contrato_cambio: "CT",
   oficio_notarial: "OF",
