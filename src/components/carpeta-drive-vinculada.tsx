@@ -207,6 +207,15 @@ export function CarpetaDriveVinculada({
   };
   useEffect(() => { cargarCopias(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
 
+  // Papelera de la copia fija (eliminados recuperables). Se carga siempre para que
+  // lo que mandaste a la basura NO cuente como "documento nuevo por copiar".
+  const [papelera, setPapelera] = useState<Copia[]>([]);
+  const cargarPapelera = () => {
+    if (!carpetaId) return;
+    listarPapelera(caso.id).then(setPapelera).catch(() => setPapelera([]));
+  };
+  useEffect(() => { cargarPapelera(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
+
   const cargarDocs = (modo: "todos" | "esta" = modoVista, folderId: string = carpetaId) => {
     if (!carpetaId) return;
     setCargando(true); setError(null); setPagina(0);
@@ -231,6 +240,8 @@ export function CarpetaDriveVinculada({
   const refrescar = () => {
     const folder = modoVista === "esta" ? (rutaFicha[rutaFicha.length - 1]?.id || carpetaId) : carpetaId;
     cargarDocs(modoVista, folder);
+    cargarCopias();
+    cargarPapelera();
   };
 
   // ----- Selección + descarga (1 doc = archivo; 2+ = ZIP; carpeta = ZIP) -----
@@ -431,11 +442,18 @@ export function CarpetaDriveVinculada({
   const pag = Math.min(pagina, totalPag - 1);
   const docsPag = docsFiltrados.slice(pag * PAGE, pag * PAGE + PAGE);
 
-  // Indicador de sincronización (cálculo rápido): cuántos de los documentos vistos ya tienen copia
-  const totalDocs = docs.length;
-  const copiadosDocs = docs.filter((d) => copias[d.id]).length;
+  // Indicador de copia fija (tomando en cuenta la papelera):
+  // los documentos que mandaste a la basura NO cuentan como "por copiar".
+  const enPapeleraSet = new Set(papelera.map((p) => p.drive_id));
+  const docsVigentes = docs.filter((d) => !enPapeleraSet.has(d.id)); // en Drive y NO en papelera
+  const totalDocs = docsVigentes.length;
+  const copiadosDocs = docsVigentes.filter((d) => copias[d.id]).length;
   const faltanSincro = Math.max(0, totalDocs - copiadosDocs);
   const colorSincro = totalDocs === 0 ? "gris" : faltanSincro === 0 ? "verde" : copiadosDocs === 0 ? "gris" : "amarillo";
+  // ¿Ya está todo copiado? → bloquear el botón. ¿Hay documentos nuevos por copiar?
+  const todoCopiado = totalDocs > 0 && faltanSincro === 0;
+  const hayNuevos = faltanSincro > 0;
+  const yaHuboCopia = copiadosDocs > 0 || papelera.length > 0; // ya se generó copia alguna vez
 
   // Copia fija: los documentos ya guardados en el sistema (tabla drive_copia).
   const copiasArr = Object.values(copias);
@@ -457,13 +475,8 @@ export function CarpetaDriveVinculada({
   }, [vista, copias]);
 
   // Papelera de la copia fija (documentos eliminados, recuperables). No toca Drive.
-  const [papelera, setPapelera] = useState<Copia[]>([]);
   const [verPapelera, setVerPapelera] = useState(false);
   const [ocupadoPap, setOcupadoPap] = useState<string | null>(null); // drive_id en proceso
-  const cargarPapelera = () => {
-    if (!carpetaId) return;
-    listarPapelera(caso.id).then(setPapelera).catch(() => setPapelera([]));
-  };
   useEffect(() => {
     if (vista === "fija") cargarPapelera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -581,7 +594,18 @@ export function CarpetaDriveVinculada({
             )}
             <span className="flex-1" />
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
-            {puedeVincular && <button onClick={sincronizar} disabled={sincro} title="Ordena la carpeta en Drive (por número de crédito) y guarda la copia fija en el sistema" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60" style={{ background: "#0C5C46" }}>{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} {sincro ? "Guardando copia fija…" : "Guardar copia fija"}</button>}
+            {puedeVincular && (
+              <button
+                onClick={sincronizar}
+                disabled={sincro || todoCopiado}
+                title={todoCopiado ? "Ya está todo copiado. Sube un documento nuevo a Drive y dale “Actualizar” para volver a generar la copia." : "Ordena la carpeta en Drive (por número de crédito) y guarda la copia fija en el sistema"}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-sm disabled:cursor-not-allowed ${todoCopiado ? "bg-emerald-100 text-emerald-800 disabled:opacity-100" : "text-white disabled:opacity-60"}`}
+                style={todoCopiado ? undefined : { background: "#0C5C46" }}
+              >
+                {sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : todoCopiado ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CloudUpload className="h-3.5 w-3.5" />}
+                {sincro ? "Guardando copia fija…" : todoCopiado ? "Copia fija al día" : "Guardar copia fija"}
+              </button>
+            )}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             {vista === "drive" && docs.length > 0 && (selModo
               ? <button onClick={salirSel} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
@@ -603,6 +627,17 @@ export function CarpetaDriveVinculada({
               <FolderCheck className="h-3.5 w-3.5" /> 📌 Copia fija{copiasArr.length ? ` (${copiasArr.length})` : ""}
             </button>
           </div>
+
+          {hayNuevos && yaHuboCopia && !sincro && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <span>📄 Hay {faltanSincro} documento{faltanSincro === 1 ? "" : "s"} nuevo{faltanSincro === 1 ? "" : "s"} en la carpeta de Drive. ¿Quieres generar la copia?</span>
+              {puedeVincular && (
+                <button onClick={sincronizar} className="ml-auto inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-white" style={{ background: "#0C5C46" }}>
+                  <CloudUpload className="h-3.5 w-3.5" /> Generar copia
+                </button>
+              )}
+            </div>
+          )}
 
           {msgSincro && (
             <div className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)]/5 px-3 py-1.5 text-xs text-[color:var(--teal)]">
