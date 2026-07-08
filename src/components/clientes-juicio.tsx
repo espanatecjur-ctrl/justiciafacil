@@ -114,7 +114,7 @@ export function ClientesJuicio({ casoId, juicioExpediente }: { casoId: string; j
                     {open && (
                       <tr className="border-b border-border bg-muted/10">
                         <td colSpan={9} className="px-3 pb-3">
-                          <ClienteFichaPanel cliente={c} juicio={juicioExpediente} onUpdated={recargar} />
+                          <ClienteFichaPanel cliente={c} juicio={{ id: casoId }} onUpdated={recargar} />
                           <div className="mt-2">{botonFormalizar(c)}</div>
                         </td>
                       </tr>
