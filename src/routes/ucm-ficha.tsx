@@ -2,12 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, Users,
+  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, Users, Activity,
 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
+import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
@@ -31,7 +32,7 @@ const AZUL = "#0F6E56"; // color de UCM (teal)
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
 
-type Modulo = "general" | "proceso" | "subjuicios" | "clientes" | "instrucciones" | "documentos" | "boletin";
+type Modulo = "general" | "seguimiento" | "proceso" | "subjuicios" | "clientes" | "instrucciones" | "documentos" | "boletin";
 
 interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
 
@@ -168,6 +169,7 @@ function UCMFicha() {
   const MODULOS: { id: Modulo; label: string; icon: React.ReactNode }[] = [
     { id: "general", label: "General", icon: <LayoutGrid className="h-4 w-4" /> },
     { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
+    { id: "seguimiento", label: "Seguimiento y actuaciones", icon: <Activity className="h-4 w-4" /> },
     { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
     { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
     { id: "instrucciones", label: "Instrucciones", icon: <ScrollText className="h-4 w-4" /> },
@@ -352,6 +354,13 @@ function UCMFicha() {
       )}
 
       {/* ============ PROCESO (dictamen jurídico + registral + PDF + firmas) ============ */}
+      {modulo === "seguimiento" && (
+        <div className="space-y-4">
+          <LineaVidaAreas caso={c} />
+          <PanelSeguimiento caso={c} />
+        </div>
+      )}
+
       {modulo === "proceso" && (
         <div className="grid gap-4 sm:grid-cols-2">
           <BloqueDictamen
