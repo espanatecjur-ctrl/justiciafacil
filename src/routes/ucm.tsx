@@ -55,7 +55,7 @@ function UcmPage() {
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [verArchivados, setVerArchivados] = useState(false);
 
-  const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: false, origen: "ucm" } as any }); };
+  const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/ucm-ficha", search: { id: c.id } as any }); };
   const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true, origen: "ucm" } as any }); };
   const archivar = async (c: CasoJuridico) => {
     const nuevo = !c.archivado;
