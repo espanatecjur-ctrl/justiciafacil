@@ -163,7 +163,12 @@ export type ContratoTipo =
   | "confidencialidad"
   | "cesion_reestructura"
   | "prestacion_promesa"
-  | "laboral";
+  | "laboral"
+  | "cesion_adjudicataria"
+  | "instruccion_notarial_diipa"
+  | "solicitud_cotizacion_diipa"
+  | "oficio_servicios_diipa"
+  | "cotizacion_marco_diipa";
 
 export interface DictamenIA {
   id: string;
