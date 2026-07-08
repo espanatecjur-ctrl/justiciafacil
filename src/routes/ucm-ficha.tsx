@@ -314,6 +314,15 @@ function UCMFicha() {
                 <>
                   <DatoUCP label="Etapa actual" valor={c.etapa_actual} importante />
                   <DatoUCP label="Estatus general" valor={c.estatus_general} importante />
+                  {["firme", "ejecutoria", "ejecuc", "adjudic", "remate", "escritur", "cosa juzgada"].some((k) => `${c.etapa_actual || ""} ${c.estatus_general || ""}`.toLowerCase().includes(k)) && (
+                    <div className="mt-1 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 sm:col-span-2">
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-900">Lista para formalizar al cliente</p>
+                        <p className="text-[11px] text-emerald-800">La etapa indica <b>sentencia firme o superior</b> — esta garantía ya se puede formalizar directo con el cliente (sin compra al banco). Mándala a formalizar desde la ficha del cliente.</p>
+                      </div>
+                    </div>
+                  )}
                   <DatoUCP label="Prioridad" valor={c.prioridad} />
                   <DatoUCP label="No. de expediente / juicio" valor={c.expediente} />
                   <DatoUCP label="No. de juzgado" valor={c.juzgado} />
