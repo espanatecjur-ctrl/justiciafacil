@@ -118,7 +118,7 @@ export function CarpetaDriveVinculada({
         const restantes = r.restantes ?? 0;
         setMsgSincro(`Guardando copia fija… ${copiadosTotal} copiado${copiadosTotal === 1 ? "" : "s"}${restantes ? ` · faltan ${restantes}` : ""}`);
         if (restantes <= 0) break;             // ya no queda nada por copiar
-        if (copiadosAhora === 0) { corte = "algunos documentos no se pudieron copiar"; break; } // no avanzó: evita ciclo infinito
+        if (copiadosAhora === 0) { corte = primerError || "algunos documentos no se pudieron copiar"; break; } // no avanzó: evita ciclo infinito
       }
     } finally {
       setSincro(false);
