@@ -27,8 +27,24 @@ export interface Evento {
   nota?: string | null;
   estado?: string | null;  // tareas: pendiente / hecho
   expediente?: string | null;
+  asignado_a?: string | null; // correo del colaborador al que se le asignó (Fase 1)
   creado_por?: string | null;
   created_at?: string | null;
+}
+
+/** Persona del equipo (para asignar tareas). */
+export interface Colaborador { nombre: string; correo: string; rol?: string | null; }
+
+/** Lista los colaboradores activos, para el selector "Asignar a". */
+export async function listarColaboradores(): Promise<Colaborador[]> {
+  try {
+    return await sbSelect<Colaborador>(
+      "colaboradores",
+      "select=nombre,correo,rol&activo=eq.true&order=nombre.asc",
+    );
+  } catch {
+    return [];
+  }
 }
 
 /** Lista los eventos de un mes (año, mes 0-11). */
