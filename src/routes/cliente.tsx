@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
+import { CarpetasCliente } from "@/components/carpetas-cliente";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
-import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen } from "lucide-react";
 
 export const Route = createFileRoute("/cliente")({
   validateSearch: (s: Record<string, unknown>) => ({ nombre: typeof s.nombre === "string" ? s.nombre : "" }),
@@ -120,6 +121,17 @@ function ClientePage() {
               })}
             </div>
           </Card>
+
+          {/* Carpetas de Drive del cliente (una o varias) con copia fija */}
+          {juicio?.id && (
+            <Card className="overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+                <FolderOpen className="h-4 w-4 text-[color:var(--teal)]" />
+                <h3 className="text-sm font-semibold">Documentos del cliente (carpetas de Drive)</h3>
+              </div>
+              <CarpetasCliente casoId={juicio.id} clienteNombre={nombre} />
+            </Card>
+          )}
         </>
       )}
 
