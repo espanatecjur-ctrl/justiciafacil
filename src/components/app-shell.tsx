@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { navItems } from "@/lib/nav";
-import { Search, Bell, Settings, Users, Network, LogOut, ChevronDown, Home, FolderOpen, Newspaper, FileCheck2, MoreHorizontal } from "lucide-react";
+import { Search, Settings, Users, Network, LogOut, ChevronDown, Home, FolderOpen, Newspaper, FileCheck2, MoreHorizontal } from "lucide-react";
+import { Campanita } from "@/components/campanita";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -176,10 +177,7 @@ export function AppShell() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="relative grid h-9 w-9 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[color:var(--legal)]" />
-            </button>
+            <Campanita />
 
             <div className="relative" ref={menuRef}>
               <button onClick={() => setMenuAbierto((v) => !v)} className="flex items-center gap-1.5 rounded-full p-0.5 hover:bg-accent" title={email ?? "Mi cuenta"}>
