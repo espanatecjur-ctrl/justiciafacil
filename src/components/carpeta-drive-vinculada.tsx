@@ -10,11 +10,12 @@ import {
   HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
   Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
   Folder, ChevronRight, Home, Layers, AlertTriangle, CheckSquare, Square, Download,
+  Trash2, RotateCcw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, listarPapelera, enviarAPapelera, recuperarDePapelera, borrarCopiaDefinitivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -414,6 +415,39 @@ export function CarpetaDriveVinculada({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista, copias]);
 
+  // Papelera de la copia fija (documentos eliminados, recuperables). No toca Drive.
+  const [papelera, setPapelera] = useState<Copia[]>([]);
+  const [verPapelera, setVerPapelera] = useState(false);
+  const [ocupadoPap, setOcupadoPap] = useState<string | null>(null); // drive_id en proceso
+  const cargarPapelera = () => {
+    if (!carpetaId) return;
+    listarPapelera(caso.id).then(setPapelera).catch(() => setPapelera([]));
+  };
+  useEffect(() => {
+    if (vista === "fija") cargarPapelera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, carpetaId]);
+
+  const aPapelera = async (driveId: string) => {
+    setOcupadoPap(driveId);
+    const r = await enviarAPapelera(caso.id, driveId);
+    setOcupadoPap(null);
+    if (r.ok) { cargarCopias(); cargarPapelera(); } else { setMsgSincro("⚠️ No se pudo mandar a la papelera: " + (r.error || "")); }
+  };
+  const recuperarDoc = async (driveId: string) => {
+    setOcupadoPap(driveId);
+    const r = await recuperarDePapelera(caso.id, driveId);
+    setOcupadoPap(null);
+    if (r.ok) { cargarCopias(); cargarPapelera(); } else { setMsgSincro("⚠️ No se pudo recuperar: " + (r.error || "")); }
+  };
+  const borrarDef = async (driveId: string, nombre: string | null) => {
+    if (!window.confirm(`¿Borrar definitivamente “${nombre || "este documento"}”?\nNo se podrá recuperar (Drive no se toca).`)) return;
+    setOcupadoPap(driveId);
+    const r = await borrarCopiaDefinitivo(caso.id, driveId);
+    setOcupadoPap(null);
+    if (r.ok) cargarPapelera(); else setMsgSincro("⚠️ No se pudo borrar: " + (r.error || ""));
+  };
+
   // firma los enlaces de las copias visibles (las que ya están en el almacén)
   useEffect(() => {
     const faltan = docsPag
@@ -680,10 +714,45 @@ export function CarpetaDriveVinculada({
                     </div>
                     <div className="flex items-center justify-between px-3 py-1.5">
                       <span className="text-[10px] text-muted-foreground">Guardado en el sistema</span>
-                      {urlsCopia[c.drive_id] && <a href={`${urlsCopia[c.drive_id]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                      <div className="flex items-center gap-2">
+                        {urlsCopia[c.drive_id] && <a href={`${urlsCopia[c.drive_id]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                        {puedeVincular && (
+                          <button onClick={() => aPapelera(c.drive_id)} disabled={ocupadoPap === c.drive_id} title="Mandar a la papelera (recuperable · no toca Drive)" className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50">
+                            {ocupadoPap === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ---- Papelera (recuperable · no toca Drive) ---- */}
+            {papelera.length > 0 && (
+              <div className="mt-1">
+                <button onClick={() => setVerPapelera((v) => !v)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                  <Trash2 className="h-3.5 w-3.5" /> Papelera ({papelera.length}) {verPapelera ? "▲" : "▼"}
+                </button>
+                {verPapelera && (
+                  <div className="mt-2 space-y-1.5 rounded-md border border-dashed border-input p-2">
+                    <p className="text-[11px] text-muted-foreground">Eliminados de la copia fija, pero se pueden recuperar. Drive no se toca.</p>
+                    {papelera.map((c) => (
+                      <div key={c.drive_id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-white px-2 py-1.5">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-xs" title={c.nombre || ""}>{c.nombre || "(sin nombre)"}</span>
+                        <button onClick={() => recuperarDoc(c.drive_id)} disabled={ocupadoPap === c.drive_id} className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--teal)] hover:underline disabled:opacity-50">
+                          {ocupadoPap === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Recuperar
+                        </button>
+                        {puedeVincular && (
+                          <button onClick={() => borrarDef(c.drive_id, c.nombre)} disabled={ocupadoPap === c.drive_id} className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline disabled:opacity-50">
+                            <X className="h-3.5 w-3.5" /> Borrar definitivo
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </>
