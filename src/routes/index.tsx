@@ -6,6 +6,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, contarAudienciasHoy, contarPredictamenes, mapaUnidadPorCaso, type Atrasada, type Cita } from "@/lib/resumen-inicio";
 import { listarProximos, ESTILO_EVENTO, type Evento } from "@/lib/evento-agenda";
 import { MisTareas } from "@/components/panel-seguimiento";
+import { ValidacionesHome } from "@/components/validaciones-home";
 import { SolicitudesPendientesHome } from "@/components/solicitudes-home";
 import {
   Gavel, Newspaper, FileSearch, AlertTriangle, CalendarClock,
@@ -351,6 +352,9 @@ function Inicio() {
               </div>
             )}
           </Card>
+
+          {/* Validaciones pendientes (instrucciones) */}
+          <ValidacionesHome />
 
           {/* Mis tareas (asignadas a mí) */}
           <MisTareas />
