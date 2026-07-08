@@ -10,12 +10,11 @@ import {
   HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
   Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
   Folder, ChevronRight, Home, Layers, AlertTriangle, CheckSquare, Square, Download,
-  Trash2, RotateCcw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, listarPapelera, enviarAPapelera, recuperarDePapelera, borrarCopiaDefinitivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -45,20 +44,6 @@ function bajarBlob(blob: Blob, nombre: string) {
 }
 
 const hdrs = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
-
-/** ¿El navegador puede mostrar este archivo en un iframe SIN descargarlo? (solo PDF e imágenes) */
-function puedeIframe(mime?: string | null): boolean {
-  const m = (mime || "").toLowerCase();
-  return m.includes("pdf") || m.startsWith("image/");
-}
-/** Etiqueta amable para archivos que no tienen vista previa aquí (Word, Excel…). */
-function etiquetaSinPreview(mime?: string | null): string {
-  const m = (mime || "").toLowerCase();
-  if (m.includes("word") || m.includes("document")) return "Documento de Word";
-  if (m.includes("sheet") || m.includes("excel")) return "Hoja de Excel";
-  if (m.includes("presentation") || m.includes("powerpoint")) return "Presentación";
-  return "Vista previa no disponible aquí";
-}
 
 export function CarpetaDriveVinculada({
   caso,
@@ -98,82 +83,33 @@ export function CarpetaDriveVinculada({
 
   // vista: "todos" = todos los docs (recursivo); "esta" = navegar carpeta por carpeta
   const [modoVista, setModoVista] = useState<"todos" | "esta">("todos");
-  // Apartado activo dentro de Documentos: "drive" = buscar/copiar de Drive (en vivo)
-  //                                        "fija"  = los del sistema (copia fija, por crédito)
-  const [vista, setVista] = useState<"drive" | "fija">("drive");
   const [rutaFicha, setRutaFicha] = useState<{ id: string; name: string }[]>([]);
   const [subcarpetas, setSubcarpetas] = useState<ItemDrive[]>([]);
 
   // aviso de carpeta ya usada por otro expediente (no repetir)
   const [dupAviso, setDupAviso] = useState<string | null>(null);
+  const [dupPendiente, setDupPendiente] = useState<{ id: string; nombre: string } | null>(null);
 
   // crear carpeta nueva (reusa el crear-carpeta del sistema: Área → Rol → garantía)
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
-  // Guardar copia fija: copia TODOS los documentos de la carpeta al almacén
-  // propio del sistema (Supabase Storage), archivados por expediente/crédito.
-  // Le da vueltas solo — de a 8 por tanda — hasta que no quede nada pendiente,
-  // así queda en UN SOLO clic (antes había que picarle varias veces).
+  // sincronizar (copiar Drive → almacén del sistema)
   const [sincro, setSincro] = useState(false);
   const [msgSincro, setMsgSincro] = useState<string | null>(null);
   const sincronizar = async () => {
-    if (!carpetaId || sincro) return;
-    setSincro(true);
-    setMsgSincro("Guardando copia fija… preparando");
-
-    // Paso 1 (automático): ordenar la carpeta en Drive → carpeta del área de la unidad,
-    // renombrada con el número de crédito. Solo si sabemos el área. NO bloquea la copia.
-    let carpetaActiva = carpetaId;
-    let avisoDrive: string | null = null;
-    let ordenada = false;
-    if (puedeVincular && area) {
-      setMsgSincro("Ordenando la carpeta en Drive…");
-      const nuevoNombre = `${nombreGarantia(caso)}${caso.expediente ? " — " + caso.expediente : ""}`.trim();
-      const org = await traerCarpetaAArea(carpetaId, area, nuevoNombre);
-      if (org.requiereCopia) {
-        avisoDrive = "la carpeta está en otra unidad de Drive; no se pudo ordenar ahí (solo se guardó la copia fija)";
-      } else if (org.ok) {
-        ordenada = true;
-        if (org.carpetaId) {
-          carpetaActiva = org.carpetaId;
-          await onGuardar({ drive_carpeta_id: org.carpetaId, drive_carpeta_nombre: org.nombre || nuevoNombre });
-        }
-      } else {
-        avisoDrive = "no se pudo ordenar en Drive (" + (org.error || "error") + ")";
-      }
-    }
-
-    // Paso 2: copia fija a Supabase (de corrido hasta terminar).
-    setMsgSincro("Guardando copia fija… preparando");
-    const MAX_VUELTAS = 60; // tope de seguridad (~480 documentos) para no ciclar de más
-    let copiadosTotal = 0;
-    let avisos = 0;
-    let primerError: string | null = null;
-    let corte: string | null = null;
-    try {
-      for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
-        const r = await sincronizarCarpeta(caso.id, carpetaActiva);
-        if (!r.ok) { corte = r.error || "No se pudo guardar la copia."; break; }
-        const copiadosAhora = r.copiados ?? 0;
-        copiadosTotal += copiadosAhora;
-        if (r.errores && r.errores.length) { avisos += r.errores.length; primerError = primerError || r.errores[0]; }
-        const restantes = r.restantes ?? 0;
-        setMsgSincro(`Guardando copia fija… ${copiadosTotal} copiado${copiadosTotal === 1 ? "" : "s"}${restantes ? ` · faltan ${restantes}` : ""}`);
-        if (restantes <= 0) break;             // ya no queda nada por copiar
-        if (copiadosAhora === 0) { corte = primerError || "algunos documentos no se pudieron copiar"; break; } // no avanzó: evita ciclo infinito
-      }
-    } finally {
-      setSincro(false);
-      cargarCopias(); // refresca qué ya está en el almacén (para el indicador)
-    }
-    if (corte && copiadosTotal === 0) { setMsgSincro("⚠️ " + corte + (avisoDrive ? " · Drive: " + avisoDrive : "")); return; }
-    const partes = [`Copia fija lista: ${copiadosTotal} documento${copiadosTotal === 1 ? "" : "s"} guardado${copiadosTotal === 1 ? "" : "s"} en el sistema`];
-    if (ordenada) partes.push(`carpeta ordenada en Drive (${area}) por número de crédito`);
-    if (avisoDrive) partes.push("⚠️ Drive: " + avisoDrive);
-    if (avisos) partes.push(`${avisos} con aviso${primerError ? ` (${primerError})` : ""}`);
-    if (corte) partes.push(`se detuvo: ${corte} — dale de nuevo para reintentar`);
-    setMsgSincro("✅ " + partes.join(" · "));
+    if (!carpetaId) return;
+    setSincro(true); setMsgSincro(null);
+    const r = await sincronizarCarpeta(caso.id, carpetaId);
+    setSincro(false);
+    if (!r.ok) { setMsgSincro("⚠️ " + (r.error || "No se pudo sincronizar.")); return; }
+    const partes = [`Copiados: ${r.copiados ?? 0}`];
+    if ((r.restantes ?? 0) > 0) partes.push(`faltan ${r.restantes} (dale de nuevo)`);
+    else partes.push("todo al día ✅");
+    if (r.errores && r.errores.length) partes.push(`${r.errores.length} con aviso`);
+    setMsgSincro(partes.join(" · "));
+    if (r.errores && r.errores.length) setMsgSincro((m) => (m || "") + " — 1º: " + r.errores![0]);
+    cargarCopias(); // refresca qué ya está en el almacén
   };
 
   // sugerencias por número (expediente / crédito / gar)
@@ -207,15 +143,6 @@ export function CarpetaDriveVinculada({
   };
   useEffect(() => { cargarCopias(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
 
-  // Papelera de la copia fija (eliminados recuperables). Se carga siempre para que
-  // lo que mandaste a la basura NO cuente como "documento nuevo por copiar".
-  const [papelera, setPapelera] = useState<Copia[]>([]);
-  const cargarPapelera = () => {
-    if (!carpetaId) return;
-    listarPapelera(caso.id).then(setPapelera).catch(() => setPapelera([]));
-  };
-  useEffect(() => { cargarPapelera(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [carpetaId]);
-
   const cargarDocs = (modo: "todos" | "esta" = modoVista, folderId: string = carpetaId) => {
     if (!carpetaId) return;
     setCargando(true); setError(null); setPagina(0);
@@ -240,8 +167,6 @@ export function CarpetaDriveVinculada({
   const refrescar = () => {
     const folder = modoVista === "esta" ? (rutaFicha[rutaFicha.length - 1]?.id || carpetaId) : carpetaId;
     cargarDocs(modoVista, folder);
-    cargarCopias();
-    cargarPapelera();
   };
 
   // ----- Selección + descarga (1 doc = archivo; 2+ = ZIP; carpeta = ZIP) -----
@@ -362,15 +287,17 @@ export function CarpetaDriveVinculada({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carpetaId, modoVista, rutaFicha]);
 
-  // Antes de vincular: revisa que la carpeta NO esté usada por otro expediente (no repetir).
+  // Antes de vincular: revisa que la carpeta NO esté usada por otro expediente.
+  // Si lo está, no bloquea: avisa y ofrece "Compartir de todos modos" (juicio ↔ exhorto, mismo seguimiento).
   const elegir = async (id: string, nombre: string) => {
-    setGuardando(true); setDupAviso(null);
+    setGuardando(true); setDupAviso(null); setDupPendiente(null);
     try {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente&drive_carpeta_id=eq.${encodeURIComponent(id)}&id=neq.${encodeURIComponent(caso.id)}`, { headers: hdrs });
       const usados = r.ok ? await r.json() : [];
       if (Array.isArray(usados) && usados.length > 0) {
         const exp = usados[0].expediente || usados[0].id;
-        setDupAviso(`Esa carpeta ya está vinculada al expediente ${exp}. Una carpeta no puede usarse en dos expedientes.`);
+        setDupAviso(`Esa carpeta ya está vinculada al expediente ${exp}. Si es el mismo seguimiento (por ejemplo un exhorto del mismo juicio), puedes compartirla.`);
+        setDupPendiente({ id, nombre });
         setGuardando(false);
         return;
       }
@@ -378,6 +305,14 @@ export function CarpetaDriveVinculada({
     await onGuardar({ drive_carpeta_id: id, drive_carpeta_nombre: nombre });
     setGuardando(false);
     setEligiendo(false);
+  };
+
+  // Compartir la carpeta de todos modos (mismo seguimiento: juicio ↔ exhorto).
+  const compartirDeTodosModos = async () => {
+    if (!dupPendiente) return;
+    setGuardando(true);
+    await onGuardar({ drive_carpeta_id: dupPendiente.id, drive_carpeta_nombre: dupPendiente.nombre });
+    setGuardando(false); setEligiendo(false); setDupAviso(null); setDupPendiente(null);
   };
 
   // "Traer a mi área": revisa duplicado, MUEVE a la carpeta del área (renombrada) y la vincula.
@@ -442,65 +377,11 @@ export function CarpetaDriveVinculada({
   const pag = Math.min(pagina, totalPag - 1);
   const docsPag = docsFiltrados.slice(pag * PAGE, pag * PAGE + PAGE);
 
-  // Indicador de copia fija (tomando en cuenta la papelera):
-  // los documentos que mandaste a la basura NO cuentan como "por copiar".
-  const enPapeleraSet = new Set(papelera.map((p) => p.drive_id));
-  const docsVigentes = docs.filter((d) => !enPapeleraSet.has(d.id)); // en Drive y NO en papelera
-  const totalDocs = docsVigentes.length;
-  const copiadosDocs = docsVigentes.filter((d) => copias[d.id]).length;
+  // Indicador de sincronización (cálculo rápido): cuántos de los documentos vistos ya tienen copia
+  const totalDocs = docs.length;
+  const copiadosDocs = docs.filter((d) => copias[d.id]).length;
   const faltanSincro = Math.max(0, totalDocs - copiadosDocs);
   const colorSincro = totalDocs === 0 ? "gris" : faltanSincro === 0 ? "verde" : copiadosDocs === 0 ? "gris" : "amarillo";
-  // ¿Ya está todo copiado? → bloquear el botón. ¿Hay documentos nuevos por copiar?
-  const todoCopiado = totalDocs > 0 && faltanSincro === 0;
-  const hayNuevos = faltanSincro > 0;
-  const yaHuboCopia = copiadosDocs > 0 || papelera.length > 0; // ya se generó copia alguna vez
-
-  // Copia fija: los documentos ya guardados en el sistema (tabla drive_copia).
-  const copiasArr = Object.values(copias);
-  const copiasFiltradas = filtroDoc.trim()
-    ? copiasArr.filter((c) => normaliza(c.nombre || "").includes(normaliza(filtroDoc)))
-    : copiasArr;
-
-  // En el apartado "Copia fija" firma TODOS los enlaces del sistema (no solo los visibles en Drive).
-  useEffect(() => {
-    if (vista !== "fija") return;
-    const faltan = copiasArr.filter((c) => !urlsCopia[c.drive_id]).map((c) => c.storage_path);
-    if (faltan.length === 0) return;
-    firmarCopias(faltan).then((urls) => {
-      const porId: Record<string, string> = {};
-      for (const c of copiasArr) { if (urls[c.storage_path]) porId[c.drive_id] = urls[c.storage_path]; }
-      if (Object.keys(porId).length) setUrlsCopia((prev) => ({ ...prev, ...porId }));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista, copias]);
-
-  // Papelera de la copia fija (documentos eliminados, recuperables). No toca Drive.
-  const [verPapelera, setVerPapelera] = useState(false);
-  const [ocupadoPap, setOcupadoPap] = useState<string | null>(null); // drive_id en proceso
-  useEffect(() => {
-    if (vista === "fija") cargarPapelera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista, carpetaId]);
-
-  const aPapelera = async (driveId: string) => {
-    setOcupadoPap(driveId);
-    const r = await enviarAPapelera(caso.id, driveId);
-    setOcupadoPap(null);
-    if (r.ok) { cargarCopias(); cargarPapelera(); } else { setMsgSincro("⚠️ No se pudo mandar a la papelera: " + (r.error || "")); }
-  };
-  const recuperarDoc = async (driveId: string) => {
-    setOcupadoPap(driveId);
-    const r = await recuperarDePapelera(caso.id, driveId);
-    setOcupadoPap(null);
-    if (r.ok) { cargarCopias(); cargarPapelera(); } else { setMsgSincro("⚠️ No se pudo recuperar: " + (r.error || "")); }
-  };
-  const borrarDef = async (driveId: string, nombre: string | null) => {
-    if (!window.confirm(`¿Borrar definitivamente “${nombre || "este documento"}”?\nNo se podrá recuperar (Drive no se toca).`)) return;
-    setOcupadoPap(driveId);
-    const r = await borrarCopiaDefinitivo(caso.id, driveId);
-    setOcupadoPap(null);
-    if (r.ok) cargarPapelera(); else setMsgSincro("⚠️ No se pudo borrar: " + (r.error || ""));
-  };
 
   // firma los enlaces de las copias visibles (las que ya están en el almacén)
   useEffect(() => {
@@ -571,7 +452,7 @@ export function CarpetaDriveVinculada({
               </button>
             </div>
             {errorCrear && <p className="mt-2 text-xs text-red-600">{errorCrear}</p>}
-            {dupAviso && <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"><AlertTriangle className="mr-1 inline h-3.5 w-3.5" /> {dupAviso}</div>}
+            {dupAviso && <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"><AlertTriangle className="mr-1 inline h-3.5 w-3.5" /> {dupAviso}{dupPendiente && <button onClick={compartirDeTodosModos} disabled={guardando} className="mt-1.5 block rounded-md px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>Compartir de todos modos</button>}</div>}
           </div>
         </div>
       )}
@@ -586,28 +467,17 @@ export function CarpetaDriveVinculada({
             {totalDocs > 0 && (
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorSincro === "verde" ? "bg-emerald-100 text-emerald-800" : colorSincro === "amarillo" ? "bg-amber-100 text-amber-800" : "bg-muted text-muted-foreground"}`}
-                title={colorSincro === "verde" ? "Copia fija completa · este expediente ya no depende de Drive" : `Faltan ${faltanSincro} por guardar en la copia fija`}
+                title={colorSincro === "verde" ? "Todo copiado al sistema · este expediente ya no depende de Drive" : `Faltan ${faltanSincro} por sincronizar`}
               >
                 <span className={`h-2 w-2 rounded-full ${colorSincro === "verde" ? "bg-emerald-500" : colorSincro === "amarillo" ? "bg-amber-500" : "bg-gray-400"}`} />
-                {colorSincro === "verde" ? "Copia fija completa" : `Copia fija ${copiadosDocs}/${totalDocs}`}
+                {colorSincro === "verde" ? "Todo en el sistema" : `Sincronizado ${copiadosDocs}/${totalDocs}`}
               </span>
             )}
             <span className="flex-1" />
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
-            {puedeVincular && (
-              <button
-                onClick={sincronizar}
-                disabled={sincro || todoCopiado}
-                title={todoCopiado ? "Ya está todo copiado. Sube un documento nuevo a Drive y dale “Actualizar” para volver a generar la copia." : "Ordena la carpeta en Drive (por número de crédito) y guarda la copia fija en el sistema"}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold shadow-sm disabled:cursor-not-allowed ${todoCopiado ? "bg-emerald-100 text-emerald-800 disabled:opacity-100" : "text-white disabled:opacity-60"}`}
-                style={todoCopiado ? undefined : { background: "#0C5C46" }}
-              >
-                {sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : todoCopiado ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CloudUpload className="h-3.5 w-3.5" />}
-                {sincro ? "Guardando copia fija…" : todoCopiado ? "Copia fija al día" : "Guardar copia fija"}
-              </button>
-            )}
+            {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
-            {vista === "drive" && docs.length > 0 && (selModo
+            {docs.length > 0 && (selModo
               ? <button onClick={salirSel} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
               : <button onClick={() => setSelModo(true)} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><CheckSquare className="h-3.5 w-3.5" /> Seleccionar</button>
             )}
@@ -618,35 +488,12 @@ export function CarpetaDriveVinculada({
             </div>
           </div>
 
-          {/* Dos apartados dentro de Documentos: buscar/copiar de Drive · ver la copia fija del sistema */}
-          <div className="inline-flex overflow-hidden rounded-md border border-input text-xs">
-            <button onClick={() => setVista("drive")} className={`inline-flex items-center gap-1 px-3 py-1.5 ${vista === "drive" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
-              <HardDrive className="h-3.5 w-3.5" /> De Drive
-            </button>
-            <button onClick={() => setVista("fija")} className={`inline-flex items-center gap-1 px-3 py-1.5 ${vista === "fija" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
-              <FolderCheck className="h-3.5 w-3.5" /> 📌 Copia fija{copiasArr.length ? ` (${copiasArr.length})` : ""}
-            </button>
-          </div>
-
-          {hayNuevos && yaHuboCopia && !sincro && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <span>📄 Hay {faltanSincro} documento{faltanSincro === 1 ? "" : "s"} nuevo{faltanSincro === 1 ? "" : "s"} en la carpeta de Drive. ¿Quieres generar la copia?</span>
-              {puedeVincular && (
-                <button onClick={sincronizar} className="ml-auto inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-white" style={{ background: "#0C5C46" }}>
-                  <CloudUpload className="h-3.5 w-3.5" /> Generar copia
-                </button>
-              )}
-            </div>
-          )}
-
           {msgSincro && (
             <div className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)]/5 px-3 py-1.5 text-xs text-[color:var(--teal)]">
               <CheckCircle2 className="h-3.5 w-3.5" /> {msgSincro}
             </div>
           )}
 
-          {vista === "drive" ? (
-          <>
           {selModo && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 px-3 py-2">
               <span className="text-xs font-medium text-[color:var(--teal)]">{nSelDocs} seleccionado{nSelDocs === 1 ? "" : "s"}</span>
@@ -733,7 +580,7 @@ export function CarpetaDriveVinculada({
                       {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
-                      <iframe src={(puedeIframe(a.mimeType) && urlsCopia[a.id]) ? urlsCopia[a.id] : previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                      <iframe src={urlsCopia[a.id] || previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
                       <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
                         <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
                       </span>
@@ -757,89 +604,6 @@ export function CarpetaDriveVinculada({
               )}
             </>
           )}
-          </>
-          ) : (
-          <>
-            {/* ---- Apartado: COPIA FIJA (documentos ya guardados en el sistema) ---- */}
-            {copiasFiltradas.length === 0 ? (
-              <div className="rounded-md border border-dashed border-input p-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {copiasArr.length === 0
-                    ? "Aún no hay copia fija de este expediente."
-                    : `Ningún documento fijo coincide con “${filtroDoc}”.`}
-                </p>
-                {copiasArr.length === 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Dale a <b>“Guardar copia fija”</b> para traer los documentos de Drive al sistema. Aquí se quedan fijos —con el número de crédito— aunque en Drive los muevan o borren.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {copiasFiltradas.map((c) => (
-                  <div key={c.drive_id} className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                      <FileText className="h-4 w-4 shrink-0 text-emerald-600" />
-                      <p className="min-w-0 flex-1 truncate text-xs font-medium" title={c.nombre || ""}>{c.nombre || "(sin nombre)"}</p>
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">📌 fijo</span>
-                    </div>
-                    <div className="h-40 w-full bg-muted">
-                      {!puedeIframe(c.mime) ? (
-                        <div className="grid h-full place-items-center gap-1 p-2 text-center">
-                          <FileText className="h-8 w-8 text-emerald-600/60" />
-                          <span className="text-[11px] text-muted-foreground">{etiquetaSinPreview(c.mime)} · usa <b>Descargar</b> para abrirlo</span>
-                        </div>
-                      ) : urlsCopia[c.drive_id] ? (
-                        <iframe src={urlsCopia[c.drive_id]} title={c.nombre || ""} loading="lazy" className="h-full w-full border-0" />
-                      ) : (
-                        <div className="grid h-full place-items-center text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Abriendo…</div>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-1.5">
-                      <span className="text-[10px] text-muted-foreground">Guardado en el sistema</span>
-                      <div className="flex items-center gap-2">
-                        {urlsCopia[c.drive_id] && <a href={`${urlsCopia[c.drive_id]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
-                        {puedeVincular && (
-                          <button onClick={() => aPapelera(c.drive_id)} disabled={ocupadoPap === c.drive_id} title="Mandar a la papelera (recuperable · no toca Drive)" className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50">
-                            {ocupadoPap === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ---- Papelera (recuperable · no toca Drive) ---- */}
-            {papelera.length > 0 && (
-              <div className="mt-1">
-                <button onClick={() => setVerPapelera((v) => !v)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                  <Trash2 className="h-3.5 w-3.5" /> Papelera ({papelera.length}) {verPapelera ? "▲" : "▼"}
-                </button>
-                {verPapelera && (
-                  <div className="mt-2 space-y-1.5 rounded-md border border-dashed border-input p-2">
-                    <p className="text-[11px] text-muted-foreground">Eliminados de la copia fija, pero se pueden recuperar. Drive no se toca.</p>
-                    {papelera.map((c) => (
-                      <div key={c.drive_id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-white px-2 py-1.5">
-                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate text-xs" title={c.nombre || ""}>{c.nombre || "(sin nombre)"}</span>
-                        <button onClick={() => recuperarDoc(c.drive_id)} disabled={ocupadoPap === c.drive_id} className="inline-flex items-center gap-1 text-xs font-medium text-[color:var(--teal)] hover:underline disabled:opacity-50">
-                          {ocupadoPap === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Recuperar
-                        </button>
-                        {puedeVincular && (
-                          <button onClick={() => borrarDef(c.drive_id, c.nombre)} disabled={ocupadoPap === c.drive_id} className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline disabled:opacity-50">
-                            <X className="h-3.5 w-3.5" /> Borrar definitivo
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-          )}
         </>
       )}
 
@@ -851,7 +615,7 @@ export function CarpetaDriveVinculada({
             <button onClick={() => setEligiendo(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
           </div>
           {guardando && <p className="text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Guardando…</p>}
-          {dupAviso && <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" /> {dupAviso}</div>}
+          {dupAviso && <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" /> {dupAviso}{dupPendiente && <button onClick={compartirDeTodosModos} disabled={guardando} className="mt-2 block rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>Compartir de todos modos</button>}</div>}
 
           {sugerencias.length > 0 && (
             <div className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
@@ -887,12 +651,7 @@ export function CarpetaDriveVinculada({
       )}
 
       {docSel && (
-        <VisorDocumentoModal
-          url={puedeIframe(docSel.mimeType) ? (urlsCopia[docSel.id] || docSel.webViewLink || "") : ""}
-          driveId={puedeIframe(docSel.mimeType) && urlsCopia[docSel.id] ? null : docSel.id}
-          nombre={docSel.name}
-          onCerrar={() => setDocSel(null)}
-        />
+        <VisorDocumentoModal url={urlsCopia[docSel.id] || docSel.webViewLink || ""} driveId={urlsCopia[docSel.id] ? null : docSel.id} nombre={docSel.name} onCerrar={() => setDocSel(null)} />
       )}
     </Card>
   );
