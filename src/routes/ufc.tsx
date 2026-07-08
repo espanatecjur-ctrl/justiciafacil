@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, FileSignature, FilePlus, Loader2, MapPin, MoreVertical, Eye, Archive, Trash2 } from "lucide-react";
+import { Search, FileSignature, FilePlus, Loader2, MapPin, MoreVertical, Eye, Archive, Trash2, User } from "lucide-react";
 import { listarFormalizaciones, crearFormalizacion, listarCasosVinculables, moverPapeleraFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, type Formalizacion } from "@/lib/formalizacion";
 import type { CasoJuridico } from "@/lib/supabase";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
@@ -56,10 +56,21 @@ function UFC() {
     const t = q.trim().toLowerCase();
     if (!t) return filas;
     return filas.filter((f) =>
-      [f.id_interno, f.direccion_garantia, f.expediente, f.tipo_proceso, f.estado_tramite]
+      [f.id_interno, f.direccion_garantia, f.expediente, f.tipo_proceso, f.estado_tramite, f.nombre_cesionario]
         .some((v) => (v || "").toLowerCase().includes(t))
     );
   }, [filas, q]);
+
+  // Agrupar por cliente (conecta UCM ↔ UFC)
+  const grupos = useMemo(() => {
+    const m = new Map<string, Formalizacion[]>();
+    for (const f of filtradas) {
+      const k = (f.nombre_cesionario || "").trim() || "Sin cliente";
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(f);
+    }
+    return [...m.entries()].map(([nombre, items]) => ({ nombre, items }));
+  }, [filtradas]);
 
   const enProceso = filas.filter((f) => (f.estado_tramite || "").toLowerCase().includes("proceso")).length;
   const testimonios = filas.filter((f) => (f.estado_tramite || "").toLowerCase().includes("testimonio")).length;
@@ -104,7 +115,15 @@ function UFC() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtradas.map((f) => (
+              {grupos.map((g) => (
+                <Fragment key={g.nombre}>
+                  <tr className="bg-[color:var(--teal)]/5">
+                    <td colSpan={6} className="px-4 py-1.5">
+                      <button onClick={(e) => { e.stopPropagation(); navigate({ to: "/cliente", search: { nombre: g.nombre } as any }); }} className="inline-flex items-center gap-1 text-[13px] font-semibold text-[color:var(--teal)] hover:underline"><User className="h-3.5 w-3.5" /> {g.nombre}</button>
+                      <span className="ml-2 text-[11px] text-muted-foreground">· {g.items.length} formalización{g.items.length === 1 ? "" : "es"}</span>
+                    </td>
+                  </tr>
+                  {g.items.map((f) => (
                 <tr key={f.id} onClick={() => navigate({ to: "/ufc-ficha", search: { id: f.id } as any })} className="cursor-pointer hover:bg-muted/30">
                   <td className="px-4 py-3">
                     <p className="font-mono text-[12px] font-semibold" style={{ color: TEAL }}>{f.id_interno || "—"}</p>
@@ -120,6 +139,8 @@ function UFC() {
                     </div>
                   </td>
                 </tr>
+                  ))}
+                </Fragment>
               ))}
               {filtradas.length === 0 && !cargando && (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Sin formalizaciones. Toca "Nueva formalización" para agregar.</td></tr>
