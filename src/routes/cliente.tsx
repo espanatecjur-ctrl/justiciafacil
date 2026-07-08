@@ -36,10 +36,23 @@ function ClientePage() {
   const [abierto, setAbierto] = useState<string | null>(null);
   const [solicitar, setSolicitar] = useState<Cli | null>(null);
 
-  const cargar = () => {
+  const cargar = async () => {
     if (!nombre) { setCargando(false); return; }
-    fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente,drive_clientes_id,drive_clientes_nombre)&nombre=eq.${encodeURIComponent(nombre)}&en_papelera=eq.false&order=folio.asc`, { headers })
-      .then((r) => (r.ok ? r.json() : [])).then(setGars).catch(() => {}).finally(() => setCargando(false));
+    const sel = "select=*,caso_juridico(id,expediente,drive_clientes_id,drive_clientes_nombre)";
+    const base = `cliente_juicio?${sel}&en_papelera=eq.false&order=folio.asc`;
+    const q = (filtro: string) => fetch(`${SUPABASE_URL}/rest/v1/${base}&${filtro}`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    try {
+      // 1) exacto · 2) sin importar mayúsculas · 3) por el nombre antes del "(" (anotación de cambio)
+      let rows = await q(`nombre=eq.${encodeURIComponent(nombre)}`);
+      if (rows.length === 0) rows = await q(`nombre=ilike.${encodeURIComponent(nombre)}`);
+      if (rows.length === 0) {
+        const raiz = nombre.split("(")[0].trim();
+        if (raiz && raiz !== nombre) rows = await q(`nombre=ilike.${encodeURIComponent(raiz + "*")}`);
+      }
+      setGars(rows);
+    } finally {
+      setCargando(false);
+    }
   };
   useEffect(() => { setCargando(true); cargar(); }, [nombre]);
 
@@ -71,7 +84,10 @@ function ClientePage() {
       {cargando ? (
         <Card className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></Card>
       ) : gars.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">No se encontró información de este cliente.</Card>
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">No se encontró este cliente en el CRM.</p>
+          <p className="mt-1 text-xs">El nombre no coincide con ninguna garantía registrada (puede venir de UFC u otro juicio, o tener el nombre distinto). Búscalo en <button onClick={() => navigate({ to: "/clientes" })} className="font-medium text-[color:var(--teal)] hover:underline">Clientes</button>.</p>
+        </Card>
       ) : (
         <>
           {/* Resumen del cliente */}
