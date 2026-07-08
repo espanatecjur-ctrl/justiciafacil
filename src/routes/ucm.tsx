@@ -53,6 +53,7 @@ function UcmPage() {
   const [entidad, setEntidad] = useState("todas");
   const [prioridad, setPrioridad] = useState("todas");
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
+  const [dictPorCaso, setDictPorCaso] = useState<Record<string, { ver: string; jur: string; reg: string }>>({});
   const [verArchivados, setVerArchivados] = useState(false);
 
   const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/ucm-ficha", search: { id: c.id } as any }); };
@@ -82,6 +83,14 @@ function UcmPage() {
         // cargar días sin avance en lote (una sola tanda de consultas)
         const ids = d.map((x) => x.id).filter(Boolean) as string[];
         diasSinAvanceLote(ids).then(setDiasAvance).catch(() => {});
+        // Dictámenes de UCP (para reflejar positivo/negativo en UCM). dictamen.caso_id es texto.
+        fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=caso_id,veredicto,juridico,registral&vigente=eq.true`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+          .then((r) => (r.ok ? r.json() : []))
+          .then((rows: any[]) => {
+            const m: Record<string, { ver: string; jur: string; reg: string }> = {};
+            for (const x of rows) if (x.caso_id) m[String(x.caso_id)] = { ver: x.veredicto || "", jur: x.juridico?.veredicto || "", reg: (typeof x.registral?.veredicto === "string" ? x.registral.veredicto : "") };
+            setDictPorCaso(m);
+          }).catch(() => {});
       })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
@@ -90,6 +99,21 @@ function UcmPage() {
 
   // Base de la unidad: solo lo que es de UCM (excluye UCP/UDP/URRJ y amparo/recurso/exhorto).
   const casosUCM = useMemo(() => casos.filter(esDeUCM), [casos]);
+
+  // Badge del dictamen de UCP (positivo/negativo/en espera) reflejado en UCM
+  const dictamenBadge = (c: CasoJuridico) => {
+    const d = c.id ? dictPorCaso[String(c.id)] : null;
+    if (!d || (!d.jur && !d.reg && !d.ver)) return null;
+    const cls = (s: string) => {
+      const v = (s || "").toUpperCase();
+      return v.includes("POSITIV") || v.includes("PROCEDEN") || v.includes("FAVORABLE") ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+        : v.includes("NEGATIV") || v.includes("IMPROCEDEN") || v.includes("DESFAVORABLE") ? "bg-red-100 text-red-800 border-red-200"
+        : v.includes("ESPERA") ? "bg-amber-100 text-amber-800 border-amber-200"
+        : "bg-muted text-muted-foreground border-border";
+    };
+    const pill = (label: string, val: string) => val ? <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls(val)}`}>{label}: {val}</span> : null;
+    return <div className="mt-1 flex flex-wrap gap-1" title="Dictamen registrado en UCP">{pill("Jur", d.jur)}{pill("Reg", d.reg)}{pill("UCP", d.ver)}</div>;
+  };
 
   const filtrados = useMemo(() => {
     return casosUCM.filter((c) => {
@@ -197,7 +221,7 @@ function UcmPage() {
                 <tr key={c.id} onClick={() => abrirFicha(c)} className="cursor-pointer hover:bg-muted/30">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-[color:var(--teal)]">{c.folio || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{(c as any).no_credito || "sin crédito"}</p>
+                    <p className="text-xs text-muted-foreground">Crédito: <span className="font-medium text-foreground">{(c as any).no_credito || "sin crédito"}</span></p>
                   </td>
                   <td className="px-4 py-3">
                     <p className="flex items-center gap-1.5 font-semibold text-[color:var(--teal)]">
@@ -205,6 +229,7 @@ function UcmPage() {
                       {c.expediente || "— sin expediente —"}
                     </p>
                     <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
+                    {dictamenBadge(c)}
                     <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
                     {c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (
                       <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
@@ -265,6 +290,7 @@ function UcmPage() {
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
               <p className="mt-0.5 text-[11px]"><span className="font-semibold text-[color:var(--teal)]">{c.folio || "sin folio"}</span> · Crédito: {(c as any).no_credito || "—"}</p>
+              {dictamenBadge(c)}
               <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
               <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
