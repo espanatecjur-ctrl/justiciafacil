@@ -4,8 +4,9 @@ import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, Users, Loader2, Eye, Check, X, MapPin, Gavel, FileSignature } from "lucide-react";
+import { Search, Users, Loader2, Eye, Check, MapPin, Gavel, FileSignature } from "lucide-react";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
+import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({ meta: [{ title: "Clientes — JusticiaFácil" }] }),
@@ -14,11 +15,6 @@ export const Route = createFileRoute("/clientes")({
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
-const fmtFecha = (s: string | null) => {
-  if (!s) return "—";
-  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : s;
-};
 
 interface Cli {
   id: string; folio: string | null; nombre: string | null; domicilio_garantia: string | null;
@@ -68,46 +64,53 @@ function ClientesCRM() {
   const valorTotal = filtrados.reduce((a, c) => a + (Number(c.total) || 0), 0);
   const listos = filtrados.filter((c) => (c.estado || "") === "completo").length;
 
-  const ficha = (c: Cli) => (
-    <div className="mt-2 grid gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-2">
-      <div>
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Documentos</p>
-        <div className="flex flex-wrap gap-1.5">
-          {DOCS.map((d) => (
-            <span key={d.k} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${c[d.k] ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-background text-muted-foreground"}`}>
-              {c[d.k] ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} {d.label}
-            </span>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Firmó cambio de contrato: <b className="text-foreground">{c.firmo_cambio ? "Sí" : "No"}</b></p>
-      </div>
-      <div>
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pagos</p>
-        <table className="w-full text-[11px]">
-          <tbody className="[&_td]:py-0.5">
-            <tr><td className="text-muted-foreground">Apartado</td><td className="text-right font-medium">{fmtMXN(c.apartado_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.apartado_fecha)}</td></tr>
-            <tr><td className="text-muted-foreground">Pago 35%</td><td className="text-right font-medium">{fmtMXN(c.pago35_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.pago35_fecha)}</td></tr>
-            <tr><td className="text-muted-foreground">Pago 50%</td><td className="text-right font-medium">{fmtMXN(c.pago50_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.pago50_fecha)}</td></tr>
-            <tr><td className="text-muted-foreground">Finiquito</td><td className="text-right font-medium">{fmtMXN(c.finiquito_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.finiquito_fecha)}</td></tr>
-            <tr className="border-t border-border"><td className="pt-1 font-semibold">Saldo</td><td className="pt-1 text-right font-bold text-[color:var(--teal)]">{fmtMXN(c.saldo)}</td><td /></tr>
-          </tbody>
-        </table>
-      </div>
-      <div className="sm:col-span-2">
-        {c.formalizacion_solicitada ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
-            <Check className="h-3 w-3" /> Formalización solicitada{c.formalizacion_tipo ? ` · ${c.formalizacion_tipo}` : ""}
-          </span>
-        ) : c.caso_juridico?.id ? (
-          <button onClick={() => setSolicitar(c)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: "var(--teal)" }}>
-            <FileSignature className="h-3.5 w-3.5" /> Solicitar formalización
-          </button>
-        ) : (
-          <span className="text-[11px] text-muted-foreground">Sin juicio ligado — no se puede formalizar todavía.</span>
-        )}
-      </div>
-    </div>
+  // Agrupar por juicio para que no estén regados
+  const grupos = useMemo(() => {
+    const m = new Map<string, { key: string; id?: string; expediente: string; clientes: Cli[]; saldo: number }>();
+    for (const c of filtrados) {
+      const key = c.caso_juridico?.id || "sin";
+      if (!m.has(key)) m.set(key, { key, id: c.caso_juridico?.id, expediente: c.caso_juridico?.expediente || "Sin juicio ligado", clientes: [], saldo: 0 });
+      const g = m.get(key)!; g.clientes.push(c); g.saldo += Number(c.saldo) || 0;
+    }
+    return [...m.values()];
+  }, [filtrados]);
+
+  const botonFormalizar = (c: Cli) => (
+    c.formalizacion_solicitada ? (
+      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800"><Check className="h-3 w-3" /> Formalización solicitada{c.formalizacion_tipo ? ` · ${c.formalizacion_tipo}` : ""}</span>
+    ) : c.caso_juridico?.id ? (
+      <button onClick={() => setSolicitar(c)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: "var(--teal)" }}><FileSignature className="h-3.5 w-3.5" /> Solicitar formalización</button>
+    ) : (
+      <span className="text-[11px] text-muted-foreground">Sin juicio ligado — no se puede formalizar todavía.</span>
+    )
   );
+
+  const filaCliente = (c: Cli) => {
+    const s = semaforo(c);
+    const open = abierto === c.id;
+    return (
+      <div key={c.id} className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="break-words text-sm font-semibold">{c.nombre || "—"}</p>
+            <p className="flex items-start gap-1 break-words text-xs text-muted-foreground"><MapPin className="mt-0.5 h-3 w-3 shrink-0" /> {c.domicilio_garantia || "—"}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Folio: <span className="font-medium text-[color:var(--teal)]">{c.folio || "—"}</span></p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.txt}</span>
+            <button onClick={() => setAbierto(open ? null : c.id)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted"><Eye className="h-3 w-3" /> {open ? "Ocultar" : "Ver ficha"}</button>
+          </div>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+          <span className="text-muted-foreground">Docs: <b className="text-foreground">{nDocs(c)}/6</b></span>
+          <span className="text-muted-foreground">Valor: <b className="text-foreground">{fmtMXN(c.total)}</b></span>
+          <span className="text-muted-foreground">Pagado: <b className="text-foreground">{fmtMXN(c.pagado)}</b></span>
+          <span className="text-muted-foreground">Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(c.saldo)}</b></span>
+        </div>
+        {open && (<><ClienteFichaPanel cliente={c} onUpdated={cargar} /><div className="mt-2">{botonFormalizar(c)}</div></>)}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -130,43 +133,25 @@ function ClientesCRM() {
       ) : filtrados.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">{clientes.length === 0 ? "Aún no hay clientes cargados." : "Sin resultados con esa búsqueda."}</Card>
       ) : (
-        <Card className="divide-y divide-border overflow-hidden">
-          {filtrados.map((c) => {
-            const s = semaforo(c);
-            const open = abierto === c.id;
-            return (
-              <div key={c.id} className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-semibold">{c.nombre || "—"}</p>
-                    <p className="flex items-start gap-1 break-words text-xs text-muted-foreground"><MapPin className="mt-0.5 h-3 w-3 shrink-0" /> {c.domicilio_garantia || "—"}</p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                      <span>Folio: <span className="font-medium text-[color:var(--teal)]">{c.folio || "—"}</span></span>
-                      {c.caso_juridico?.expediente && (
-                        <button onClick={() => navigate({ to: "/ucm-ficha", search: { id: c.caso_juridico!.id } as any })} className="inline-flex items-center gap-1 underline decoration-dotted hover:text-foreground">
-                          <Gavel className="h-3 w-3" /> Juicio {c.caso_juridico.expediente}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.txt}</span>
-                    <button onClick={() => setAbierto(open ? null : c.id)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted">
-                      <Eye className="h-3 w-3" /> {open ? "Ocultar" : "Ver ficha"}
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-                  <span className="text-muted-foreground">Docs: <b className="text-foreground">{nDocs(c)}/6</b></span>
-                  <span className="text-muted-foreground">Valor: <b className="text-foreground">{fmtMXN(c.total)}</b></span>
-                  <span className="text-muted-foreground">Pagado: <b className="text-foreground">{fmtMXN(c.pagado)}</b></span>
-                  <span className="text-muted-foreground">Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(c.saldo)}</b></span>
-                </div>
-                {open && ficha(c)}
+        <div className="space-y-3">
+          {grupos.map((g) => (
+            <Card key={g.key} className="overflow-hidden">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-2">
+                {g.id ? (
+                  <button onClick={() => navigate({ to: "/ucm-ficha", search: { id: g.id } as any })} className="inline-flex items-center gap-1 text-sm font-semibold text-[color:var(--teal)] hover:underline">
+                    <Gavel className="h-4 w-4" /> Juicio {g.expediente}
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground"><Gavel className="h-4 w-4" /> {g.expediente}</span>
+                )}
+                <span className="text-xs text-muted-foreground">· {g.clientes.length} clientes · saldo {fmtMXN(g.saldo)}</span>
               </div>
-            );
-          })}
-        </Card>
+              <div className="divide-y divide-border">
+                {g.clientes.map((c) => filaCliente(c))}
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
 
       {solicitar && solicitar.caso_juridico?.id && (
