@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { correoActual, rolActual } from "@/lib/auth";
-import { FileText, Loader2, Check, AlertTriangle, ChevronDown, ChevronUp, ScrollText, DollarSign, ShieldCheck } from "lucide-react";
+import { FileText, Loader2, Check, AlertTriangle, ChevronDown, ChevronUp, ScrollText, DollarSign, ShieldCheck, Package } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
@@ -73,6 +73,7 @@ export function ContratosCliente({ clienteIds }: { clienteIds: string[] }) {
               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${est === "listo" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : est === "en_validacion" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-border bg-muted text-muted-foreground"}`}>{est === "listo" ? "Listo" : est === "en_validacion" ? "En validación" : "Revisar"}</span>
             </div>
             {faltan && <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800"><AlertTriangle className="h-3 w-3" /> Faltan documentos: {i.docs_faltantes}</p>}
+            {est === "listo" && <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-2 py-0.5 text-[11px] font-medium text-[color:var(--teal)]"><Package className="h-3 w-3" /> Falta mandar paquete para formalizar</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {chip(i.val_urrj, "URRJ", <ScrollText className="h-3 w-3" />)}
               {!i.val_urrj && puede(rol, "urrj") && <button onClick={() => validar(i, "urrj")} className="rounded-md border border-input px-2 py-0.5 text-[11px] font-medium hover:bg-muted">Validar instrucciones</button>}
