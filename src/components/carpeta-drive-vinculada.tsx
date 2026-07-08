@@ -83,6 +83,9 @@ export function CarpetaDriveVinculada({
 
   // vista: "todos" = todos los docs (recursivo); "esta" = navegar carpeta por carpeta
   const [modoVista, setModoVista] = useState<"todos" | "esta">("todos");
+  // Apartado activo dentro de Documentos: "drive" = buscar/copiar de Drive (en vivo)
+  //                                        "fija"  = los del sistema (copia fija, por crédito)
+  const [vista, setVista] = useState<"drive" | "fija">("drive");
   const [rutaFicha, setRutaFicha] = useState<{ id: string; name: string }[]>([]);
   const [subcarpetas, setSubcarpetas] = useState<ItemDrive[]>([]);
 
@@ -392,6 +395,25 @@ export function CarpetaDriveVinculada({
   const faltanSincro = Math.max(0, totalDocs - copiadosDocs);
   const colorSincro = totalDocs === 0 ? "gris" : faltanSincro === 0 ? "verde" : copiadosDocs === 0 ? "gris" : "amarillo";
 
+  // Copia fija: los documentos ya guardados en el sistema (tabla drive_copia).
+  const copiasArr = Object.values(copias);
+  const copiasFiltradas = filtroDoc.trim()
+    ? copiasArr.filter((c) => normaliza(c.nombre || "").includes(normaliza(filtroDoc)))
+    : copiasArr;
+
+  // En el apartado "Copia fija" firma TODOS los enlaces del sistema (no solo los visibles en Drive).
+  useEffect(() => {
+    if (vista !== "fija") return;
+    const faltan = copiasArr.filter((c) => !urlsCopia[c.drive_id]).map((c) => c.storage_path);
+    if (faltan.length === 0) return;
+    firmarCopias(faltan).then((urls) => {
+      const porId: Record<string, string> = {};
+      for (const c of copiasArr) { if (urls[c.storage_path]) porId[c.drive_id] = urls[c.storage_path]; }
+      if (Object.keys(porId).length) setUrlsCopia((prev) => ({ ...prev, ...porId }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, copias]);
+
   // firma los enlaces de las copias visibles (las que ya están en el almacén)
   useEffect(() => {
     const faltan = docsPag
@@ -486,7 +508,7 @@ export function CarpetaDriveVinculada({
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
             {puedeVincular && <button onClick={sincronizar} disabled={sincro} title="Copia todos los documentos al sistema (deja de depender de Drive)" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60" style={{ background: "#0C5C46" }}>{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} {sincro ? "Guardando copia fija…" : "Guardar copia fija"}</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
-            {docs.length > 0 && (selModo
+            {vista === "drive" && docs.length > 0 && (selModo
               ? <button onClick={salirSel} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
               : <button onClick={() => setSelModo(true)} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><CheckSquare className="h-3.5 w-3.5" /> Seleccionar</button>
             )}
@@ -497,12 +519,24 @@ export function CarpetaDriveVinculada({
             </div>
           </div>
 
+          {/* Dos apartados dentro de Documentos: buscar/copiar de Drive · ver la copia fija del sistema */}
+          <div className="inline-flex overflow-hidden rounded-md border border-input text-xs">
+            <button onClick={() => setVista("drive")} className={`inline-flex items-center gap-1 px-3 py-1.5 ${vista === "drive" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
+              <HardDrive className="h-3.5 w-3.5" /> De Drive
+            </button>
+            <button onClick={() => setVista("fija")} className={`inline-flex items-center gap-1 px-3 py-1.5 ${vista === "fija" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>
+              <FolderCheck className="h-3.5 w-3.5" /> 📌 Copia fija{copiasArr.length ? ` (${copiasArr.length})` : ""}
+            </button>
+          </div>
+
           {msgSincro && (
             <div className="flex items-center gap-1.5 rounded-md bg-[color:var(--teal)]/5 px-3 py-1.5 text-xs text-[color:var(--teal)]">
               <CheckCircle2 className="h-3.5 w-3.5" /> {msgSincro}
             </div>
           )}
 
+          {vista === "drive" ? (
+          <>
           {selModo && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 px-3 py-2">
               <span className="text-xs font-medium text-[color:var(--teal)]">{nSelDocs} seleccionado{nSelDocs === 1 ? "" : "s"}</span>
@@ -612,6 +646,47 @@ export function CarpetaDriveVinculada({
                 </div>
               )}
             </>
+          )}
+          </>
+          ) : (
+          <>
+            {/* ---- Apartado: COPIA FIJA (documentos ya guardados en el sistema) ---- */}
+            {copiasFiltradas.length === 0 ? (
+              <div className="rounded-md border border-dashed border-input p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {copiasArr.length === 0
+                    ? "Aún no hay copia fija de este expediente."
+                    : `Ningún documento fijo coincide con “${filtroDoc}”.`}
+                </p>
+                {copiasArr.length === 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Dale a <b>“Guardar copia fija”</b> para traer los documentos de Drive al sistema. Aquí se quedan fijos —con el número de crédito— aunque en Drive los muevan o borren.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {copiasFiltradas.map((c) => (
+                  <div key={c.drive_id} className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
+                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                      <FileText className="h-4 w-4 shrink-0 text-emerald-600" />
+                      <p className="min-w-0 flex-1 truncate text-xs font-medium" title={c.nombre || ""}>{c.nombre || "(sin nombre)"}</p>
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">📌 fijo</span>
+                    </div>
+                    <div className="h-40 w-full bg-muted">
+                      {urlsCopia[c.drive_id]
+                        ? <iframe src={urlsCopia[c.drive_id]} title={c.nombre || ""} loading="lazy" className="h-full w-full border-0" />
+                        : <div className="grid h-full place-items-center text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Abriendo…</div>}
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-1.5">
+                      <span className="text-[10px] text-muted-foreground">Guardado en el sistema</span>
+                      {urlsCopia[c.drive_id] && <a href={`${urlsCopia[c.drive_id]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
           )}
         </>
       )}
