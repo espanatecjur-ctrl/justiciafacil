@@ -23,7 +23,7 @@ import {
 import {
   Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen, Eye,
   MoreVertical, UserCheck, Upload, CheckCircle2, FileText,
-  Trash2, Copy,
+  Trash2, Copy, Send,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ucp")({
@@ -220,7 +220,23 @@ function UCP() {
     } catch { alert("No se pudo mover a la papelera."); }
   };
 
-  // Coincidencias: casos que comparten gar_id, dirección, expediente o cliente con otro(s).
+  // Mandar a UCM (seguimiento de juicio): crea la copia ligada vía la función mandar_a_ucm.
+  const mandarAUcm = async (c: CasoJuridico) => {
+    if (c.origen_ucp_id) { alert("Este registro ya es de UCM (seguimiento)."); return; }
+    if (!confirm(`¿Mandar a UCM (seguimiento de juicio) el expediente ${c.expediente || "(sin expediente)"}?\n\nSe crea su ficha de seguimiento como PENDIENTE DE FORMALIZACIÓN, con copia de sus sub-juicios y documentos.\nLo que cambies en UCM NO regresa a UCP.`)) return;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/mandar_a_ucm`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_caso_id: c.id }),
+      });
+      if (!r.ok) throw new Error(`Supabase ${r.status} — revisa que la función mandar_a_ucm exista`);
+      cargar();
+      alert("Listo: ya está en UCM como pendiente de formalización.");
+    } catch (e: any) {
+      alert("No se pudo mandar a UCM: " + e.message);
+    }
+  };
   // Sirve para detectar garantías reasignadas, clientes con varios juicios o cambios de garantía.
   const dupInfo = useMemo(() => {
     const norm = (s: any) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
@@ -359,6 +375,25 @@ function UCP() {
     if (!nueva.expediente.trim() && !nueva.direccion_garantia.trim()) {
       setError("Pon al menos el expediente o la dirección de la garantía."); return;
     }
+
+    // Aviso anti-duplicado: si coincide en algo (crédito, dirección o cliente+expediente) con algo que ya existe, preguntar.
+    const nz = (s: any) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const PLACEHOLDER = new Set(["sinnmerodecrdito", "sinnumerodecredito", "compraaterceros", "nolitigable", "sincliente", "sincredito", "deprueba", "enespera", "espera", "notiene", "na", "sn"]);
+    const nCred = nz(nueva.no_credito), nGar = nz(nueva.gar_id), nDir = nz(nueva.direccion_garantia), nCli = nz(nueva.cliente_nombre), nExp = nz(nueva.expediente);
+    const coincide = casos.filter((c) => {
+      if (c.archivado) return false;
+      const cCred = nz((c as any).no_credito);
+      if (nCred && cCred && !PLACEHOLDER.has(nCred) && cCred === nCred) return true;              // mismo crédito real
+      if (nGar && nz((c as any).gar_id) === nGar) return true;                                     // misma garantía
+      if (nDir.length >= 8 && nz(c.direccion_garantia) === nDir) return true;                       // misma dirección
+      if (nExp.length >= 3 && nz(c.expediente) === nExp && nCli.length >= 4 && nz(c.cliente_nombre) === nCli) return true; // mismo cliente+expediente
+      return false;
+    }).slice(0, 8);
+    if (coincide.length) {
+      const lista = coincide.map((c) => `• ${c.expediente || "s/exp"} · ${(c as any).no_credito || "s/c"} · ${c.cliente_nombre || "s/cliente"}`).join("\n");
+      if (!confirm(`⚠ Puede que esto YA EXISTA (coincide en crédito, dirección o cliente+expediente):\n\n${lista}\n\n¿Agregar de todos modos?`)) return;
+    }
+
     setGuardandoAlta(true); setError(null);
     try {
       // Limpia los campos vacíos para no mandar cadenas en blanco a columnas que no aplican
@@ -755,6 +790,7 @@ function UCP() {
             <Item icon={FileText} onClick={() => { cerrar(); navigate({ to: "/ucp-ficha", search: { id: c.id } as any }); }}>Escoger boletín judicial</Item>
             <div className="my-1 border-t border-border" />
             <Item icon={CheckCircle2} disabled={!puedo("terminar")} title={puedo("terminar") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); darPorTerminado(c); }}>Dar por terminado</Item>
+            <Item icon={Send} onClick={() => { cerrar(); mandarAUcm(c); }}>Mandar a UCM (seguimiento)</Item>
             <div className="my-1 border-t border-border" />
             <Item icon={Trash2} danger disabled={!puedo("papelera")} title={puedo("papelera") ? undefined : "Sin permiso para tu rol"} onClick={() => { cerrar(); moverPapelera(c); }}>Mover a la papelera</Item>
           </div>
