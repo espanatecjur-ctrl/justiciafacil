@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Check, Circle, CheckCircle2 } from "lucide-react";
 import { correoActual, rolActual } from "@/lib/auth";
 import { ROLES } from "@/lib/roles";
+import { crearNotificacion } from "@/lib/notificaciones";
 import {
   listarEventosMes, crearEvento, actualizarEvento, eliminarEvento,
   listarColaboradores,
@@ -105,6 +106,13 @@ function Calendario() {
 
   const nuevoEnDia = (dia: number) => setEditando({ tipo: "evento", fecha: fechaStr(anio, mes, dia) });
 
+  // Marca una tarea como hecha/pendiente de un clic (sin abrir el modal).
+  const toggleHecha = async (e: Evento) => {
+    if (!e.id) return;
+    await actualizarEvento(e.id, { estado: e.estado === "hecho" ? "pendiente" : "hecho" });
+    recargar();
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -183,6 +191,11 @@ function Calendario() {
                         title={`${e.titulo || ""}${e.asignado_a ? ` · para ${nombrePorCorreo[e.asignado_a] || e.asignado_a}` : ""}`}
                       >
                         {filtro === "equipo" && e.asignado_a && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorPorCorreo[e.asignado_a] || "#9CA3AF" }} />}
+                        {e.tipo === "tarea" && (
+                          <span role="button" onClick={(ev) => { ev.stopPropagation(); toggleHecha(e); }} title={hecha ? "Marcar como pendiente" : "Marcar como hecha"} className="shrink-0 hover:opacity-100">
+                            {hecha ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-60" />}
+                          </span>
+                        )}
                         {e.hora && <span className="font-mono text-[10px] opacity-80">{e.hora}</span>}
                         <span className="truncate">{e.titulo || "(sin título)"}</span>
                         {e.asignado_a && <span className="ml-auto shrink-0 rounded-full bg-white/60 px-1 text-[9px] font-medium">👤 {nombrePorCorreo[e.asignado_a] || "?"}</span>}
@@ -224,11 +237,19 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
     if (!titulo.trim() || !fecha) return;
     setOcupado(true);
     const asignado = asignadoA || null;
+    const correo = await correoActual();
     if (editar) {
       await actualizarEvento(evento.id!, { titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado });
     } else {
-      const correo = await correoActual();
       await crearEvento({ titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado, creado_por: correo || null });
+    }
+    // Aviso (campanita) al asignado, si no soy yo mismo y cambió el asignado.
+    if (asignado && asignado !== correo && asignado !== (evento.asignado_a ?? null)) {
+      await crearNotificacion({
+        para: asignado,
+        texto: `Te asignaron ${tipo === "tarea" ? "una tarea" : "un evento"}: "${titulo.trim()}" para el ${fecha}.`,
+        enlace: "/calendario",
+      });
     }
     setOcupado(false);
     onGuardado();
