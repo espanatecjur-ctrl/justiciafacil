@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Users, Loader2, Eye, MapPin, FileSignature, Check } from "lucide-react";
+import { Users, Loader2, Eye, FileSignature, Check } from "lucide-react";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
+import { Card } from "@/components/ui/card";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -32,7 +33,7 @@ const semaforo = (c: ClienteJuicio) => {
   return { cls: "bg-amber-100 text-amber-800 border-amber-200", txt: "En proceso" };
 };
 
-export function ClientesJuicio({ casoId }: { casoId: string }) {
+export function ClientesJuicio({ casoId, juicioExpediente }: { casoId: string; juicioExpediente?: string }) {
   const [clientes, setClientes] = useState<ClienteJuicio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -76,38 +77,55 @@ export function ClientesJuicio({ casoId }: { casoId: string }) {
         </div>
       </div>
 
-      {/* lista */}
-      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-        {clientes.map((c) => {
-          const s = semaforo(c);
-          const open = abierto === c.id;
-          return (
-            <div key={c.id} className="p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="break-words text-sm font-semibold">{c.nombre || "—"}</p>
-                  <p className="flex items-start gap-1 break-words text-xs text-muted-foreground"><MapPin className="mt-0.5 h-3 w-3 shrink-0" /> {c.domicilio_garantia || "—"}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Folio: <span className="font-medium text-[color:var(--teal)]">{c.folio || "—"}</span></p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.txt}</span>
-                  <button onClick={() => setAbierto(open ? null : c.id)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted">
-                    <Eye className="h-3 w-3" /> {open ? "Ocultar" : "Ver ficha"}
-                  </button>
-                </div>
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-                <span className="text-muted-foreground">Docs: <b className="text-foreground">{nDocs(c)}/6</b></span>
-                <span className="text-muted-foreground">Valor: <b className="text-foreground">{fmtMXN(c.total)}</b></span>
-                <span className="text-muted-foreground">Pagado: <b className="text-foreground">{fmtMXN(c.pagado)}</b></span>
-                <span className="text-muted-foreground">Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(c.saldo)}</b></span>
-              </div>
-              {open && <ClienteFichaPanel cliente={c} onUpdated={recargar} />}
-              {open && botonFormalizar(c)}
-            </div>
-          );
-        })}
-      </div>
+      {/* lista estilo Excel */}
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left">Folio</th>
+                <th className="px-3 py-2 text-left">Cliente</th>
+                <th className="px-3 py-2 text-left">Garantía</th>
+                <th className="px-3 py-2 text-center">Docs</th>
+                <th className="px-3 py-2 text-right">Valor</th>
+                <th className="px-3 py-2 text-right">Pagado</th>
+                <th className="px-3 py-2 text-right">Saldo</th>
+                <th className="px-3 py-2 text-left">Estado</th>
+                <th className="px-2 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientes.map((c) => {
+                const s = semaforo(c);
+                const open = abierto === c.id;
+                return (
+                  <Fragment key={c.id}>
+                    <tr onClick={() => setAbierto(open ? null : c.id)} className="cursor-pointer border-b border-border hover:bg-muted/30">
+                      <td className="whitespace-nowrap px-3 py-2 font-medium text-[color:var(--teal)]">{c.folio || "—"}</td>
+                      <td className="px-3 py-2">{c.nombre || "—"}</td>
+                      <td className="max-w-[220px] truncate px-3 py-2 text-muted-foreground" title={c.domicilio_garantia || ""}>{c.domicilio_garantia || "—"}</td>
+                      <td className="px-3 py-2 text-center">{nDocs(c)}/6</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right">{fmtMXN(c.total)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right text-emerald-700">{fmtMXN(c.pagado)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-[color:var(--teal)]">{fmtMXN(c.saldo)}</td>
+                      <td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.txt}</span></td>
+                      <td className="px-2 py-2 text-right"><Eye className="inline h-4 w-4 text-muted-foreground" /></td>
+                    </tr>
+                    {open && (
+                      <tr className="border-b border-border bg-muted/10">
+                        <td colSpan={9} className="px-3 pb-3">
+                          <ClienteFichaPanel cliente={c} juicio={juicioExpediente} onUpdated={recargar} />
+                          <div className="mt-2">{botonFormalizar(c)}</div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {solicitar && (
         <SolicitarFormalizacion cliente={solicitar} casoId={casoId} onClose={() => setSolicitar(null)} onHecho={recargar} />
