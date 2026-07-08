@@ -223,7 +223,40 @@ function UCP() {
   // Mandar a UCM (seguimiento de juicio): crea la copia ligada vía la función mandar_a_ucm.
   const mandarAUcm = async (c: CasoJuridico) => {
     if (c.origen_ucp_id) { alert("Este registro ya es de UCM (seguimiento)."); return; }
-    if (!confirm(`¿Mandar a UCM (seguimiento de juicio) el expediente ${c.expediente || "(sin expediente)"}?\n\nSe crea su ficha de seguimiento como PENDIENTE DE FORMALIZACIÓN, con copia de sus sub-juicios y documentos.\nLo que cambies en UCM NO regresa a UCP.`)) return;
+
+    // 1) ¿ya existe esta garantía en UCM? (cualquier coincidencia: crédito, garantía, dirección, expediente o cliente)
+    const nz = (s: any) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const PH = new Set(["sinnmerodecrdito", "sinnumerodecredito", "compraaterceros", "nolitigable", "sincliente", "sincredito", "deprueba", "enespera", "espera", "notiene", "na", "sn"]);
+    const nCred = nz(c.no_credito), nGar = nz((c as any).gar_id), nDir = nz(c.direccion_garantia), nCli = nz(c.cliente_nombre), nExp = nz(c.expediente);
+    const existente = casos.find((x) => {
+      if (x.id === c.id) return false;
+      if (!x.pasa_a_ucm && !x.origen_ucp_id) return false; // solo lo que ya está en UCM
+      const xCred = nz((x as any).no_credito);
+      if (nCred && xCred && !PH.has(nCred) && xCred === nCred) return true;
+      if (nGar && nz((x as any).gar_id) === nGar) return true;
+      if (nDir.length >= 8 && nz(x.direccion_garantia) === nDir) return true;
+      if (nExp.length >= 3 && nz(x.expediente) === nExp) return true;
+      if (nCli.length >= 4 && nExp.length >= 3 && nz(x.cliente_nombre) === nCli && nz(x.expediente) === nExp) return true;
+      return false;
+    });
+
+    if (existente) {
+      if (!confirm(`Esta garantía (crédito ${c.no_credito || "s/c"}) YA está en UCM:\n\n${existente.expediente || "s/exp"} · ${existente.cliente_nombre || "s/cliente"}\n\nNo se crea copia. ¿Vincularla y marcarla PENDIENTE DE FORMALIZACIÓN?`)) return;
+      try {
+        const body: any = { estado_ucm: "pendiente_formalizacion", pasa_a_ucm: true };
+        if (!existente.origen_ucp_id) body.origen_ucp_id = c.id; // conectar al original de UCP
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${existente.id}`, {
+          method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        if (!r.ok) throw new Error(`Supabase ${r.status}`);
+        cargar();
+        navigate({ to: "/ucm-ficha", search: { id: existente.id } as any });
+      } catch (e: any) { alert("No se pudo vincular: " + e.message); }
+      return;
+    }
+
+    // 2) no existe -> crear nueva con indicador PENDIENTE DE FORMALIZACIÓN
+    if (!confirm(`¿Mandar a UCM (seguimiento de juicio) el expediente ${c.expediente || "(sin expediente)"}?\n\nSe crea su ficha como PENDIENTE DE FORMALIZACIÓN, con copia de sus sub-juicios y documentos.\nLo que cambies en UCM NO regresa a UCP.`)) return;
     try {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/mandar_a_ucm`, {
         method: "POST",
