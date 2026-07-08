@@ -582,7 +582,15 @@ export function CarpetaDriveVinculada({
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
                       {urlsCopia[a.id] ? (
-                        <iframe src={urlsCopia[a.id]} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                        (copias[a.id]?.mime || a.mimeType || "").includes("pdf") || (copias[a.id]?.mime || a.mimeType || "").startsWith("image/") ? (
+                          <iframe src={urlsCopia[a.id]} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
+                            <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />
+                            <span className="text-[11px] font-medium text-muted-foreground">Documento copiado</span>
+                            <span className="text-[10px] text-muted-foreground">Este tipo no se previsualiza; ábrelo con «Descargar».</span>
+                          </div>
+                        )
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
                           <FileText className="h-8 w-8 text-muted-foreground/40" />
