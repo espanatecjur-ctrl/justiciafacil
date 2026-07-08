@@ -209,14 +209,14 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
     <div>
       <style>{`.doc-editable ul{list-style:disc;padding-left:1.5rem}.doc-editable ol{list-style:decimal;padding-left:1.5rem}.doc-editable img{max-width:100%}.doc-editable:focus{outline:none}`}</style>
 
-      {/* Barra de herramientas */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-border pb-2 mb-3 sticky top-0 bg-background z-10">
+      {/* Barra de herramientas — se acomoda sola en teléfono, tablet o cualquier pantalla */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b border-border pb-2 mb-3 sticky top-0 bg-background z-10">
         <select defaultValue="Georgia" onChange={(e) => cmd("fontName", e.target.value)}
-          className="h-8 rounded border border-input bg-background px-1 text-xs" title="Tipo de letra">
+          className="h-8 max-w-[7.5rem] shrink-0 rounded border border-input bg-background px-1 text-xs" title="Tipo de letra">
           {FUENTES.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
         <select defaultValue="3" onChange={(e) => cmd("fontSize", e.target.value)}
-          className="h-8 rounded border border-input bg-background px-1 text-xs" title="Tamaño de letra">
+          className="h-8 shrink-0 rounded border border-input bg-background px-1 text-xs" title="Tamaño de letra">
           <option value="1">Muy pequeña</option>
           <option value="2">Pequeña</option>
           <option value="3">Normal</option>
@@ -226,7 +226,7 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
           <option value="7">Muy grande</option>
         </select>
 
-        <span className="mx-1 h-5 w-px bg-border" />
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
         <BtnHerramienta onClick={() => cmd("bold")} title="Negritas"><Bold className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => cmd("italic")} title="Cursiva"><Italic className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => cmd("underline")} title="Subrayado"><UnderlineIcon className="h-4 w-4" /></BtnHerramienta>
@@ -242,25 +242,29 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
           ))}
         </span>
 
-        <span className="mx-1 h-5 w-px bg-border" />
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
         <BtnHerramienta onClick={() => cmd("justifyLeft")} title="Alinear a la izquierda"><AlignLeft className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => cmd("justifyCenter")} title="Centrar"><AlignCenter className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => cmd("justifyRight")} title="Alinear a la derecha"><AlignRight className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => cmd("justifyFull")} title="Justificar"><AlignJustify className="h-4 w-4" /></BtnHerramienta>
 
-        <span className="mx-1 h-5 w-px bg-border" />
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
         <BtnHerramienta onClick={() => cmd("insertUnorderedList")} title="Viñetas"><List className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => cmd("insertOrderedList")} title="Lista numerada"><ListOrdered className="h-4 w-4" /></BtnHerramienta>
         <BtnHerramienta onClick={() => inputImgRef.current?.click()} title="Insertar imagen"><ImagePlus className="h-4 w-4" /></BtnHerramienta>
         <input ref={inputImgRef} type="file" accept="image/*" className="hidden" onChange={onImagen} />
 
-        <span className="flex-1" />
-        <Button variant="outline" size="sm" onClick={exportarWord} title="Descargar como Word editable">
-          <Download className="h-4 w-4 mr-1.5" /> Word
-        </Button>
-        <Button size="sm" onClick={imprimir} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
-          <Printer className="h-4 w-4 mr-1.5" /> Imprimir / PDF
-        </Button>
+        {/* Acciones: ocupan su propio renglón en teléfono; a la derecha en pantallas grandes */}
+        <div className="flex w-full items-center gap-2 pt-1.5 sm:ml-auto sm:w-auto sm:pt-0">
+          <Button variant="outline" size="sm" onClick={exportarWord} title="Descargar como Word editable"
+            className="flex-1 sm:flex-none">
+            <Download className="h-4 w-4 mr-1.5" /> Word
+          </Button>
+          <Button size="sm" onClick={imprimir}
+            className="flex-1 bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white sm:flex-none">
+            <Printer className="h-4 w-4 mr-1.5" /> Imprimir / PDF
+          </Button>
+        </div>
       </div>
 
       {/* Pie de página y marca de agua */}
@@ -269,14 +273,14 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
           value={pie}
           onChange={(e) => setPie(e.target.value)}
           placeholder="Pie de página (opcional)"
-          className="h-8 flex-1 min-w-[180px] rounded border border-input bg-background px-2 text-xs"
+          className="h-8 w-full rounded border border-input bg-background px-2 text-xs sm:w-auto sm:flex-1 sm:min-w-[180px]"
           title="Texto que aparece al pie de cada página"
         />
         <input
           value={marca}
           onChange={(e) => setMarca(e.target.value)}
           placeholder="Marca de agua (opcional)"
-          className="h-8 flex-1 min-w-[180px] rounded border border-input bg-background px-2 text-xs"
+          className="h-8 w-full rounded border border-input bg-background px-2 text-xs sm:w-auto sm:flex-1 sm:min-w-[180px]"
           title="Texto en diagonal, tenue, detrás del documento"
         />
       </div>
@@ -302,7 +306,7 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
           onKeyUp={guardarRango}
           onMouseUp={guardarRango}
           onBlur={guardarRango}
-          className="doc-editable relative z-10 min-h-[58vh] max-h-[66vh] overflow-y-auto bg-transparent px-8 py-6 text-[14px] text-black"
+          className="doc-editable relative z-10 min-h-[58vh] max-h-[66vh] overflow-y-auto bg-transparent px-4 py-5 text-[14px] text-black sm:px-8 sm:py-6"
           style={{ fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1.7 }}
           dangerouslySetInnerHTML={{ __html: initialHtml }}
         />
