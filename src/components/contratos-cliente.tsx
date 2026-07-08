@@ -8,7 +8,7 @@ const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", c
 const TIPO_LABEL: Record<string, string> = { cesion: "Cesión de derechos", instruccion_notarial: "Instrucción notarial", solicitud_cotizacion: "Solicitud de cotización", solicitud_formalizacion: "Solicitud de formalización" };
 
 interface Doc {
-  id: string; tipo: string; folio: string | null; contenido: string | null; precio: number | null; docs_faltantes: string | null;
+  id: string; tipo: string; folio: string | null; contenido: string | null; precio: number | null; docs_faltantes: string | null; info_faltante: string | null;
   val_urrj: boolean | null; val_urrj_por: string | null; val_urrj_fecha: string | null;
   val_gad: boolean | null; val_gad_por: string | null; val_gad_fecha: string | null;
   val_dil: boolean | null; val_dil_por: string | null; val_dil_fecha: string | null;
@@ -74,6 +74,7 @@ export function ContratosCliente({ clienteIds }: { clienteIds: string[] }) {
             </div>
             {faltan && <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800"><AlertTriangle className="h-3 w-3" /> Faltan documentos: {i.docs_faltantes}</p>}
             {est === "listo" && <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-2 py-0.5 text-[11px] font-medium text-[color:var(--teal)]"><Package className="h-3 w-3" /> Falta mandar paquete para formalizar</p>}
+            {i.info_faltante && i.info_faltante !== "Completa" && <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800"><AlertTriangle className="h-3 w-3" /> Falta info por capturar: {i.info_faltante}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {chip(i.val_urrj, "URRJ", <ScrollText className="h-3 w-3" />)}
               {!i.val_urrj && puede(rol, "urrj") && <button onClick={() => validar(i, "urrj")} className="rounded-md border border-input px-2 py-0.5 text-[11px] font-medium hover:bg-muted">Validar instrucciones</button>}
