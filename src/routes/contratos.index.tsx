@@ -413,7 +413,7 @@ function ContratosExistentes({ estados, vacio }: { estados: string[]; vacio: str
                 <tr key={c.id} className="hover:bg-muted/30">
                   <td className="px-4 py-3 font-mono text-xs font-semibold">{c.folio || "—"}</td>
                   <td className="px-4 py-3">{c.nombre_documento || "—"}</td>
-                  <td className="px-4 py-3">{c.nombre_cliente || "—"}</td>
+                  <td className="px-4 py-3">{c.nombre_cliente ? <Link to="/cliente" search={{ nombre: c.nombre_cliente }} className="font-medium text-[color:var(--teal)] hover:underline">{c.nombre_cliente}</Link> : "—"}</td>
                   <td className="px-4 py-3 text-xs">{c.apoderado || "—"}</td>
                   <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
                   <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
