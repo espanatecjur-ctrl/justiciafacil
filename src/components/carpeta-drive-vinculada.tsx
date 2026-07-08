@@ -46,6 +46,20 @@ function bajarBlob(blob: Blob, nombre: string) {
 
 const hdrs = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+/** ¿El navegador puede mostrar este archivo en un iframe SIN descargarlo? (solo PDF e imágenes) */
+function puedeIframe(mime?: string | null): boolean {
+  const m = (mime || "").toLowerCase();
+  return m.includes("pdf") || m.startsWith("image/");
+}
+/** Etiqueta amable para archivos que no tienen vista previa aquí (Word, Excel…). */
+function etiquetaSinPreview(mime?: string | null): string {
+  const m = (mime || "").toLowerCase();
+  if (m.includes("word") || m.includes("document")) return "Documento de Word";
+  if (m.includes("sheet") || m.includes("excel")) return "Hoja de Excel";
+  if (m.includes("presentation") || m.includes("powerpoint")) return "Presentación";
+  return "Vista previa no disponible aquí";
+}
+
 export function CarpetaDriveVinculada({
   caso,
   onGuardar,
@@ -107,6 +121,31 @@ export function CarpetaDriveVinculada({
     if (!carpetaId || sincro) return;
     setSincro(true);
     setMsgSincro("Guardando copia fija… preparando");
+
+    // Paso 1 (automático): ordenar la carpeta en Drive → carpeta del área de la unidad,
+    // renombrada con el número de crédito. Solo si sabemos el área. NO bloquea la copia.
+    let carpetaActiva = carpetaId;
+    let avisoDrive: string | null = null;
+    let ordenada = false;
+    if (puedeVincular && area) {
+      setMsgSincro("Ordenando la carpeta en Drive…");
+      const nuevoNombre = `${nombreGarantia(caso)}${caso.expediente ? " — " + caso.expediente : ""}`.trim();
+      const org = await traerCarpetaAArea(carpetaId, area, nuevoNombre);
+      if (org.requiereCopia) {
+        avisoDrive = "la carpeta está en otra unidad de Drive; no se pudo ordenar ahí (solo se guardó la copia fija)";
+      } else if (org.ok) {
+        ordenada = true;
+        if (org.carpetaId) {
+          carpetaActiva = org.carpetaId;
+          await onGuardar({ drive_carpeta_id: org.carpetaId, drive_carpeta_nombre: org.nombre || nuevoNombre });
+        }
+      } else {
+        avisoDrive = "no se pudo ordenar en Drive (" + (org.error || "error") + ")";
+      }
+    }
+
+    // Paso 2: copia fija a Supabase (de corrido hasta terminar).
+    setMsgSincro("Guardando copia fija… preparando");
     const MAX_VUELTAS = 60; // tope de seguridad (~480 documentos) para no ciclar de más
     let copiadosTotal = 0;
     let avisos = 0;
@@ -114,7 +153,7 @@ export function CarpetaDriveVinculada({
     let corte: string | null = null;
     try {
       for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
-        const r = await sincronizarCarpeta(caso.id, carpetaId);
+        const r = await sincronizarCarpeta(caso.id, carpetaActiva);
         if (!r.ok) { corte = r.error || "No se pudo guardar la copia."; break; }
         const copiadosAhora = r.copiados ?? 0;
         copiadosTotal += copiadosAhora;
@@ -128,8 +167,10 @@ export function CarpetaDriveVinculada({
       setSincro(false);
       cargarCopias(); // refresca qué ya está en el almacén (para el indicador)
     }
-    if (corte && copiadosTotal === 0) { setMsgSincro("⚠️ " + corte); return; }
+    if (corte && copiadosTotal === 0) { setMsgSincro("⚠️ " + corte + (avisoDrive ? " · Drive: " + avisoDrive : "")); return; }
     const partes = [`Copia fija lista: ${copiadosTotal} documento${copiadosTotal === 1 ? "" : "s"} guardado${copiadosTotal === 1 ? "" : "s"} en el sistema`];
+    if (ordenada) partes.push(`carpeta ordenada en Drive (${area}) por número de crédito`);
+    if (avisoDrive) partes.push("⚠️ Drive: " + avisoDrive);
     if (avisos) partes.push(`${avisos} con aviso${primerError ? ` (${primerError})` : ""}`);
     if (corte) partes.push(`se detuvo: ${corte} — dale de nuevo para reintentar`);
     setMsgSincro("✅ " + partes.join(" · "));
@@ -540,7 +581,7 @@ export function CarpetaDriveVinculada({
             )}
             <span className="flex-1" />
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
-            {puedeVincular && <button onClick={sincronizar} disabled={sincro} title="Copia todos los documentos al sistema (deja de depender de Drive)" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60" style={{ background: "#0C5C46" }}>{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} {sincro ? "Guardando copia fija…" : "Guardar copia fija"}</button>}
+            {puedeVincular && <button onClick={sincronizar} disabled={sincro} title="Ordena la carpeta en Drive (por número de crédito) y guarda la copia fija en el sistema" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60" style={{ background: "#0C5C46" }}>{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} {sincro ? "Guardando copia fija…" : "Guardar copia fija"}</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             {vista === "drive" && docs.length > 0 && (selModo
               ? <button onClick={salirSel} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
@@ -657,7 +698,7 @@ export function CarpetaDriveVinculada({
                       {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
-                      <iframe src={urlsCopia[a.id] || previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                      <iframe src={(puedeIframe(a.mimeType) && urlsCopia[a.id]) ? urlsCopia[a.id] : previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
                       <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
                         <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
                       </span>
@@ -708,9 +749,16 @@ export function CarpetaDriveVinculada({
                       <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">📌 fijo</span>
                     </div>
                     <div className="h-40 w-full bg-muted">
-                      {urlsCopia[c.drive_id]
-                        ? <iframe src={urlsCopia[c.drive_id]} title={c.nombre || ""} loading="lazy" className="h-full w-full border-0" />
-                        : <div className="grid h-full place-items-center text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Abriendo…</div>}
+                      {!puedeIframe(c.mime) ? (
+                        <div className="grid h-full place-items-center gap-1 p-2 text-center">
+                          <FileText className="h-8 w-8 text-emerald-600/60" />
+                          <span className="text-[11px] text-muted-foreground">{etiquetaSinPreview(c.mime)} · usa <b>Descargar</b> para abrirlo</span>
+                        </div>
+                      ) : urlsCopia[c.drive_id] ? (
+                        <iframe src={urlsCopia[c.drive_id]} title={c.nombre || ""} loading="lazy" className="h-full w-full border-0" />
+                      ) : (
+                        <div className="grid h-full place-items-center text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Abriendo…</div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between px-3 py-1.5">
                       <span className="text-[10px] text-muted-foreground">Guardado en el sistema</span>
@@ -804,7 +852,12 @@ export function CarpetaDriveVinculada({
       )}
 
       {docSel && (
-        <VisorDocumentoModal url={urlsCopia[docSel.id] || docSel.webViewLink || ""} driveId={urlsCopia[docSel.id] ? null : docSel.id} nombre={docSel.name} onCerrar={() => setDocSel(null)} />
+        <VisorDocumentoModal
+          url={puedeIframe(docSel.mimeType) ? (urlsCopia[docSel.id] || docSel.webViewLink || "") : ""}
+          driveId={puedeIframe(docSel.mimeType) && urlsCopia[docSel.id] ? null : docSel.id}
+          nombre={docSel.name}
+          onCerrar={() => setDocSel(null)}
+        />
       )}
     </Card>
   );
