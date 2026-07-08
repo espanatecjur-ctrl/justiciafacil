@@ -41,13 +41,16 @@ function ClientePage() {
     const sel = "select=*,caso_juridico(id,expediente,drive_clientes_id,drive_clientes_nombre)";
     const base = `cliente_juicio?${sel}&en_papelera=eq.false&order=folio.asc`;
     const q = (filtro: string) => fetch(`${SUPABASE_URL}/rest/v1/${base}&${filtro}`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\(.*$/, "").replace(/\s+/g, " ").trim();
     try {
-      // 1) exacto · 2) sin importar mayúsculas · 3) por el nombre antes del "(" (anotación de cambio)
+      // 1) exacto (rápido)
       let rows = await q(`nombre=eq.${encodeURIComponent(nombre)}`);
-      if (rows.length === 0) rows = await q(`nombre=ilike.${encodeURIComponent(nombre)}`);
+      // 2) amplio por el primer nombre + comparación normalizada (tolera acentos y "(Cambio a…)")
       if (rows.length === 0) {
-        const raiz = nombre.split("(")[0].trim();
-        if (raiz && raiz !== nombre) rows = await q(`nombre=ilike.${encodeURIComponent(raiz + "*")}`);
+        const tok = nombre.split(/\s+/)[0] || nombre;
+        const cand: any[] = await q(`nombre=ilike.*${encodeURIComponent(tok)}*`);
+        const objetivo = norm(nombre);
+        rows = cand.filter((r) => { const n = norm(r.nombre); return n === objetivo || n.startsWith(objetivo) || objetivo.startsWith(n); });
       }
       setGars(rows);
     } finally {
