@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send,
+  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, Users,
 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
@@ -16,6 +16,7 @@ import { CronologiaCaso } from "@/components/cronologia-caso";
 import { registrarEvento } from "@/lib/cronologia-caso";
 import { TraspasoArea } from "@/components/traspaso-area";
 import { BannerCoincidencias } from "@/components/banner-coincidencias";
+import { ClientesJuicio } from "@/components/clientes-juicio";
 
 export const Route = createFileRoute("/ucm-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -29,7 +30,7 @@ const AZUL = "#0F6E56"; // color de UCM (teal)
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
 
-type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "boletin";
+type Modulo = "general" | "proceso" | "subjuicios" | "clientes" | "documentos" | "boletin";
 
 interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
 
@@ -167,6 +168,7 @@ function UCMFicha() {
     { id: "general", label: "General", icon: <LayoutGrid className="h-4 w-4" /> },
     { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
     { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
+    { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
     { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
     { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
   ];
@@ -367,6 +369,11 @@ function UCMFicha() {
       {/* ============ SUB-JUICIOS ============ */}
       {modulo === "subjuicios" && (
         <div className="rounded-xl border border-border bg-card p-4"><SubJuicios casoId={c.id} /></div>
+      )}
+
+      {/* ============ CLIENTES / GARANTÍAS ============ */}
+      {modulo === "clientes" && (
+        <ClientesJuicio casoId={c.id} />
       )}
 
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
