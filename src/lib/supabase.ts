@@ -55,6 +55,10 @@ export interface CasoJuridico {
   nota_adicional: string | null;
   // Resolución de garantía repetida/duplicada: se decide si se conserva o se elimina, con motivo.
   dup_resolucion?: { estado: "conservar" | "eliminar"; nota: string; fecha: string; por: string } | null;
+  // Enlace y estado de la copia de seguimiento UCM (feed una vía UCP -> UCM)
+  origen_ucp_id?: string | null;
+  estado_ucm?: string | null;
+  pasa_a_ucm?: boolean | null;
   cve_distrito?: string | null;
   cve_juzgado?: string | null;
   nombre_juzgado?: string | null;
