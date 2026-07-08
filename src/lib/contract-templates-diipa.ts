@@ -421,7 +421,112 @@ Testigo                                   Testigo`;
 // ----------------------------------------------------------------------------
 //  Export: se suma al arreglo `plantillas` de contract-templates.ts
 // ----------------------------------------------------------------------------
+
+// ---- Cesión onerosa de derechos adjudicatarios (acta destacada · Jalisco) ----
+const cesionAdjudicatariaCampos: PlantillaCampo[] = [
+  ...clienteApoderadoCampos,
+  { id: "folioReal", label: "Folio real (registral) del inmueble", tipo: "text", ayuda: "Ej. 2174963" },
+  { id: "manzana", label: "Manzana", tipo: "text", requerido: true },
+  { id: "lote", label: "Lote", tipo: "text", requerido: true },
+  { id: "nombreCesionario", label: "Nombre completo del cesionario (comprador)", tipo: "text", requerido: true },
+  { id: "nacionalidad", label: "Nacionalidad", tipo: "text", ayuda: "Ej. Mexicana" },
+  { id: "rfc", label: "RFC del cesionario", tipo: "text" },
+  { id: "curp", label: "CURP del cesionario", tipo: "text" },
+  { id: "domicilioCesionario", label: "Domicilio del cesionario", tipo: "textarea" },
+  { id: "estadoCivil", label: "Estado civil", tipo: "text", ayuda: "Ej. Casado(a) / Soltero(a)" },
+  { id: "precio", label: "Precio de la cesión (MXN)", tipo: "text", requerido: true, ayuda: "Ej. 235,000.00" },
+  { id: "precioLetra", label: "Precio con letra", tipo: "text", ayuda: "Ej. DOSCIENTOS TREINTA Y CINCO MIL" },
+  { id: "formaPago", label: "Forma de pago", tipo: "textarea", ayuda: "Ej. apartado, primer pago 35% y saldo conforme al convenio" },
+  { id: "domicilioCedente", label: "Domicilio de EL CEDENTE (DIIPA)", tipo: "textarea", ayuda: "Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco" },
+  { id: "actaNumero", label: "Acta número (lo asigna la notaría)", tipo: "text" },
+  { id: "volumen", label: "Volumen (notaría)", tipo: "text" },
+  { id: "folioNotarial", label: "Folio (notaría)", tipo: "text" },
+  { id: "dia", label: "Día de firma", tipo: "text" },
+  { id: "mes", label: "Mes de firma", tipo: "text" },
+  { id: "anio", label: "Año de firma", tipo: "text" },
+];
+
+const cesionAdjudicatariaCuerpo = `ACTA DESTACADA — CONTRATO DE CESIÓN ONEROSA DE DERECHOS ADJUDICATARIOS
+
+Y DERECHOS DERIVADOS DE LA EJECUCIÓN DE SENTENCIA
+
+Fraccionamiento Residencial San Antonio · Tlajomulco de Zúñiga, Jalisco · Manzana {{manzana}}, Lote {{lote}} · Folio real {{folioReal}}
+
+ACTA NÚMERO {{actaNumero}}.— VOLUMEN {{volumen}}, FOLIO {{folioNotarial}}.
+
+En el Municipio de Tlajomulco de Zúñiga, Estado de Jalisco, Estados Unidos Mexicanos, siendo el día {{dia}} del mes de {{mes}} del año {{anio}}, ante mí, Licenciado(a) «____», Notario(a) Público(a) número «____» del Estado de Jalisco, con adscripción y ejercicio en este Municipio, procedo mediante la presente acta a hacer constar EL CONTRATO DE CESIÓN ONEROSA DE DERECHOS ADJUDICATARIOS Y DERECHOS DERIVADOS DE LA EJECUCIÓN DE SENTENCIA, que celebran: de una parte, DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE, representada en este acto por ERIKA PAOLA ESPAÑA MÉNDEZ, en su carácter de Administradora Única y Apoderada Legal —o en su caso por MILTON CASTRO CERVANTES, en su carácter de Apoderado General para Pleitos y Cobranzas, facultado para suscribir las cesiones conforme a la escritura pública número 2,388 otorgada ante el Licenciado Eduardo Antonio Rocha Pacheco, Notario Público número 234 de Culiacán, Sinaloa—, a quien en lo sucesivo se le denominará “EL CEDENTE”; y de la otra parte, «____», por su propio derecho, a quien en lo sucesivo se le denominará “EL CESIONARIO”; al tenor de los siguientes ANTECEDENTES, DECLARACIONES y CLÁUSULAS:
+
+A N T E C E D E N T E S
+
+PRIMERO. DEL CRÉDITO Y GARANTÍA ORIGINAL.— Con fecha 6 de octubre de 2006, mediante la escritura pública número 48,466 (cuarenta y ocho mil cuatrocientos sesenta y seis), otorgada ante el Notario Público número 64 (sesenta y cuatro) de Guadalajara, Jalisco, la sociedad METROFINANCIERA, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE, otorgó un crédito simple con garantía fiduciaria a favor de GRUPO CONSTRUCTOR FEDAL, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE. Dicho gravamen quedó inscrito bajo el folio real 2174963 y afectó el patrimonio fideicomitido del Fraccionamiento Residencial San Antonio, en Tlajomulco de Zúñiga, Jalisco.
+
+SEGUNDO. DE LA CADENA DE CESIONES CORPORATIVAS.— El 31 de julio de 2007, METROFINANCIERA cedió los derechos del crédito a BANCO INVEX, SOCIEDAD ANÓNIMA, para integrarlos al Fideicomiso número 650 (seiscientos cincuenta). El 21 de marzo de 2012, BANCO INVEX transmitió la totalidad de dichos derechos a PROYECTOS ADAMFUND, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE. El 17 de febrero de 2014 se formalizó la fusión de PROYECTOS ADAMFUND (como fusionada) con PROYECTOS ADAMANTINE, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE, SOCIEDAD FINANCIERA DE OBJETO MÚLTIPLE, ENTIDAD REGULADA (como fusionante), subrogándose esta última en todos los derechos y activos derivados del crédito original.
+
+TERCERO. DEL JUICIO ORDINARIO MERCANTIL Y LA ADJUDICACIÓN.— Ante el incumplimiento de las obligaciones garantizadas, PROYECTOS ADAMANTINE promovió juicio ordinario mercantil bajo el expediente 1393/2017, del índice del Juzgado Octavo de Jurisdicción Concurrente del Primer Distrito Judicial en Monterrey, Nuevo León. El 27 de febrero de 2024 se dictó la resolución por la que se adjudicaron, por remate judicial, diversos lotes a favor de la parte actora, misma que causó ejecutoria el 13 de mayo de 2024 al no haber sido recurrida por las partes. En razón de que la parte demandada no cumplió voluntariamente con la prevención respectiva, el juzgado ordenó el otorgamiento de la escritura de propiedad en rebeldía de la demandada a favor del adjudicatario, girándose oficio para su protocolización.
+
+CUARTO. DE LA CESIÓN A FAVOR DE «EL CEDENTE» (DIIPA).— Con fecha 13 de febrero de 2025, PROYECTOS ADAMANTINE, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE, formalizó ante el Licenciado Iván Alfonso López Fierro, Notario Público número 293 de Culiacán, Sinaloa, la escritura número 854 (ochocientos cincuenta y cuatro), mediante la cual cedió de manera onerosa los derechos de crédito, litigiosos y, fundamentalmente, los derechos adjudicatarios derivados del expediente 1393/2017, a favor de DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, SOCIEDAD ANÓNIMA DE CAPITAL VARIABLE.
+
+QUINTO. DEL RECONOCIMIENTO JUDICIAL, EL EXHORTO Y LA POSESIÓN.— El 31 de marzo de 2025, el Juez Octavo de lo Concurrente en Monterrey, Nuevo León, sancionó legalmente la cesión de derechos a favor de «EL CEDENTE». Para la ejecución en el lugar de ubicación de los inmuebles se libró el exhorto número 82/2026, turnado al Juzgado Primero de lo Civil de Tlajomulco de Zúñiga, Jalisco, en el que a la fecha se tiene reconocido al Apoderado General para Pleitos y Cobranzas de «EL CEDENTE», se desecharon los incidentes de nulidad promovidos por la contraparte y se resolvió lo relativo a los honorarios del perito valuador, etapa que antecede al señalamiento de la fecha de desalojo. El juzgado ordenó la entrega material y jurídica de los inmuebles a favor del cesionario, con el apercibimiento del uso de la fuerza pública para garantizar la toma de posesión.
+
+SEXTO. DE LOS GRAVÁMENES.— Los inmuebles reportan un gravamen vigente por fideicomiso e hipoteca a favor de METROFINANCIERA. La resolución judicial de adjudicación en rebeldía ordena la entrega material y jurídica, lo que faculta la escrituración forzosa y la consecuente liberación y cancelación de dicho gravamen en el historial registral del inmueble, conforme a la ejecutoria dictada en el expediente 1393/2017.
+
+D E C L A R A C I O N E S
+
+I. Declara “EL CEDENTE”, por conducto de su representante, el (la) C. {{apoderadoNombre}}:
+
+a) Que es una sociedad legalmente constituida conforme a las leyes mexicanas, según consta en la escritura pública número 1,809 (mil ochocientos nueve), volumen II (segundo), libro 4 (cuatro), de fecha 20 de abril de 2022, otorgada ante la fe del Licenciado Luis Manuel Bouciéguez Velarde, Notario Público número 256 con ejercicio y residencia en Mazatlán, Sinaloa, e inscrita bajo el folio mercantil electrónico N-2022029617, en el Registro Público de Comercio de Mazatlán, Sinaloa; con Registro Federal de Contribuyentes DII2204206J5 y domicilio en la Ciudad de Mazatlán, Sinaloa, con oficina en Calle Agustín Yáñez 2583, Colonia Arcos Vallarta, Guadalajara, Jalisco.
+
+b) Que su representante cuenta con las facultades suficientes para la celebración del presente acto, mismas que a la fecha no le han sido revocadas ni modificadas en forma alguna.
+
+c) Que es legítimo titular de los derechos adjudicatarios y derechos derivados de la ejecución de sentencia dictada en el expediente 1393/2017, respecto del inmueble objeto de este instrumento, según el tracto relacionado en los Antecedentes que preceden, y que es su voluntad cederlos de manera onerosa a favor de “EL CESIONARIO”.
+
+II. Declara “EL CESIONARIO”:
+
+a) Llamarse {{nombreCesionario}}, de nacionalidad {{nacionalidad}}, con Registro Federal de Contribuyentes {{rfc}}, Clave Única de Registro de Población {{curp}}, con domicilio en {{domicilioCesionario}}; manifestando su estado civil como {{estadoCivil}}. (Datos a asentar por la notaría conforme a las identificaciones exhibidas.)
+
+b) Que conoce la situación jurídica, administrativa y registral del inmueble objeto de esta cesión, incluido el gravamen relacionado en el Antecedente SEXTO, así como los alcances de la adjudicación en rebeldía, y que es su voluntad adquirir los derechos materia de este instrumento.
+
+c) Que los recursos con los que cubre el precio de esta cesión provienen de fuente lícita; que el presente acto se celebra con el carácter de acto ocasional; y que “EL CESIONARIO” es el único titular y beneficiario del negocio jurídico contenido en este instrumento, sin que exista tercero alguno que sea dueño o beneficiario del mismo, de conformidad con la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita.
+
+C L A U S U L A S
+
+PRIMERA. OBJETO.— “EL CEDENTE” cede de manera onerosa a “EL CESIONARIO”, quien adquiere, la totalidad de los derechos adjudicatarios y derechos derivados de la ejecución de sentencia dictada en el expediente 1393/2017, respecto del inmueble identificado como Lote «____» de la Manzana “«____»” del Fraccionamiento Residencial San Antonio, en Tlajomulco de Zúñiga, Jalisco, con folio real «____», superficie de «____» m2 y las medidas y colindancias del anexo respectivo.
+
+SEGUNDA. PRECIO Y FORMA DE PAGO.— El precio de la presente cesión es la cantidad de $ {{precio}} ({{precioLetra}} pesos 00/100 M.N.), que “EL CESIONARIO” cubre a “EL CEDENTE” en la forma siguiente: {{formaPago}}. “EL CEDENTE” otorgará el recibo correspondiente.
+
+TERCERA. TÍTULO Y TRACTO.— El derecho que se cede deriva del tracto relacionado en los Antecedentes, cuya última transmisión a favor de “EL CEDENTE” consta en la escritura número 854 otorgada el 13 de febrero de 2025 ante el Notario Público número 293 de Culiacán, Sinaloa, y fue sancionada judicialmente el 31 de marzo de 2025.
+
+CUARTA. ENTREGA, POSESIÓN Y RECONOCIMIENTO JUDICIAL.— “EL CESIONARIO” se subroga en los derechos de posesión y entrega material y jurídica del inmueble, reconocidos y ordenados por el juzgado en los términos de la ejecutoria del expediente 1393/2017 y del exhorto 82/2026, incluido el apercibimiento de uso de la fuerza pública. “EL CESIONARIO” se obliga a hacer del conocimiento del juez de la causa la presente cesión y a realizar las gestiones necesarias para que se le reconozca en su carácter de cesionario y, en su caso, se ordene la escrituración forzosa a su favor, por su cuenta y bajo su responsabilidad.
+
+QUINTA. GRAVÁMENES Y LIBERACIÓN DE HIPOTECA.— Las partes reconocen que el inmueble reporta el gravamen relacionado en el Antecedente SEXTO a favor de METROFINANCIERA. En virtud de la adjudicación en rebeldía y de la escrituración forzosa ordenada judicialmente, “EL CESIONARIO” queda facultado para gestionar y obtener la cancelación y liberación de dicho gravamen ante el Registro Público de la Propiedad, conforme a la resolución del expediente 1393/2017.
+
+SEXTA. IMPUESTOS Y DERECHOS.— El Impuesto sobre Transmisiones Patrimoniales (traslación de dominio), los derechos de inscripción registral y demás contribuciones y gastos que genere la protocolización serán por cuenta exclusiva de “EL CESIONARIO”. La notaría podrá abstenerse de expedir testimonio en tanto no se acredite su entero, conforme a la Ley del Notariado del Estado de Jalisco.
+
+SÉPTIMA. CESIÓN SIN RESPONSABILIDAD Y ADQUISICIÓN EN EL ESTADO ACTUAL.— “EL CESIONARIO” declara y reconoce que, con anterioridad a la firma del presente instrumento, revisó por sus propios medios la totalidad de la información y documentación jurídica, registral, administrativa y física relativa a los derechos y al inmueble objeto de esta cesión, incluidos el expediente 1393/2017, el exhorto 82/2026 y la situación registral del inmueble; que adquiere los derechos en el estado físico, jurídico y registral en que se encuentran, con el gravamen relacionado en el Antecedente SEXTO; y que, en consecuencia, la presente cesión se realiza sin responsabilidad alguna para “EL CEDENTE” con posterioridad a la venta, liberándolo “EL CESIONARIO” de cualquier reclamación, saneamiento o evicción. “EL CEDENTE” responde únicamente de la legitimidad de la titularidad cedida, en términos del artículo 2,043 del Código Civil Federal y sus correlativos del Código Civil del Estado de Jalisco. Asimismo, “EL CESIONARIO” renuncia expresamente al saneamiento por evicción y por vicios ocultos respecto de los derechos y del inmueble objeto de esta cesión, en términos de los artículos 2,119, 2,123 y 2,162 del Código Civil Federal y sus correlativos del Código Civil del Estado de Jalisco, liberando a “EL CEDENTE” de toda responsabilidad por dichos conceptos.
+
+OCTAVA. DOMICILIOS.— “EL CEDENTE” señala como domicilio {{domicilioCedente}} y “EL CESIONARIO” el señalado en sus declaraciones.
+
+NOVENA. JURISDICCIÓN.— Las partes se someten a las leyes aplicables y a la jurisdicción de los tribunales competentes del Municipio de Tlajomulco de Zúñiga o del Primer Partido Judicial del Estado de Jalisco, renunciando a cualquier otro fuero.
+
+CIERRE
+
+Yo, el(la) Notario(a), doy fe de que lo relacionado concuerda con los documentos que tuve a la vista y que se agregarán al Apéndice de esta acta bajo el número «____». Previa lectura y explicación del valor y consecuencias legales de su contenido, los comparecientes manifestaron su conformidad y firman ante mí. DOY FE.
+
+_____________________________
+
+EL(LA) NOTARIO(A) PÚBLICO(A)  ·  Firma y sello de autorizar
+
+NOTA — Machote de apoyo para revisión por notario y abogado. Los espacios «____» los completa la notaría (datos de la notaría, número de acta, volumen/folio y fecha) y las partes (generales del cesionario, precio y forma de pago). Plaza fija: Tlajomulco de Zúñiga, Jalisco. Fundamento: Ley del Notariado del Estado de Jalisco y Código Civil del Estado de Jalisco.`;
+
 export const plantillasDiipa: PlantillaContrato[] = [
+  {
+    tipo: "cesion_adjudicataria",
+    nombre: "Cesión de derechos adjudicatarios (acta destacada · Jalisco)",
+    descripcion: "Acta destacada de cesión onerosa de derechos adjudicatarios y derechos derivados de la ejecución de sentencia, conforme al derecho de Jalisco. Autollenable con los datos del cliente/comprador. Machote de apoyo para revisión de notario y abogado.",
+    campos: cesionAdjudicatariaCampos,
+    cuerpo: cesionAdjudicatariaCuerpo,
+  },
+
   {
     tipo: "prestacion_diipa",
     nombre: "Prestación de Servicios Profesionales (DIIPA · Garantía con Contingencia)",
