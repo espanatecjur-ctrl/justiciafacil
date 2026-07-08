@@ -7,7 +7,7 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import {
-  HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2,
+  HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2, Pin,
   Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
   Folder, ChevronRight, Home, Layers, AlertTriangle, CheckSquare, Square, Download,
 } from "lucide-react";
@@ -473,6 +473,7 @@ export function CarpetaDriveVinculada({
                 {colorSincro === "verde" ? "Todo en el sistema" : `Sincronizado ${copiadosDocs}/${totalDocs}`}
               </span>
             )}
+            {totalDocs > 0 && <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-2 py-0.5 text-[11px] font-medium text-[color:var(--teal)]" title="Copia fija: los documentos quedan guardados en el sistema, ya no dependen de Drive"><Pin className="h-3 w-3" /> Copia fija</span>}
             <span className="flex-1" />
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
             {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
