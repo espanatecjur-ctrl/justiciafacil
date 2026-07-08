@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
-import { ContratosCliente } from "@/components/contratos-cliente";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
 import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home } from "lucide-react";
 
@@ -102,12 +101,6 @@ function ClientePage() {
                 );
               })}
             </div>
-          </Card>
-
-          {/* Contratos y documentos del cliente (con su validación) */}
-          <Card className="overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5"><FileSignature className="h-4 w-4 text-[color:var(--teal)]" /><h3 className="text-sm font-semibold">Contratos y documentos</h3></div>
-            <ContratosCliente clienteIds={gars.map((g) => g.id)} />
           </Card>
         </>
       )}
