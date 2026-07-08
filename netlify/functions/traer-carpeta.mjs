@@ -1,519 +1,140 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import {
-  ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, DollarSign,
-} from "lucide-react";
-import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
-import { correoActual } from "@/lib/auth";
-import { DocumentosGarantia } from "@/components/documentos-garantia";
-import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
-import { LineaVidaAreas } from "@/components/linea-vida-areas";
-import { SubJuicios } from "@/components/sub-juicios";
-import { BoletinExpediente } from "@/components/boletin-expediente";
-import { BuscadorBoletin } from "@/components/buscador-boletin";
-import { VincularClienteModal } from "@/components/vincular-cliente";
-import { CronologiaCaso } from "@/components/cronologia-caso";
-import { registrarEvento } from "@/lib/cronologia-caso";
-import { TraspasoArea } from "@/components/traspaso-area";
-import { BannerCoincidencias } from "@/components/banner-coincidencias";
+// ============================================================
+// JusticiaFácil · "Traer a mi área" (Paso 1: MOVER)
+// Mueve una carpeta suelta a la carpeta de su área dentro de Justiciafacil
+// y la renombra (garantía + expediente). Solo funciona si la carpeta ya
+// está en la MISMA unidad (Justiciafacil). Si viene de otra Unidad, avisa
+// que requiere copia (Paso 2).
+//
+// POST { carpetaId, area, nuevoNombre }
+//   -> { ok, movida, carpetaId, nombre }  |  { ok:false, requiereCopia:true }
+// ============================================================
+import crypto from "crypto";
 
-export const Route = createFileRoute("/ucp-ficha")({
-  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
-  head: () => ({ meta: [{ title: "Ficha UCP — JusticiaFácil" }] }),
-  component: UCPFicha,
-});
-
-const NAVY = "#0B1E3A";
-const AZUL = "#0C447C"; // color de UCP
-
-const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
-const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
-
-type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "boletin";
-
-interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
-
-const fmtFecha = (s: string | null) => {
-  if (!s) return "—";
-  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return s;
-  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
-};
-
-const fmtMXN = (v: number | string | null | undefined) => {
-  const n = Number(v);
-  if (!isFinite(n)) return "—";
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
-};
-
-function enteroALetras(n: number): string {
-  const U = ["", "UNO", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISÉIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE", "VEINTE"];
-  const D = ["", "", "VEINTE", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
-  const C = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS"];
-  const apoc = (s: string) => s.replace(/VEINTIUNO$/, "VEINTIÚN").replace(/UNO$/, "UN");
-  const cen = (x: number): string => {
-    if (x === 0) return "";
-    if (x === 100) return "CIEN";
-    let s = "";
-    const c = Math.floor(x / 100), r = x % 100;
-    if (c) s += C[c] + " ";
-    if (r <= 20) s += U[r];
-    else if (r < 30) s += "VEINTI" + U[r - 20];
-    else { const d = Math.floor(r / 10), u = r % 10; s += D[d] + (u ? " Y " + U[u] : ""); }
-    return s.trim();
-  };
-  if (n === 0) return "CERO";
-  let s = "";
-  const mill = Math.floor(n / 1000000), mil = Math.floor((n % 1000000) / 1000), r = n % 1000;
-  if (mill) s += (mill === 1 ? "UN MILLÓN" : apoc(cen(mill)) + " MILLONES") + " ";
-  if (mil) s += (mil === 1 ? "MIL" : apoc(cen(mil)) + " MIL") + " ";
-  if (r) s += cen(r);
-  return s.trim();
+function base64url(input) {
+  return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-const pesosEnLetra = (monto: number | string | null | undefined): string => {
-  const m = Math.round(Number(monto) * 100) / 100;
-  if (!isFinite(m)) return "—";
-  const ent = Math.floor(m), cent = Math.round((m - ent) * 100);
-  const letras = enteroALetras(ent).replace(/VEINTIUNO$/, "VEINTIÚN").replace(/UNO$/, "UN");
-  return `${letras} ${ent === 1 ? "PESO" : "PESOS"} ${String(cent).padStart(2, "0")}/100 M.N.`;
-};
-
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-0.5 block text-[11px] text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function DatoUCP({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
-  const vacio = !valor || !String(valor).trim();
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-right text-sm">{vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}</span>
-    </div>
-  );
-}
-
-function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode; titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
-        {accion}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function UCPFicha() {
-  const { id } = Route.useSearch();
-  const navigate = useNavigate();
-  const [c, setC] = useState<CasoJuridico | null>(null);
-  const [dict, setDict] = useState<any>(null);
-  const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [modulo, setModulo] = useState<Modulo>("general");
-
-  // edición (igual que UCM)
-  const [editAnt, setEditAnt] = useState(false);
-  const [editEst, setEditEst] = useState(false);
-  const [verBoletin, setVerBoletin] = useState(false);
-  const [verVincular, setVerVincular] = useState(false);
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [guardando, setGuardando] = useState(false);
-  const [errorDatos, setErrorDatos] = useState<string | null>(null);
-  const [recargaCron, setRecargaCron] = useState(0);
-  const [editPago, setEditPago] = useState(false);
-  const [montoPago, setMontoPago] = useState("");
-  const [miCorreo, setMiCorreo] = useState("");
-  useEffect(() => { correoActual().then((c) => setMiCorreo(c || "")).catch(() => {}); }, []);
-
-  const validarPago = async () => {
-    if (!c) return;
-    const monto = parseFloat(String(montoPago).replace(/[^0-9.]/g, ""));
-    if (!monto || monto <= 0) { setErrorDatos("Pon el monto del pago."); return; }
-    setGuardando(true); setErrorDatos(null);
-    try {
-      const body: any = { pago2_validado: true, pago2_monto: monto, pago2_por: miCorreo || null, pago2_fecha: new Date().toISOString() };
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
-        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body),
-      });
-      if (!r.ok) throw new Error(String(r.status));
-      setC({ ...c, ...body });
-      registrarEvento({ caso_id: c.id, expediente: c.expediente, area: "UCP", tipo: "cambio", texto: `2º pago validado: $${monto.toLocaleString("es-MX")}` });
-      setRecargaCron((n) => n + 1); setEditPago(false);
-    } catch { setErrorDatos("No se pudo validar el pago."); } finally { setGuardando(false); }
+async function obtenerAccessToken(clientEmail, privateKey) {
+  const ahora = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claim = {
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/drive",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: ahora,
+    exp: ahora + 3600,
   };
-
-  useEffect(() => {
-    if (!id) { setCargando(false); return; }
-    Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
-      fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${id}&vigente=eq.true&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
-    ])
-      .then(async ([cs, ds]) => {
-        const caso: CasoJuridico | null = cs?.[0] || null;
-        setC(caso); setDict(ds?.[0] || null);
-        if (caso?.expediente) {
-          const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(caso.expediente.trim())}&order=fecha_acuerdo.desc&limit=200`, { headers });
-          setAcuerdos(ra.ok ? await ra.json() : []);
-        }
-      })
-      .finally(() => setCargando(false));
-  }, [id]);
-
-  const guardarDatos = async (campos: Record<string, string>, cerrar: () => void) => {
-    if (!c) return;
-    setGuardando(true); setErrorDatos(null);
-    try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
-        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(campos),
-      });
-      if (!r.ok) throw new Error(String(r.status));
-      setC({ ...c, ...(campos as any) });
-      registrarEvento({ caso_id: c.id, expediente: c.expediente, area: "UCP", tipo: "cambio", texto: "Se actualizó: " + Object.keys(campos).join(", ") });
-      setRecargaCron((n) => n + 1);
-      cerrar();
-    } catch {
-      setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
-    } finally { setGuardando(false); }
-  };
-  const guardarCampos = (campos: Record<string, string>) => guardarDatos(campos, () => {});
-
-  // arma y descarga el PDF del dictamen usando la función que ya existe
-  const armarFirmas = () => {
-    const firmasArr: { titulo: string; firma: any }[] = [];
-    const fj = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.juridico || dict.firmas.juridico_firma) : null;
-    const fr = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.registral || dict.firmas.registral_firma) : null;
-    if (fj) firmasArr.push({ titulo: "Dictamen jurídico", firma: typeof fj === "string" ? { nombre: fj } : fj });
-    if (fr) firmasArr.push({ titulo: "Dictamen registral (RPPC)", firma: typeof fr === "string" ? { nombre: fr } : fr });
-    return firmasArr;
-  };
-  const datosPDF = () => ({
-    expediente: c?.expediente || undefined,
-    juzgado: c?.juzgado || undefined,
-    garantia: c?.direccion_garantia || (c as any)?.gar_id || undefined,
-    cliente: c?.cliente_nombre || undefined,
-    entidad: c?.entidad || undefined,
-    veredictoJuridico: dict?.juridico?.veredicto || undefined,
-    veredictoRegistral: (typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : undefined),
-    veredictoFinal: dict?.veredicto || undefined,
-    firmas: armarFirmas(),
+  const sinFirma = base64url(JSON.stringify(header)) + "." + base64url(JSON.stringify(claim));
+  const firma = crypto.createSign("RSA-SHA256").update(sinFirma).sign(privateKey)
+    .toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const jwt = sinFirma + "." + firma;
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" + encodeURIComponent(jwt),
   });
-  const descargarPDF = async () => {
-    if (!c) return;
-    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
-    await descargarDictamenFinalPDF(datosPDF());
-  };
-  const verDictamenPDF = async () => {
-    if (!c) return;
-    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
-    await descargarDictamenFinalPDF(datosPDF(), "ver");
-  };
-
-  if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
-  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucp" })} className="underline">Volver a UCP</button></div>;
-
-  const firmasN = ["elabora", "dil", "gad", "dgc", "dge"].filter((k) => (dict?.firmas as any)?.[k]?.fecha).length;
-  const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
-  const ultima = acuerdos[0] || null;
-
-  const MODULOS: { id: Modulo; label: string; icon: React.ReactNode }[] = [
-    { id: "general", label: "General", icon: <LayoutGrid className="h-4 w-4" /> },
-    { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
-    { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
-    { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
-    { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
-  ];
-
-  const btnEditar = (onClick: () => void) => (
-    <button onClick={onClick} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>
-      <PenLine className="h-3 w-3" /> Editar / validar
-    </button>
-  );
-  const btnGuardar = (onClick: () => void) => (
-    <button onClick={onClick} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: AZUL }}>
-      {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar
-    </button>
-  );
-
-  return (
-    <div className="space-y-4">
-      {/* barra superior */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => navigate({ to: "/ucp" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UCP</button>
-        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: AZUL }}>UCP</span>
-        <button onClick={descargarPDF} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
-          <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF
-        </button>
-      </div>
-
-      {/* encabezado (siempre visible) */}
-      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${AZUL})` }}>
-        <p className="text-xs uppercase tracking-wide text-white/60">Ficha UCP · Consolidación Patrimonial</p>
-        <p className="text-2xl font-bold">{c.expediente || "Sin expediente"}</p>
-        <p className="text-sm text-white/80">{c.direccion_garantia || c.cliente_nombre || "—"}</p>
-        <p className="mt-1 text-xs text-white/70">{c.juzgado || "Juzgado sin asignar"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
-        <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${firmasN >= 5 ? "bg-emerald-400/25 text-white" : "bg-white/15 text-white"}`}>✍ {firmasN}/5 firmas del dictamen</div>
-      </div>
-
-      {/* pestañas */}
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-        {MODULOS.map((m) => (
-          <button key={m.id} onClick={() => setModulo(m.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === m.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === m.id ? { background: AZUL } : undefined}>
-            {m.icon} {m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ============ GENERAL ============ */}
-      {modulo === "general" && (
-        <div className="space-y-4">
-          <BannerCoincidencias caso={c} onNavegar={(nid) => navigate({ to: "/ucp-ficha", search: { id: nid } as any })} />
-          <TraspasoArea caso={c} area="UCP" onGuardarCarpeta={guardarCampos} onTraspaso={() => navigate({ to: "/ucp" })} />
-          <LineaVidaAreas caso={c} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Antecedente de la garantía (editable) */}
-            <SeccionUCP
-              icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
-              titulo="Antecedente de la garantía"
-              accion={!editAnt ? btnEditar(() => { setForm({ no_credito: c.no_credito || "", direccion_garantia: c.direccion_garantia || "", entidad: c.entidad || "" }); setErrorDatos(null); setEditAnt(true); }) : undefined}
-            >
-              {editAnt ? (
-                <div className="space-y-2">
-                  <Campo label="No. de crédito"><input className={inp} value={form.no_credito} onChange={(e) => setForm({ ...form, no_credito: e.target.value })} /></Campo>
-                  <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
-                  <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
-                  <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
-                    <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{c.cliente_nombre || c.cliente_codigo || "sin vincular"}</b></span>
-                    <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"} cliente</button>
-                  </div>
-                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
-                  <div className="flex gap-2 pt-1">
-                    {btnGuardar(() => guardarDatos({ no_credito: form.no_credito, direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false)))}
-                    <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <DatoUCP label="ID garantía" valor={(c as any).gar_id} />
-                  <DatoUCP label="No. de crédito" valor={c.no_credito} importante />
-                  <DatoUCP label="Dirección de la garantía" valor={c.direccion_garantia} importante />
-                  <div className="flex items-center justify-between gap-2">
-                    <DatoUCP label="Cliente / deudor" valor={c.cliente_nombre || c.demandado} importante />
-                    <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}</button>
-                  </div>
-                  <DatoUCP label="Entidad" valor={c.entidad} />
-                  <DatoUCP label="Tipo de proceso" valor={c.tipo_proceso} />
-                </>
-              )}
-            </SeccionUCP>
-
-            {/* Estatus actual (editable + robotsito) */}
-            <SeccionUCP
-              icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />}
-              titulo="Estatus actual"
-              accion={!editEst ? btnEditar(() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "", actor: c.actor || "", demandado: c.demandado || "" }); setErrorDatos(null); setVerBoletin(false); setEditEst(true); }) : undefined}
-            >
-              {editEst ? (
-                <div className="space-y-2">
-                  <Campo label="Etapa actual"><input className={inp} value={form.etapa_actual} onChange={(e) => setForm({ ...form, etapa_actual: e.target.value })} /></Campo>
-                  <Campo label="Estatus general"><input className={inp} value={form.estatus_general} onChange={(e) => setForm({ ...form, estatus_general: e.target.value })} /></Campo>
-                  <Campo label="Prioridad"><input className={inp} value={form.prioridad} onChange={(e) => setForm({ ...form, prioridad: e.target.value })} placeholder="ALTA / MEDIA / BAJA" /></Campo>
-                  <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1593/2008" /></Campo>
-                  <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Segundo…" /></Campo>
-                  <Campo label="Actor"><input className={inp} value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="Quien demanda" /></Campo>
-                  <Campo label="Demandado"><input className={inp} value={form.demandado} onChange={(e) => setForm({ ...form, demandado: e.target.value })} placeholder="Contra quién" /></Campo>
-
-                  {/* Robotsito del boletín */}
-                  <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
-                    <button type="button" onClick={() => setVerBoletin((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold" style={{ color: AZUL }}>
-                      <Send className="h-3.5 w-3.5" /> {verBoletin ? "Ocultar buscador del boletín" : "Buscar en el boletín (jurisdicción, juzgado y expediente)"}
-                    </button>
-                    {verBoletin && (
-                      <div className="mt-2">
-                        <p className="mb-2 text-[11px] text-muted-foreground">Elige la jurisdicción y el juzgado, busca el expediente y dale <b>“Guardar hallazgos del boletín”</b>: se rellenan solos. Luego revisa y dale <b>Guardar</b>.</p>
-                        <BuscadorBoletin
-                          expedienteInicial={form.expediente}
-                          onGuardarHallazgos={() => {}}
-                          onDatosBoletin={(d) => setForm((f) => ({
-                            ...f,
-                            expediente: d.expediente || f.expediente,
-                            juzgado: d.juzgado || f.juzgado,
-                            actor: d.actor || f.actor,
-                            demandado: d.demandado || f.demandado,
-                            etapa_actual: d.etapa || f.etapa_actual,
-                          }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
-                  <div className="flex gap-2 pt-1">
-                    {btnGuardar(() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado, actor: form.actor, demandado: form.demandado }, () => setEditEst(false)))}
-                    <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <DatoUCP label="Etapa actual" valor={c.etapa_actual} importante />
-                  <DatoUCP label="Estatus general" valor={c.estatus_general} importante />
-                  <DatoUCP label="Prioridad" valor={c.prioridad} />
-                  <DatoUCP label="No. de expediente / juicio" valor={c.expediente} />
-                  <DatoUCP label="No. de juzgado" valor={c.juzgado} />
-                  <DatoUCP label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
-                </>
-              )}
-            </SeccionUCP>
-          </div>
-
-          {/* Validación del 2º pago (manual, Contabilidad) */}
-          <SeccionUCP
-            icon={<DollarSign className="h-4 w-4" style={{ color: AZUL }} />}
-            titulo="Validación del 2º pago"
-            accion={!editPago ? btnEditar(() => { setMontoPago(c.pago2_monto != null ? String(c.pago2_monto) : ""); setErrorDatos(null); setEditPago(true); }) : undefined}
-          >
-            {editPago ? (
-              <div className="space-y-2">
-                <Campo label="Monto del pago (MXN)"><input className={inp} inputMode="decimal" value={montoPago} onChange={(e) => setMontoPago(e.target.value)} placeholder="Ej. 25000" /></Campo>
-                {(() => {
-                  const n = parseFloat(String(montoPago).replace(/[^0-9.]/g, ""));
-                  if (!n || n <= 0) return null;
-                  return (
-                    <div className="rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
-                      <p className="font-semibold text-foreground">{fmtMXN(n)}</p>
-                      <p className="text-muted-foreground">{pesosEnLetra(n)}</p>
-                    </div>
-                  );
-                })()}
-                {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
-                <div className="flex gap-2 pt-1">
-                  <button onClick={validarPago} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
-                    {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Validar pago
-                  </button>
-                  <button onClick={() => setEditPago(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
-                </div>
-              </div>
-            ) : c.pago2_validado ? (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
-                <p className="text-sm font-semibold">✓ 2º pago validado</p>
-                <p className="mt-0.5 text-lg font-bold">{fmtMXN(c.pago2_monto)}</p>
-                <p className="text-xs">{pesosEnLetra(c.pago2_monto)}</p>
-                <div className="mt-1 text-[11px] text-emerald-700/80">{c.pago2_por ? `Validó ${c.pago2_por}` : ""}{c.pago2_fecha ? ` · ${fmtFecha(c.pago2_fecha)}` : ""}</div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Pendiente. Cuando Contabilidad valide el 2º pago, márcalo aquí con su monto.</p>
-            )}
-          </SeccionUCP>
-
-          {/* última actuación del boletín (resumen) */}
-          <SeccionUCP icon={<Megaphone className="h-4 w-4" style={{ color: AZUL }} />} titulo="Última actuación en el boletín">
-            {sinJuzgado ? (
-              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertTriangle className="mr-1 inline h-4 w-4" /> Falta asignar el juzgado para que el robot pueda seguir este expediente.</div>
-            ) : ultima ? (
-              <div className="rounded-md bg-muted/40 p-3">
-                <span className="text-xs font-medium text-muted-foreground">{fmtFecha(ultima.fecha_acuerdo)}</span>
-                <p className="mt-1 text-sm">{ultima.texto || "—"}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sin actuaciones todavía. El robot revisa el boletín todos los días a las 9:00 AM.</p>
-            )}
-          </SeccionUCP>
-
-          {/* Cronología del expediente (compartida entre áreas) */}
-          <CronologiaCaso casoId={c.id} expediente={c.expediente} recargaId={recargaCron} />
-        </div>
-      )}
-
-      {/* ============ PROCESO (dictamen jurídico + registral + PDF + firmas) ============ */}
-      {modulo === "proceso" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <BloqueDictamen
-            titulo="Dictamen jurídico"
-            icon={<ScrollText className="h-4 w-4" style={{ color: AZUL }} />}
-            veredicto={dict?.juridico?.veredicto || dict?.veredicto || null}
-            firmas={dict?.firmas}
-            claveFirma="juridico"
-            onAbrir={() => navigate({ to: "/ucp" })}
-            onVer={() => verDictamenPDF()}
-            onDescargar={() => descargarPDF()}
-          />
-          <BloqueDictamen
-            titulo="Dictamen registral (RPPC)"
-            icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
-            veredicto={typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : (dict?.rppc ? "registrado" : null)}
-            firmas={dict?.firmas}
-            claveFirma="registral"
-            onAbrir={() => navigate({ to: "/ucp" })}
-            onVer={() => verDictamenPDF()}
-            onDescargar={() => descargarPDF()}
-          />
-        </div>
-      )}
-
-      {/* ============ SUB-JUICIOS ============ */}
-      {modulo === "subjuicios" && (
-        <div className="rounded-xl border border-border bg-card p-4"><SubJuicios casoId={c.id} /></div>
-      )}
-
-      {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
-      {modulo === "documentos" && (
-        <div className="space-y-4">
-          <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
-          <DocumentosGarantia area="UCP" caso={c} />
-        </div>
-      )}
-
-      {/* ============ BOLETÍN ============ */}
-      {modulo === "boletin" && (
-        <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} />
-      )}
-
-      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setC({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_id: cl.id }); setVerVincular(false); }} />}
-    </div>
-  );
+  const data = await resp.json();
+  if (!data.access_token) throw new Error("No se obtuvo access_token de Google: " + JSON.stringify(data));
+  return data.access_token;
 }
 
-// Bloque resumen de un dictamen (jurídico o registral) con su veredicto, firma y PDF.
-function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir, onVer, onDescargar }: {
-  titulo: string; icon: React.ReactNode; veredicto: string | null;
-  firmas: any; claveFirma: string; onAbrir: () => void; onVer: () => void; onDescargar: () => void;
-}) {
-  const v = (veredicto || "").toLowerCase();
-  const positivo = v.includes("positiv") || v.includes("proceden") || v.includes("registrad") || v.includes("favorable");
-  const negativo = v.includes("negativ") || v.includes("improcedent") || v.includes("desfavorable");
-  const Icono = positivo ? CheckCircle2 : negativo ? XCircle : Clock;
-  const color = positivo ? "#0C5C46" : negativo ? "#A32D2D" : "#B26B00";
-
-  const firma = firmas && typeof firmas === "object" ? (firmas[claveFirma] || firmas[`${claveFirma}_firma`]) : null;
-  const firmado = !!firma;
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
-        <button onClick={onAbrir} className="rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>Abrir proceso</button>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <Icono className="h-5 w-5" style={{ color }} />
-        <span className="text-sm font-medium" style={{ color }}>{veredicto ? veredicto : "Sin dictaminar"}</span>
-      </div>
-      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-xs">
-        <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-        {firmado
-          ? <span className="text-[color:var(--teal)]">Firmado{typeof firma === "string" ? `: ${firma}` : (firma?.nombre ? `: ${firma.nombre}` : "")}</span>
-          : <span className="text-muted-foreground">Sin firma</span>}
-      </div>
-      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
-        <button onClick={onVer} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] hover:bg-muted"><Eye className="h-3.5 w-3.5" /> Ver PDF</button>
-        <button onClick={onDescargar} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] hover:bg-muted" style={{ borderColor: "#C2A24C", color: "#8a7326" }}><Download className="h-3.5 w-3.5" /> Descargar</button>
-      </div>
-    </div>
-  );
+async function metadatos(accessToken, id) {
+  const url = "https://www.googleapis.com/drive/v3/files/" + id +
+    "?fields=id,name,parents,driveId,mimeType&supportsAllDrives=true";
+  const r = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.error?.message || ("Drive respondió " + r.status));
+  return d;
 }
+
+// Busca (o crea) la carpeta del área dentro de la raíz de Justiciafacil.
+async function carpetaDeArea(accessToken, raizId, area) {
+  const seguro = String(area).replace(/'/g, "\\'");
+  const q = `name='${seguro}' and mimeType='application/vnd.google-apps.folder' and '${raizId}' in parents and trashed=false`;
+  const rb = await fetch(
+    "https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent(q) +
+    "&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives",
+    { headers: { Authorization: "Bearer " + accessToken } });
+  const db = await rb.json();
+  if (rb.ok && db.files && db.files[0]) return db.files[0].id;
+  // crear
+  const rc = await fetch("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: String(area), mimeType: "application/vnd.google-apps.folder", parents: [raizId] }),
+  });
+  const dc = await rc.json();
+  if (!rc.ok) throw new Error(dc?.error?.message || "No se pudo crear la carpeta del área.");
+  return dc.id;
+}
+
+export default async (req) => {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok: false, error: "Método no permitido" }), { status: 405 });
+  }
+  try {
+    const { carpetaId, area, nuevoNombre } = await req.json();
+    if (!carpetaId || !area) {
+      return new Response(JSON.stringify({ ok: false, error: "Faltan carpetaId o área." }), { status: 400 });
+    }
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const credBruto = process.env.GOOGLE_SERVICE_ACCOUNT;
+    if (!folderId || !credBruto) {
+      return new Response(JSON.stringify({ ok: false, error: "Faltan variables de entorno (GOOGLE_DRIVE_FOLDER_ID / GOOGLE_SERVICE_ACCOUNT)." }), { status: 500 });
+    }
+    const cred = JSON.parse(credBruto);
+    let privateKey = cred.private_key || "";
+    if (privateKey.includes("\\n")) privateKey = privateKey.replace(/\\n/g, "\n");
+    const accessToken = await obtenerAccessToken(cred.client_email, privateKey);
+
+    // ¿La carpeta suelta está en la misma unidad que Justiciafacil?
+    const [carpeta, raiz] = await Promise.all([
+      metadatos(accessToken, String(carpetaId).trim()),
+      metadatos(accessToken, folderId),
+    ]);
+    if (carpeta.mimeType !== "application/vnd.google-apps.folder") {
+      return new Response(JSON.stringify({ ok: false, error: "Lo que escogiste no es una carpeta." }), { status: 400 });
+    }
+    // Si está en otra unidad → no se puede mover, requiere copia (Paso 2)
+    if (raiz.driveId && carpeta.driveId && raiz.driveId !== carpeta.driveId) {
+      return new Response(JSON.stringify({ ok: false, requiereCopia: true, error: "Esta carpeta está en otra Unidad; se necesita COPIAR (Paso 2)." }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    // Carpeta del área (crea si no existe) dentro de Justiciafacil
+    const areaId = await carpetaDeArea(accessToken, folderId, area);
+    const padreActual = (carpeta.parents && carpeta.parents[0]) || "";
+    const nombreFinal = String(nuevoNombre || carpeta.name).trim() || carpeta.name;
+    const idLimpio = String(carpetaId).trim();
+
+    // ¿Ya está dentro de la carpeta del área? Entonces NO se mueve (evita re-mover
+    // en cada "Guardar copia fija", lo que podría dejar la carpeta huérfana).
+    const yaEnArea = padreActual === areaId;
+
+    if (yaEnArea && nombreFinal === carpeta.name) {
+      // Ya está ordenada y con el nombre correcto: nada que hacer.
+      return new Response(JSON.stringify({ ok: true, movida: false, yaOrdenada: true, carpetaId: carpeta.id || idLimpio, nombre: carpeta.name }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    // Renombra siempre; mueve SOLO si aún no está en la carpeta del área.
+    let params = "supportsAllDrives=true&fields=id,name";
+    if (!yaEnArea) {
+      params = "addParents=" + encodeURIComponent(areaId) +
+        (padreActual ? "&removeParents=" + encodeURIComponent(padreActual) : "") + "&" + params;
+    }
+    const url = "https://www.googleapis.com/drive/v3/files/" + idLimpio + "?" + params;
+    const rm = await fetch(url, {
+      method: "PATCH",
+      headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: nombreFinal }),
+    });
+    const dm = await rm.json();
+    if (!rm.ok) throw new Error(dm?.error?.message || ("No se pudo ordenar (" + rm.status + ")."));
+
+    return new Response(JSON.stringify({ ok: true, movida: !yaEnArea, carpetaId: dm.id, nombre: dm.name }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: String((e && e.message) || e) }), { status: 500 });
+  }
+};
