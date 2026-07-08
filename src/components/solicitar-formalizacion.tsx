@@ -5,7 +5,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { FileSignature, Loader2, X, Check } from "lucide-react";
 
 // Tipos de Contratos existentes + Escritura (que no había)
-export const TIPOS_FORMALIZACION = [...TIPOS_CONTRATO, "Escritura pública de cesión"];
+export const TIPOS_FORMALIZACION = [...TIPOS_CONTRATO, "Cesión de derechos adjudicataria", "Escritura pública de cesión"];
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
