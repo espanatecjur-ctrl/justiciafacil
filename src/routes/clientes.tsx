@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, Users, Loader2, Eye, Check, X, MapPin, Gavel } from "lucide-react";
+import { Search, Users, Loader2, Eye, Check, X, MapPin, Gavel, FileSignature } from "lucide-react";
+import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({ meta: [{ title: "Clientes — JusticiaFácil" }] }),
@@ -29,6 +30,7 @@ interface Cli {
   pago50_monto: number | null; pago50_fecha: string | null;
   finiquito_monto: number | null; finiquito_fecha: string | null;
   total: number | null; pagado: number | null; saldo: number | null; estado: string | null;
+  formalizacion_solicitada?: boolean | null; formalizacion_tipo?: string | null; formalizacion_id?: string | null;
   caso_juridico?: { id: string; expediente: string | null; folio: string | null } | null;
 }
 
@@ -50,11 +52,11 @@ function ClientesCRM() {
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [solicitar, setSolicitar] = useState<Cli | null>(null);
 
-  useEffect(() => {
-    fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente,folio)&en_papelera=eq.false&order=nombre.asc`, { headers })
-      .then((r) => (r.ok ? r.json() : [])).then(setClientes).catch(() => {}).finally(() => setCargando(false));
-  }, []);
+  const cargar = () => fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente,folio)&en_papelera=eq.false&order=nombre.asc`, { headers })
+    .then((r) => (r.ok ? r.json() : [])).then(setClientes).catch(() => {}).finally(() => setCargando(false));
+  useEffect(() => { cargar(); }, []);
 
   const filtrados = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -90,6 +92,19 @@ function ClientesCRM() {
             <tr className="border-t border-border"><td className="pt-1 font-semibold">Saldo</td><td className="pt-1 text-right font-bold text-[color:var(--teal)]">{fmtMXN(c.saldo)}</td><td /></tr>
           </tbody>
         </table>
+      </div>
+      <div className="sm:col-span-2">
+        {c.formalizacion_solicitada ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+            <Check className="h-3 w-3" /> Formalización solicitada{c.formalizacion_tipo ? ` · ${c.formalizacion_tipo}` : ""}
+          </span>
+        ) : c.caso_juridico?.id ? (
+          <button onClick={() => setSolicitar(c)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: "var(--teal)" }}>
+            <FileSignature className="h-3.5 w-3.5" /> Solicitar formalización
+          </button>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">Sin juicio ligado — no se puede formalizar todavía.</span>
+        )}
       </div>
     </div>
   );
@@ -152,6 +167,10 @@ function ClientesCRM() {
             );
           })}
         </Card>
+      )}
+
+      {solicitar && solicitar.caso_juridico?.id && (
+        <SolicitarFormalizacion cliente={solicitar} casoId={solicitar.caso_juridico.id} onClose={() => setSolicitar(null)} onHecho={cargar} />
       )}
     </div>
   );
