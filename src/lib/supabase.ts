@@ -59,6 +59,11 @@ export interface CasoJuridico {
   origen_ucp_id?: string | null;
   estado_ucm?: string | null;
   pasa_a_ucm?: boolean | null;
+  // Validación del 2º pago (manual, por Contabilidad)
+  pago2_validado?: boolean | null;
+  pago2_monto?: number | string | null;
+  pago2_por?: string | null;
+  pago2_fecha?: string | null;
   cve_distrito?: string | null;
   cve_juzgado?: string | null;
   nombre_juzgado?: string | null;
