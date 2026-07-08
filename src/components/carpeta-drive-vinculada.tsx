@@ -14,7 +14,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, previewDeId, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -581,7 +581,15 @@ export function CarpetaDriveVinculada({
                       {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
-                      <iframe src={urlsCopia[a.id] || previewDeId(a.id)} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                      {urlsCopia[a.id] ? (
+                        <iframe src={urlsCopia[a.id]} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
+                          <FileText className="h-8 w-8 text-muted-foreground/40" />
+                          <span className="text-[11px] font-medium text-muted-foreground">Aún no copiado al sistema</span>
+                          <span className="text-[10px] text-muted-foreground">Dale «Sincronizar documentos» para que lo vea todo el equipo (y en el celular).</span>
+                        </div>
+                      )}
                       <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
                         <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
                       </span>
