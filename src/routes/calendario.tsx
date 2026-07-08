@@ -4,12 +4,20 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Check } from "lucide-react";
-import { correoActual } from "@/lib/auth";
+import { correoActual, rolActual } from "@/lib/auth";
+import { ROLES } from "@/lib/roles";
 import {
   listarEventosMes, crearEvento, actualizarEvento, eliminarEvento,
   listarColaboradores,
   TIPOS_EVENTO, ESTILO_EVENTO, type Evento, type Colaborador,
 } from "@/lib/evento-agenda";
+
+// Grupo al que pertenece cada rol (para armar "el equipo jurídico").
+const GRUPO_DE_ROL: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.codigo, r.grupo]));
+// Es "director" quien ve todos los módulos (DGE, DIL, Super_Admin): puede ver a su equipo.
+const esDirector = (rol: string) => ROLES.find((r) => r.codigo === rol)?.modulos === "todos";
+// Colores para distinguir a cada persona del equipo.
+const PALETA_PERSONA = ["#0C5C46", "#B45309", "#1D4ED8", "#9333EA", "#BE123C", "#0891B2", "#4D7C0F", "#C2410C", "#7C3AED", "#0F766E", "#A21CAF", "#374151"];
 
 export const Route = createFileRoute("/calendario")({
   head: () => ({ meta: [{ title: "Calendario — SIGA-DIIPA" }] }),
@@ -33,7 +41,23 @@ function Calendario() {
   useEffect(() => { listarColaboradores().then(setColabs); }, []);
   const [correoYo, setCorreoYo] = useState<string | null>(null);
   useEffect(() => { correoActual().then(setCorreoYo); }, []);
-  const [filtro, setFiltro] = useState<"mias" | "todas">("mias"); // por defecto, cada quien ve las suyas
+  const [rolYo, setRolYo] = useState("");
+  useEffect(() => { rolActual().then(setRolYo); }, []);
+  const soyDirector = esDirector(rolYo);
+  const [filtro, setFiltro] = useState<"mias" | "equipo" | "todas">("mias"); // por defecto, cada quien ve las suyas
+
+  // Equipo jurídico (para el director): colaboradores de las unidades jurídicas + colores por persona.
+  const equipoJuridico = useMemo(() => colabs.filter((c) => GRUPO_DE_ROL[c.rol || ""] === "Jurídico" && c.correo), [colabs]);
+  const equipoCorreos = useMemo(() => {
+    const s = new Set(equipoJuridico.map((c) => c.correo));
+    if (correoYo) s.add(correoYo);
+    return s;
+  }, [equipoJuridico, correoYo]);
+  const colorPorCorreo = useMemo(() => {
+    const m: Record<string, string> = {};
+    equipoJuridico.forEach((c, i) => { m[c.correo] = PALETA_PERSONA[i % PALETA_PERSONA.length]; });
+    return m;
+  }, [equipoJuridico]);
 
   // Mapa correo -> nombre corto (para mostrar a quién está asignada cada tarea).
   const nombrePorCorreo = useMemo(() => {
@@ -47,11 +71,12 @@ function Calendario() {
 
   const hoyStr = fechaStr(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
-  // "Mías" = asignadas a mí o creadas por mí. "Todas" = todo el equipo.
+  // "Mías" = asignadas a mí o creadas por mí. "Mi equipo" = todo el jurídico. "Todas" = todo.
   const eventosVisibles = useMemo(() => {
     if (filtro === "todas" || !correoYo) return eventos;
+    if (filtro === "equipo") return eventos.filter((e) => (e.asignado_a && equipoCorreos.has(e.asignado_a)) || (e.creado_por && equipoCorreos.has(e.creado_por)));
     return eventos.filter((e) => e.asignado_a === correoYo || e.creado_por === correoYo);
-  }, [eventos, filtro, correoYo]);
+  }, [eventos, filtro, correoYo, equipoCorreos]);
 
   // Eventos agrupados por día.
   const porDia = useMemo(() => {
@@ -104,13 +129,24 @@ function Calendario() {
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <div className="inline-flex overflow-hidden rounded-md border border-input">
             <button onClick={() => setFiltro("mias")} className={`px-3 py-1.5 font-medium ${filtro === "mias" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>Mías</button>
-            <button onClick={() => setFiltro("todas")} className={`px-3 py-1.5 font-medium ${filtro === "todas" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>Todas</button>
+            {soyDirector && (
+              <button onClick={() => setFiltro("equipo")} className={`border-l border-input px-3 py-1.5 font-medium ${filtro === "equipo" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>Mi equipo</button>
+            )}
+            <button onClick={() => setFiltro("todas")} className={`border-l border-input px-3 py-1.5 font-medium ${filtro === "todas" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>Todas</button>
           </div>
-          {TIPOS_EVENTO.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1.5 text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: ESTILO_EVENTO[t].dot }} /> {ESTILO_EVENTO[t].label}
-            </span>
-          ))}
+          {filtro === "equipo" ? (
+            equipoJuridico.map((c) => (
+              <span key={c.correo} className="inline-flex items-center gap-1.5 text-muted-foreground" title={c.correo}>
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorPorCorreo[c.correo] }} /> {(c.nombre || c.correo).split(" ")[0]}
+              </span>
+            ))
+          ) : (
+            TIPOS_EVENTO.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: ESTILO_EVENTO[t].dot }} /> {ESTILO_EVENTO[t].label}
+              </span>
+            ))
+          )}
         </div>
       </div>
 
@@ -146,6 +182,7 @@ function Calendario() {
                         className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] ${st.bg} ${st.text} ${hecha ? "line-through opacity-60" : ""}`}
                         title={`${e.titulo || ""}${e.asignado_a ? ` · para ${nombrePorCorreo[e.asignado_a] || e.asignado_a}` : ""}`}
                       >
+                        {filtro === "equipo" && e.asignado_a && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorPorCorreo[e.asignado_a] || "#9CA3AF" }} />}
                         {e.hora && <span className="font-mono text-[10px] opacity-80">{e.hora}</span>}
                         <span className="truncate">{e.titulo || "(sin título)"}</span>
                         {e.asignado_a && <span className="ml-auto shrink-0 rounded-full bg-white/60 px-1 text-[9px] font-medium">👤 {nombrePorCorreo[e.asignado_a] || "?"}</span>}
