@@ -2,9 +2,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send,
+  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, DollarSign,
 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { correoActual } from "@/lib/auth";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
@@ -89,6 +90,27 @@ function UCPFicha() {
   const [guardando, setGuardando] = useState(false);
   const [errorDatos, setErrorDatos] = useState<string | null>(null);
   const [recargaCron, setRecargaCron] = useState(0);
+  const [editPago, setEditPago] = useState(false);
+  const [montoPago, setMontoPago] = useState("");
+  const [miCorreo, setMiCorreo] = useState("");
+  useEffect(() => { correoActual().then((c) => setMiCorreo(c || "")).catch(() => {}); }, []);
+
+  const validarPago = async () => {
+    if (!c) return;
+    const monto = parseFloat(String(montoPago).replace(/[^0-9.]/g, ""));
+    if (!monto || monto <= 0) { setErrorDatos("Pon el monto del pago."); return; }
+    setGuardando(true); setErrorDatos(null);
+    try {
+      const body: any = { pago2_validado: true, pago2_monto: monto, pago2_por: miCorreo || null, pago2_fecha: new Date().toISOString() };
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
+        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      setC({ ...c, ...body });
+      registrarEvento({ caso_id: c.id, expediente: c.expediente, area: "UCP", tipo: "cambio", texto: `2º pago validado: $${monto.toLocaleString("es-MX")}` });
+      setRecargaCron((n) => n + 1); setEditPago(false);
+    } catch { setErrorDatos("No se pudo validar el pago."); } finally { setGuardando(false); }
+  };
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -311,6 +333,33 @@ function UCPFicha() {
               )}
             </SeccionUCP>
           </div>
+
+          {/* Validación del 2º pago (manual, Contabilidad) */}
+          <SeccionUCP
+            icon={<DollarSign className="h-4 w-4" style={{ color: AZUL }} />}
+            titulo="Validación del 2º pago"
+            accion={!editPago ? btnEditar(() => { setMontoPago(c.pago2_monto != null ? String(c.pago2_monto) : ""); setErrorDatos(null); setEditPago(true); }) : undefined}
+          >
+            {editPago ? (
+              <div className="space-y-2">
+                <Campo label="Monto del pago (MXN)"><input className={inp} inputMode="decimal" value={montoPago} onChange={(e) => setMontoPago(e.target.value)} placeholder="Ej. 25000" /></Campo>
+                {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={validarPago} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                    {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Validar pago
+                  </button>
+                  <button onClick={() => setEditPago(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+                </div>
+              </div>
+            ) : c.pago2_validado ? (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                <span className="font-semibold">✓ 2º pago validado{c.pago2_monto != null ? `: $${Number(c.pago2_monto).toLocaleString("es-MX")}` : ""}</span>
+                <div className="mt-0.5 text-[11px] text-emerald-700/80">{c.pago2_por ? `por ${c.pago2_por}` : ""}{c.pago2_fecha ? ` · ${fmtFecha(c.pago2_fecha)}` : ""}</div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Pendiente. Cuando Contabilidad valide el 2º pago, márcalo aquí con su monto.</p>
+            )}
+          </SeccionUCP>
 
           {/* última actuación del boletín (resumen) */}
           <SeccionUCP icon={<Megaphone className="h-4 w-4" style={{ color: AZUL }} />} titulo="Última actuación en el boletín">
