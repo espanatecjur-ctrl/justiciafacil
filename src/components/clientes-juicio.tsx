@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Users, Loader2, MoreVertical, Eye, Check, X, MapPin } from "lucide-react";
+import { Users, Loader2, Eye, Check, X, MapPin, FileSignature } from "lucide-react";
+import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
@@ -20,6 +21,7 @@ export interface ClienteJuicio {
   pago50_monto: number | null; pago50_fecha: string | null;
   finiquito_monto: number | null; finiquito_fecha: string | null;
   total: number | null; pagado: number | null; saldo: number | null; estado: string | null;
+  formalizacion_solicitada?: boolean | null; formalizacion_tipo?: string | null; formalizacion_id?: string | null;
 }
 
 const DOCS: { k: keyof ClienteJuicio; label: string }[] = [
@@ -38,6 +40,8 @@ export function ClientesJuicio({ casoId }: { casoId: string }) {
   const [clientes, setClientes] = useState<ClienteJuicio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [solicitar, setSolicitar] = useState<ClienteJuicio | null>(null);
+  const recargar = () => fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*&caso_id=eq.${casoId}&en_papelera=eq.false&order=nombre.asc`, { headers }).then((r) => (r.ok ? r.json() : [])).then(setClientes).catch(() => {});
 
   useEffect(() => {
     if (!casoId) { setCargando(false); return; }
@@ -51,6 +55,18 @@ export function ClientesJuicio({ casoId }: { casoId: string }) {
 
   if (cargando) return <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando clientes…</div>;
   if (clientes.length === 0) return <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">Este juicio no tiene clientes/garantías cargados todavía.</div>;
+
+  const botonFormalizar = (c: ClienteJuicio) => (
+    c.formalizacion_solicitada ? (
+      <span className="mt-2 inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+        <Check className="h-3 w-3" /> Formalización solicitada{c.formalizacion_tipo ? ` · ${c.formalizacion_tipo}` : ""}
+      </span>
+    ) : (
+      <button onClick={() => setSolicitar(c)} className="mt-2 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: "var(--teal)" }}>
+        <FileSignature className="h-3.5 w-3.5" /> Solicitar formalización
+      </button>
+    )
+  );
 
   const ficha = (c: ClienteJuicio) => (
     <div className="mt-2 grid gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-2">
@@ -119,10 +135,15 @@ export function ClientesJuicio({ casoId }: { casoId: string }) {
                 <span className="text-muted-foreground">Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(c.saldo)}</b></span>
               </div>
               {open && ficha(c)}
+              {open && botonFormalizar(c)}
             </div>
           );
         })}
       </div>
+
+      {solicitar && (
+        <SolicitarFormalizacion cliente={solicitar} casoId={casoId} onClose={() => setSolicitar(null)} onHecho={recargar} />
+      )}
     </div>
   );
 }
