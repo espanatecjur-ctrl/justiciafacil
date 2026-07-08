@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Users, Loader2, Eye, Check, X, MapPin, FileSignature } from "lucide-react";
+import { Users, Loader2, Eye, MapPin, FileSignature, Check } from "lucide-react";
+import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
-const fmtFecha = (s: string | null) => {
-  if (!s) return "—";
-  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : s;
-};
 
 export interface ClienteJuicio {
   id: string; folio: string | null; nombre: string | null; domicilio_garantia: string | null;
@@ -68,34 +64,6 @@ export function ClientesJuicio({ casoId }: { casoId: string }) {
     )
   );
 
-  const ficha = (c: ClienteJuicio) => (
-    <div className="mt-2 grid gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-2">
-      <div>
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Documentos</p>
-        <div className="flex flex-wrap gap-1.5">
-          {DOCS.map((d) => (
-            <span key={d.k} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${c[d.k] ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-background text-muted-foreground"}`}>
-              {c[d.k] ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} {d.label}
-            </span>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Firmó cambio de contrato: <b className="text-foreground">{c.firmo_cambio ? "Sí" : "No"}</b></p>
-      </div>
-      <div>
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pagos</p>
-        <table className="w-full text-[11px]">
-          <tbody className="[&_td]:py-0.5">
-            <tr><td className="text-muted-foreground">Apartado</td><td className="text-right font-medium">{fmtMXN(c.apartado_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.apartado_fecha)}</td></tr>
-            <tr><td className="text-muted-foreground">Pago 35%</td><td className="text-right font-medium">{fmtMXN(c.pago35_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.pago35_fecha)}</td></tr>
-            <tr><td className="text-muted-foreground">Pago 50%</td><td className="text-right font-medium">{fmtMXN(c.pago50_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.pago50_fecha)}</td></tr>
-            <tr><td className="text-muted-foreground">Finiquito</td><td className="text-right font-medium">{fmtMXN(c.finiquito_monto)}</td><td className="pl-2 text-right text-muted-foreground">{fmtFecha(c.finiquito_fecha)}</td></tr>
-            <tr className="border-t border-border"><td className="pt-1 font-semibold">Saldo</td><td className="pt-1 text-right font-bold text-[color:var(--teal)]">{fmtMXN(c.saldo)}</td><td /></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-3">
       {/* resumen */}
@@ -134,7 +102,7 @@ export function ClientesJuicio({ casoId }: { casoId: string }) {
                 <span className="text-muted-foreground">Pagado: <b className="text-foreground">{fmtMXN(c.pagado)}</b></span>
                 <span className="text-muted-foreground">Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(c.saldo)}</b></span>
               </div>
-              {open && ficha(c)}
+              {open && <ClienteFichaPanel cliente={c} onUpdated={recargar} />}
               {open && botonFormalizar(c)}
             </div>
           );
