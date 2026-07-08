@@ -518,7 +518,181 @@ EL(LA) NOTARIO(A) PÚBLICO(A)  ·  Firma y sello de autorizar
 
 NOTA — Machote de apoyo para revisión por notario y abogado. Los espacios «____» los completa la notaría (datos de la notaría, número de acta, volumen/folio y fecha) y las partes (generales del cesionario, precio y forma de pago). Plaza fija: Tlajomulco de Zúñiga, Jalisco. Fundamento: Ley del Notariado del Estado de Jalisco y Código Civil del Estado de Jalisco.`;
 
+
+// ---- Instrucción notarial (carta de instrucción · per-cliente) ----
+const instruccionNotarialCampos: PlantillaCampo[] = [
+  ...clienteApoderadoCampos,
+  { id: "manzana", label: "Manzana", tipo: "text", requerido: true },
+  { id: "lote", label: "Lote", tipo: "text", requerido: true },
+  { id: "folioReal", label: "Folio real (registral)", tipo: "text" },
+  { id: "superficie", label: "Superficie (m²)", tipo: "text" },
+  { id: "notario", label: "Notario (número)", tipo: "text" },
+  { id: "dia", label: "Día", tipo: "text" },
+  { id: "mes", label: "Mes", tipo: "text" },
+  { id: "oficioNum", label: "Número de oficio", tipo: "text" },
+];
+const instruccionNotarialCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
+Inmuebles Accesibles
+Oficina Guadalajara: Calle Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco · Tel. 33 3712 4705
+CARTA DE INSTRUCCIÓN NOTARIAL PARA FORMALIZACIÓN DE CESIÓN
+Manzana "{{manzana}}", Lote {{lote}} · Fraccionamiento Residencial San Antonio · Tlajomulco de Zúñiga, Jalisco
+AVISO: Este documento es una carta de instrucción para la elaboración y firma de la cesión. NO constituye cotización de honorarios; los costos se detallan en el oficio de cotización que se acompaña por separado.
+Guadalajara, Jalisco, a {{dia}} de {{mes}} de 2026.
+Oficio (Carta de Instrucción): DIIPA/CI-{{manzana}}{{lote}}/{{oficioNum}}/2026
+C. NOTARIO(A) PÚBLICO(A) No. {{notario}} DEL ESTADO DE JALISCO,
+CON ADSCRIPCIÓN EN TLAJOMULCO DE ZÚÑIGA. P R E S E N T E.
+Por medio del presente, en mi carácter de Administradora Única y Apoderada Legal de DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V. («DIIPA»), giro a usted la presente carta de instrucción para que se sirva elaborar y, en su caso, protocolizar la ACTA DESTACADA DE CONTRATO DE CESIÓN ONEROSA DE DERECHOS ADJUDICATARIOS Y DERECHOS DERIVADOS DE LA EJECUCIÓN DE SENTENCIA, que celebrarán DIIPA, como PARTE CEDENTE, y la persona identificada en el punto III, como PARTE CESIONARIA, respecto de la garantía que se precisa a continuación.
+I. Gestión de formalización a cargo de DIIPA
+Se hace de su conocimiento que DIIPA lleva a su cargo la gestión integral de formalización de esta cesión, la cual consiste en:
+a) Conseguir y designar la notaría que llevará el acto y coordinar con su despacho la fecha de firma.
+b) Citar a la parte cesionaria a la firma, comunicándole únicamente la fecha, hora y lugar de la cita.
+c) Dar seguimiento a la cesión hasta su conclusión: firma del acta, entero de impuestos y derechos, expedición de testimonio e inscripción registral.
+Por dicha gestión, DIIPA percibe un honorario del 5% (cinco por ciento) sobre el valor de la operación, más IVA (16%), ajeno al arancel notarial. De forma independiente, y a cargo de la parte cesionaria, la cesión de derechos litigiosos y derivados de la ejecución de sentencia causa el Impuesto sobre Negocios Jurídicos del Estado de Jalisco a la tasa del 2% sobre el valor (art. 10 fr. III de la Ley de Ingresos del Estado de Jalisco), que la notaría retiene y entera. Ambos conceptos se desglosan en el oficio de cotización respectivo.
+II. Identificación de la garantía
+Manzana "{{manzana}}", Lote {{lote}} del Fraccionamiento Residencial San Antonio, Municipio de Tlajomulco de Zúñiga, Estado de Jalisco, inscrito bajo el folio real número {{folioReal}}, con superficie de {{superficie}} m², con las medidas y colindancias que constan en el acta respectiva y su anexo.
+III. Origen del derecho (tracto)
+Los derechos derivan del Juicio Ordinario Mercantil 1393/2017, del Juzgado Octavo de Jurisdicción Concurrente del Primer Distrito Judicial en Monterrey, Nuevo León, donde se adjudicó por remate judicial la garantía, resolución que causó ejecutoria. Su ejecución se tramita mediante el exhorto 82/2026, ante el Juzgado Primero de lo Civil de Tlajomulco de Zúñiga, Jalisco. La titularidad de DIIPA consta en la escritura número 854, de 13 de febrero de 2025, ante el Notario Público 293 de Culiacán, Sinaloa, sancionada judicialmente el 31 de marzo de 2025.
+IV. Parte cesionaria (a asentar con las identificaciones exhibidas)
+Nombre: ««____»»; nacionalidad: ««____»»; RFC: ««____»»; CURP: ««____»»; domicilio: ««____»»; estado civil: ««____»».
+V. Precio de la cesión
+$ ««____»» (««____»» pesos 00/100 M.N.), cuyo pago total acreditará la parte cesionaria previo a la firma, en los términos del punto VI, inciso c).
+VI. Instrucciones específicas
+a) No se hace entrega física del inmueble; la posesión material y jurídica se rige por la ejecutoria y el exhorto 82/2026.
+b) Los gastos, impuestos (incluido el Impuesto sobre Transmisiones Patrimoniales / traslación de dominio), derechos de inscripción y honorarios notariales serán por cuenta exclusiva de la parte cesionaria.
+c) Previo a la firma, la parte cesionaria acreditará el pago total del precio; sin dicha acreditación no se procederá a firmar.
+d) Se solicita remitir el proyecto de acta al correo erikapaola@diipadesarrollos.com para revisión y aprobación antes de la firma.
+e) La presente instrucción tiene vigencia de 30 (treinta) días naturales desde su emisión.
+VII. Documentación que se acompaña
+(1) Actuaciones del expediente 1393/2017 y del exhorto 82/2026; (2) escritura 854 de cesión a favor de DIIPA; (3) personalidad de DIIPA (escritura 1,809, RFC DII2204206J5) y del poder del apoderado (escritura 2,388, Notaría 234 de Culiacán); (4) identificaciones y generales de la parte cesionaria.
+Sin otro particular, agradezco su atención y quedo a sus órdenes.
+A T E N T A M E N T E
+«____»
+ERIKA PAOLA ESPAÑA MÉNDEZ
+Administradora Única y Apoderada Legal
+Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V.
+erikapaola@diipadesarrollos.com · WhatsApp 33 1881 7553
+NOTA — Documento de apoyo para revisión por notario y abogado; no sustituye el criterio del fedatario. Los espacios ««____»» los completan la notaría y las partes. Plaza: Tlajomulco de Zúñiga, Jalisco.`;
+
+// ---- Solicitud de cotización notarial ----
+const solicitudCotizacionCampos: PlantillaCampo[] = [
+  ...clienteApoderadoCampos,
+  { id: "fecha", label: "Fecha", tipo: "text", ayuda: "Ej. 8 de julio de 2026" },
+  { id: "notario", label: "Notario (número)", tipo: "text" },
+];
+const solicitudCotizacionCuerpo = `SOLICITUD DE COTIZACIÓN NOTARIAL
+Tlajomulco de Zúñiga, Jalisco, a {{fecha}}.
+C. NOTARIO(A) PÚBLICO(A) No. {{notario}}. P R E S E N T E.
+Por medio del presente, DIIPA solicita atentamente cotización formal, conforme al Arancel Notarial vigente del Estado de Jalisco, para la formalización de las cesiones onerosas de derechos adjudicatarios respecto de los inmuebles del Fraccionamiento Residencial San Antonio, en Tlajomulco de Zúñiga, Jalisco, precisando por cada operación los conceptos siguientes:
+•  Honorarios por la autorización del acta de cesión (Arancel, art. 133 fr. I), tomando como base el valor mayor entre el fiscal, el precio o el avalúo.
+•  Honorarios por la cancelación y liberación del gravamen (hipoteca/fideicomiso) — fr. XXII.
+•  Impuesto sobre Transmisiones Patrimoniales (traslación de dominio) y derechos de inscripción registral, senalando montos aproximados o base de cálculo.
+•  Expedición de testimonios y copias certificadas (fr. XI y XII), considerando dos copias certificadas por operación.
+•  Cualquier otro concepto, gasto o gestión que la Notaría estime aplicable.
+Se solicita la cotización por partida individual y por paquete, así como los tiempos estimados de entrega. Quedamos atentos.
+A T E N T A M E N T E
+«____»
+ERIKA PAOLA ESPAÑA MÉNDEZ, en su carácter de Administradora Única y Apoderada Legal
+En representación de DIIPA`;
+
+// ---- Oficio de solicitud de servicios notariales ----
+const oficioServiciosCampos: PlantillaCampo[] = [
+  ...clienteApoderadoCampos,
+  { id: "dia", label: "Día", tipo: "text" },
+  { id: "mes", label: "Mes", tipo: "text" },
+  { id: "oficioNum", label: "Número de oficio", tipo: "text" },
+];
+const oficioServiciosCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
+Inmuebles Accesibles
+Oficina Guadalajara: Calle Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco · Tel. 33 3712 4705
+Guadalajara, Jalisco, a {{dia}} de {{mes}} de 2026.
+Oficio: DIIPA/{{oficioNum}}/2026
+Asunto: Solicitud de servicios notariales y cotización.
+C. NOTARIO(A) PÚBLICO(A) TITULAR
+P R E S E N T E.
+Por medio del presente, en mi carácter de Apoderada Legal y Administradora Única de DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V. («DIIPA»), me dirijo a usted de la manera más atenta para solicitar los servicios de la notaría a su digno cargo y, previa revisión de la documentación que se anexa, la emisión de una cotización de honorarios y gastos a la brevedad posible.
+I. De la sociedad.
+DIIPA es una sociedad mercantil constituida mediante escritura pública número 1,809, Volumen II, Libro 4, de fecha 20 de abril de 2022, otorgada ante la fe del Lic. Luis Manuel Bouciéguez Velarde, Notario Público número 256 de Mazatlán, Sinaloa, e inscrita en el Registro Público de Comercio de Mazatlán bajo el Folio Mercantil Electrónico N-2022029617, con domicilio social en la Ciudad de Mazatlán, Sinaloa.
+II. De la representación y los apoderados.
+•  La suscrita, Erika Paola España Méndez, comparece como Administradora Única y Apoderada Legal de la sociedad, conforme a la escritura constitutiva antes citada.
+•  El C. Milton Castro Cervantes funge como Apoderado General para Pleitos y Cobranzas, reconocido dentro del procedimiento judicial que más adelante se describe y facultado para suscribir las cesiones correspondientes, conforme a la escritura pública número 2,388 otorgada ante el Lic. Eduardo Antonio Rocha Pacheco, Notario Público número 234 de Culiacán, Sinaloa.
+•  Lo anterior, sin perjuicio de los demás apoderados designados en la escritura constitutiva, la cual se anexa para su revisión.
+III. Del estado actual del expediente.
+Los derechos objeto de las operaciones derivan del Juicio Ordinario Mercantil número 1393/2017, radicado ante el Juzgado Octavo de Jurisdicción Concurrente del Primer Distrito Judicial del Estado de Nuevo León, en el que DIIPA obtuvo adjudicación por remate judicial de diversos lotes ubicados en el Fraccionamiento Residencial San Antonio, en Tlajomulco de Zúñiga, Jalisco. Para su ejecución se libró el exhorto número 82/2026, turnado al Juzgado Primero de lo Civil de Tlajomulco de Zúñiga, Jalisco. A la fecha, el procedimiento registra: (i) el reconocimiento del Apoderado General para Pleitos y Cobranzas de la sociedad; (ii) el desechamiento de los incidentes de nulidad promovidos por la contraparte; y (iii) la aceptación y reconsideración de los honorarios del perito valuador designado, etapa que antecede al señalamiento de la fecha de desalojo.
+IV. De los servicios solicitados.
+Atentamente solicito a usted:
+•  La formalización y, en su caso, protocolización de las cesiones de derechos litigiosos y adjudicatarios, así como la firma de los contratos respectivos.
+•  La posterior escrituración de las garantías adjudicadas a favor de los cesionarios.
+•  Los trámites notariales y registrales que correspondan. Por tratarse de una operación en conjunto (en masa), se requiere conocer sus honorarios y tiempos estimados.
+V. De la cotización.
+Solicito que la cotización de honorarios y gastos se gire a la brevedad posible a los siguientes datos de contacto:
+•  Correo: erikapaola@diipadesarrollos.com
+•  WhatsApp: 33 1881 7553
+•  Oficina Guadalajara: Calle Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco · Tel. 33 3712 4705
+VI. Anexos.
+Para su revisión se acompañan: (1) copia del expediente y las constancias procesales del juicio 1393/2017 y del exhorto 82/2026; (2) las escrituras de adjudicación de los inmuebles de Tlajomulco; (3) la escritura constitutiva y documentos de la sociedad; y (4) la escritura del poder del apoderado.
+Sin otro particular, agradezco de antemano su atención y quedo a sus órdenes para cualquier aclaración.
+A T E N T A M E N T E
+«____»
+Erika Paola España Méndez
+Apoderada Legal y Administradora Única
+Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V.`;
+
+// ---- Cotización notarial (marco de cálculo · valores y % a mano) ----
+const cotizacionMarcoCampos: PlantillaCampo[] = [
+  { id: "valorBase", label: "Valor base de la operación (MXN)", tipo: "text", requerido: true, ayuda: "Ej. 235,000.00" },
+  { id: "gestionDiipa", label: "Gestión DIIPA (5% + IVA)", tipo: "text", ayuda: "Captura a mano" },
+  { id: "totalEstimado", label: "Total estimado", tipo: "text", ayuda: "Captura a mano" },
+];
+const cotizacionMarcoCuerpo = `COTIZACIÓN NOTARIAL — MARCO DE CÁLCULO
+Fraccionamiento Residencial San Antonio · Tlajomulco de Zúñiga, Jalisco
+Estimación por operación individual con base en el Arancel Notarial Oficial del Estado de Jalisco 2025 (art. 133). Referencia para un valor de \${{valorBase}}.00; ajustar al valor mayor entre fiscal, precio o avalúo de cada inmueble. Los montos definitivos los fija la notaría.
+Consideraciones: (1) las copias certificadas se presupuestan por dos (una cuenta como dos); (2) el 5% de gestión es honorario de DIIPA, ajeno al arancel notarial; (3) los impuestos y derechos registrales son pagos de terceros a cargo del cesionario que la notaría entera cuando corresponde; (4) las cifras notariales son topes máximos del arancel y pueden variar por el valor real de cada operación.
+NOTA — Marco de referencia, no cotización oficial. La cotización formal la emite la notaría elegida. Fuente: Arancel Notarial Oficial Jalisco 2025 (notariosjalisco.com), art. 133.
+Concepto   Fundamento (Arancel/Ley)   Importe estimado
+Autorización del acta de cesión   Art.133 fr. I: fija $4,636.69 + 2.00% del valor   $9,336.69
+Cancelación/liberación de hipoteca   Art.133 fr. XXII   $1,854.68
+Segundo testimonio (2a copia autorizada)   Art.133 fr. XII   $2,782.02
+Certificación de copias   Art.133 fr. XI   $927.34
+Búsqueda de antecedentes   Art.133 fr. XIV   $927.34
+Subtotal honorarios notariales (aprox.)   Suma de lo anterior   $16,828.07
+Impuesto sobre Transmisiones Patrimoniales   Ley de Ingresos del Municipio — a confirmar   Por confirmar
+Derechos de inscripción en el Registro Público   Arancel registral estatal — a confirmar   Por confirmar
+Gestión DIIPA (5% adicional, no notarial)   Honorario de gestión de DIIPA   5% del monto
+
+Gestión DIIPA (5% + IVA 16%): \${{gestionDiipa}}
+TOTAL ESTIMADO: \${{totalEstimado}}
+(Los importes y porcentajes se capturan/ajustan a mano según la notaría y el valor de cada operación.)`;
+
 export const plantillasDiipa: PlantillaContrato[] = [
+  {
+    tipo: "instruccion_notarial_diipa",
+    nombre: "Instrucción notarial para formalización de cesión (per-cliente)",
+    descripcion: "Carta de instrucción de DIIPA a la notaría para formalizar la cesión de una unidad. Autollenable con manzana, lote, folio real, superficie y apoderado.",
+    campos: instruccionNotarialCampos,
+    cuerpo: instruccionNotarialCuerpo,
+  },
+  {
+    tipo: "solicitud_cotizacion_diipa",
+    nombre: "Solicitud de cotización notarial",
+    descripcion: "Oficio de DIIPA a la notaría pidiendo cotización formal conforme al Arancel Notarial de Jalisco.",
+    campos: solicitudCotizacionCampos,
+    cuerpo: solicitudCotizacionCuerpo,
+  },
+  {
+    tipo: "oficio_servicios_diipa",
+    nombre: "Oficio de solicitud de servicios notariales",
+    descripcion: "Oficio general de DIIPA presentando la operación en masa y solicitando servicios y cotización notarial.",
+    campos: oficioServiciosCampos,
+    cuerpo: oficioServiciosCuerpo,
+  },
+  {
+    tipo: "cotizacion_marco_diipa",
+    nombre: "Cotización notarial (marco de cálculo)",
+    descripcion: "Marco de cálculo de honorarios notariales (Arancel Jalisco 2025). Los importes y porcentajes se capturan/ajustan a mano por operación.",
+    campos: cotizacionMarcoCampos,
+    cuerpo: cotizacionMarcoCuerpo,
+  },
+
   {
     tipo: "cesion_adjudicataria",
     nombre: "Cesión de derechos adjudicatarios (acta destacada · Jalisco)",
