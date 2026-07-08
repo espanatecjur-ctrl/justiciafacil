@@ -662,6 +662,7 @@ function UCP() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Folio / Crédito</TableHead>
                   <TableHead>Expediente</TableHead>
                   <TableHead>Garantía</TableHead>
                   <TableHead>Cliente</TableHead>
@@ -677,6 +678,7 @@ function UCP() {
                   const { elegible, d, r, info, ver } = derivar(c);
                   return (
                     <TableRow key={c.id}>
+                      <TableCell><div className="text-xs font-semibold text-[color:var(--teal)]">{c.folio || "—"}</div><div className="text-xs text-muted-foreground">Crédito: <span className="font-medium text-foreground">{(c as any).no_credito || "sin crédito"}</span></div></TableCell>
                       <TableCell className="font-medium">{c.expediente || "—"}<div className="text-xs font-normal text-muted-foreground">{c.juzgado || ""}</div>{avisoSinAvance(c) && <div className="mt-0.5">{avisoSinAvance(c)}</div>}</TableCell>
                       <TableCell className="max-w-[200px] text-xs">{c.direccion_garantia || "—"}<div className="text-muted-foreground">{c.entidad || ""}</div></TableCell>
                       <TableCell className="text-xs">{c.cliente_nombre || c.cliente_codigo || "—"}</TableCell>
@@ -701,6 +703,7 @@ function UCP() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="break-words text-sm font-semibold">{c.expediente || "—"}</p>
+                      <p className="text-[11px]"><span className="font-semibold text-[color:var(--teal)]">{c.folio || "sin folio"}</span> · Crédito: {(c as any).no_credito || "—"}</p>
                       {c.juzgado && <p className="break-words text-[11px] text-muted-foreground">{c.juzgado}</p>}
                     </div>
                     {menuBtn(c)}
