@@ -11,7 +11,14 @@ const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
 
 interface ClienteMin {
   id: string; nombre: string | null; domicilio_garantia: string | null; folio: string | null;
+  doc_ine?: boolean | null; doc_comprobante?: boolean | null; doc_acta_nac?: boolean | null;
+  doc_curp?: boolean | null; doc_csf?: boolean | null; doc_acta_matri?: boolean | null;
 }
+
+const DOCS_CHK: { k: keyof ClienteMin; label: string }[] = [
+  { k: "doc_ine", label: "INE" }, { k: "doc_comprobante", label: "Comprobante" }, { k: "doc_acta_nac", label: "Acta nac." },
+  { k: "doc_curp", label: "CURP" }, { k: "doc_csf", label: "CSF" }, { k: "doc_acta_matri", label: "Acta matri." },
+];
 
 export function SolicitarFormalizacion({ cliente, casoId, onClose, onHecho }: {
   cliente: ClienteMin; casoId: string; onClose: () => void; onHecho?: () => void;
@@ -20,6 +27,7 @@ export function SolicitarFormalizacion({ cliente, casoId, onClose, onHecho }: {
   const [tipo, setTipo] = useState(TIPOS_FORMALIZACION[TIPOS_FORMALIZACION.length - 1]); // Escritura por defecto
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const faltantes = DOCS_CHK.filter((d) => !cliente[d.k]).map((d) => d.label);
 
   const enviar = async () => {
     setGuardando(true); setErr(null);
@@ -31,7 +39,7 @@ export function SolicitarFormalizacion({ cliente, casoId, onClose, onHecho }: {
         direccion_garantia: cliente.domicilio_garantia || null,
         id_interno: cliente.folio || null,
         nombre_cesionario: cliente.nombre || null,
-        observaciones: `Cliente: ${cliente.nombre || "—"} · Folio ${cliente.folio || "—"} · Solicitud de formalización desde el CRM`,
+        observaciones: `Cliente: ${cliente.nombre || "—"} · Folio ${cliente.folio || "—"} · Tipo: ${tipo}` + (faltantes.length ? ` · ⚠ DOCUMENTOS FALTANTES: ${faltantes.join(", ")}` : " · Documentos completos"),
         estado_tramite: "En proceso",
         en_papelera: false,
       });
@@ -75,6 +83,22 @@ export function SolicitarFormalizacion({ cliente, casoId, onClose, onHecho }: {
                 </button>
               ))}
             </div>
+          </div>
+          {/* Checklist de documentos */}
+          <div>
+            <p className="mb-1.5 text-xs font-medium">Documentos del cliente</p>
+            <div className="flex flex-wrap gap-1.5">
+              {DOCS_CHK.map((d) => (
+                <span key={d.k} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${cliente[d.k] ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`}>
+                  {cliente[d.k] ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} {d.label}
+                </span>
+              ))}
+            </div>
+            {faltantes.length > 0 ? (
+              <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">⚠ Faltan documentos: <b>{faltantes.join(", ")}</b>. Se registrará la formalización con esta observación.</p>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-emerald-700">✓ Documentos completos.</p>
+            )}
           </div>
           {err && <p className="text-xs text-red-600">{err}</p>}
           <p className="text-[11px] text-muted-foreground">Se creará el trámite en UFC como “En proceso” y te llevaré a su ficha para continuar.</p>
