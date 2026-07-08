@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, FileSignature, FilePlus, Loader2, MapPin } from "lucide-react";
-import { listarFormalizaciones, crearFormalizacion, listarCasosVinculables, TIPOS_PROCESO, TIPOS_CONTRATO, type Formalizacion } from "@/lib/formalizacion";
+import { Search, FileSignature, FilePlus, Loader2, MapPin, MoreVertical, Eye, Archive, Trash2 } from "lucide-react";
+import { listarFormalizaciones, crearFormalizacion, listarCasosVinculables, moverPapeleraFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, type Formalizacion } from "@/lib/formalizacion";
 import type { CasoJuridico } from "@/lib/supabase";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 export const Route = createFileRoute("/ufc")({
   head: () => ({ meta: [{ title: "UFC · Formalizaciones — JusticiaFácil" }] }),
@@ -27,6 +28,29 @@ function UFC() {
     listarFormalizaciones().then(setFilas).finally(() => setCargando(false));
   };
   useEffect(cargar, []);
+
+  // menú de 3 puntitos por fila
+  const [menuF, setMenuF] = useState<{ id: string; x: number; y: number } | null>(null);
+  useEffect(() => {
+    const fn = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest("[data-menu-ufc]")) setMenuF(null); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+  const hdrs = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+  const archivar = async (f: Formalizacion) => {
+    if (!f.id) return;
+    if (!confirm(`¿Archivar la formalización ${f.id_interno || f.expediente || ""}?\n\nSale del registro y se puede recuperar después.`)) return;
+    await moverPapeleraFormalizacion(f.id); cargar();
+  };
+  const eliminar = async (f: Formalizacion) => {
+    if (!f.id) return;
+    if (!confirm(`¿ELIMINAR de forma permanente la formalización ${f.id_interno || f.expediente || ""}?\n\nEsta acción NO se puede deshacer.`)) return;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/formalizacion?id=eq.${f.id}`, { method: "DELETE", headers: hdrs });
+      if (!r.ok) throw new Error(String(r.status));
+      cargar();
+    } catch { alert("No se pudo eliminar."); }
+  };
 
   const filtradas = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -76,6 +100,7 @@ function UFC() {
                 <th className="px-4 py-3">Expediente</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Etapa a seguir</th>
+                <th className="px-2 py-3 w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -89,16 +114,36 @@ function UFC() {
                   <td className="px-4 py-3">{f.expediente || "—"}<p className="text-xs text-muted-foreground">{f.juzgado ? f.juzgado.slice(0, 30) + "…" : ""}</p></td>
                   <td className="px-4 py-3"><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{f.estado_tramite || "—"}</span></td>
                   <td className="px-4 py-3 text-muted-foreground">{f.etapa_a_seguir || "—"}</td>
+                  <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div data-menu-ufc className="relative inline-block">
+                      <button onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenuF(menuF?.id === f.id ? null : { id: f.id!, x: r.right, y: r.bottom }); }} className="rounded-md p-1.5 hover:bg-muted" aria-label="Acciones"><MoreVertical className="h-4 w-4" /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filtradas.length === 0 && !cargando && (
-                <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Sin formalizaciones. Toca "Nueva formalización" para agregar.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Sin formalizaciones. Toca "Nueva formalización" para agregar.</td></tr>
               )}
-              {cargando && (<tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>)}
+              {cargando && (<tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>)}
             </tbody>
           </table>
         </div>
       </Card>
+
+      {/* menú flotante de acciones (3 puntitos) */}
+      {menuF && (() => {
+        const f = filas.find((x) => x.id === menuF.id);
+        if (!f) return null;
+        return (
+          <div data-menu-ufc onClick={(e) => e.stopPropagation()} className="fixed z-50 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl"
+            style={{ top: menuF.y + 4, left: Math.max(8, menuF.x - 208) }}>
+            <button onClick={() => { setMenuF(null); navigate({ to: "/ufc-ficha", search: { id: f.id } as any }); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"><Eye className="h-4 w-4" /> Ver ficha</button>
+            <button onClick={() => { setMenuF(null); archivar(f); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-4 w-4" /> Archivar</button>
+            <div className="my-1 border-t border-border" />
+            <button onClick={() => { setMenuF(null); eliminar(f); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-muted"><Trash2 className="h-4 w-4" /> Eliminar</button>
+          </div>
+        );
+      })()}
 
       {nuevoOpen && <NuevaFormalizacion onClose={() => setNuevoOpen(false)} onCreada={(nf) => { setNuevoOpen(false); if (nf?.id) navigate({ to: "/ufc-ficha", search: { id: nf.id } as any }); else cargar(); }} />}
     </div>
