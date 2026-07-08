@@ -93,22 +93,42 @@ export function CarpetaDriveVinculada({
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
-  // sincronizar (copiar Drive → almacén del sistema)
+  // Guardar copia fija: copia TODOS los documentos de la carpeta al almacén
+  // propio del sistema (Supabase Storage), archivados por expediente/crédito.
+  // Le da vueltas solo — de a 8 por tanda — hasta que no quede nada pendiente,
+  // así queda en UN SOLO clic (antes había que picarle varias veces).
   const [sincro, setSincro] = useState(false);
   const [msgSincro, setMsgSincro] = useState<string | null>(null);
   const sincronizar = async () => {
-    if (!carpetaId) return;
-    setSincro(true); setMsgSincro(null);
-    const r = await sincronizarCarpeta(caso.id, carpetaId);
-    setSincro(false);
-    if (!r.ok) { setMsgSincro("⚠️ " + (r.error || "No se pudo sincronizar.")); return; }
-    const partes = [`Copiados: ${r.copiados ?? 0}`];
-    if ((r.restantes ?? 0) > 0) partes.push(`faltan ${r.restantes} (dale de nuevo)`);
-    else partes.push("todo al día ✅");
-    if (r.errores && r.errores.length) partes.push(`${r.errores.length} con aviso`);
-    setMsgSincro(partes.join(" · "));
-    if (r.errores && r.errores.length) setMsgSincro((m) => (m || "") + " — 1º: " + r.errores![0]);
-    cargarCopias(); // refresca qué ya está en el almacén
+    if (!carpetaId || sincro) return;
+    setSincro(true);
+    setMsgSincro("Guardando copia fija… preparando");
+    const MAX_VUELTAS = 60; // tope de seguridad (~480 documentos) para no ciclar de más
+    let copiadosTotal = 0;
+    let avisos = 0;
+    let primerError: string | null = null;
+    let corte: string | null = null;
+    try {
+      for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
+        const r = await sincronizarCarpeta(caso.id, carpetaId);
+        if (!r.ok) { corte = r.error || "No se pudo guardar la copia."; break; }
+        const copiadosAhora = r.copiados ?? 0;
+        copiadosTotal += copiadosAhora;
+        if (r.errores && r.errores.length) { avisos += r.errores.length; primerError = primerError || r.errores[0]; }
+        const restantes = r.restantes ?? 0;
+        setMsgSincro(`Guardando copia fija… ${copiadosTotal} copiado${copiadosTotal === 1 ? "" : "s"}${restantes ? ` · faltan ${restantes}` : ""}`);
+        if (restantes <= 0) break;             // ya no queda nada por copiar
+        if (copiadosAhora === 0) { corte = "algunos documentos no se pudieron copiar"; break; } // no avanzó: evita ciclo infinito
+      }
+    } finally {
+      setSincro(false);
+      cargarCopias(); // refresca qué ya está en el almacén (para el indicador)
+    }
+    if (corte && copiadosTotal === 0) { setMsgSincro("⚠️ " + corte); return; }
+    const partes = [`Copia fija lista: ${copiadosTotal} documento${copiadosTotal === 1 ? "" : "s"} guardado${copiadosTotal === 1 ? "" : "s"} en el sistema`];
+    if (avisos) partes.push(`${avisos} con aviso${primerError ? ` (${primerError})` : ""}`);
+    if (corte) partes.push(`se detuvo: ${corte} — dale de nuevo para reintentar`);
+    setMsgSincro("✅ " + partes.join(" · "));
   };
 
   // sugerencias por número (expediente / crédito / gar)
@@ -456,15 +476,15 @@ export function CarpetaDriveVinculada({
             {totalDocs > 0 && (
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorSincro === "verde" ? "bg-emerald-100 text-emerald-800" : colorSincro === "amarillo" ? "bg-amber-100 text-amber-800" : "bg-muted text-muted-foreground"}`}
-                title={colorSincro === "verde" ? "Todo copiado al sistema · este expediente ya no depende de Drive" : `Faltan ${faltanSincro} por sincronizar`}
+                title={colorSincro === "verde" ? "Copia fija completa · este expediente ya no depende de Drive" : `Faltan ${faltanSincro} por guardar en la copia fija`}
               >
                 <span className={`h-2 w-2 rounded-full ${colorSincro === "verde" ? "bg-emerald-500" : colorSincro === "amarillo" ? "bg-amber-500" : "bg-gray-400"}`} />
-                {colorSincro === "verde" ? "Todo en el sistema" : `Sincronizado ${copiadosDocs}/${totalDocs}`}
+                {colorSincro === "verde" ? "Copia fija completa" : `Copia fija ${copiadosDocs}/${totalDocs}`}
               </span>
             )}
             <span className="flex-1" />
             <button onClick={refrescar} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /> Actualizar</button>
-            {puedeVincular && <button onClick={sincronizar} disabled={sincro} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-xs font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10 disabled:opacity-60">{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} Sincronizar documentos</button>}
+            {puedeVincular && <button onClick={sincronizar} disabled={sincro} title="Copia todos los documentos al sistema (deja de depender de Drive)" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60" style={{ background: "#0C5C46" }}>{sincro ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CloudUpload className="h-3.5 w-3.5" />} {sincro ? "Guardando copia fija…" : "Guardar copia fija"}</button>}
             {puedeVincular && <button onClick={() => { if (sugerencias.length === 0) cargarSugerencias(); setEligiendo(true); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Cambiar</button>}
             {docs.length > 0 && (selModo
               ? <button onClick={salirSel} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs text-muted-foreground hover:bg-muted"><X className="h-3.5 w-3.5" /> Cancelar</button>
