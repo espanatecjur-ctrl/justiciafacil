@@ -5,11 +5,8 @@ import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
-import { ClienteGeneralesDrive } from "@/components/cliente-generales-drive";
-import { CarpetasCliente } from "@/components/carpetas-cliente";
-import { resolverEntrada } from "@/lib/drive-explorar";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
-import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home } from "lucide-react";
 
 export const Route = createFileRoute("/cliente")({
   validateSearch: (s: Record<string, unknown>) => ({ nombre: typeof s.nombre === "string" ? s.nombre : "" }),
@@ -21,7 +18,7 @@ const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` 
 const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
 
 interface Cli extends ClienteJuicio {
-  caso_juridico?: { id: string; expediente: string | null; drive_clientes_id?: string | null; drive_clientes_nombre?: string | null } | null;
+  caso_juridico?: { id: string; expediente: string | null } | null;
   formalizacion_solicitada?: boolean | null; formalizacion_tipo?: string | null;
 }
 const DOCS: (keyof ClienteJuicio)[] = ["doc_ine", "doc_comprobante", "doc_acta_nac", "doc_curp", "doc_csf", "doc_acta_matri"];
@@ -36,21 +33,20 @@ function ClientePage() {
   const [abierto, setAbierto] = useState<string | null>(null);
   const [solicitar, setSolicitar] = useState<Cli | null>(null);
 
+  // Búsqueda tolerante: exacto -> amplio por el primer nombre + comparación normalizada
+  // (ignora acentos y la anotación "(Cambio a...)"), para que la encuentre venga de donde venga.
   const cargar = async () => {
     if (!nombre) { setCargando(false); return; }
-    const sel = "select=*,caso_juridico(id,expediente,drive_clientes_id,drive_clientes_nombre)";
-    const base = `cliente_juicio?${sel}&en_papelera=eq.false&order=folio.asc`;
+    const base = `cliente_juicio?select=*,caso_juridico(id,expediente)&en_papelera=eq.false&order=folio.asc`;
     const q = (filtro: string) => fetch(`${SUPABASE_URL}/rest/v1/${base}&${filtro}`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
     const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\(.*$/, "").replace(/\s+/g, " ").trim();
     try {
-      // 1) exacto (rápido)
-      let rows = await q(`nombre=eq.${encodeURIComponent(nombre)}`);
-      // 2) amplio por el primer nombre + comparación normalizada (tolera acentos y "(Cambio a…)")
+      let rows: Cli[] = await q(`nombre=eq.${encodeURIComponent(nombre)}`);
       if (rows.length === 0) {
         const tok = nombre.split(/\s+/)[0] || nombre;
-        const cand: any[] = await q(`nombre=ilike.*${encodeURIComponent(tok)}*`);
+        const cand: Cli[] = await q(`nombre=ilike.*${encodeURIComponent(tok)}*`);
         const objetivo = norm(nombre);
-        rows = cand.filter((r) => { const n = norm(r.nombre); return n === objetivo || n.startsWith(objetivo) || objetivo.startsWith(n); });
+        rows = cand.filter((r) => { const n = norm(r.nombre || ""); return n === objetivo || n.startsWith(objetivo) || objetivo.startsWith(n); });
       }
       setGars(rows);
     } finally {
@@ -62,21 +58,6 @@ function ClientePage() {
   const totalValor = useMemo(() => gars.reduce((a, c) => a + (Number(c.total) || 0), 0), [gars]);
   const totalSaldo = useMemo(() => gars.reduce((a, c) => a + (Number(c.saldo) || 0), 0), [gars]);
   const juicio = gars[0]?.caso_juridico;
-
-  const [linkCarpeta, setLinkCarpeta] = useState("");
-  const [conectando, setConectando] = useState(false);
-  const [errCarpeta, setErrCarpeta] = useState<string | null>(null);
-  const conectarCarpeta = async () => {
-    if (!juicio?.id || !linkCarpeta.trim()) return;
-    setConectando(true); setErrCarpeta(null);
-    const r = await resolverEntrada(linkCarpeta.trim());
-    if (!r.ok || !r.item?.id) { setErrCarpeta(r.error || "No se pudo leer ese enlace de Drive."); setConectando(false); return; }
-    await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${juicio.id}`, {
-      method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ drive_clientes_id: r.item.id, drive_clientes_nombre: r.item.name }),
-    });
-    setConectando(false); setLinkCarpeta(""); cargar();
-  };
 
   return (
     <div className="space-y-4">
@@ -138,38 +119,6 @@ function ClientePage() {
                 );
               })}
             </div>
-          </Card>
-
-          {/* Carpetas de Drive del cliente (una o varias) con copia fija */}
-          {juicio?.id && (
-            <Card className="overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-                <FolderOpen className="h-4 w-4 text-[color:var(--teal)]" />
-                <h3 className="text-sm font-semibold">Documentos del cliente (carpetas de Drive)</h3>
-              </div>
-              <CarpetasCliente casoId={juicio.id} clienteNombre={nombre} />
-            </Card>
-          )}
-
-          {/* Generales del cliente desde la carpeta Drive «CLIENTES» */}
-          <Card className="overflow-hidden">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-              <FolderOpen className="h-4 w-4 text-[color:var(--teal)]" />
-              <h3 className="text-sm font-semibold">Generales del cliente (Drive «CLIENTES»)</h3>
-              {juicio?.drive_clientes_nombre && <span className="text-[11px] text-muted-foreground">· {juicio.drive_clientes_nombre}</span>}
-            </div>
-            {juicio?.drive_clientes_id ? (
-              <ClienteGeneralesDrive clienteNombre={nombre} clientesFolderId={juicio.drive_clientes_id} />
-            ) : (
-              <div className="space-y-2 p-4">
-                <p className="text-xs text-muted-foreground">Pega el enlace de la carpeta <b>«CLIENTES»</b> de Drive (la que compartiste con el robot). Se guardará para este juicio y buscará las generales de cada cliente por coincidencia de nombre.</p>
-                <div className="flex flex-wrap gap-2">
-                  <input value={linkCarpeta} onChange={(e) => setLinkCarpeta(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" className="min-w-0 flex-1 rounded-md border border-input px-2 py-1.5 text-sm" />
-                  <button onClick={conectarCarpeta} disabled={conectando || !linkCarpeta.trim()} className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>{conectando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />} Conectar carpeta</button>
-                </div>
-                {errCarpeta && <p className="text-xs text-amber-700">{errCarpeta}</p>}
-              </div>
-            )}
           </Card>
         </>
       )}
