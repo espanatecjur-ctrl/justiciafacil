@@ -445,6 +445,7 @@ function ContratosExistentes({ estados, vacio }: { estados: string[]; vacio: str
 
 function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => void }) {
   const [abierto, setAbierto] = useState(false);
+  const [ver, setVer] = useState(false);
   const navigate = useNavigate();
 
   const reelaborar = () => {
@@ -464,7 +465,10 @@ function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => vo
       {abierto && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+          <div className="absolute right-0 z-20 mt-1 w-52 rounded-md border border-border bg-white py-1 shadow-lg">
+            <button onClick={() => { setAbierto(false); setVer(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-[color:var(--teal)] hover:bg-muted">
+              <Eye className="h-3.5 w-3.5" /> Mirar contrato elaborado
+            </button>
             <button onClick={reelaborar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
               <PenLine className="h-3.5 w-3.5" /> Reelaborar
             </button>
@@ -484,6 +488,27 @@ function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => vo
             )}
           </div>
         </>
+      )}
+
+      {ver && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/40 p-4" onClick={() => setVer(false)}>
+          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold" title={c.nombre_documento || c.titulo || ""}>{c.nombre_documento || c.titulo || "Contrato elaborado"}</h3>
+                <p className="text-[11px] text-muted-foreground">{c.folio || ""}{c.nombre_cliente ? ` · ${c.nombre_cliente}` : ""}</p>
+              </div>
+              <button onClick={() => setVer(false)} className="shrink-0 rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-auto p-6">
+              {c.cuerpo ? (
+                <div className="mx-auto max-w-2xl whitespace-pre-wrap text-justify text-[13px] leading-relaxed text-gray-800" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{c.cuerpo}</div>
+              ) : (
+                <p className="text-center text-sm text-muted-foreground">Este contrato no tiene contenido guardado para mostrar.</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
