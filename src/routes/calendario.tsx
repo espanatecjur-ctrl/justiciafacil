@@ -7,7 +7,8 @@ import { ChevronLeft, ChevronRight, Plus, X, Trash2, Check } from "lucide-react"
 import { correoActual } from "@/lib/auth";
 import {
   listarEventosMes, crearEvento, actualizarEvento, eliminarEvento,
-  TIPOS_EVENTO, ESTILO_EVENTO, type Evento,
+  listarColaboradores,
+  TIPOS_EVENTO, ESTILO_EVENTO, type Evento, type Colaborador,
 } from "@/lib/evento-agenda";
 
 export const Route = createFileRoute("/calendario")({
@@ -28,6 +29,15 @@ function Calendario() {
   const [mes, setMes] = useState(ahora.getMonth());
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [editando, setEditando] = useState<Evento | null>(null); // null = modal cerrado
+  const [colabs, setColabs] = useState<Colaborador[]>([]);
+  useEffect(() => { listarColaboradores().then(setColabs); }, []);
+
+  // Mapa correo -> nombre corto (para mostrar a quién está asignada cada tarea).
+  const nombrePorCorreo = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of colabs) if (c.correo) m[c.correo] = (c.nombre || c.correo).split(" ")[0];
+    return m;
+  }, [colabs]);
 
   const recargar = () => { listarEventosMes(anio, mes).then(setEventos); };
   useEffect(recargar, [anio, mes]); // eslint-disable-line
@@ -121,10 +131,11 @@ function Calendario() {
                         key={e.id}
                         onClick={(ev) => { ev.stopPropagation(); setEditando(e); }}
                         className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] ${st.bg} ${st.text} ${hecha ? "line-through opacity-60" : ""}`}
-                        title={e.titulo || ""}
+                        title={`${e.titulo || ""}${e.asignado_a ? ` · para ${nombrePorCorreo[e.asignado_a] || e.asignado_a}` : ""}`}
                       >
                         {e.hora && <span className="font-mono text-[10px] opacity-80">{e.hora}</span>}
                         <span className="truncate">{e.titulo || "(sin título)"}</span>
+                        {e.asignado_a && <span className="ml-auto shrink-0 rounded-full bg-white/60 px-1 text-[9px] font-medium">👤 {nombrePorCorreo[e.asignado_a] || "?"}</span>}
                       </button>
                     );
                   })}
@@ -139,6 +150,7 @@ function Calendario() {
       {editando && (
         <ModalEvento
           evento={editando}
+          colabs={colabs}
           onCerrar={() => setEditando(null)}
           onGuardado={() => { setEditando(null); recargar(); }}
         />
@@ -147,24 +159,26 @@ function Calendario() {
   );
 }
 
-function ModalEvento({ evento, onCerrar, onGuardado }: { evento: Evento; onCerrar: () => void; onGuardado: () => void }) {
+function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento; colabs: Colaborador[]; onCerrar: () => void; onGuardado: () => void }) {
   const [titulo, setTitulo] = useState(evento.titulo ?? "");
   const [tipo, setTipo] = useState(evento.tipo ?? "evento");
   const [fecha, setFecha] = useState(evento.fecha ?? "");
   const [hora, setHora] = useState(evento.hora ?? "");
   const [nota, setNota] = useState(evento.nota ?? "");
   const [estado, setEstado] = useState(evento.estado ?? "pendiente");
+  const [asignadoA, setAsignadoA] = useState(evento.asignado_a ?? "");
   const [ocupado, setOcupado] = useState(false);
   const editar = !!evento.id;
 
   const guardar = async () => {
     if (!titulo.trim() || !fecha) return;
     setOcupado(true);
+    const asignado = asignadoA || null;
     if (editar) {
-      await actualizarEvento(evento.id!, { titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null });
+      await actualizarEvento(evento.id!, { titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado });
     } else {
       const correo = await correoActual();
-      await crearEvento({ titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, creado_por: correo || null });
+      await crearEvento({ titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado, creado_por: correo || null });
     }
     setOcupado(false);
     onGuardado();
@@ -220,6 +234,16 @@ function ModalEvento({ evento, onCerrar, onGuardado }: { evento: Evento; onCerra
             <label className="text-[11px] font-medium text-muted-foreground">Nota (opcional)</label>
             <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
               className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">Asignar a (opcional)</label>
+            <select value={asignadoA} onChange={(e) => setAsignadoA(e.target.value)}
+              className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <option value="">— Sin asignar —</option>
+              {colabs.map((c) => (
+                <option key={c.correo} value={c.correo}>{c.nombre}{c.rol ? ` (${c.rol})` : ""}</option>
+              ))}
+            </select>
           </div>
           {tipo === "tarea" && (
             <label className="flex items-center gap-2 text-sm">
