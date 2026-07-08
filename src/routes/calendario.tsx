@@ -31,6 +31,9 @@ function Calendario() {
   const [editando, setEditando] = useState<Evento | null>(null); // null = modal cerrado
   const [colabs, setColabs] = useState<Colaborador[]>([]);
   useEffect(() => { listarColaboradores().then(setColabs); }, []);
+  const [correoYo, setCorreoYo] = useState<string | null>(null);
+  useEffect(() => { correoActual().then(setCorreoYo); }, []);
+  const [filtro, setFiltro] = useState<"mias" | "todas">("mias"); // por defecto, cada quien ve las suyas
 
   // Mapa correo -> nombre corto (para mostrar a quién está asignada cada tarea).
   const nombrePorCorreo = useMemo(() => {
@@ -44,12 +47,18 @@ function Calendario() {
 
   const hoyStr = fechaStr(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
+  // "Mías" = asignadas a mí o creadas por mí. "Todas" = todo el equipo.
+  const eventosVisibles = useMemo(() => {
+    if (filtro === "todas" || !correoYo) return eventos;
+    return eventos.filter((e) => e.asignado_a === correoYo || e.creado_por === correoYo);
+  }, [eventos, filtro, correoYo]);
+
   // Eventos agrupados por día.
   const porDia = useMemo(() => {
     const m: Record<string, Evento[]> = {};
-    for (const e of eventos) if (e.fecha) (m[e.fecha] ??= []).push(e);
+    for (const e of eventosVisibles) if (e.fecha) (m[e.fecha] ??= []).push(e);
     return m;
-  }, [eventos]);
+  }, [eventosVisibles]);
 
   // Celdas del mes (con huecos al inicio para cuadrar la semana).
   const celdas = useMemo(() => {
@@ -93,6 +102,10 @@ function Calendario() {
           <Button variant="outline" size="sm" onClick={() => { setAnio(ahora.getFullYear()); setMes(ahora.getMonth()); }}>Hoy</Button>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="inline-flex overflow-hidden rounded-md border border-input">
+            <button onClick={() => setFiltro("mias")} className={`px-3 py-1.5 font-medium ${filtro === "mias" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>Mías</button>
+            <button onClick={() => setFiltro("todas")} className={`px-3 py-1.5 font-medium ${filtro === "todas" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground hover:bg-muted"}`}>Todas</button>
+          </div>
           {TIPOS_EVENTO.map((t) => (
             <span key={t} className="inline-flex items-center gap-1.5 text-muted-foreground">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: ESTILO_EVENTO[t].dot }} /> {ESTILO_EVENTO[t].label}
