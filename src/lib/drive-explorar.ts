@@ -155,13 +155,14 @@ export interface Copia {
   storage_path: string;
   nombre: string | null;
   mime: string | null;
+  papelera?: boolean;
 }
 
-/** Copias ya hechas al almacén del sistema para un expediente (por caso). */
+/** Copias VIGENTES (no en papelera) del almacén del sistema, por expediente. */
 export async function listarCopias(casoId: string): Promise<Record<string, Copia>> {
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/drive_copia?select=drive_id,storage_path,nombre,mime&caso_id=eq.${encodeURIComponent(casoId)}`,
+      `${SUPABASE_URL}/rest/v1/drive_copia?select=drive_id,storage_path,nombre,mime&caso_id=eq.${encodeURIComponent(casoId)}&papelera=eq.false`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     const filas: Copia[] = r.ok ? await r.json() : [];
@@ -172,6 +173,39 @@ export async function listarCopias(casoId: string): Promise<Record<string, Copia
     return {};
   }
 }
+
+/** Documentos fijos que están en la PAPELERA (recuperables), por expediente. */
+export async function listarPapelera(casoId: string): Promise<Copia[]> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/drive_copia?select=drive_id,storage_path,nombre,mime&caso_id=eq.${encodeURIComponent(casoId)}&papelera=eq.true&order=actualizado_en.desc`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    return r.ok ? await r.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+async function accionPapelera(accion: "a_papelera" | "recuperar" | "borrar", casoId: string, driveId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/papelera-copia", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accion, casoId, driveId }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/** Manda un documento fijo a la papelera (recuperable). No toca Drive. */
+export function enviarAPapelera(casoId: string, driveId: string) { return accionPapelera("a_papelera", casoId, driveId); }
+/** Recupera un documento fijo desde la papelera. */
+export function recuperarDePapelera(casoId: string, driveId: string) { return accionPapelera("recuperar", casoId, driveId); }
+/** Borra definitivo un documento fijo (almacén + registro). No toca Drive. */
+export function borrarCopiaDefinitivo(casoId: string, driveId: string) { return accionPapelera("borrar", casoId, driveId); }
 
 /** Firma (temporalmente) los enlaces de varias copias del almacén. */
 export async function firmarCopias(paths: string[]): Promise<Record<string, string>> {
