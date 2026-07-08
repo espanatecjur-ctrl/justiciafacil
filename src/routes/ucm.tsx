@@ -182,6 +182,7 @@ function UcmPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
+                <th className="text-left px-4 py-2.5">Folio / Crédito</th>
                 <th className="text-left px-4 py-2.5">Expediente / Cliente</th>
                 <th className="text-left px-4 py-2.5">Juzgado</th>
                 <th className="text-left px-4 py-2.5">Materia / Vía</th>
@@ -194,6 +195,10 @@ function UcmPage() {
             <tbody className="divide-y divide-border">
               {paginados.map((c) => (
                 <tr key={c.id} onClick={() => abrirFicha(c)} className="cursor-pointer hover:bg-muted/30">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-[color:var(--teal)]">{c.folio || "—"}</p>
+                    <p className="text-xs text-muted-foreground">{(c as any).no_credito || "sin crédito"}</p>
+                  </td>
                   <td className="px-4 py-3">
                     <p className="flex items-center gap-1.5 font-semibold text-[color:var(--teal)]">
                       {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
@@ -229,10 +234,10 @@ function UcmPage() {
                 </tr>
               ))}
               {!cargando && filtrados.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Sin resultados con esos filtros.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin resultados con esos filtros.</td></tr>
               )}
               {cargando && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>
               )}
             </tbody>
           </table>
@@ -259,6 +264,7 @@ function UcmPage() {
                 </div>
               </div>
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
+              <p className="mt-0.5 text-[11px]"><span className="font-semibold text-[color:var(--teal)]">{c.folio || "sin folio"}</span> · Crédito: {(c as any).no_credito || "—"}</p>
               <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
               <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
