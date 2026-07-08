@@ -74,7 +74,7 @@ export function ValidacionesHome() {
             return (
               <div key={i.id} className="rounded-lg border border-border p-2.5">
                 <div className="flex items-start justify-between gap-2">
-                  <button onClick={() => i.caso_id && navigate({ to: "/ucm-ficha", search: { id: i.caso_id } as any })} className="min-w-0 text-left">
+                  <button onClick={() => i.cliente_juicio?.nombre && navigate({ to: "/cliente", search: { nombre: i.cliente_juicio.nombre } as any })} className="min-w-0 text-left">
                     <p className="truncate text-sm font-medium">{i.cliente_juicio?.nombre || "—"}</p>
                     <p className="text-[11px] text-muted-foreground">{i.folio} · {fmtMXN(i.precio)} · Exp. {i.caso_juridico?.expediente || "—"}</p>
                   </button>
