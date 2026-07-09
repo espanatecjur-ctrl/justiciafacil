@@ -134,8 +134,12 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
                 title="Ampliar vista previa"
               >
                 {urls[c.storage_path] ? (
-                  (c.mime || "").includes("pdf") || (c.mime || "").startsWith("image/") ? (
+                  (c.mime || "").includes("pdf") ? (
                     <iframe src={urls[c.storage_path]} title={c.nombre || ""} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                  ) : (c.mime || "").startsWith("image/") ? (
+                    <img src={urls[c.storage_path]} alt={c.nombre || ""} loading="lazy" className="h-full w-full object-contain bg-white" />
+                  ) : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? (
+                    <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(urls[c.storage_path])}&embedded=true`} title={c.nombre || ""} loading="lazy" className="pointer-events-none h-full w-full border-0" />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
                       <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />
