@@ -19,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, puedeVerDriveAvanzado, type ModuloPerm } from "@/lib/permisos-acciones";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
-import { DocumentosFijos } from "@/components/documentos-fijos";
 
 // Carga JSZip desde CDN solo cuando se necesita (para armar los .zip).
 async function cargarJSZip(): Promise<any> {
@@ -412,9 +411,18 @@ export function CarpetaDriveVinculada({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pag, filtroDoc, docs, copias]);
 
-  // Sin el permiso "drive_avanzado" (solo en el módulo en prueba, UCM): panel liviano de solo copias.
+  // Sin el permiso "drive_avanzado" (solo en el módulo en prueba, UCM): no ve el explorador de Drive.
+  // El módulo "Documentos fijos" (con las copias) vive aparte, siempre visible para todo el equipo.
   if (enPrueba && !driveAvanzado) {
-    return <DocumentosFijos caso={caso} area={area || "UCM"} />;
+    return (
+      <Card className="legal-card p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><HardDrive className="h-4 w-4" /></div>
+          <p className="text-sm font-semibold" style={{ color: "#0B1E3A" }}>Carpeta de Drive</p>
+        </div>
+        <p className="text-xs text-muted-foreground">El explorador de Drive es solo para quien vincula/sincroniza carpetas. Los documentos ya copiados están en <b>«Documentos fijos»</b>, aquí al lado — se ven desde cualquier celular sin necesitar Drive.</p>
+      </Card>
+    );
   }
 
   return (
