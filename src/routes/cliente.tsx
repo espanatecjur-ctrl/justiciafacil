@@ -169,7 +169,7 @@ function ClientePage() {
                         <button onClick={() => setAbierto(open ? null : c.id)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted"><Eye className="h-3 w-3" /> {open ? "Ocultar" : "Ver detalle"}</button>
                       </div>
                     </div>
-                    {open && <ClienteFichaPanel cliente={c} juicio={{ id: c.caso_juridico?.id, expediente: c.caso_juridico?.expediente }} onUpdated={cargar} />}
+                    {open && <ClienteFichaPanel cliente={c} juicio={{ id: c.caso_juridico?.id, expediente: c.caso_juridico?.expediente }} onUpdated={cargar} onCerrar={() => setAbierto(null)} />}
                   </div>
                 );
               })}
