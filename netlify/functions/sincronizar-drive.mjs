@@ -116,6 +116,18 @@ async function descargarDeDrive(accessToken, file, plan) {
   return buf;
 }
 
+// Limpia un pedazo de ruta para el almacén: sin acentos, sin espacios ni signos raros
+// (evita el error "InvalidKey" de Supabase Storage con nombres como "JESÚS", "O.T. 50299", etc.)
+function limpiarSegmento(s) {
+  return String(s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/[^a-zA-Z0-9 _-]/g, "")                   // quita puntos, comas, etc.
+    .trim()
+    .replace(/\s+/g, "-")                              // espacios -> guion
+    .replace(/-+/g, "-")
+    .slice(0, 80) || "sin-dato";
+}
+
 async function subirAStorage(serviceKey, path, buf, mime) {
   const url = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${encodeURI(path)}`;
   const r = await fetch(url, {
@@ -162,8 +174,11 @@ export default async (req) => {
       return new Response(JSON.stringify({ ok: false, error: "Faltan casoId o carpetaId." }), { status: 400 });
     }
     // Carpeta base en el almacén: área/número de crédito/cliente (nueva) si viene; si no, casoId (como antes).
+    // Cada pedazo se limpia (sin acentos/espacios/puntos) para que Supabase Storage no rechace la ruta.
     const clienteSlug = (nombreCliente || "").trim() || "Sin cliente";
-    const carpetaBase = area ? `${area}/${noCredito || casoId}/${clienteSlug}` : casoId;
+    const carpetaBase = area
+      ? `${limpiarSegmento(area)}/${limpiarSegmento(noCredito || casoId)}/${limpiarSegmento(clienteSlug)}`
+      : casoId;
 
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     if (!serviceKey) {
@@ -210,7 +225,8 @@ export default async (req) => {
         if (tam && tam > LIMITE_BYTES) { errores.push(`${f.name}: muy grande (${Math.round(tam / 1048576)} MB)`); continue; }
         const plan = planDeDescarga(f.mimeType);
         const buf = await descargarDeDrive(accessToken, f, plan);
-        const path = `${carpetaBase}${f.rutaSub ? "/" + f.rutaSub : ""}/${f.id}${plan.sufijo}`;
+        const rutaSubLimpia = f.rutaSub ? f.rutaSub.split("/").map(limpiarSegmento).join("/") : "";
+        const path = `${carpetaBase}${rutaSubLimpia ? "/" + rutaSubLimpia : ""}/${f.id}${plan.sufijo}`;
         await subirAStorage(serviceKey, path, buf, plan.mimeFinal);
         await anotarCopia(serviceKey, {
           caso_id: casoId,
