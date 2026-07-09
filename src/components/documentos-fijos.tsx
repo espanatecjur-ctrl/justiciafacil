@@ -32,13 +32,21 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
 
   const lista = Object.values(copias);
 
-  // Firma los enlaces de lo que ya está copiado (para vista previa/descarga).
+  // Paginación: no renderizamos ni firmamos todo de un jalón — pesa mucho con muchos documentos.
+  const POR_PAGINA = 12;
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => { setPagina(0); }, [caso.id]);
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas - 1);
+  const listaPagina = lista.slice(paginaActual * POR_PAGINA, paginaActual * POR_PAGINA + POR_PAGINA);
+
+  // Firma los enlaces solo de la página actual (para vista previa/descarga) — no todo el expediente de golpe.
   useEffect(() => {
-    const paths = lista.map((c) => c.storage_path).filter((p) => p && !urls[p]);
+    const paths = listaPagina.map((c) => c.storage_path).filter((p) => p && !urls[p]);
     if (paths.length === 0) return;
     firmarCopias(paths).then((nuevas) => setUrls((prev) => ({ ...prev, ...nuevas })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [copias]);
+  }, [copias, paginaActual]);
 
   // Aviso (solo conteo, sin explorar Drive) de documentos nuevos sin copiar.
   const [pendientes, setPendientes] = useState<number | null>(null);
@@ -121,8 +129,9 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
       ) : lista.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Todavía no hay documentos copiados al sistema para este expediente.</p>
       ) : (
+        <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {lista.map((c) => (
+          {listaPagina.map((c) => (
             <div key={c.drive_id} className="overflow-hidden rounded-lg border border-border bg-white">
               <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                 <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
@@ -133,21 +142,15 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
                 className="group relative block h-40 w-full bg-muted"
                 title="Ampliar vista previa"
               >
-                {urls[c.storage_path] ? (
-                  (c.mime || "").includes("pdf") ? (
-                    <iframe src={urls[c.storage_path]} title={c.nombre || ""} loading="lazy" className="pointer-events-none h-full w-full border-0" />
-                  ) : (c.mime || "").startsWith("image/") ? (
-                    <img src={urls[c.storage_path]} alt={c.nombre || ""} loading="lazy" className="h-full w-full object-contain bg-white" />
-                  ) : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? (
-                    <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(urls[c.storage_path])}`} title={c.nombre || ""} loading="lazy" className="pointer-events-none h-full w-full border-0" />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
-                      <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />
-                      <span className="text-[11px] font-medium text-muted-foreground">Documento copiado</span>
-                    </div>
-                  )
+                {(c.mime || "").startsWith("image/") && urls[c.storage_path] ? (
+                  <img src={urls[c.storage_path]} alt={c.nombre || ""} loading="lazy" className="h-full w-full object-contain bg-white" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
+                    {(c.mime || "").includes("pdf") ? <FileText className="h-8 w-8 text-red-500/60" />
+                      : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? <FileText className="h-8 w-8 text-emerald-600/60" />
+                      : <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />}
+                    <span className="text-[11px] font-medium text-muted-foreground">{(c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(c.nombre || "") ? "Word" : /\.(xlsx?)$/i.test(c.nombre || "") ? "Excel" : /\.(pptx?)$/i.test(c.nombre || "") ? "PowerPoint" : "Documento copiado"}</span>
+                  </div>
                 )}
                 <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
                   <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
@@ -160,6 +163,16 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
             </div>
           ))}
         </div>
+        {totalPaginas > 1 && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{lista.length} documentos · pág. {paginaActual + 1} de {totalPaginas}</span>
+            <div className="flex gap-2">
+              <button onClick={() => setPagina(paginaActual - 1)} disabled={paginaActual === 0} className="rounded-md border border-input px-2.5 py-1 disabled:opacity-40">Anterior</button>
+              <button onClick={() => setPagina(paginaActual + 1)} disabled={paginaActual >= totalPaginas - 1} className="rounded-md border border-input px-2.5 py-1 disabled:opacity-40">Siguiente</button>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {docSel && (
