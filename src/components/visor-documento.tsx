@@ -25,8 +25,11 @@ export function urlVistaPrevia(url: string, driveId?: string | null): string {
 export function VisorDocumentoModal({ url, driveId, nombre, onCerrar }: { url: string; driveId?: string | null; nombre?: string | null; onCerrar: () => void }) {
   const ref = (nombre || url || "").toLowerCase();
   const esImagen = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|&|$)/.test(ref);
+  // Word / Excel / PowerPoint: el navegador no los abre solo — se embeben con el visor de Google.
+  const esOffice = /\.(docx?|xlsx?|pptx?)(\?|&|$)/.test(ref);
   const enSistema = !!url && !driveId; // hay copia en el sistema (Storage)
   const abrir = url || (driveId ? `https://drive.google.com/file/d/${driveId}/view` : "");
+  const urlOffice = enSistema && esOffice ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true` : "";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-4" onClick={onCerrar}>
@@ -48,6 +51,17 @@ export function VisorDocumentoModal({ url, driveId, nombre, onCerrar }: { url: s
           <div className="min-h-0 flex-1 overflow-auto bg-muted p-2">
             <img src={url} alt={nombre || "Documento"} className="mx-auto max-h-full max-w-full object-contain" />
           </div>
+        ) : esOffice ? (
+          <>
+            {/* Compu: se embebe con el visor de Google (Word/Excel/PowerPoint no los abre el navegador solo). */}
+            <iframe src={urlOffice} title={nombre || "Documento"} className="hidden min-h-0 flex-1 rounded-b-xl border-0 bg-muted sm:block" />
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center sm:hidden">
+              <FileText className="h-10 w-10 text-[color:var(--teal)]/50" />
+              <p className="text-sm font-medium text-foreground">Documento listo en el sistema</p>
+              <p className="max-w-sm text-xs text-muted-foreground">Word / Excel / PowerPoint se abren mejor fuera de la vista previa en el celular.</p>
+              <a href={abrir} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}><ExternalLink className="h-4 w-4" /> Abrir documento</a>
+            </div>
+          </>
         ) : (
           <>
             {/* Compu: se embebe. */}
