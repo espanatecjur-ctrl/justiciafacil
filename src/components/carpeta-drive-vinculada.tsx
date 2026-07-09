@@ -74,9 +74,9 @@ export function CarpetaDriveVinculada({
     puedeAbrirDrive(modulo).then(setPuedeDrive).catch(() => setPuedeDrive(false));
   }, [modulo]);
 
-  // ---- Prueba piloto: solo en UCM se separa "Documentos fijos" del explorador completo ----
-  // (UCP / URRJ / Expediente siguen viendo el explorador de siempre hasta que se apruebe el cambio).
-  const enPrueba = modulo === "ucm";
+  // ---- Prueba piloto: en UCM y UCP se separa "Documentos fijos" del explorador completo ----
+  // (UDP / UFC / Amparos / URRJ siguen viendo el explorador de siempre por ahora).
+  const enPrueba = modulo === "ucm" || modulo === "ucp";
   const [driveAvanzado, setDriveAvanzado] = useState(!enPrueba); // fuera de la prueba: comportamiento de siempre
   useEffect(() => {
     if (!enPrueba) { setDriveAvanzado(true); return; }
