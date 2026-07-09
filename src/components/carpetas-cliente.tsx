@@ -69,7 +69,7 @@ function CarpetaItem({ casoId, expediente, fila, onQuitar }: { casoId: string; e
         <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"><FolderOpen className="h-3.5 w-3.5 text-[color:var(--teal)]" /> Carpeta del cliente</span>
         <button onClick={onQuitar} title="Quitar carpeta" className="rounded-md p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
-      <div className="p-2 grid items-start gap-2 lg:grid-cols-2">
+      <div className="p-2 space-y-2">
         <CarpetaDriveVinculada key={fila.drive_carpeta_id} caso={casoVirtual} area="UCM" onGuardar={guardar} />
         <DocumentosFijos caso={casoVirtual} area="UCM" />
       </div>
