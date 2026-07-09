@@ -466,10 +466,8 @@ function UCPFicha() {
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
-            <DocumentosFijos caso={c} area="UCP" />
-          </div>
+          <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
+          <DocumentosFijos caso={c} area="UCP" />
           <DocumentosGarantia area="UCP" caso={c} />
         </div>
       )}
