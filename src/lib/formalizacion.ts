@@ -34,6 +34,8 @@ export interface Formalizacion {
   id?: string;
   caso_id?: string | null;
   id_interno?: string | null;
+  drive_carpeta_id?: string | null;
+  drive_carpeta_nombre?: string | null;
   // Bloque 1
   tipo_proceso?: string | null;
   tipo_contrato?: string | null;
