@@ -74,10 +74,10 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated, onCerrar }: {
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         {/* Encabezado */}
         <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>{inicial}</div>
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style={{ background: "#2E6DA8" }}>{inicial}</div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-foreground">{cliente.nombre || "Cliente"}</p>
-            <p className="text-xs text-muted-foreground">Folio <span className="font-medium text-[color:var(--teal)]">{cliente.folio || "—"}</span></p>
+            <p className="text-xs text-muted-foreground">Folio <span className="font-medium text-[color:#2E6DA8]">{cliente.folio || "—"}</span></p>
           </div>
           <button onClick={onCerrar} className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
@@ -138,7 +138,7 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated, onCerrar }: {
             <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2.5 text-xs">
               <span>Valor<br /><b>{fmtMXN(total)}</b></span>
               <span>Pagado<br /><b className="text-emerald-700">{fmtMXN(pagado)}</b></span>
-              <span>Saldo<br /><b className="text-[color:var(--teal)]">{fmtMXN(saldo)}</b></span>
+              <span>Saldo<br /><b className="text-[color:#2E6DA8]">{fmtMXN(saldo)}</b></span>
             </div>
           </div>
         </div>
