@@ -33,7 +33,7 @@ function ClientePage() {
   const [cargando, setCargando] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [solicitar, setSolicitar] = useState<Cli | null>(null);
-  const [modulo, setModulo] = useState<"general" | "documentos">("general");
+  const [modulo, setModulo] = useState<"general" | "documentos" | "urrj" | "ucp" | "ucm" | "udp">("general");
 
   // Búsqueda tolerante: exacto -> amplio por el primer nombre + comparación normalizada
   // (ignora acentos y la anotación "(Cambio a...)"), para que la encuentre venga de donde venga.
@@ -96,6 +96,16 @@ function ClientePage() {
             <button onClick={() => setModulo("documentos")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "documentos" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "documentos" ? { background: "var(--teal)" } : undefined}>
               <FolderOpen className="h-4 w-4" /> Documentos
             </button>
+            {([
+              { id: "urrj" as const, label: "URRJ" },
+              { id: "ucp" as const, label: "UCP" },
+              { id: "ucm" as const, label: "UCM" },
+              { id: "udp" as const, label: "UDP" },
+            ]).map((t) => (
+              <button key={t.id} onClick={() => setModulo(t.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === t.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === t.id ? { background: "var(--teal)" } : undefined}>
+                <Gavel className="h-4 w-4" /> {t.label}
+              </button>
+            ))}
           </div>
 
           {/* ============ GENERAL ============ */}
@@ -148,6 +158,14 @@ function ClientePage() {
             ) : (
               <Card className="p-6 text-center text-sm text-muted-foreground">Este cliente todavía no tiene un juicio vinculado — sin eso no se puede guardar la carpeta de documentos.</Card>
             )
+          )}
+          {/* ============ URRJ / UCP / UCM / UDP — en construcción, se conectan después ============ */}
+          {(["urrj", "ucp", "ucm", "udp"] as const).includes(modulo as any) && (
+            <Card className="p-8 text-center">
+              <Gavel className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm font-semibold text-foreground">{modulo.toUpperCase()} · En construcción</p>
+              <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">Aquí se va a ver la información de {modulo.toUpperCase()} de este cliente — todavía no está conectada. Lo armamos en un siguiente paso.</p>
+            </Card>
           )}
         </>
       )}
