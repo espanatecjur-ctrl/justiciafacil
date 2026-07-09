@@ -71,6 +71,7 @@ export interface CasoJuridico {
   demandado?: string | null;
   // Campos opcionales de registros de amparo / recurso / notaría (usados en la ficha)
   tipo_registro?: string | null;
+  tipo_garantia?: string | null;
   quejoso?: string | null;
   acto_reclamado?: string | null;
   tipo_amparo?: string | null;
