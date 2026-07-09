@@ -1,316 +1,473 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/components/page-header";
-import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
-import { RobotBoletines } from "@/components/robot-boletines";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Search, Scale, AlertTriangle, Gavel, Archive, FilePlus } from "lucide-react";
-import { FilaAcciones } from "@/components/fila-acciones";
-import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
-import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
-import { ValidarJuzgado } from "@/components/validar-juzgado";
-import { ValidarExpediente } from "@/components/validar-expediente";
+import { useEffect, useState } from "react";
+import {
+  ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
+  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, Users, Activity,
+} from "lucide-react";
+import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
+import { DocumentosFijos } from "@/components/documentos-fijos";
+import { LineaVidaAreas } from "@/components/linea-vida-areas";
+import { PanelSeguimiento } from "@/components/panel-seguimiento";
+import { SubJuicios } from "@/components/sub-juicios";
+import { BoletinExpediente } from "@/components/boletin-expediente";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
+import { VincularClienteModal } from "@/components/vincular-cliente";
+import { CronologiaCaso } from "@/components/cronologia-caso";
+import { registrarEvento } from "@/lib/cronologia-caso";
+import { TraspasoArea } from "@/components/traspaso-area";
+import { BannerCoincidencias } from "@/components/banner-coincidencias";
+import { ClientesJuicio } from "@/components/clientes-juicio";
+import { InstruccionesPanel } from "@/components/instrucciones-panel";
 
-export const Route = createFileRoute("/ucm")({
-  head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
-  component: UcmPage,
+export const Route = createFileRoute("/ucm-ficha")({
+  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
+  head: () => ({ meta: [{ title: "Ficha UCM — JusticiaFácil" }] }),
+  component: UCMFicha,
 });
 
-const wHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
+const NAVY = "#0B1E3A";
+const AZUL = "#0F6E56"; // color de UCM (teal)
 
-function prioridadClase(p: string | null) {
-  const v = (p || "").toUpperCase();
-  if (v === "ALTA") return "bg-red-100 text-red-700";
-  if (v === "MEDIA") return "bg-amber-100 text-amber-800";
-  if (v === "BAJA") return "bg-emerald-100 text-emerald-800";
-  return "bg-muted text-muted-foreground";
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
+
+type Modulo = "general" | "seguimiento" | "proceso" | "subjuicios" | "clientes" | "instrucciones" | "documentos" | "boletin";
+
+interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
+
+const fmtFecha = (s: string | null) => {
+  if (!s) return "—";
+  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return s;
+  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
+};
+
+function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 block text-[11px] text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
 }
 
-// ⚠️ rojo si al juicio le falta lo mínimo (juzgado para el robot, expediente o etapa)
-function leFalta(c: CasoJuridico): boolean {
-  const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
-  return sinJuzgado || !c.expediente || !c.etapa_actual;
+function DatoUCP({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
+  const vacio = !valor || !String(valor).trim();
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">{vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}</span>
+    </div>
+  );
 }
 
-// Una garantía es de UCM solo si se creó directo aquí (unidad UCM) o pasó las 5 firmas.
-// Lo que sigue en UCP / UDP / URRJ NO es de esta unidad.
-function esDeUCM(c: CasoJuridico): boolean {
-  if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return false; // tienen su propia pantalla
-  const u = (c.unidad || "").toUpperCase();
-  return !(u.includes("UCP") || u.includes("UDP") || u.includes("URRJ"));
+function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode; titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+        {accion}
+      </div>
+      {children}
+    </div>
+  );
 }
 
-function UcmPage() {
+function UCMFicha() {
+  const { id } = Route.useSearch();
   const navigate = useNavigate();
-  const [nuevoOpen, setNuevoOpen] = useState(false);
-  const [editCaso, setEditCaso] = useState<CasoJuridico | null>(null);
-  const [casos, setCasos] = useState<CasoJuridico[]>([]);
+  const [c, setC] = useState<CasoJuridico | null>(null);
+  const [dict, setDict] = useState<any>(null);
+  const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [modulo, setModulo] = useState<Modulo>("general");
 
-  const [q, setQ] = useState("");
-  const [entidad, setEntidad] = useState("todas");
-  const [prioridad, setPrioridad] = useState("todas");
-  const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
-  const [dictPorCaso, setDictPorCaso] = useState<Record<string, { ver: string; jur: string; reg: string }>>({});
-  const [verArchivados, setVerArchivados] = useState(false);
+  // edición (igual que UCM)
+  const [editAnt, setEditAnt] = useState(false);
+  const [editEst, setEditEst] = useState(false);
+  const [verBoletin, setVerBoletin] = useState(false);
+  const [verVincular, setVerVincular] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [errorDatos, setErrorDatos] = useState<string | null>(null);
+  const [recargaCron, setRecargaCron] = useState(0);
 
-  const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/ucm-ficha", search: { id: c.id } as any }); };
-  const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true, origen: "ucm" } as any }); };
-  const archivar = async (c: CasoJuridico) => {
-    const nuevo = !c.archivado;
+  useEffect(() => {
+    if (!id) { setCargando(false); return; }
+    (async () => {
+      const cs = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : []));
+      const caso: CasoJuridico | null = cs?.[0] || null;
+      setC(caso);
+      // el dictamen vive en el ORIGINAL de UCP; si esta ficha es copia, lo leemos de ahí
+      const dictCasoId = caso?.origen_ucp_id || id;
+      const ds = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${dictCasoId}&vigente=eq.true&limit=1`, { headers }).then((r) => (r.ok ? r.json() : []));
+      setDict(ds?.[0] || null);
+      if (caso?.expediente) {
+        const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(caso.expediente.trim())}&order=fecha_acuerdo.desc&limit=200`, { headers });
+        setAcuerdos(ra.ok ? await ra.json() : []);
+      }
+    })().finally(() => setCargando(false));
+  }, [id]);
+
+  const guardarDatos = async (campos: Record<string, string>, cerrar: () => void) => {
+    if (!c) return;
+    setGuardando(true); setErrorDatos(null);
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "PATCH", headers: wHeaders, body: JSON.stringify({ archivado: nuevo }) });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
+        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(campos),
+      });
       if (!r.ok) throw new Error(String(r.status));
-      setCasos((p) => p.map((x) => (x.id === c.id ? { ...x, archivado: nuevo } : x)));
-    } catch (e: any) { alert("No se pudo archivar: " + e.message); }
+      setC({ ...c, ...(campos as any) });
+      registrarEvento({ caso_id: c.id, expediente: c.expediente, area: "UCM", tipo: "cambio", texto: "Se actualizó: " + Object.keys(campos).join(", ") });
+      setRecargaCron((n) => n + 1);
+      cerrar();
+    } catch {
+      setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
+    } finally { setGuardando(false); }
   };
-  const borrar = async (c: CasoJuridico) => {
-    if (!confirm(`¿Borrar el expediente ${c.expediente || "(sin número)"}? Esta acción no se puede deshacer.`)) return;
-    try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "DELETE", headers: wHeaders });
-      if (!r.ok) throw new Error(String(r.status));
-      setCasos((p) => p.filter((x) => x.id !== c.id));
-    } catch (e: any) { alert("No se pudo borrar: " + e.message); }
+  const guardarCampos = (campos: Record<string, string>) => guardarDatos(campos, () => {});
+
+  // arma y descarga el PDF del dictamen usando la función que ya existe
+  const armarFirmas = () => {
+    const firmasArr: { titulo: string; firma: any }[] = [];
+    const fj = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.juridico || dict.firmas.juridico_firma) : null;
+    const fr = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.registral || dict.firmas.registral_firma) : null;
+    if (fj) firmasArr.push({ titulo: "Dictamen jurídico", firma: typeof fj === "string" ? { nombre: fj } : fj });
+    if (fr) firmasArr.push({ titulo: "Dictamen registral (RPPC)", firma: typeof fr === "string" ? { nombre: fr } : fr });
+    return firmasArr;
   };
-
-  const cargar = () => {
-    setCargando(true);
-    sbSelect<CasoJuridico>("caso_juridico", "select=*&order=prioridad.asc")
-      .then((d) => {
-        setCasos(d);
-        // cargar días sin avance en lote (una sola tanda de consultas)
-        const ids = d.map((x) => x.id).filter(Boolean) as string[];
-        diasSinAvanceLote(ids).then(setDiasAvance).catch(() => {});
-        // Dictámenes de UCP (para reflejar positivo/negativo en UCM). dictamen.caso_id es texto.
-        fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=caso_id,veredicto,juridico,registral&vigente=eq.true`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
-          .then((r) => (r.ok ? r.json() : []))
-          .then((rows: any[]) => {
-            const m: Record<string, { ver: string; jur: string; reg: string }> = {};
-            for (const x of rows) if (x.caso_id) m[String(x.caso_id)] = { ver: x.veredicto || "", jur: x.juridico?.veredicto || "", reg: (typeof x.registral?.veredicto === "string" ? x.registral.veredicto : "") };
-            setDictPorCaso(m);
-          }).catch(() => {});
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setCargando(false));
+  const datosPDF = () => ({
+    expediente: c?.expediente || undefined,
+    juzgado: c?.juzgado || undefined,
+    garantia: c?.direccion_garantia || (c as any)?.gar_id || undefined,
+    cliente: c?.cliente_nombre || undefined,
+    entidad: c?.entidad || undefined,
+    veredictoJuridico: dict?.juridico?.veredicto || undefined,
+    veredictoRegistral: (typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : undefined),
+    veredictoFinal: dict?.veredicto || undefined,
+    firmas: armarFirmas(),
+  });
+  const descargarPDF = async () => {
+    if (!c) return;
+    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
+    await descargarDictamenFinalPDF(datosPDF());
   };
-  useEffect(() => { cargar(); }, []);
-
-  // Base de la unidad: solo lo que es de UCM (excluye UCP/UDP/URRJ y amparo/recurso/exhorto).
-  const casosUCM = useMemo(() => casos.filter(esDeUCM), [casos]);
-
-  // Badge del dictamen de UCP (positivo/negativo/en espera) reflejado en UCM
-  const dictamenBadge = (c: CasoJuridico) => {
-    const d = c.id ? dictPorCaso[String(c.id)] : null;
-    if (!d || (!d.jur && !d.reg && !d.ver)) return null;
-    const cls = (s: string) => {
-      const v = (s || "").toUpperCase();
-      return v.includes("POSITIV") || v.includes("PROCEDEN") || v.includes("FAVORABLE") ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-        : v.includes("NEGATIV") || v.includes("IMPROCEDEN") || v.includes("DESFAVORABLE") ? "bg-red-100 text-red-800 border-red-200"
-        : v.includes("ESPERA") ? "bg-amber-100 text-amber-800 border-amber-200"
-        : "bg-muted text-muted-foreground border-border";
-    };
-    const pill = (label: string, val: string) => val ? <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls(val)}`}>{label}: {val}</span> : null;
-    return <div className="mt-1 flex flex-wrap gap-1" title="Dictamen registrado en UCP">{pill("Jur", d.jur)}{pill("Reg", d.reg)}{pill("UCP", d.ver)}</div>;
+  const verDictamenPDF = async () => {
+    if (!c) return;
+    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
+    await descargarDictamenFinalPDF(datosPDF(), "ver");
   };
 
-  const filtrados = useMemo(() => {
-    return casosUCM.filter((c) => {
-      if (verArchivados ? !c.archivado : !!c.archivado) return false;
-      if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
-      if (prioridad !== "todas" && (c.prioridad || "").toUpperCase() !== prioridad) return false;
-      if (!q) return true;
-      const blob = `${c.expediente || ""} ${c.cliente_nombre || ""} ${c.juzgado || ""} ${c.proveedor || ""}`.toLowerCase();
-      return blob.includes(q.toLowerCase());
-    });
-  }, [casosUCM, q, entidad, prioridad, verArchivados]);
+  if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
+  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucm" })} className="underline">Volver a UCM</button></div>;
 
-  // paginación: máximo 20 por página (web y cel)
-  const PAGE = 20;
-  const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [q, entidad, prioridad, verArchivados]);
-  const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
-  const pag = Math.min(pagina, totalPag - 1);
-  const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
+  const firmasN = ["elabora", "dil", "gad", "dgc", "dge"].filter((k) => (dict?.firmas as any)?.[k]?.fecha).length;
+  const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
+  const ultima = acuerdos[0] || null;
 
-  const alta = casosUCM.filter((c) => (c.prioridad || "").toUpperCase() === "ALTA").length;
-  const conExpediente = casosUCM.filter((c) => (c.expediente || "").match(/\d+\/\d+/)).length;
-  const expedientes = casosUCM.map((c) => c.expediente);
+  const MODULOS: { id: Modulo; label: string; icon: React.ReactNode }[] = [
+    { id: "general", label: "General", icon: <LayoutGrid className="h-4 w-4" /> },
+    { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
+    { id: "seguimiento", label: "Seguimiento y actuaciones", icon: <Activity className="h-4 w-4" /> },
+    { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
+    { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
+    { id: "instrucciones", label: "Instrucciones", icon: <ScrollText className="h-4 w-4" /> },
+    { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
+    { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
+  ];
+
+  const btnEditar = (onClick: () => void) => (
+    <button onClick={onClick} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>
+      <PenLine className="h-3 w-3" /> Editar / validar
+    </button>
+  );
+  const btnGuardar = (onClick: () => void) => (
+    <button onClick={onClick} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: AZUL }}>
+      {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar
+    </button>
+  );
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Unidad Civil y Mercantil"
-        title="UCM · Seguimiento a juicios"
-        description={cargando ? "Cargando juicios…" : `${filtrados.length} de ${casosUCM.length} juicios de la unidad.`}
-        actions={
-          <button onClick={() => setNuevoOpen(true)} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
-            <FilePlus className="h-4 w-4" /> Nuevo expediente
-          </button>
-        }
-      />
-
-      {nuevoOpen && <NuevoExpedienteModal onClose={() => setNuevoOpen(false)} onCreado={() => { setNuevoOpen(false); cargar(); }} />}
-      {editCaso && <NuevoExpedienteModal caso={editCaso} onClose={() => setEditCaso(null)} onCreado={() => { setEditCaso(null); cargar(); }} />}
-
-      {/* Barra del robot (indicador central de avance) */}
-      <RobotBoletines expedientes={expedientes} />
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="legal-card p-4 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><Gavel className="h-5 w-5" /></div>
-          <div><p className="text-2xl font-bold font-display leading-none">{casosUCM.length}</p><p className="text-xs text-muted-foreground">Juicios totales</p></div>
-        </Card>
-        <Card className="legal-card p-4 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-emerald-100 text-emerald-700"><Scale className="h-5 w-5" /></div>
-          <div><p className="text-2xl font-bold font-display leading-none">{conExpediente}</p><p className="text-xs text-muted-foreground">Con expediente</p></div>
-        </Card>
-        <Card className="legal-card p-4 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-red-100 text-red-700"><AlertTriangle className="h-5 w-5" /></div>
-          <div><p className="text-2xl font-bold font-display leading-none">{alta}</p><p className="text-xs text-muted-foreground">Prioridad alta</p></div>
-        </Card>
-      </div>
-
-      <Card className="legal-card p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Expediente, cliente, juzgado…" className="pl-8" />
-          </div>
-          <select value={entidad} onChange={(e) => setEntidad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
-            <option value="todas">Todos los estados</option>
-            <option value="Sinaloa">Sinaloa</option>
-            <option value="CDMX">CDMX</option>
-            <option value="BCS">BCS</option>
-            <option value="Jalisco">Jalisco</option>
-          </select>
-          <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
-            <option value="todas">Toda prioridad</option>
-            <option value="ALTA">Alta</option>
-            <option value="MEDIA">Media</option>
-            <option value="BAJA">Baja</option>
-          </select>
-        </div>
-        <button onClick={() => setVerArchivados((v) => !v)} className={`mt-2 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs ${verArchivados ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}>
-          <Archive className="h-3.5 w-3.5" /> {verArchivados ? "Viendo archivados — volver a activos" : "Ver archivados"}
+    <div className="space-y-4">
+      {/* barra superior */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => navigate({ to: "/ucm" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UCM</button>
+        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: AZUL }}>UCM</span>
+        <button onClick={descargarPDF} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
+          <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF
         </button>
-      </Card>
-
-      {error && (
-        <Card className="legal-card p-4 border-red-200 bg-red-50 text-sm text-red-700">No se pudieron cargar los juicios: {error}</Card>
-      )}
-
-      <Card className="legal-card hidden overflow-hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-2.5">Folio / Crédito</th>
-                <th className="text-left px-4 py-2.5">Expediente / Cliente</th>
-                <th className="text-left px-4 py-2.5">Juzgado</th>
-                <th className="text-left px-4 py-2.5">Materia / Vía</th>
-                <th className="text-left px-4 py-2.5">Etapa actual</th>
-                <th className="text-left px-4 py-2.5">Prioridad</th>
-                <th className="text-left px-4 py-2.5">Seguimiento</th>
-                <th className="px-2 py-2.5 w-12"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paginados.map((c) => (
-                <tr key={c.id} onClick={() => abrirFicha(c)} className="cursor-pointer hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <p className="font-semibold text-[color:var(--teal)]">{c.folio || "—"}</p>
-                    <p className="text-xs text-muted-foreground">Crédito: <span className="font-medium text-foreground">{(c as any).no_credito || "sin crédito"}</span></p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="flex items-center gap-1.5 font-semibold text-[color:var(--teal)]">
-                      {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
-                      {c.expediente || "— sin expediente —"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
-                    {dictamenBadge(c)}
-                    <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
-                    {c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (
-                      <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
-                        <AlertTriangle className="h-2.5 w-2.5" /> {diasAvance[c.id] >= 9999 ? "sin avances" : `${diasAvance[c.id]}d sin avance`}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="max-w-[260px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{c.distrito_judicial || ""}{c.entidad ? ` · ${c.entidad}` : ""}</p>
-                    <div className="mt-1"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{c.materia || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{c.via_procesal || ""}</p>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.etapa_actual || "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <p className="max-w-[260px] truncate" title={c.nota_adicional || ""}>{c.nota_adicional || "—"}</p>
-                  </td>
-                  <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <FilaAcciones archivado={!!c.archivado} area="UCM" caso={c} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
-                  </td>
-                </tr>
-              ))}
-              {!cargando && filtrados.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Sin resultados con esos filtros.</td></tr>
-              )}
-              {cargando && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Cargando…</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Tarjetas (celular) */}
-      <div className="space-y-2 md:hidden">
-        {cargando ? (
-          <Card className="legal-card p-6 text-center text-sm text-muted-foreground">Cargando…</Card>
-        ) : filtrados.length === 0 ? (
-          <Card className="legal-card p-6 text-center text-sm text-muted-foreground">Sin resultados con esos filtros.</Card>
-        ) : (
-          paginados.map((c) => (
-            <Card key={c.id} onClick={() => abrirFicha(c)} className="legal-card cursor-pointer p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="flex min-w-0 items-center gap-1.5 truncate font-semibold text-[color:var(--teal)]">
-                  {leFalta(c) && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />}
-                  <span className="truncate">{c.expediente || "— sin expediente —"}</span>
-                </p>
-                <div className="flex shrink-0 items-center gap-1">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span>
-                  <FilaAcciones archivado={!!c.archivado} area="UCM" caso={c} onEditar={() => setEditCaso(c)} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
-                </div>
-              </div>
-              {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
-              <p className="mt-0.5 text-[11px]"><span className="font-semibold text-[color:var(--teal)]">{c.folio || "sin folio"}</span> · Crédito: {(c as any).no_credito || "—"}</p>
-              {dictamenBadge(c)}
-              <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
-              <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
-              <p className="mt-0.5 text-xs"><span className="font-medium">{c.materia || "—"}</span>{c.via_procesal ? ` · ${c.via_procesal}` : ""}{c.etapa_actual ? ` · ${c.etapa_actual}` : ""}</p>
-              {c.nota_adicional && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{c.nota_adicional}</p>}
-            </Card>
-          ))
-        )}
       </div>
 
-      {/* Paginación (web y cel): máximo 20 por página */}
-      {filtrados.length > PAGE && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>{filtrados.length} juicios · pág. {pag + 1} de {totalPag}</span>
-          <div className="flex gap-2">
-            <button onClick={() => setPagina(pag - 1)} disabled={pag === 0} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-40">Anterior</button>
-            <button onClick={() => setPagina(pag + 1)} disabled={pag >= totalPag - 1} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-40">Siguiente</button>
+      {/* encabezado (siempre visible) */}
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${AZUL})` }}>
+        <p className="text-xs uppercase tracking-wide text-white/60">Ficha UCM · Seguimiento de juicio</p>
+        <p className="text-2xl font-bold">{c.expediente || "Sin expediente"}</p>
+        <p className="text-sm text-white/80">{c.direccion_garantia || c.cliente_nombre || "—"}</p>
+        <p className="mt-1 text-xs text-white/70">{c.juzgado || "Juzgado sin asignar"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+        {c.estado_ucm && <div className="mt-2 mr-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/25 px-2.5 py-1 text-xs font-medium text-white">{c.estado_ucm === "pendiente_formalizacion" ? "Pendiente de formalización" : c.estado_ucm}</div>}
+        <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${firmasN >= 5 ? "bg-emerald-400/25 text-white" : "bg-white/15 text-white"}`}>✍ {firmasN}/5 firmas del dictamen</div>
+      </div>
+
+      {/* pestañas */}
+      <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
+        {MODULOS.map((m) => (
+          <button key={m.id} onClick={() => setModulo(m.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === m.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === m.id ? { background: AZUL } : undefined}>
+            {m.icon} {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ============ GENERAL ============ */}
+      {modulo === "general" && (
+        <div className="space-y-4">
+          {c.origen_ucp_id && (
+            <div className="flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: AZUL + "55", background: AZUL + "0d" }}>
+              <p className="text-xs" style={{ color: AZUL }}><span className="font-semibold">📋 Viene de UCP.</span> Los datos base se copiaron de UCP y se mantienen al día solos. Lo que cambies aquí NO regresa a UCP.</p>
+              <button onClick={() => navigate({ to: "/ucp-ficha", search: { id: c.origen_ucp_id } as any })} className="shrink-0 self-start inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>Ver original en UCP</button>
+            </div>
+          )}
+          <BannerCoincidencias caso={c} onNavegar={(nid) => navigate({ to: "/ucm-ficha", search: { id: nid } as any })} />
+          <TraspasoArea caso={c} area="UCM" onGuardarCarpeta={guardarCampos} onTraspaso={() => navigate({ to: "/ucm" })} />
+          <LineaVidaAreas caso={c} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Antecedente de la garantía (editable) */}
+            <SeccionUCP
+              icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
+              titulo="Antecedente de la garantía"
+              accion={!editAnt ? btnEditar(() => { setForm({ no_credito: c.no_credito || "", direccion_garantia: c.direccion_garantia || "", entidad: c.entidad || "" }); setErrorDatos(null); setEditAnt(true); }) : undefined}
+            >
+              {editAnt ? (
+                <div className="space-y-2">
+                  <Campo label="No. de crédito"><input className={inp} value={form.no_credito} onChange={(e) => setForm({ ...form, no_credito: e.target.value })} /></Campo>
+                  <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
+                  <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
+                  <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
+                    <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{c.cliente_nombre || c.cliente_codigo || "sin vincular"}</b></span>
+                    <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"} cliente</button>
+                  </div>
+                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+                  <div className="flex gap-2 pt-1">
+                    {btnGuardar(() => guardarDatos({ no_credito: form.no_credito, direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false)))}
+                    <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <DatoUCP label="ID garantía" valor={(c as any).gar_id} />
+                  <DatoUCP label="No. de crédito" valor={c.no_credito} importante />
+                  <DatoUCP label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+                  <div className="flex items-center justify-between gap-2">
+                    <DatoUCP label="Cliente / deudor" valor={c.cliente_nombre || c.demandado} importante />
+                    <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}</button>
+                  </div>
+                  <DatoUCP label="Entidad" valor={c.entidad} />
+                  <DatoUCP label="Tipo de proceso" valor={c.tipo_proceso} />
+                </>
+              )}
+            </SeccionUCP>
+
+            {/* Estatus actual (editable + robotsito) */}
+            <SeccionUCP
+              icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />}
+              titulo="Estatus actual"
+              accion={!editEst ? btnEditar(() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "", actor: c.actor || "", demandado: c.demandado || "" }); setErrorDatos(null); setVerBoletin(false); setEditEst(true); }) : undefined}
+            >
+              {editEst ? (
+                <div className="space-y-2">
+                  <Campo label="Etapa actual"><input className={inp} value={form.etapa_actual} onChange={(e) => setForm({ ...form, etapa_actual: e.target.value })} /></Campo>
+                  <Campo label="Estatus general"><input className={inp} value={form.estatus_general} onChange={(e) => setForm({ ...form, estatus_general: e.target.value })} /></Campo>
+                  <Campo label="Prioridad"><input className={inp} value={form.prioridad} onChange={(e) => setForm({ ...form, prioridad: e.target.value })} placeholder="ALTA / MEDIA / BAJA" /></Campo>
+                  <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1593/2008" /></Campo>
+                  <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Segundo…" /></Campo>
+                  <Campo label="Actor"><input className={inp} value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="Quien demanda" /></Campo>
+                  <Campo label="Demandado"><input className={inp} value={form.demandado} onChange={(e) => setForm({ ...form, demandado: e.target.value })} placeholder="Contra quién" /></Campo>
+
+                  {/* Robotsito del boletín */}
+                  <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
+                    <button type="button" onClick={() => setVerBoletin((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold" style={{ color: AZUL }}>
+                      <Send className="h-3.5 w-3.5" /> {verBoletin ? "Ocultar buscador del boletín" : "Buscar en el boletín (jurisdicción, juzgado y expediente)"}
+                    </button>
+                    {verBoletin && (
+                      <div className="mt-2">
+                        <p className="mb-2 text-[11px] text-muted-foreground">Elige la jurisdicción y el juzgado, busca el expediente y dale <b>“Guardar hallazgos del boletín”</b>: se rellenan solos. Luego revisa y dale <b>Guardar</b>.</p>
+                        <BuscadorBoletin
+                          expedienteInicial={form.expediente}
+                          onGuardarHallazgos={() => {}}
+                          onDatosBoletin={(d) => setForm((f) => ({
+                            ...f,
+                            expediente: d.expediente || f.expediente,
+                            juzgado: d.juzgado || f.juzgado,
+                            actor: d.actor || f.actor,
+                            demandado: d.demandado || f.demandado,
+                            etapa_actual: d.etapa || f.etapa_actual,
+                          }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
+                  <div className="flex gap-2 pt-1">
+                    {btnGuardar(() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado, actor: form.actor, demandado: form.demandado }, () => setEditEst(false)))}
+                    <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <DatoUCP label="Etapa actual" valor={c.etapa_actual} importante />
+                  <DatoUCP label="Estatus general" valor={c.estatus_general} importante />
+                  {["firme", "ejecutoria", "ejecuc", "adjudic", "remate", "escritur", "cosa juzgada"].some((k) => `${c.etapa_actual || ""} ${c.estatus_general || ""}`.toLowerCase().includes(k)) && (
+                    <div className="mt-1 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 sm:col-span-2">
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-900">Lista para formalizar al cliente</p>
+                        <p className="text-[11px] text-emerald-800">La etapa indica <b>sentencia firme o superior</b> — esta garantía ya se puede formalizar directo con el cliente (sin compra al banco). Mándala a formalizar desde la ficha del cliente.</p>
+                      </div>
+                    </div>
+                  )}
+                  <DatoUCP label="Prioridad" valor={c.prioridad} />
+                  <DatoUCP label="No. de expediente / juicio" valor={c.expediente} />
+                  <DatoUCP label="No. de juzgado" valor={c.juzgado} />
+                  <DatoUCP label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
+                </>
+              )}
+            </SeccionUCP>
           </div>
+
+          {/* última actuación del boletín (resumen) */}
+          <SeccionUCP icon={<Megaphone className="h-4 w-4" style={{ color: AZUL }} />} titulo="Última actuación en el boletín">
+            {sinJuzgado ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertTriangle className="mr-1 inline h-4 w-4" /> Falta asignar el juzgado para que el robot pueda seguir este expediente.</div>
+            ) : ultima ? (
+              <div className="rounded-md bg-muted/40 p-3">
+                <span className="text-xs font-medium text-muted-foreground">{fmtFecha(ultima.fecha_acuerdo)}</span>
+                <p className="mt-1 text-sm">{ultima.texto || "—"}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin actuaciones todavía. El robot revisa el boletín todos los días a las 9:00 AM.</p>
+            )}
+          </SeccionUCP>
+
+          {/* Cronología del expediente (compartida entre áreas) */}
+          <CronologiaCaso casoId={c.id} expediente={c.expediente} recargaId={recargaCron} />
         </div>
       )}
+
+      {/* ============ PROCESO (dictamen jurídico + registral + PDF + firmas) ============ */}
+      {modulo === "seguimiento" && (
+        <div className="space-y-4">
+          <LineaVidaAreas caso={c} />
+          <PanelSeguimiento caso={c} />
+        </div>
+      )}
+
+      {modulo === "proceso" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <BloqueDictamen
+            titulo="Dictamen jurídico"
+            icon={<ScrollText className="h-4 w-4" style={{ color: AZUL }} />}
+            veredicto={dict?.juridico?.veredicto || dict?.veredicto || null}
+            firmas={dict?.firmas}
+            claveFirma="juridico"
+            onAbrir={() => navigate({ to: "/ucm" })}
+            onVer={() => verDictamenPDF()}
+            onDescargar={() => descargarPDF()}
+          />
+          <BloqueDictamen
+            titulo="Dictamen registral (RPPC)"
+            icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
+            veredicto={typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : (dict?.rppc ? "registrado" : null)}
+            firmas={dict?.firmas}
+            claveFirma="registral"
+            onAbrir={() => navigate({ to: "/ucm" })}
+            onVer={() => verDictamenPDF()}
+            onDescargar={() => descargarPDF()}
+          />
+        </div>
+      )}
+
+      {/* ============ SUB-JUICIOS ============ */}
+      {modulo === "subjuicios" && (
+        <div className="rounded-xl border border-border bg-card p-4"><SubJuicios casoId={c.id} /></div>
+      )}
+
+      {/* ============ CLIENTES / GARANTÍAS ============ */}
+      {modulo === "clientes" && (
+        <ClientesJuicio casoId={c.id} juicioExpediente={c.expediente || undefined} />
+      )}
+
+      {/* ============ INSTRUCCIONES (validación URRJ/GAD/DIL·DGE) ============ */}
+      {modulo === "instrucciones" && (
+        <InstruccionesPanel casoId={c.id} />
+      )}
+
+      {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
+      {modulo === "documentos" && (
+        <div className="space-y-4">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
+            <DocumentosFijos caso={c} area="UCM" />
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Users className="h-5 w-5 text-[color:var(--teal)]" />
+                <h3 className="text-sm font-semibold">Documentos de Clientes</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">Aquí se conectan los PDFs de la carpeta Drive <b>«CLIENTES»</b> (INE, CURP, comprobantes, actas) y se copian al sistema por cliente.</p>
+              <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+                <p className="flex items-center gap-1 font-medium text-foreground"><FolderOpen className="h-3.5 w-3.5" /> Carpeta «CLIENTES» de Drive</p>
+                <p className="mt-0.5">Se conectará y copiará en la próxima etapa, ligando cada PDF a su cliente en el CRM.</p>
+              </div>
+            </div>
+          </div>
+          <DocumentosGarantia area="UCM" caso={c} />
+        </div>
+      )}
+
+      {/* ============ BOLETÍN ============ */}
+      {modulo === "boletin" && (
+        <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} />
+      )}
+
+      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setC({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_id: cl.id }); setVerVincular(false); }} />}
+    </div>
+  );
+}
+
+// Bloque resumen de un dictamen (jurídico o registral) con su veredicto, firma y PDF.
+function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir, onVer, onDescargar }: {
+  titulo: string; icon: React.ReactNode; veredicto: string | null;
+  firmas: any; claveFirma: string; onAbrir: () => void; onVer: () => void; onDescargar: () => void;
+}) {
+  const v = (veredicto || "").toLowerCase();
+  const positivo = v.includes("positiv") || v.includes("proceden") || v.includes("registrad") || v.includes("favorable");
+  const negativo = v.includes("negativ") || v.includes("improcedent") || v.includes("desfavorable");
+  const Icono = positivo ? CheckCircle2 : negativo ? XCircle : Clock;
+  const color = positivo ? "#0C5C46" : negativo ? "#A32D2D" : "#B26B00";
+
+  const firma = firmas && typeof firmas === "object" ? (firmas[claveFirma] || firmas[`${claveFirma}_firma`]) : null;
+  const firmado = !!firma;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
+        <button onClick={onAbrir} className="rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>Abrir proceso</button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <Icono className="h-5 w-5" style={{ color }} />
+        <span className="text-sm font-medium" style={{ color }}>{veredicto ? veredicto : "Sin dictaminar"}</span>
+      </div>
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-xs">
+        <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
+        {firmado
+          ? <span className="text-[color:var(--teal)]">Firmado{typeof firma === "string" ? `: ${firma}` : (firma?.nombre ? `: ${firma.nombre}` : "")}</span>
+          : <span className="text-muted-foreground">Sin firma</span>}
+      </div>
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
+        <button onClick={onVer} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] hover:bg-muted"><Eye className="h-3.5 w-3.5" /> Ver PDF</button>
+        <button onClick={onDescargar} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] hover:bg-muted" style={{ borderColor: "#C2A24C", color: "#8a7326" }}><Download className="h-3.5 w-3.5" /> Descargar</button>
+      </div>
     </div>
   );
 }
