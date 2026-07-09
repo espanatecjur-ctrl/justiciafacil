@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, Users, Loader2, Gavel, Home, Download } from "lucide-react";
+import { Search, Users, Loader2, Gavel, Home, Download, UserPlus, X, Save } from "lucide-react";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({ meta: [{ title: "Clientes — JusticiaFácil" }] }),
@@ -43,6 +43,10 @@ function ClientesCRM() {
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
   const [entidad, setEntidad] = useState("todas");
+  const [unidadFiltro, setUnidadFiltro] = useState("todas");
+  const [pagina, setPagina] = useState(0);
+  const [agregando, setAgregando] = useState(false);
+  const PAGE = 20;
 
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente,unidad,entidad,no_credito)&en_papelera=eq.false&order=nombre.asc`, { headers })
@@ -91,11 +95,39 @@ function ClientesCRM() {
       // la más avanzada de sus áreas, según el orden de la operación
       const areaActual = [...f.areas].filter((a) => a !== "—").sort((a, b) => AREA_ORDEN.indexOf(b) - AREA_ORDEN.indexOf(a))[0] || "—";
       return { ...f, areaActual };
-    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [filtrados, casoUFC]);
+    })
+      .filter((f) => unidadFiltro === "todas" || f.areaActual === unidadFiltro)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [filtrados, casoUFC, unidadFiltro]);
+
+  useEffect(() => { setPagina(0); }, [q, entidad, unidadFiltro]);
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / PAGE));
+  const paginaActual = Math.min(pagina, totalPaginas - 1);
+  const filasPagina = filas.slice(paginaActual * PAGE, paginaActual * PAGE + PAGE);
 
   const totalClientes = filas.length;
   const saldoTotal = filtrados.reduce((a, c) => a + (Number(c.saldo) || 0), 0);
+
+  const crearCliente = async (datos: { nombre: string; domicilio_garantia: string; valor_inmueble: string; folio: string }) => {
+    const v = Number(datos.valor_inmueble.replace(/[^0-9.]/g, "")) || 0;
+    const body = {
+      nombre: datos.nombre.trim(),
+      domicilio_garantia: datos.domicilio_garantia.trim() || null,
+      valor_inmueble: v || null,
+      total: v || null,
+      pagado: 0,
+      saldo: v || null,
+      folio: datos.folio.trim() || null,
+      en_papelera: false,
+    };
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) {
+      setAgregando(false);
+      fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente,unidad,entidad,no_credito)&en_papelera=eq.false&order=nombre.asc`, { headers })
+        .then((rr) => (rr.ok ? rr.json() : [])).then(setClientes).catch(() => {});
+    }
+    return r.ok;
+  };
 
   const descargarExcel = () => {
     const cols = ["Cliente", "Garantías", "Área actual", "Estado/Ciudad", "Folio(s)", "Expediente(s)", "Valor total", "Saldo total", "Documentos", "Formalización"];
@@ -120,9 +152,14 @@ function ClientesCRM() {
         title="Clientes"
         description="Cada cliente con cuántas garantías tiene y en qué área va cada una. Entra a su ficha para ver el detalle."
         actions={
-          <button onClick={descargarExcel} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
-            <Download className="h-4 w-4" /> Descargar Excel
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setAgregando(true)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white" style={{ background: "#2E6DA8" }}>
+              <UserPlus className="h-4 w-4" /> Agregar cliente
+            </button>
+            <button onClick={descargarExcel} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
+              <Download className="h-4 w-4" /> Descargar Excel
+            </button>
+          </div>
         }
       />
 
@@ -133,11 +170,15 @@ function ClientesCRM() {
       </div>
 
       <Card className="p-3">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por cliente, domicilio, folio, crédito o expediente…" className="pl-9" />
           </div>
+          <select value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="todas">Todas las unidades</option>
+            {AREA_ORDEN.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
           <select value={entidad} onChange={(e) => setEntidad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
             <option value="todas">Todas las ciudades/estados</option>
             {entidades.map((e) => <option key={e} value={e}>{e}</option>)}
@@ -169,7 +210,7 @@ function ClientesCRM() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filas.map((f) => (
+                  {filasPagina.map((f) => (
                     <tr key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer hover:bg-muted/30">
                       <td className="px-3 py-2.5 font-medium">{f.nombre}</td>
                       <td className="px-3 py-2.5 text-center"><span className="inline-flex items-center gap-1 text-[color:#2E6DA8] font-medium"><Home className="h-3 w-3" /> {f.nGar}</span></td>
@@ -187,25 +228,94 @@ function ClientesCRM() {
             </div>
           </Card>
 
-          {/* Tarjetas (celular) */}
-          <div className="space-y-2 md:hidden">
-            {filas.map((f) => (
-              <Card key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold">{f.nombre}</p>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span>
+          {/* Tarjetas (celular) — compactas */}
+          <div className="space-y-1.5 md:hidden">
+            {filasPagina.map((f) => (
+              <Card key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-[13px] font-semibold">{f.nombre}</p>
+                  <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span>
                 </div>
-                <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 font-medium text-[color:#2E6DA8]"><Home className="h-3 w-3" /> {f.nGar} {f.nGar === 1 ? "garantía" : "garantías"}</span>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-0.5 font-medium text-[color:#2E6DA8]"><Home className="h-2.5 w-2.5" /> {f.nGar}</span>
                   <span>Saldo: <b className="text-[color:#2E6DA8]">{fmtMXN(f.saldo)}</b></span>
                   {[...f.entidades].join(" / ") && <span>{[...f.entidades].join(" / ")}</span>}
+                  {f.docsMin < 6 && <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-800">Faltan docs</span>}
                 </p>
-                {f.docsMin < 6 && <span className="mt-1 inline-block rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">Faltan documentos</span>}
               </Card>
             ))}
           </div>
+
+          {/* Paginación */}
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{filas.length} clientes · pág. {paginaActual + 1} de {totalPaginas}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setPagina(paginaActual - 1)} disabled={paginaActual === 0} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-40">Anterior</button>
+                <button onClick={() => setPagina(paginaActual + 1)} disabled={paginaActual >= totalPaginas - 1} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-40">Siguiente</button>
+              </div>
+            </div>
+          )}
         </>
       )}
+
+      {agregando && <AgregarClienteModal onClose={() => setAgregando(false)} onCrear={crearCliente} />}
+    </div>
+  );
+}
+
+function AgregarClienteModal({ onClose, onCrear }: { onClose: () => void; onCrear: (d: { nombre: string; domicilio_garantia: string; valor_inmueble: string; folio: string }) => Promise<boolean> }) {
+  const [nombre, setNombre] = useState("");
+  const [domicilio, setDomicilio] = useState("");
+  const [valor, setValor] = useState("");
+  const [folio, setFolio] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+
+  const guardar = async () => {
+    if (!nombre.trim()) { setError("El nombre es obligatorio."); return; }
+    setGuardando(true); setError("");
+    const ok = await onCrear({ nombre, domicilio_garantia: domicilio, valor_inmueble: valor, folio });
+    setGuardando(false);
+    if (!ok) setError("No se pudo guardar. Intenta de nuevo.");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-base font-bold" style={{ color: "#0B1E3A" }}>Agregar cliente</p>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Nombre completo *</span>
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Ej. Juan Pérez López" />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Domicilio de la garantía</span>
+            <input value={domicilio} onChange={(e) => setDomicilio(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">Valor del inmueble</span>
+              <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="0" />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">Folio (opcional)</span>
+              <input value={folio} onChange={(e) => setFolio(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Se puede dejar vacío" />
+            </label>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Para ligar este cliente a un juicio y sus documentos, entra a su ficha después de crearlo.</p>
+          {error && <p className="text-[11px] text-red-600">{error}</p>}
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#2E6DA8" }}>
+            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar
+          </button>
+          <button onClick={onClose} className="rounded-md border px-4 py-2 text-sm">Cancelar</button>
+        </div>
+      </div>
     </div>
   );
 }
