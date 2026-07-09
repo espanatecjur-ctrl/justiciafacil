@@ -48,7 +48,7 @@ export function CarpetasCliente({ casoId, clienteNombre, expediente }: { casoId:
         <p className="mb-1.5 text-[11px] font-medium">Vincular carpeta o archivo del cliente</p>
         <div className="flex flex-wrap gap-2">
           <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Pega el enlace de una carpeta o un archivo de Drive…" className="min-w-0 flex-1 rounded-md border border-input px-2 py-1.5 text-sm" />
-          <button onClick={agregar} disabled={agregando || !link.trim()} className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--teal)" }}>{agregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Vincular</button>
+          <button onClick={agregar} disabled={agregando || !link.trim()} className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#2E6DA8" }}>{agregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Vincular</button>
         </div>
         <p className="mt-1 text-[10px] text-muted-foreground">Detecta solo si es carpeta o archivo. Puedes agregar los que quieras (varias carpetas y varios archivos).</p>
         {err && <p className="mt-1 text-xs text-amber-700">{err}</p>}
@@ -66,7 +66,7 @@ function CarpetaItem({ casoId, expediente, fila, onQuitar }: { casoId: string; e
   return (
     <div className="rounded-lg border border-border">
       <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"><FolderOpen className="h-3.5 w-3.5 text-[color:var(--teal)]" /> Carpeta del cliente</span>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"><FolderOpen className="h-3.5 w-3.5 text-[color:#2E6DA8]" /> Carpeta del cliente</span>
         <button onClick={onQuitar} title="Quitar carpeta" className="rounded-md p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
       <div className="p-2 space-y-2">
@@ -82,9 +82,9 @@ function ArchivoItem({ fila, onQuitar }: { fila: Item; onQuitar: () => void }) {
   const drive = `https://drive.google.com/file/d/${fila.drive_carpeta_id}/view`;
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border p-2.5">
-      <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
+      <FileText className="h-4 w-4 shrink-0 text-[color:#2E6DA8]" />
       <span className="min-w-0 flex-1 truncate text-sm" title={fila.drive_carpeta_nombre || ""}>{fila.drive_carpeta_nombre || "Archivo"}</span>
-      <BotonVerDoc driveId={fila.drive_carpeta_id} nombre={fila.drive_carpeta_nombre} label="Ver" className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline" />
+      <BotonVerDoc driveId={fila.drive_carpeta_id} nombre={fila.drive_carpeta_nombre} label="Ver" className="inline-flex items-center gap-1 text-xs text-[color:#2E6DA8] hover:underline" />
       <a href={drive} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>
       <button onClick={onQuitar} title="Quitar archivo" className="rounded-md p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
     </div>
