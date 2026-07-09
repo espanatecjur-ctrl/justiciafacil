@@ -405,10 +405,8 @@ function UCMFicha() {
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
-            <DocumentosFijos caso={c} area="UCM" />
-          </div>
+          <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
+          <DocumentosFijos caso={c} area="UCM" />
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="mb-2 flex items-center gap-2">
               <Users className="h-5 w-5 text-[color:var(--teal)]" />
