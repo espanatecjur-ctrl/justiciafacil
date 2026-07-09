@@ -9,8 +9,9 @@
 //    al almacén (descarga + carga real, con un clic).
 // ============================================================
 import { useEffect, useState } from "react";
-import { Pin, FileText, Loader2, Maximize2, ExternalLink, UploadCloud, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Pin, FileText, Loader2, Maximize2, ExternalLink, UploadCloud, AlertTriangle, CheckCircle2, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { listarCopias, firmarCopias, sincronizarCarpeta, revisarPendientesDrive, type Copia } from "@/lib/drive-explorar";
 import { subirDocumento } from "@/lib/drive";
@@ -32,13 +33,19 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
 
   const lista = Object.values(copias);
 
+  // Buscador: filtra por nombre, incluyendo lo que viene de subcarpetas (el nombre ya trae "Subcarpeta / archivo.pdf").
+  const [q, setQ] = useState("");
+  const listaBuscada = q.trim()
+    ? lista.filter((c) => (c.nombre || "").toLowerCase().includes(q.trim().toLowerCase()))
+    : lista;
+
   // Paginación: no renderizamos ni firmamos todo de un jalón — pesa mucho con muchos documentos.
   const POR_PAGINA = 12;
   const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [caso.id]);
-  const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
+  useEffect(() => { setPagina(0); }, [caso.id, q]);
+  const totalPaginas = Math.max(1, Math.ceil(listaBuscada.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas - 1);
-  const listaPagina = lista.slice(paginaActual * POR_PAGINA, paginaActual * POR_PAGINA + POR_PAGINA);
+  const listaPagina = listaBuscada.slice(paginaActual * POR_PAGINA, paginaActual * POR_PAGINA + POR_PAGINA);
 
   // Firma los enlaces solo de la página actual (para vista previa/descarga) — no todo el expediente de golpe.
   useEffect(() => {
@@ -87,13 +94,20 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
   };
 
   return (
-    <Card className="legal-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><Pin className="h-4 w-4" /></div>
-        <p className="text-sm font-semibold" style={{ color: "#0B1E3A" }}>Documentos fijos</p>
+    <Card className="legal-card p-5 space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-md bg-[color:var(--teal)]/10 text-[color:var(--teal)]"><Pin className="h-4.5 w-4.5" /></div>
+        <p className="text-base font-semibold" style={{ color: "#0B1E3A" }}>Documentos fijos</p>
         <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-2 py-0.5 text-[11px] font-medium text-[color:var(--teal)]">
           Copia del sistema
         </span>
+        <span className="text-xs text-muted-foreground">· se ve igual desde el celular</span>
+        {lista.length > 0 && (
+          <div className="relative ml-auto w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar documento (incluye subcarpetas)…" className="h-8 pl-8 text-xs" />
+          </div>
+        )}
       </div>
       <p className="text-xs text-muted-foreground">Aquí ves los documentos ya guardados en el sistema (no se navega Drive directamente).</p>
 
@@ -128,35 +142,37 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
         <p className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Cargando documentos…</p>
       ) : lista.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Todavía no hay documentos copiados al sistema para este expediente.</p>
+      ) : listaBuscada.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">Ningún documento coincide con “{q}”.</p>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {listaPagina.map((c) => (
             <div key={c.drive_id} className="overflow-hidden rounded-lg border border-border bg-white">
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
                 <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
                 <p className="min-w-0 flex-1 truncate text-xs font-medium" title={c.nombre || ""}>{c.nombre || "Documento"}</p>
               </div>
               <button
                 onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || "Documento", url: urls[c.storage_path] || "" })}
-                className="group relative block h-40 w-full bg-muted"
+                className="group relative block h-56 w-full bg-muted"
                 title="Ampliar vista previa"
               >
                 {(c.mime || "").startsWith("image/") && urls[c.storage_path] ? (
                   <img src={urls[c.storage_path]} alt={c.nombre || ""} loading="lazy" className="h-full w-full object-contain bg-white" />
                 ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
-                    {(c.mime || "").includes("pdf") ? <FileText className="h-8 w-8 text-red-500/60" />
-                      : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? <FileText className="h-8 w-8 text-emerald-600/60" />
-                      : <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />}
-                    <span className="text-[11px] font-medium text-muted-foreground">{(c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(c.nombre || "") ? "Word" : /\.(xlsx?)$/i.test(c.nombre || "") ? "Excel" : /\.(pptx?)$/i.test(c.nombre || "") ? "PowerPoint" : "Documento copiado"}</span>
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center">
+                    {(c.mime || "").includes("pdf") ? <FileText className="h-12 w-12 text-red-500/60" />
+                      : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? <FileText className="h-12 w-12 text-emerald-600/60" />
+                      : <FileText className="h-12 w-12 text-[color:var(--teal)]/50" />}
+                    <span className="text-xs font-medium text-muted-foreground">{(c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(c.nombre || "") ? "Word" : /\.(xlsx?)$/i.test(c.nombre || "") ? "Excel" : /\.(pptx?)$/i.test(c.nombre || "") ? "PowerPoint" : "Documento copiado"}</span>
                   </div>
                 )}
                 <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2.5 py-1.5 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
                 </span>
               </button>
-              <div className="flex items-center justify-between px-3 py-1.5">
+              <div className="flex items-center justify-between px-3 py-2">
                 <button onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || "Documento", url: urls[c.storage_path] || "" })} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
                 {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
               </div>
@@ -165,7 +181,7 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
         </div>
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{lista.length} documentos · pág. {paginaActual + 1} de {totalPaginas}</span>
+            <span>{listaBuscada.length} documento{listaBuscada.length === 1 ? "" : "s"} · pág. {paginaActual + 1} de {totalPaginas}</span>
             <div className="flex gap-2">
               <button onClick={() => setPagina(paginaActual - 1)} disabled={paginaActual === 0} className="rounded-md border border-input px-2.5 py-1 disabled:opacity-40">Anterior</button>
               <button onClick={() => setPagina(paginaActual + 1)} disabled={paginaActual >= totalPaginas - 1} className="rounded-md border border-input px-2.5 py-1 disabled:opacity-40">Siguiente</button>
