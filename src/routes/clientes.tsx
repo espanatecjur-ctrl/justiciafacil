@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, Users, Loader2, Gavel, ChevronRight, Home } from "lucide-react";
+import { Search, Users, Loader2, Gavel, Home, Download } from "lucide-react";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({ meta: [{ title: "Clientes — JusticiaFácil" }] }),
@@ -20,52 +20,111 @@ interface Cli {
   doc_ine: boolean | null; doc_comprobante: boolean | null; doc_acta_nac: boolean | null;
   doc_curp: boolean | null; doc_csf: boolean | null; doc_acta_matri: boolean | null;
   formalizacion_solicitada: boolean | null;
-  caso_juridico?: { id: string; expediente: string | null } | null;
+  caso_juridico?: { id: string; expediente: string | null; unidad: string | null; entidad: string | null; no_credito: string | null } | null;
 }
 const DOCS: (keyof Cli)[] = ["doc_ine", "doc_comprobante", "doc_acta_nac", "doc_curp", "doc_csf", "doc_acta_matri"];
 const nDocs = (c: Cli) => DOCS.filter((k) => c[k]).length;
 
+// Progresión de las unidades: URRJ -> UCP -> UCM -> UFC. Si hay formalización iniciada, ya es UFC
+// (aunque el caso siga marcado como UCM), porque es la etapa más avanzada.
+const AREA_ORDEN = ["URRJ", "UCP", "UCM", "UDP", "UFC"];
+const areaClase: Record<string, string> = {
+  URRJ: "bg-purple-100 text-purple-800 border-purple-200",
+  UCP: "bg-blue-100 text-blue-800 border-blue-200",
+  UCM: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  UDP: "bg-amber-100 text-amber-800 border-amber-200",
+  UFC: "bg-red-100 text-red-800 border-red-200",
+};
+
 function ClientesCRM() {
   const navigate = useNavigate();
   const [clientes, setClientes] = useState<Cli[]>([]);
+  const [casoUFC, setCasoUFC] = useState<Set<string>>(new Set());
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
+  const [entidad, setEntidad] = useState("todas");
 
   useEffect(() => {
-    fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente)&en_papelera=eq.false&order=nombre.asc`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?select=*,caso_juridico(id,expediente,unidad,entidad,no_credito)&en_papelera=eq.false&order=nombre.asc`, { headers })
       .then((r) => (r.ok ? r.json() : [])).then(setClientes).catch(() => {}).finally(() => setCargando(false));
+    // Casos con formalización iniciada (UFC) — para saber cuál mostrar como área más avanzada.
+    fetch(`${SUPABASE_URL}/rest/v1/formalizacion?select=caso_id&en_papelera=eq.false`, { headers })
+      .then((r) => (r.ok ? r.json() : [])).then((rows: any[]) => setCasoUFC(new Set(rows.map((x) => x.caso_id).filter(Boolean)))).catch(() => {});
   }, []);
+
+  const areaDe = (c: Cli): string => {
+    if (c.caso_juridico?.id && casoUFC.has(c.caso_juridico.id)) return "UFC";
+    return c.caso_juridico?.unidad || "—";
+  };
+
+  const entidades = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of clientes) if (c.caso_juridico?.entidad) set.add(c.caso_juridico.entidad);
+    return Array.from(set).sort();
+  }, [clientes]);
 
   const filtrados = useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return clientes;
-    return clientes.filter((c) => [c.nombre, c.domicilio_garantia, c.folio, c.caso_juridico?.expediente].some((v) => (v || "").toLowerCase().includes(t)));
-  }, [clientes, q]);
+    return clientes.filter((c) => {
+      if (entidad !== "todas" && (c.caso_juridico?.entidad || "") !== entidad) return false;
+      if (!t) return true;
+      return [c.nombre, c.domicilio_garantia, c.folio, c.caso_juridico?.expediente, c.caso_juridico?.no_credito].some((v) => (v || "").toLowerCase().includes(t));
+    });
+  }, [clientes, q, entidad]);
 
-  // Agrupar: por juicio -> por cliente (un renglón por cliente, con cuántas garantías)
-  const grupos = useMemo(() => {
-    const byJ = new Map<string, { key: string; id?: string; expediente: string; clientes: Map<string, { nombre: string; nGar: number; valor: number; saldo: number; docsMin: number; formalizadas: number }>; saldo: number }>();
+  // Un renglón por cliente (agrupa sus garantías), con el área más avanzada entre todas sus garantías.
+  const filas = useMemo(() => {
+    const m = new Map<string, { nombre: string; nGar: number; valor: number; saldo: number; docsMin: number; formalizadas: number; areas: Set<string>; entidades: Set<string>; folios: string[]; expedientes: string[]; caso_id?: string }>();
     for (const c of filtrados) {
-      const jk = c.caso_juridico?.id || "sin";
-      if (!byJ.has(jk)) byJ.set(jk, { key: jk, id: c.caso_juridico?.id, expediente: c.caso_juridico?.expediente || "Sin juicio ligado", clientes: new Map(), saldo: 0 });
-      const g = byJ.get(jk)!;
       const nk = (c.nombre || "—").toLowerCase().trim();
-      if (!g.clientes.has(nk)) g.clientes.set(nk, { nombre: c.nombre || "—", nGar: 0, valor: 0, saldo: 0, docsMin: 6, formalizadas: 0 });
-      const cl = g.clientes.get(nk)!;
-      cl.nGar += 1; cl.valor += Number(c.total) || 0; cl.saldo += Number(c.saldo) || 0;
-      cl.docsMin = Math.min(cl.docsMin, nDocs(c));
-      if (c.formalizacion_solicitada) cl.formalizadas += 1;
-      g.saldo += Number(c.saldo) || 0;
+      if (!m.has(nk)) m.set(nk, { nombre: c.nombre || "—", nGar: 0, valor: 0, saldo: 0, docsMin: 6, formalizadas: 0, areas: new Set(), entidades: new Set(), folios: [], expedientes: [], caso_id: c.caso_juridico?.id });
+      const f = m.get(nk)!;
+      f.nGar += 1; f.valor += Number(c.total) || 0; f.saldo += Number(c.saldo) || 0;
+      f.docsMin = Math.min(f.docsMin, nDocs(c));
+      if (c.formalizacion_solicitada) f.formalizadas += 1;
+      f.areas.add(areaDe(c));
+      if (c.caso_juridico?.entidad) f.entidades.add(c.caso_juridico.entidad);
+      if (c.folio) f.folios.push(c.folio);
+      if (c.caso_juridico?.expediente) f.expedientes.push(c.caso_juridico.expediente);
     }
-    return [...byJ.values()].map((g) => ({ ...g, clientes: [...g.clientes.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)) }));
-  }, [filtrados]);
+    return [...m.values()].map((f) => {
+      // la más avanzada de sus áreas, según el orden de la operación
+      const areaActual = [...f.areas].filter((a) => a !== "—").sort((a, b) => AREA_ORDEN.indexOf(b) - AREA_ORDEN.indexOf(a))[0] || "—";
+      return { ...f, areaActual };
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [filtrados, casoUFC]);
 
-  const totalClientes = useMemo(() => new Set(filtrados.map((c) => (c.nombre || "").toLowerCase().trim())).size, [filtrados]);
+  const totalClientes = filas.length;
   const saldoTotal = filtrados.reduce((a, c) => a + (Number(c.saldo) || 0), 0);
+
+  const descargarExcel = () => {
+    const cols = ["Cliente", "Garantías", "Área actual", "Estado/Ciudad", "Folio(s)", "Expediente(s)", "Valor total", "Saldo total", "Documentos", "Formalización"];
+    const filasCSV = filas.map((f) => [
+      f.nombre, f.nGar, f.areaActual, [...f.entidades].join(" / ") || "—",
+      f.folios.join(" / ") || "—", f.expedientes.join(" / ") || "—",
+      f.valor, f.saldo, `${f.docsMin}/6`, f.formalizadas > 0 ? `${f.formalizadas} en formalización` : "—",
+    ]);
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csv = [cols.map(esc).join(","), ...filasCSV.map((r) => r.map(esc).join(","))].join("\r\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Clientes" description="Cada cliente con cuántas garantías tiene. Entra a su ficha para ver la relación y mandar a formalizar." />
+      <PageHeader
+        title="Clientes"
+        description="Cada cliente con cuántas garantías tiene y en qué área va cada una. Entra a su ficha para ver el detalle."
+        actions={
+          <button onClick={descargarExcel} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
+            <Download className="h-4 w-4" /> Descargar Excel
+          </button>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="p-4"><p className="text-2xl font-bold text-[color:var(--teal)]">{totalClientes}</p><p className="text-xs text-muted-foreground">Clientes</p></Card>
@@ -73,47 +132,79 @@ function ClientesCRM() {
         <Card className="p-4"><p className="text-lg font-bold text-[color:var(--teal)]">{fmtMXN(saldoTotal)}</p><p className="text-xs text-muted-foreground">Saldo total</p></Card>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por cliente, domicilio, folio o expediente…" className="pl-9" />
-      </div>
+      <Card className="p-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por cliente, domicilio, folio, crédito o expediente…" className="pl-9" />
+          </div>
+          <select value={entidad} onChange={(e) => setEntidad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="todas">Todas las ciudades/estados</option>
+            {entidades.map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+        </div>
+      </Card>
 
       {cargando ? (
         <Card className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></Card>
-      ) : filtrados.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">{clientes.length === 0 ? "Aún no hay clientes cargados." : "Sin resultados con esa búsqueda."}</Card>
+      ) : filas.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">{clientes.length === 0 ? "Aún no hay clientes cargados." : "Sin resultados con esos filtros."}</Card>
       ) : (
-        <div className="space-y-3">
-          {grupos.map((g) => (
-            <Card key={g.key} className="overflow-hidden">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/40 px-3 py-2">
-                {g.id ? (
-                  <button onClick={() => navigate({ to: "/ucm-ficha", search: { id: g.id } as any })} className="inline-flex items-center gap-1 text-sm font-semibold text-[color:var(--teal)] hover:underline"><Gavel className="h-4 w-4" /> Juicio {g.expediente}</button>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground"><Gavel className="h-4 w-4" /> {g.expediente}</span>
-                )}
-                <span className="text-xs text-muted-foreground">· {g.clientes.length} clientes · saldo {fmtMXN(g.saldo)}</span>
-              </div>
-              <div className="divide-y divide-border">
-                {g.clientes.map((cl) => (
-                  <button key={cl.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: cl.nombre } as any })}
-                    className="flex w-full items-center justify-between gap-2 p-3 text-left hover:bg-muted/30">
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-semibold">{cl.nombre}</p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
-                        <span className="inline-flex items-center gap-1 font-medium text-[color:var(--teal)]"><Home className="h-3 w-3" /> {cl.nGar} {cl.nGar === 1 ? "garantía" : "garantías"}</span>
-                        <span>Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(cl.saldo)}</b></span>
-                        {cl.docsMin < 6 && <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-800">Faltan documentos</span>}
-                        {cl.formalizadas > 0 && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-800">{cl.formalizadas} en formalización</span>}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </button>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
+        <>
+          {/* Tabla tipo Excel (compu) */}
+          <Card className="hidden overflow-hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left">Cliente</th>
+                    <th className="px-3 py-2.5 text-center">Garantías</th>
+                    <th className="px-3 py-2.5 text-left">Área actual</th>
+                    <th className="px-3 py-2.5 text-left">Ciudad/Estado</th>
+                    <th className="px-3 py-2.5 text-left">Folio(s)</th>
+                    <th className="px-3 py-2.5 text-right">Valor</th>
+                    <th className="px-3 py-2.5 text-right">Saldo</th>
+                    <th className="px-3 py-2.5 text-center">Docs</th>
+                    <th className="px-3 py-2.5 text-left">Formalización</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filas.map((f) => (
+                    <tr key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer hover:bg-muted/30">
+                      <td className="px-3 py-2.5 font-medium">{f.nombre}</td>
+                      <td className="px-3 py-2.5 text-center"><span className="inline-flex items-center gap-1 text-[color:var(--teal)] font-medium"><Home className="h-3 w-3" /> {f.nGar}</span></td>
+                      <td className="px-3 py-2.5"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span></td>
+                      <td className="px-3 py-2.5 text-muted-foreground">{[...f.entidades].join(" / ") || "—"}</td>
+                      <td className="max-w-[160px] truncate px-3 py-2.5 text-muted-foreground" title={f.folios.join(" / ")}>{f.folios.join(" / ") || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right">{fmtMXN(f.valor)}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-[color:var(--teal)]">{fmtMXN(f.saldo)}</td>
+                      <td className="px-3 py-2.5 text-center">{f.docsMin}/6{f.docsMin < 6 && <span className="ml-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">faltan</span>}</td>
+                      <td className="px-3 py-2.5">{f.formalizadas > 0 ? <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-800">{f.formalizadas} en tramite</span> : <span className="text-muted-foreground">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Tarjetas (celular) */}
+          <div className="space-y-2 md:hidden">
+            {filas.map((f) => (
+              <Card key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold">{f.nombre}</p>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span>
+                </div>
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 font-medium text-[color:var(--teal)]"><Home className="h-3 w-3" /> {f.nGar} {f.nGar === 1 ? "garantía" : "garantías"}</span>
+                  <span>Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(f.saldo)}</b></span>
+                  {[...f.entidades].join(" / ") && <span>{[...f.entidades].join(" / ")}</span>}
+                </p>
+                {f.docsMin < 6 && <span className="mt-1 inline-block rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">Faltan documentos</span>}
+              </Card>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
