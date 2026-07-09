@@ -17,8 +17,9 @@ import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarCarpeta, listarTodo, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
-import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, type ModuloPerm } from "@/lib/permisos-acciones";
+import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, puedeVerDriveAvanzado, type ModuloPerm } from "@/lib/permisos-acciones";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { DocumentosFijos } from "@/components/documentos-fijos";
 
 // Carga JSZip desde CDN solo cuando se necesita (para armar los .zip).
 async function cargarJSZip(): Promise<any> {
@@ -74,6 +75,16 @@ export function CarpetaDriveVinculada({
     puedeAbrirDrive(modulo).then(setPuedeDrive).catch(() => setPuedeDrive(false));
   }, [modulo]);
 
+  // ---- Prueba piloto: solo en UCM se separa "Documentos fijos" del explorador completo ----
+  // (UCP / URRJ / Expediente siguen viendo el explorador de siempre hasta que se apruebe el cambio).
+  const enPrueba = modulo === "ucm";
+  const [driveAvanzado, setDriveAvanzado] = useState(!enPrueba); // fuera de la prueba: comportamiento de siempre
+  useEffect(() => {
+    if (!enPrueba) { setDriveAvanzado(true); return; }
+    puedeVerDriveAvanzado(modulo).then(setDriveAvanzado).catch(() => setDriveAvanzado(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modulo, enPrueba]);
+
   const [eligiendo, setEligiendo] = useState(false);
   const [docs, setDocs] = useState<ItemDrive[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -100,7 +111,7 @@ export function CarpetaDriveVinculada({
   const sincronizar = async () => {
     if (!carpetaId) return;
     setSincro(true); setMsgSincro(null);
-    const r = await sincronizarCarpeta(caso.id, carpetaId);
+    const r = await sincronizarCarpeta(caso.id, carpetaId, area || "UCM", caso.no_credito || undefined);
     setSincro(false);
     if (!r.ok) { setMsgSincro("⚠️ " + (r.error || "No se pudo sincronizar.")); return; }
     const partes = [`Copiados: ${r.copiados ?? 0}`];
@@ -400,6 +411,11 @@ export function CarpetaDriveVinculada({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pag, filtroDoc, docs, copias]);
+
+  // Sin el permiso "drive_avanzado" (solo en el módulo en prueba, UCM): panel liviano de solo copias.
+  if (enPrueba && !driveAvanzado) {
+    return <DocumentosFijos caso={caso} area={area || "UCM"} />;
+  }
 
   return (
     <Card className="legal-card p-4 space-y-3">
