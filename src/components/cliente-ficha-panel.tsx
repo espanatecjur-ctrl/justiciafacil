@@ -18,17 +18,17 @@ const DOCS: { k: keyof ClienteJuicio; label: string }[] = [
 function Dato({ label, valor, importante }: { label: string; valor?: React.ReactNode; importante?: boolean }) {
   const vacio = valor === null || valor === undefined || valor === "";
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-right text-sm">{vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}</span>
+    <div className="flex items-start justify-between gap-2 border-b border-border/60 py-1 last:border-0 sm:py-1.5">
+      <span className="text-[11px] text-muted-foreground sm:text-xs">{label}</span>
+      <span className="text-right text-xs sm:text-sm">{vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}</span>
     </div>
   );
 }
 function Seccion({ icon, titulo, accion, children }: { icon: React.ReactNode; titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: AZUL }}>{icon} {titulo}</p>
+    <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 sm:mb-3">
+        <p className="flex items-center gap-1.5 text-xs font-semibold sm:text-sm" style={{ color: AZUL }}>{icon} {titulo}</p>
         {accion}
       </div>
       {children}
@@ -82,12 +82,12 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated }: {
   };
 
   const filaPago = (label: string, mk: keyof typeof f, fk: keyof typeof f) => (
-    <div className="flex items-center justify-between gap-2 border-b border-border/60 py-1.5 text-xs last:border-0">
+    <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/60 py-1 text-[11px] last:border-0 sm:py-1.5 sm:text-xs">
       <span className="text-muted-foreground">{label}</span>
       {edit ? (
-        <div className="flex items-center gap-2">
-          <input inputMode="decimal" value={f[mk]} onChange={(e) => set(mk, e.target.value)} className="w-24 rounded-md border border-input px-2 py-1 text-right" placeholder="0" />
-          <input type="date" value={f[fk]} onChange={(e) => set(fk, e.target.value)} className="rounded-md border border-input px-2 py-1 text-[11px]" />
+        <div className="flex items-center gap-1.5">
+          <input inputMode="decimal" value={f[mk]} onChange={(e) => set(mk, e.target.value)} className="w-20 rounded-md border border-input px-1.5 py-1 text-right sm:w-24 sm:px-2" placeholder="0" />
+          <input type="date" value={f[fk]} onChange={(e) => set(fk, e.target.value)} className="rounded-md border border-input px-1.5 py-1 text-[10px] sm:px-2 sm:text-[11px]" />
         </div>
       ) : (
         <span className="text-right">{fmtMXN(f[mk])} <span className="text-muted-foreground">· {f[fk] || "—"}</span></span>
@@ -96,8 +96,8 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated }: {
   );
 
   return (
-    <div className="space-y-4 border-t border-border pt-4">
-      <div className="grid gap-4 lg:grid-cols-2">
+    <div className="space-y-3 border-t border-border pt-3 sm:space-y-4 sm:pt-4">
+      <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
         {/* Antecedente de la garantía */}
         <Seccion icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />} titulo="Antecedente de la garantía">
           <Dato label="Cliente" valor={cliente.nombre} importante />
@@ -118,11 +118,11 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated }: {
           icon={<Save className="h-4 w-4" style={{ color: AZUL }} />}
           titulo="Pagos y saldo"
           accion={!edit ? (
-            <button onClick={() => setEdit(true)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Pencil className="h-3 w-3" /> Editar / validar</button>
+            <button onClick={() => setEdit(true)} className="inline-flex items-center gap-1 rounded-md border border-input px-1.5 py-1 text-[10px] font-medium hover:bg-muted sm:px-2 sm:text-[11px]" style={{ color: AZUL }}><Pencil className="h-3 w-3" /> Editar</button>
           ) : (
-            <div className="flex gap-2">
-              <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: AZUL }}>{guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
-              <button onClick={() => setEdit(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
+            <div className="flex gap-1.5">
+              <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] font-semibold text-white disabled:opacity-60 sm:px-3 sm:py-1.5 sm:text-xs" style={{ background: AZUL }}>{guardando ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Guardar</button>
+              <button onClick={() => setEdit(false)} className="rounded-md border border-input px-2.5 py-1 text-[10px] font-medium hover:bg-muted sm:px-3 sm:py-1.5 sm:text-xs">Cancelar</button>
             </div>
           )}
         >
@@ -136,7 +136,7 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated }: {
           {filaPago("Pago 35%", "pago35_monto", "pago35_fecha")}
           {filaPago("Pago 50%", "pago50_monto", "pago50_fecha")}
           {filaPago("Finiquito", "finiquito_monto", "finiquito_fecha")}
-          <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2.5 text-xs">
+          <div className="mt-2 grid grid-cols-3 gap-1.5 rounded-lg bg-muted/40 p-2 text-[10px] sm:gap-2 sm:p-2.5 sm:text-xs">
             <span>Valor<br /><b>{fmtMXN(total)}</b></span>
             <span>Pagado<br /><b className="text-emerald-700">{fmtMXN(pagado)}</b></span>
             <span>Saldo<br /><b style={{ color: AZUL }}>{fmtMXN(saldo)}</b></span>
@@ -146,10 +146,10 @@ export function ClienteFichaPanel({ cliente, juicio, onUpdated }: {
 
       {/* Documentos */}
       <Seccion icon={<FolderOpen className="h-4 w-4" style={{ color: AZUL }} />} titulo={`Documentos · ${nDocs}/6`}>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {DOCS.map((d) => (
-            <span key={d.k} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${cliente[d.k] ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-muted/40 text-muted-foreground"}`}>
-              {cliente[d.k] ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} {d.label}
+            <span key={d.k} className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] sm:px-2 sm:text-[11px] ${cliente[d.k] ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-muted/40 text-muted-foreground"}`}>
+              {cliente[d.k] ? <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> : <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />} {d.label}
             </span>
           ))}
         </div>
