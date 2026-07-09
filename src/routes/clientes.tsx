@@ -127,9 +127,9 @@ function ClientesCRM() {
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="p-4"><p className="text-2xl font-bold text-[color:var(--teal)]">{totalClientes}</p><p className="text-xs text-muted-foreground">Clientes</p></Card>
+        <Card className="p-4"><p className="text-2xl font-bold text-[color:#2E6DA8]">{totalClientes}</p><p className="text-xs text-muted-foreground">Clientes</p></Card>
         <Card className="p-4"><p className="text-2xl font-bold">{filtrados.length}</p><p className="text-xs text-muted-foreground">Garantías</p></Card>
-        <Card className="p-4"><p className="text-lg font-bold text-[color:var(--teal)]">{fmtMXN(saldoTotal)}</p><p className="text-xs text-muted-foreground">Saldo total</p></Card>
+        <Card className="p-4"><p className="text-lg font-bold text-[color:#2E6DA8]">{fmtMXN(saldoTotal)}</p><p className="text-xs text-muted-foreground">Saldo total</p></Card>
       </div>
 
       <Card className="p-3">
@@ -172,12 +172,12 @@ function ClientesCRM() {
                   {filas.map((f) => (
                     <tr key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer hover:bg-muted/30">
                       <td className="px-3 py-2.5 font-medium">{f.nombre}</td>
-                      <td className="px-3 py-2.5 text-center"><span className="inline-flex items-center gap-1 text-[color:var(--teal)] font-medium"><Home className="h-3 w-3" /> {f.nGar}</span></td>
+                      <td className="px-3 py-2.5 text-center"><span className="inline-flex items-center gap-1 text-[color:#2E6DA8] font-medium"><Home className="h-3 w-3" /> {f.nGar}</span></td>
                       <td className="px-3 py-2.5"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span></td>
                       <td className="px-3 py-2.5 text-muted-foreground">{[...f.entidades].join(" / ") || "—"}</td>
                       <td className="max-w-[160px] truncate px-3 py-2.5 text-muted-foreground" title={f.folios.join(" / ")}>{f.folios.join(" / ") || "—"}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right">{fmtMXN(f.valor)}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-[color:var(--teal)]">{fmtMXN(f.saldo)}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-[color:#2E6DA8]">{fmtMXN(f.saldo)}</td>
                       <td className="px-3 py-2.5 text-center">{f.docsMin}/6{f.docsMin < 6 && <span className="ml-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">faltan</span>}</td>
                       <td className="px-3 py-2.5">{f.formalizadas > 0 ? <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-800">{f.formalizadas} en tramite</span> : <span className="text-muted-foreground">—</span>}</td>
                     </tr>
@@ -196,8 +196,8 @@ function ClientesCRM() {
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span>
                 </div>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 font-medium text-[color:var(--teal)]"><Home className="h-3 w-3" /> {f.nGar} {f.nGar === 1 ? "garantía" : "garantías"}</span>
-                  <span>Saldo: <b className="text-[color:var(--teal)]">{fmtMXN(f.saldo)}</b></span>
+                  <span className="inline-flex items-center gap-1 font-medium text-[color:#2E6DA8]"><Home className="h-3 w-3" /> {f.nGar} {f.nGar === 1 ? "garantía" : "garantías"}</span>
+                  <span>Saldo: <b className="text-[color:#2E6DA8]">{fmtMXN(f.saldo)}</b></span>
                   {[...f.entidades].join(" / ") && <span>{[...f.entidades].join(" / ")}</span>}
                 </p>
                 {f.docsMin < 6 && <span className="mt-1 inline-block rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">Faltan documentos</span>}
