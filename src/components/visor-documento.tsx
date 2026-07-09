@@ -6,8 +6,8 @@
 // - Si NO está copiado (solo Drive): NO embebe Google; invita a
 //   sincronizar y deja un enlace a Drive por si tiene acceso.
 // ============================================================
-import { useState } from "react";
-import { Eye, X, ExternalLink, FileText, CloudUpload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, X, ExternalLink, FileText, CloudUpload, Loader2 } from "lucide-react";
 
 /** Convierte un enlace a su forma embebible (se conserva por compatibilidad). */
 export function urlVistaPrevia(url: string, driveId?: string | null): string {
@@ -25,11 +25,24 @@ export function urlVistaPrevia(url: string, driveId?: string | null): string {
 export function VisorDocumentoModal({ url, driveId, nombre, onCerrar }: { url: string; driveId?: string | null; nombre?: string | null; onCerrar: () => void }) {
   const ref = (nombre || url || "").toLowerCase();
   const esImagen = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|&|$)/.test(ref);
-  // Word / Excel / PowerPoint: el navegador no los abre solo — se embeben con el visor de Google.
+  // Word / Excel / PowerPoint: el navegador no los abre solo — se embeben con el visor de Office.
   const esOffice = /\.(docx?|xlsx?|pptx?)(\?|&|$)/.test(ref);
+  const esCSV = /\.csv(\?|&|$)/.test(ref);
   const enSistema = !!url && !driveId; // hay copia en el sistema (Storage)
   const abrir = url || (driveId ? `https://drive.google.com/file/d/${driveId}/view` : "");
-  const urlOffice = enSistema && esOffice ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true` : "";
+  // El visor de Office de Microsoft es más confiable que el de Google para Excel/Word/PowerPoint.
+  const urlOffice = enSistema && esOffice ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}` : "";
+
+  // CSV: no hay visor embebible bueno — lo leemos y lo pintamos como tabla.
+  const [filasCSV, setFilasCSV] = useState<string[][] | null>(null);
+  const [errorCSV, setErrorCSV] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enSistema || !esCSV || !url) return;
+    fetch(url).then((r) => r.text()).then((txt) => {
+      const filas = txt.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(0, 500).map((l) => l.split(","));
+      setFilasCSV(filas);
+    }).catch(() => setErrorCSV("No se pudo leer el CSV."));
+  }, [enSistema, esCSV, url]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-4" onClick={onCerrar}>
@@ -50,6 +63,24 @@ export function VisorDocumentoModal({ url, driveId, nombre, onCerrar }: { url: s
         ) : esImagen ? (
           <div className="min-h-0 flex-1 overflow-auto bg-muted p-2">
             <img src={url} alt={nombre || "Documento"} className="mx-auto max-h-full max-w-full object-contain" />
+          </div>
+        ) : esCSV ? (
+          <div className="min-h-0 flex-1 overflow-auto bg-white p-2">
+            {errorCSV ? (
+              <p className="p-4 text-sm text-muted-foreground">{errorCSV}</p>
+            ) : !filasCSV ? (
+              <p className="p-4 text-sm text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Cargando…</p>
+            ) : (
+              <table className="w-full border-collapse text-xs">
+                <tbody>
+                  {filasCSV.map((fila, i) => (
+                    <tr key={i} className={i === 0 ? "bg-muted/70 font-semibold" : "odd:bg-muted/20"}>
+                      {fila.map((celda, j) => <td key={j} className="border border-border px-2 py-1">{celda}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         ) : esOffice ? (
           <>
