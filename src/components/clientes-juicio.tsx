@@ -1,6 +1,6 @@
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useState } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Users, Loader2, Eye, FileSignature, Check } from "lucide-react";
+import { Users, Loader2, FileSignature, Check } from "lucide-react";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 import { Card } from "@/components/ui/card";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
@@ -95,12 +95,10 @@ export function ClientesJuicio({ casoId, juicioExpediente }: { casoId: string; j
               </tr>
             </thead>
             <tbody>
-              {clientes.map((c) => {
+                {clientes.map((c) => {
                 const s = semaforo(c);
-                const open = abierto === c.id;
                 return (
-                  <Fragment key={c.id}>
-                    <tr onClick={() => setAbierto(open ? null : c.id)} className="cursor-pointer border-b border-border hover:bg-muted/30">
+                    <tr key={c.id} onClick={() => setAbierto(c.id)} className="cursor-pointer border-b border-border hover:bg-muted/30">
                       <td className="whitespace-nowrap px-3 py-2 font-medium text-[color:var(--teal)]">{c.folio || "—"}</td>
                       <td className="px-3 py-2">{c.nombre || "—"}</td>
                       <td className="max-w-[220px] truncate px-3 py-2 text-muted-foreground" title={c.domicilio_garantia || ""}>{c.domicilio_garantia || "—"}</td>
@@ -109,17 +107,8 @@ export function ClientesJuicio({ casoId, juicioExpediente }: { casoId: string; j
                       <td className="whitespace-nowrap px-3 py-2 text-right text-emerald-700">{fmtMXN(c.pagado)}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-[color:var(--teal)]">{fmtMXN(c.saldo)}</td>
                       <td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.txt}</span></td>
-                      <td className="px-2 py-2 text-right"><Eye className="inline h-4 w-4 text-muted-foreground" /></td>
+                      <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>{botonFormalizar(c)}</td>
                     </tr>
-                    {open && (
-                      <tr className="border-b border-border bg-muted/10">
-                        <td colSpan={9} className="px-3 pb-3">
-                          <ClienteFichaPanel cliente={c} juicio={{ id: casoId }} onUpdated={recargar} />
-                          <div className="mt-2">{botonFormalizar(c)}</div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
                 );
               })}
             </tbody>
@@ -129,6 +118,10 @@ export function ClientesJuicio({ casoId, juicioExpediente }: { casoId: string; j
 
       {solicitar && (
         <SolicitarFormalizacion cliente={solicitar} casoId={casoId} onClose={() => setSolicitar(null)} onHecho={recargar} />
+      )}
+
+      {abierto && clientes.find((c) => c.id === abierto) && (
+        <ClienteFichaPanel cliente={clientes.find((c) => c.id === abierto)!} juicio={{ id: casoId }} onUpdated={recargar} onCerrar={() => setAbierto(null)} />
       )}
     </div>
   );
