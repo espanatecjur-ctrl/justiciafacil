@@ -93,18 +93,18 @@ function ClientePage() {
       ) : gars.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           <p className="font-medium text-foreground">No se encontró este cliente en el CRM.</p>
-          <p className="mt-1 text-xs">El nombre no coincide con ninguna garantía registrada (puede venir de UFC u otro juicio, o tener el nombre distinto). Búscalo en <button onClick={() => navigate({ to: "/clientes" })} className="font-medium text-[color:var(--teal)] hover:underline">Clientes</button>.</p>
+          <p className="mt-1 text-xs">El nombre no coincide con ninguna garantía registrada (puede venir de UFC u otro juicio, o tener el nombre distinto). Búscalo en <button onClick={() => navigate({ to: "/clientes" })} className="font-medium text-[color:#2E6DA8] hover:underline">Clientes</button>.</p>
         </Card>
       ) : (
         <>
           {/* Resumen del cliente */}
           <div className="grid gap-3 sm:grid-cols-4">
-            <Card className="p-4"><p className="text-2xl font-bold text-[color:var(--teal)]">{gars.length}</p><p className="text-xs text-muted-foreground">Garantías (UCM)</p></Card>
+            <Card className="p-4"><p className="text-2xl font-bold text-[color:#2E6DA8]">{gars.length}</p><p className="text-xs text-muted-foreground">Garantías (UCM)</p></Card>
             <Card className="p-4"><p className="text-lg font-bold">{fmtMXN(totalValor)}</p><p className="text-xs text-muted-foreground">Valor total</p></Card>
-            <Card className="p-4"><p className="text-lg font-bold text-[color:var(--teal)]">{fmtMXN(totalSaldo)}</p><p className="text-xs text-muted-foreground">Saldo total</p></Card>
+            <Card className="p-4"><p className="text-lg font-bold text-[color:#2E6DA8]">{fmtMXN(totalSaldo)}</p><p className="text-xs text-muted-foreground">Saldo total</p></Card>
             {juicio?.expediente && (
               <Card className="flex items-center justify-center p-4">
-                <button onClick={() => navigate({ to: "/ucm-ficha", search: { id: juicio.id } as any })} className="inline-flex items-center gap-1 text-sm font-semibold text-[color:var(--teal)] hover:underline"><Gavel className="h-4 w-4" /> Juicio {juicio.expediente}</button>
+                <button onClick={() => navigate({ to: "/ucm-ficha", search: { id: juicio.id } as any })} className="inline-flex items-center gap-1 text-sm font-semibold text-[color:#2E6DA8] hover:underline"><Gavel className="h-4 w-4" /> Juicio {juicio.expediente}</button>
               </Card>
             )}
           </div>
@@ -122,10 +122,10 @@ function ClientePage() {
 
           {/* pestañas */}
           <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-            <button onClick={() => setModulo("general")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "general" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "general" ? { background: "var(--teal)" } : undefined}>
+            <button onClick={() => setModulo("general")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "general" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "general" ? { background: "#2E6DA8" } : undefined}>
               <LayoutGrid className="h-4 w-4" /> General
             </button>
-            <button onClick={() => setModulo("documentos")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "documentos" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "documentos" ? { background: "var(--teal)" } : undefined}>
+            <button onClick={() => setModulo("documentos")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "documentos" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "documentos" ? { background: "#2E6DA8" } : undefined}>
               <FolderOpen className="h-4 w-4" /> Documentos
             </button>
             {([
@@ -134,7 +134,7 @@ function ClientePage() {
               { id: "ucm" as const, label: "UCM" },
               { id: "udp" as const, label: "UDP" },
             ]).map((t) => (
-              <button key={t.id} onClick={() => setModulo(t.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === t.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === t.id ? { background: "var(--teal)" } : undefined}>
+              <button key={t.id} onClick={() => setModulo(t.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === t.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === t.id ? { background: "#2E6DA8" } : undefined}>
                 <Gavel className="h-4 w-4" /> {t.label}
               </button>
             ))}
@@ -143,7 +143,7 @@ function ClientePage() {
           {/* ============ GENERAL ============ */}
           {modulo === "general" && (
           <Card className="overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5"><Home className="h-4 w-4 text-[color:var(--teal)]" /><h3 className="text-sm font-semibold">Relación de garantías ({gars.length})</h3></div>
+            <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5"><Home className="h-4 w-4 text-[color:#2E6DA8]" /><h3 className="text-sm font-semibold">Relación de garantías ({gars.length})</h3></div>
             <div className="divide-y divide-border">
               {gars.map((c) => {
                 const s = sem(c);
@@ -153,7 +153,7 @@ function ClientePage() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="flex items-start gap-1 break-words text-sm font-medium"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" /> {c.domicilio_garantia || "—"}</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">Folio {c.folio} · Valor {fmtMXN(c.total)} · Saldo <b className="text-[color:var(--teal)]">{fmtMXN(c.saldo)}</b></p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Folio {c.folio} · Valor {fmtMXN(c.total)} · Saldo <b className="text-[color:#2E6DA8]">{fmtMXN(c.saldo)}</b></p>
                         <div className="mt-1 flex items-center gap-2">
                           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${s.cls}`}>Docs {nDocs(c)}/6 · {s.txt}</span>
                         </div>
@@ -162,7 +162,7 @@ function ClientePage() {
                         {c.formalizacion_solicitada ? (
                           <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800"><Check className="h-3 w-3" /> Formalización solicitada{c.formalizacion_tipo ? ` · ${c.formalizacion_tipo}` : ""}</span>
                         ) : c.caso_juridico?.id ? (
-                          <button onClick={() => setSolicitar(c)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: "var(--teal)" }}><FileSignature className="h-3.5 w-3.5" /> Mandar a formalizar</button>
+                          <button onClick={() => setSolicitar(c)} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-white" style={{ background: "#2E6DA8" }}><FileSignature className="h-3.5 w-3.5" /> Mandar a formalizar</button>
                         ) : (
                           <span className="text-[11px] text-muted-foreground">Sin juicio ligado</span>
                         )}
@@ -182,7 +182,7 @@ function ClientePage() {
             juicio?.id ? (
               <Card className="overflow-hidden">
                 <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-                  <Users className="h-4 w-4 text-[color:var(--teal)]" />
+                  <Users className="h-4 w-4 text-[color:#2E6DA8]" />
                   <h3 className="text-sm font-semibold">Documentos del cliente (carpetas de Drive)</h3>
                 </div>
                 <CarpetasCliente casoId={juicio.id} clienteNombre={nombre} expediente={juicio.expediente} />
