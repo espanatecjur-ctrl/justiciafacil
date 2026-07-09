@@ -136,13 +136,30 @@ export async function buscarEnDrive(texto: string): Promise<{ ok: boolean; carpe
   }
 }
 
-/** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema. */
-export async function sincronizarCarpeta(casoId: string, carpetaId: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
+/** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema.
+ *  Si mandas area/noCredito, los archivos NUEVOS se guardan en esa ruta (área/número de crédito).
+ *  Los ya copiados antes conservan su ruta vieja: no se mueven. */
+export async function sincronizarCarpeta(casoId: string, carpetaId: string, area?: string, noCredito?: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
   try {
     const r = await fetch("/.netlify/functions/sincronizar-drive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ casoId, carpetaId }),
+      body: JSON.stringify({ casoId, carpetaId, area, noCredito }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/** Solo AVISA cuántos documentos de Drive todavía no están copiados (no copia nada, no navega Drive).
+ *  Para el panel "Documentos fijos", que no debe exponer el explorador. */
+export async function revisarPendientesDrive(casoId: string, carpetaId: string): Promise<{ ok: boolean; total?: number; copiados?: number; pendientes?: number; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/sincronizar-drive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ casoId, carpetaId, soloContar: true }),
     });
     return await r.json();
   } catch (e: any) {
