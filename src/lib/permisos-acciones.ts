@@ -92,6 +92,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
     { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
     { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+    { clave: "drive_avanzado", label: "Ver explorador de Drive completo (vincular / sincronizar)" },
   ],
   amparos: [
     { clave: "crear", label: "Crear amparo / recurso / exhorto" },
