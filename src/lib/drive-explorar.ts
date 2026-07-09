@@ -137,14 +137,14 @@ export async function buscarEnDrive(texto: string): Promise<{ ok: boolean; carpe
 }
 
 /** Sincroniza (copia) los documentos de la carpeta de Drive al almacén del sistema.
- *  Si mandas area/noCredito, los archivos NUEVOS se guardan en esa ruta (área/número de crédito).
+ *  Si mandas area/noCredito, los archivos NUEVOS se guardan en esa ruta (área/número de crédito/cliente).
  *  Los ya copiados antes conservan su ruta vieja: no se mueven. */
-export async function sincronizarCarpeta(casoId: string, carpetaId: string, area?: string, noCredito?: string): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
+export async function sincronizarCarpeta(casoId: string, carpetaId: string, area?: string, noCredito?: string, nombreCliente?: string | null): Promise<{ ok: boolean; copiados?: number; restantes?: number; total?: number; errores?: string[]; error?: string }> {
   try {
     const r = await fetch("/.netlify/functions/sincronizar-drive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ casoId, carpetaId, area, noCredito }),
+      body: JSON.stringify({ casoId, carpetaId, area, noCredito, nombreCliente }),
     });
     return await r.json();
   } catch (e: any) {
@@ -260,6 +260,20 @@ export async function traerArchivo(archivoId: string, carpetaDestino: string): P
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ archivoId, carpetaDestino }),
+    });
+    return await r.json();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/** Ordena la carpeta YA vinculada dentro de Drive: área / número de garantía / cliente (o "Sin cliente"). */
+export async function ordenarCarpetaPorCliente(carpetaId: string, area: string, noGarantia: string, nombreCliente?: string | null): Promise<{ ok: boolean; movida?: boolean; ruta?: string; requiereCopia?: boolean; error?: string }> {
+  try {
+    const r = await fetch("/.netlify/functions/ordenar-carpeta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carpetaId, area, noGarantia, nombreCliente: nombreCliente || "" }),
     });
     return await r.json();
   } catch (e: any) {
