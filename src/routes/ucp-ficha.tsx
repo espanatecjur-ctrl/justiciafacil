@@ -8,6 +8,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { correoActual } from "@/lib/auth";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
+import { DocumentosFijos } from "@/components/documentos-fijos";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
@@ -465,7 +466,10 @@ function UCPFicha() {
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
-          <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
+            <DocumentosFijos caso={c} area="UCP" />
+          </div>
           <DocumentosGarantia area="UCP" caso={c} />
         </div>
       )}
