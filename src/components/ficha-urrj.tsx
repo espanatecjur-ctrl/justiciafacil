@@ -583,14 +583,12 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       {/* ===== DOCUMENTOS (Drive + movimientos) ===== */}
       {modulo === "documentos" && (
         <div className="space-y-4">
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <CarpetaDriveVinculada
-              caso={casoLV}
-              area="URRJ"
-              onGuardar={(campos) => guardarDatos(campos as Partial<RefGarantia>, () => {})}
-            />
-            <DocumentosFijos caso={casoLV} area="URRJ" />
-          </div>
+          <CarpetaDriveVinculada
+            caso={casoLV}
+            area="URRJ"
+            onGuardar={(campos) => guardarDatos(campos as Partial<RefGarantia>, () => {})}
+          />
+          <DocumentosFijos caso={casoLV} area="URRJ" />
           <DocumentosGarantia area="URRJ" caso={casoLV} />
         </div>
       )}
