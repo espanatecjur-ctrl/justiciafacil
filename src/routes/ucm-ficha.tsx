@@ -7,6 +7,7 @@ import {
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
+import { DocumentosFijos } from "@/components/documentos-fijos";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { SubJuicios } from "@/components/sub-juicios";
@@ -406,6 +407,7 @@ function UCMFicha() {
         <div className="space-y-4">
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
+            <DocumentosFijos caso={c} area="UCM" />
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="mb-2 flex items-center gap-2">
                 <Users className="h-5 w-5 text-[color:var(--teal)]" />
