@@ -7,7 +7,7 @@ import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 import { CarpetasCliente } from "@/components/carpetas-cliente";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
-import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen, LayoutGrid, Users } from "lucide-react";
 
 export const Route = createFileRoute("/cliente")({
   validateSearch: (s: Record<string, unknown>) => ({ nombre: typeof s.nombre === "string" ? s.nombre : "" }),
@@ -33,6 +33,7 @@ function ClientePage() {
   const [cargando, setCargando] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [solicitar, setSolicitar] = useState<Cli | null>(null);
+  const [modulo, setModulo] = useState<"general" | "documentos">("general");
 
   // Búsqueda tolerante: exacto -> amplio por el primer nombre + comparación normalizada
   // (ignora acentos y la anotación "(Cambio a...)"), para que la encuentre venga de donde venga.
@@ -87,7 +88,18 @@ function ClientePage() {
             )}
           </div>
 
-          {/* Relación de garantías */}
+          {/* pestañas */}
+          <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
+            <button onClick={() => setModulo("general")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "general" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "general" ? { background: "var(--teal)" } : undefined}>
+              <LayoutGrid className="h-4 w-4" /> General
+            </button>
+            <button onClick={() => setModulo("documentos")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "documentos" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "documentos" ? { background: "var(--teal)" } : undefined}>
+              <FolderOpen className="h-4 w-4" /> Documentos
+            </button>
+          </div>
+
+          {/* ============ GENERAL ============ */}
+          {modulo === "general" && (
           <Card className="overflow-hidden">
             <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5"><Home className="h-4 w-4 text-[color:var(--teal)]" /><h3 className="text-sm font-semibold">Relación de garantías ({gars.length})</h3></div>
             <div className="divide-y divide-border">
@@ -121,16 +133,21 @@ function ClientePage() {
               })}
             </div>
           </Card>
+          )}
 
-          {/* Carpetas de Drive del cliente (una o varias) con copia fija */}
-          {juicio?.id && (
-            <Card className="overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-                <FolderOpen className="h-4 w-4 text-[color:var(--teal)]" />
-                <h3 className="text-sm font-semibold">Documentos del cliente (carpetas de Drive)</h3>
-              </div>
-              <CarpetasCliente casoId={juicio.id} clienteNombre={nombre} expediente={juicio.expediente} />
-            </Card>
+          {/* ============ DOCUMENTOS ============ */}
+          {modulo === "documentos" && (
+            juicio?.id ? (
+              <Card className="overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+                  <Users className="h-4 w-4 text-[color:var(--teal)]" />
+                  <h3 className="text-sm font-semibold">Documentos del cliente (carpetas de Drive)</h3>
+                </div>
+                <CarpetasCliente casoId={juicio.id} clienteNombre={nombre} expediente={juicio.expediente} />
+              </Card>
+            ) : (
+              <Card className="p-6 text-center text-sm text-muted-foreground">Este cliente todavía no tiene un juicio vinculado — sin eso no se puede guardar la carpeta de documentos.</Card>
+            )
           )}
         </>
       )}
