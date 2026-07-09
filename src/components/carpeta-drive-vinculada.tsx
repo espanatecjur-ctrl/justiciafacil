@@ -626,16 +626,13 @@ export function CarpetaDriveVinculada({
                       {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
                     </div>
                     <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
-                      {urlsCopia[a.id] ? (
-                        (copias[a.id]?.mime || a.mimeType || "").includes("pdf") || (copias[a.id]?.mime || a.mimeType || "").startsWith("image/") ? (
-                          <iframe src={urlsCopia[a.id]} title={a.name} loading="lazy" className="pointer-events-none h-full w-full border-0" />
-                        ) : (
-                          <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
-                            <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />
-                            <span className="text-[11px] font-medium text-muted-foreground">Documento copiado</span>
-                            <span className="text-[10px] text-muted-foreground">Este tipo no se previsualiza; ábrelo con «Descargar».</span>
-                          </div>
-                        )
+                      {(copias[a.id]?.mime || a.mimeType || "").startsWith("image/") && urlsCopia[a.id] ? (
+                        <img src={urlsCopia[a.id]} alt={a.name} loading="lazy" className="h-full w-full object-contain bg-white" />
+                      ) : urlsCopia[a.id] ? (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
+                          <FileText className={`h-8 w-8 ${(copias[a.id]?.mime || a.mimeType || "").includes("pdf") ? "text-red-500/60" : "text-[color:var(--teal)]/50"}`} />
+                          <span className="text-[11px] font-medium text-muted-foreground">{(copias[a.id]?.mime || a.mimeType || "").includes("pdf") ? "PDF · del sistema" : "Documento copiado"}</span>
+                        </div>
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
                           <FileText className="h-8 w-8 text-muted-foreground/40" />
