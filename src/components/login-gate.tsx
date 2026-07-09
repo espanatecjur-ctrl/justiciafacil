@@ -10,17 +10,38 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsub = () => {};
-    getAuth()
-      .then(async (auth) => {
-        const { data } = await auth.auth.getSession();
-        setEmail(data.session?.user?.email ?? null);
-        setCargando(false);
-        const { data: sub } = auth.auth.onAuthStateChange((_e: any, session: any) => {
-          setEmail(session?.user?.email ?? null);
-        });
-        unsub = () => sub.subscription.unsubscribe();
-      })
-      .catch(() => setCargando(false));
+    (async () => {
+      const auth = await getAuth();
+
+      // 👇 Si llegamos desde el Portal DIIPA con un código de acceso
+      // (?sso=XXXX), lo canjeamos por la sesión real ANTES de revisar
+      // si hay sesión. Así entras directo, sin volver a loguearte.
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const codigo = params.get("sso");
+        if (codigo) {
+          const res = await fetch("https://jurisconecta.netlify.app/.netlify/functions/canjear-sso", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: codigo }),
+          });
+          if (res.ok) {
+            const { access_token, refresh_token } = await res.json();
+            await auth.auth.setSession({ access_token, refresh_token });
+          }
+          // Quitamos el ?sso= de la URL (haya funcionado o no; no se puede reusar).
+          window.history.replaceState({}, "", window.location.pathname + window.location.hash);
+        }
+      } catch { /* si algo falla aquí, seguimos con el login normal */ }
+
+      const { data } = await auth.auth.getSession();
+      setEmail(data.session?.user?.email ?? null);
+      setCargando(false);
+      const { data: sub } = auth.auth.onAuthStateChange((_e: any, session: any) => {
+        setEmail(session?.user?.email ?? null);
+      });
+      unsub = () => sub.subscription.unsubscribe();
+    })().catch(() => setCargando(false));
     return () => unsub();
   }, []);
 
