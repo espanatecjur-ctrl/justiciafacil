@@ -6,6 +6,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 import { CarpetasCliente } from "@/components/carpetas-cliente";
+import { GarantiasModuloCliente } from "@/components/garantias-modulo-cliente";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
 import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen, LayoutGrid, Users } from "lucide-react";
 
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/cliente")({
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
+const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\(.*$/, "").replace(/\s+/g, " ").trim();
 
 interface Cli extends ClienteJuicio {
   caso_juridico?: { id: string; expediente: string | null } | null;
@@ -41,7 +43,6 @@ function ClientePage() {
     if (!nombre) { setCargando(false); return; }
     const base = `cliente_juicio?select=*,caso_juridico(id,expediente)&en_papelera=eq.false&order=folio.asc`;
     const q = (filtro: string) => fetch(`${SUPABASE_URL}/rest/v1/${base}&${filtro}`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-    const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\(.*$/, "").replace(/\s+/g, " ").trim();
     try {
       let rows: Cli[] = await q(`nombre=eq.${encodeURIComponent(nombre)}`);
       if (rows.length === 0) {
@@ -61,6 +62,26 @@ function ClientePage() {
   const totalSaldo = useMemo(() => gars.reduce((a, c) => a + (Number(c.saldo) || 0), 0), [gars]);
   const juicio = gars[0]?.caso_juridico;
 
+  // Conteo de garantías contratadas por tipo, cruzando URRJ + UCP + UCM (por nombre, igual que las pestañas).
+  const [porTipo, setPorTipo] = useState<{ total: number; tipos: Record<string, number> } | null>(null);
+  useEffect(() => {
+    if (!nombre) return;
+    const tok = nombre.split(/\s+/)[0] || nombre;
+    const objetivo = norm(nombre);
+    Promise.all(["URRJ", "UCP", "UCM"].map((u) =>
+      fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,cliente_nombre,demandado,tipo_garantia&unidad=eq.${u}&or=(cliente_nombre.ilike.*${encodeURIComponent(tok)}*,demandado.ilike.*${encodeURIComponent(tok)}*)`, { headers })
+        .then((r) => (r.ok ? r.json() : [])).catch(() => [])
+    )).then((listas) => {
+      const todos = listas.flat().filter((c: any) => {
+        const n1 = norm(c.cliente_nombre || ""); const n2 = norm(c.demandado || "");
+        return (n1 && (n1 === objetivo || n1.startsWith(objetivo) || objetivo.startsWith(n1))) || (n2 && (n2 === objetivo || n2.startsWith(objetivo) || objetivo.startsWith(n2)));
+      });
+      const tipos: Record<string, number> = {};
+      for (const c of todos) { const t = c.tipo_garantia || "Sin clasificar"; tipos[t] = (tipos[t] || 0) + 1; }
+      setPorTipo({ total: todos.length, tipos });
+    });
+  }, [nombre]);
+
   return (
     <div className="space-y-4">
       <button onClick={() => navigate({ to: "/clientes" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Volver a Clientes</button>
@@ -78,7 +99,7 @@ function ClientePage() {
         <>
           {/* Resumen del cliente */}
           <div className="grid gap-3 sm:grid-cols-4">
-            <Card className="p-4"><p className="text-2xl font-bold text-[color:var(--teal)]">{gars.length}</p><p className="text-xs text-muted-foreground">Garantías</p></Card>
+            <Card className="p-4"><p className="text-2xl font-bold text-[color:var(--teal)]">{gars.length}</p><p className="text-xs text-muted-foreground">Garantías (UCM)</p></Card>
             <Card className="p-4"><p className="text-lg font-bold">{fmtMXN(totalValor)}</p><p className="text-xs text-muted-foreground">Valor total</p></Card>
             <Card className="p-4"><p className="text-lg font-bold text-[color:var(--teal)]">{fmtMXN(totalSaldo)}</p><p className="text-xs text-muted-foreground">Saldo total</p></Card>
             {juicio?.expediente && (
@@ -87,6 +108,17 @@ function ClientePage() {
               </Card>
             )}
           </div>
+
+          {porTipo && porTipo.total > 0 && (
+            <Card className="p-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Garantías contratadas en total (URRJ + UCP + UCM): <b className="text-foreground">{porTipo.total}</b></p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(porTipo.tipos).map(([t, n]) => (
+                  <span key={t} className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] text-foreground">{t}: <b>{n}</b></span>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* pestañas */}
           <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
@@ -159,12 +191,17 @@ function ClientePage() {
               <Card className="p-6 text-center text-sm text-muted-foreground">Este cliente todavía no tiene un juicio vinculado — sin eso no se puede guardar la carpeta de documentos.</Card>
             )
           )}
-          {/* ============ URRJ / UCP / UCM / UDP — en construcción, se conectan después ============ */}
-          {(["urrj", "ucp", "ucm", "udp"] as const).includes(modulo as any) && (
+          {/* ============ URRJ / UCP / UCM (datos reales por nombre) ============ */}
+          {modulo === "urrj" && <GarantiasModuloCliente nombreCliente={nombre} unidad="URRJ" color="#5B3A9E" />}
+          {modulo === "ucp" && <GarantiasModuloCliente nombreCliente={nombre} unidad="UCP" color="#0B6FA8" />}
+          {modulo === "ucm" && <GarantiasModuloCliente nombreCliente={nombre} unidad="UCM" color="#0F6E56" />}
+
+          {/* ============ UDP — en construcción, todavía no tiene su ficha propia ============ */}
+          {modulo === "udp" && (
             <Card className="p-8 text-center">
               <Gavel className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm font-semibold text-foreground">{modulo.toUpperCase()} · En construcción</p>
-              <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">Aquí se va a ver la información de {modulo.toUpperCase()} de este cliente — todavía no está conectada. Lo armamos en un siguiente paso.</p>
+              <p className="text-sm font-semibold text-foreground">UDP · En construcción</p>
+              <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">Aquí se va a ver la información de UDP de este cliente — todavía no está conectada. Lo armamos en un siguiente paso.</p>
             </Card>
           )}
         </>
