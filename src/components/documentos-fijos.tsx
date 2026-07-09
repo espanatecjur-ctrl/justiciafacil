@@ -57,7 +57,7 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
     const r = await subirDocumento(area, caso, file, "otro");
     if (!r.ok) { setMsg("⚠️ " + (r.error || "No se pudo subir el documento.")); setSubiendo(false); return; }
     setMsg("Copiando al sistema…");
-    const s = await sincronizarCarpeta(caso.id, carpetaId, area, caso.no_credito || undefined);
+    const s = await sincronizarCarpeta(caso.id, carpetaId, area, caso.no_credito || undefined, caso.cliente_nombre || undefined);
     setSubiendo(false);
     setMsg(s.ok ? "Documento agregado y copiado ✅" : "Se subió a Drive, pero faltó copiarlo al sistema — dale a alguien con el explorador que sincronice.");
     cargar();
@@ -69,7 +69,7 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
   const copiarPendientes = async () => {
     if (!carpetaId) return;
     setCopiandoPendientes(true); setMsg("Copiando documentos nuevos…");
-    const s = await sincronizarCarpeta(caso.id, carpetaId, area, caso.no_credito || undefined);
+    const s = await sincronizarCarpeta(caso.id, carpetaId, area, caso.no_credito || undefined, caso.cliente_nombre || undefined);
     setCopiandoPendientes(false);
     if (!s.ok) { setMsg("⚠️ " + (s.error || "No se pudieron copiar.")); return; }
     const faltan = s.restantes ?? 0;
@@ -139,7 +139,7 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
                   ) : (c.mime || "").startsWith("image/") ? (
                     <img src={urls[c.storage_path]} alt={c.nombre || ""} loading="lazy" className="h-full w-full object-contain bg-white" />
                   ) : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? (
-                    <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(urls[c.storage_path])}&embedded=true`} title={c.nombre || ""} loading="lazy" className="pointer-events-none h-full w-full border-0" />
+                    <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(urls[c.storage_path])}`} title={c.nombre || ""} loading="lazy" className="pointer-events-none h-full w-full border-0" />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
                       <FileText className="h-8 w-8 text-[color:var(--teal)]/50" />
