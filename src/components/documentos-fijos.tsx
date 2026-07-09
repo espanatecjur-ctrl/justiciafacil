@@ -42,10 +42,11 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
 
   // Aviso (solo conteo, sin explorar Drive) de documentos nuevos sin copiar.
   const [pendientes, setPendientes] = useState<number | null>(null);
-  useEffect(() => {
+  const revisar = () => {
     if (!carpetaId) { setPendientes(null); return; }
     revisarPendientesDrive(caso.id, carpetaId).then((r) => setPendientes(r.ok ? (r.pendientes ?? 0) : null));
-  }, [carpetaId, caso.id]);
+  };
+  useEffect(revisar, [carpetaId, caso.id]);
 
   // Agregar documento individual: sube a Drive (real) y de inmediato lo copia al almacén.
   const [subiendo, setSubiendo] = useState(false);
@@ -60,7 +61,21 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
     setSubiendo(false);
     setMsg(s.ok ? "Documento agregado y copiado ✅" : "Se subió a Drive, pero faltó copiarlo al sistema — dale a alguien con el explorador que sincronice.");
     cargar();
-    revisarPendientesDrive(caso.id, carpetaId).then((r2) => setPendientes(r2.ok ? (r2.pendientes ?? 0) : null));
+    revisar();
+  };
+
+  // Copiar los documentos nuevos detectados en Drive (sin abrir el explorador — mismo botón para todo el equipo).
+  const [copiandoPendientes, setCopiandoPendientes] = useState(false);
+  const copiarPendientes = async () => {
+    if (!carpetaId) return;
+    setCopiandoPendientes(true); setMsg("Copiando documentos nuevos…");
+    const s = await sincronizarCarpeta(caso.id, carpetaId, area, caso.no_credito || undefined);
+    setCopiandoPendientes(false);
+    if (!s.ok) { setMsg("⚠️ " + (s.error || "No se pudieron copiar.")); return; }
+    const faltan = s.restantes ?? 0;
+    setMsg(faltan > 0 ? `Copiados ${s.copiados ?? 0} · faltan ${faltan}, dale de nuevo` : `Copiados ${s.copiados ?? 0} ✅ todo al día`);
+    cargar();
+    revisar();
   };
 
   return (
@@ -75,8 +90,17 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
       <p className="text-xs text-muted-foreground">Aquí ves los documentos ya guardados en el sistema (no se navega Drive directamente).</p>
 
       {pendientes !== null && pendientes > 0 && (
-        <div className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Hay {pendientes} documento{pendientes === 1 ? "" : "s"} nuevo{pendientes === 1 ? "" : "s"} en Drive sin copiar todavía. Pide que lo sincronicen.
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">Hay {pendientes} documento{pendientes === 1 ? "" : "s"} nuevo{pendientes === 1 ? "" : "s"} en Drive sin copiar.</span>
+          <button
+            onClick={copiarPendientes}
+            disabled={copiandoPendientes}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+            style={{ background: "#0C5C46" }}
+          >
+            {copiandoPendientes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />} Copiar
+          </button>
         </div>
       )}
 
