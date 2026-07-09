@@ -408,16 +408,16 @@ function UCMFicha() {
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
             <DocumentosFijos caso={c} area="UCM" />
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Users className="h-5 w-5 text-[color:var(--teal)]" />
-                <h3 className="text-sm font-semibold">Documentos de Clientes</h3>
-              </div>
-              <p className="text-xs text-muted-foreground">Aquí se conectan los PDFs de la carpeta Drive <b>«CLIENTES»</b> (INE, CURP, comprobantes, actas) y se copian al sistema por cliente.</p>
-              <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
-                <p className="flex items-center gap-1 font-medium text-foreground"><FolderOpen className="h-3.5 w-3.5" /> Carpeta «CLIENTES» de Drive</p>
-                <p className="mt-0.5">Se conectará y copiará en la próxima etapa, ligando cada PDF a su cliente en el CRM.</p>
-              </div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Users className="h-5 w-5 text-[color:var(--teal)]" />
+              <h3 className="text-sm font-semibold">Documentos de Clientes</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">Aquí se conectan los PDFs de la carpeta Drive <b>«CLIENTES»</b> (INE, CURP, comprobantes, actas) y se copian al sistema por cliente.</p>
+            <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+              <p className="flex items-center gap-1 font-medium text-foreground"><FolderOpen className="h-3.5 w-3.5" /> Carpeta «CLIENTES» de Drive</p>
+              <p className="mt-0.5">Se conectará y copiará en la próxima etapa, ligando cada PDF a su cliente en el CRM.</p>
             </div>
           </div>
           <DocumentosGarantia area="UCM" caso={c} />
