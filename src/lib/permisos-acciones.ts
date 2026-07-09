@@ -58,6 +58,7 @@ export const ACCIONES: Record<ModuloPerm, { clave: string; label: string }[]> = 
     { clave: "carpeta", label: "Abrir expediente / carpeta" },
     { clave: "vincular_drive", label: "Vincular carpetas de Drive" },
     { clave: "abrir_drive", label: "Abrir en Drive (salir a Drive)" },
+    { clave: "drive_avanzado", label: "Ver explorador de Drive completo (vincular / sincronizar)" },
   ],
   udp: [
     { clave: "crear", label: "Crear caso de defensa" },
@@ -231,5 +232,36 @@ export async function puedeAbrirDrive(modulo?: ModuloPerm): Promise<boolean> {
     return Array.isArray(lista) && lista.includes("abrir_drive");
   } catch {
     return false; // ante cualquier error → no mostrar (seguro)
+  }
+}
+
+// ============================================================
+// Permiso ESTRICTO "Explorador de Drive completo" (vincular / navegar / sincronizar).
+// Misma lógica que puedeAbrirDrive: negado por defecto para TODOS. Solo lo tienen:
+//   · DGE y Super_Admin (siempre), y
+//   · los roles a los que la DGE/Super_Admin se lo enciendan explícitamente.
+// Quien NO lo tiene ve en su lugar el panel "Documentos fijos" (solo copias, sin Drive).
+// ============================================================
+export async function puedeVerDriveAvanzado(modulo?: ModuloPerm): Promise<boolean> {
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    const correo = data?.session?.user?.email ?? null;
+    if (!correo) return false;
+
+    const colRes = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+    const col = colRes.ok ? await colRes.json() : [];
+    const rol: string | null = col?.[0]?.rol ?? null;
+    if (!rol) return false;
+    if (VEN_TODO.includes(rol)) return true;
+
+    if (!modulo) return false;
+
+    const cfgRes = await fetch(`${SUPABASE_URL}/rest/v1/app_permisos?select=config&id=eq.1`, { headers });
+    const cfg = cfgRes.ok ? await cfgRes.json() : [];
+    const lista = cfg?.[0]?.config?.acciones?.[modulo]?.[rol];
+    return Array.isArray(lista) && lista.includes("drive_avanzado");
+  } catch {
+    return false;
   }
 }
