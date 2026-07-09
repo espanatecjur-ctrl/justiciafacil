@@ -1,18 +1,22 @@
 // ============================================================
 // GarantiasModuloCliente · en la ficha del cliente, por pestaña (URRJ/UCP/UCM).
 // Encuentra las garantías de caso_juridico que hacen match por NOMBRE
-// (cliente_nombre o demandado) para la unidad indicada, y muestra los
-// puntos críticos de esa unidad (dictamen, firmas, documentos).
+// (cliente_nombre o demandado), comparando la unidad en el cliente
+// (igual que en ucm.tsx/ucp.tsx: nunca por filtro exacto en el server,
+// porque la columna trae mayúsculas/minúsculas distintas según el caso).
+// Formato copiado de la ficha de UCM (secciones con filas dato:valor),
+// no tarjetas de banner — con azul claro (color de confianza) para clientes.
 // Si el match está mal (nombre repetido, persona distinta), se puede
 // "Quitar de este cliente" — no borra la garantía, solo la desliga aquí.
 // ============================================================
 import { useEffect, useState } from "react";
-import { Loader2, AlertTriangle, FileText, PenLine, X, Landmark, MapPin } from "lucide-react";
+import { Loader2, AlertTriangle, FileText, PenLine, X, Landmark } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { listarCopias } from "@/lib/drive-explorar";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\(.*$/, "").replace(/\s+/g, " ").trim();
+const AZUL = "#2E6DA8"; // azul claro — "de confianza" para la parte de clientes
 
 interface Dictamen { id: string; caso_id: string; veredicto: string | null; juridico: any; registral: any; firmas: any; }
 interface Predictamen { id: string; caso_id: string; dictamen_sugerido: string | null; dictamen_final: string | null; terminado: boolean | null; }
@@ -21,37 +25,54 @@ const veredictoTxt = (v: any) => {
   const s = typeof v === "string" ? v : v?.veredicto;
   return s || "Sin dictaminar";
 };
-const veredictoColor = (v: any) => {
-  const s = (typeof v === "string" ? v : v?.veredicto || "").toUpperCase();
-  if (s.includes("POSITIV") || s.includes("PROCEDEN") || s.includes("FAVORABLE")) return "text-emerald-700 bg-emerald-50 border-emerald-200";
-  if (s.includes("NEGATIV") || s.includes("IMPROCEDEN") || s.includes("DESFAVORABLE")) return "text-red-700 bg-red-50 border-red-200";
-  return "text-muted-foreground bg-muted border-border";
-};
 const contarFirmas = (firmas: any) => ["elabora", "dil", "gad", "dgc", "dge"].filter((k) => firmas?.[k]?.fecha).length;
 const TIPOS_GARANTIA = ["Derecho litigioso", "Casa", "Prestación de servicios", "Otro"];
 
-export function GarantiasModuloCliente({ nombreCliente, unidad, color }: { nombreCliente: string; unidad: "URRJ" | "UCP" | "UCM"; color: string }) {
+// Fila dato:valor — mismo patrón que DatoUCP de la ficha de UCM.
+function Dato({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
+  const vacio = !valor || !String(valor).trim();
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-right text-sm">{vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}</span>
+    </div>
+  );
+}
+function Seccion({ icon, titulo, children }: { icon: React.ReactNode; titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: AZUL }}>{icon} {titulo}</p>
+      {children}
+    </div>
+  );
+}
+
+export function GarantiasModuloCliente({ nombreCliente, unidad }: { nombreCliente: string; unidad: "URRJ" | "UCP" | "UCM" }) {
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [cargando, setCargando] = useState(true);
   const [extra, setExtra] = useState<Record<string, Dictamen | Predictamen | undefined>>({});
   const [docsN, setDocsN] = useState<Record<string, number>>({});
   const [excluidos, setExcluidos] = useState<Set<string>>(new Set());
+  const [totalNombre, setTotalNombre] = useState(0);
 
   const cargar = async () => {
     setCargando(true);
     try {
-      // 1) Match amplio por nombre (cliente_nombre o demandado), filtrado por unidad, luego normalizado en el cliente.
+      // 1) Match amplio por nombre (cliente_nombre o demandado) — SIN filtrar unidad en el server.
       const objetivo = norm(nombreCliente);
       const tok = (nombreCliente || "").split(/\s+/)[0] || nombreCliente;
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&unidad=eq.${unidad}&or=(cliente_nombre.ilike.*${encodeURIComponent(tok)}*,demandado.ilike.*${encodeURIComponent(tok)}*)`, { headers });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&or=(cliente_nombre.ilike.*${encodeURIComponent(tok)}*,demandado.ilike.*${encodeURIComponent(tok)}*)`, { headers });
       const candidatos: CasoJuridico[] = r.ok ? await r.json() : [];
-      const filtrados = candidatos.filter((c) => {
+      const porNombre = candidatos.filter((c) => {
         const n1 = norm(c.cliente_nombre || ""); const n2 = norm((c as any).demandado || "");
         return (n1 && (n1 === objetivo || n1.startsWith(objetivo) || objetivo.startsWith(n1))) ||
                (n2 && (n2 === objetivo || n2.startsWith(objetivo) || objetivo.startsWith(n2)));
       });
+      setTotalNombre(porNombre.length);
+      // 2) Filtra por unidad EN EL CLIENTE, comparando en mayúsculas (la columna trae formatos distintos).
+      const filtrados = porNombre.filter((c) => (c.unidad || "").toUpperCase().trim() === unidad);
 
-      // 2) Excluidos (desligados a mano)
+      // 3) Excluidos (desligados a mano)
       const re = await fetch(`${SUPABASE_URL}/rest/v1/cliente_garantia_excluida?select=caso_id&cliente_nombre=eq.${encodeURIComponent(nombreCliente)}`, { headers });
       const exRows = re.ok ? await re.json() : [];
       const exSet = new Set<string>((exRows || []).map((x: any) => x.caso_id));
@@ -60,7 +81,7 @@ export function GarantiasModuloCliente({ nombreCliente, unidad, color }: { nombr
       const visibles = filtrados.filter((c) => !exSet.has(c.id));
       setCasos(visibles);
 
-      // 3) Datos extra por unidad
+      // 4) Datos extra por unidad
       const ids = visibles.map((c) => c.id);
       if (ids.length > 0) {
         if (unidad === "URRJ") {
@@ -76,7 +97,6 @@ export function GarantiasModuloCliente({ nombreCliente, unidad, color }: { nombr
           for (const x of rows) m[x.caso_id] = x;
           setExtra(m);
         }
-        // documentos (copia fija) por caso
         const dn: Record<string, number> = {};
         await Promise.all(visibles.map(async (c) => { dn[c.id] = Object.keys(await listarCopias(c.id)).length; }));
         setDocsN(dn);
@@ -105,50 +125,58 @@ export function GarantiasModuloCliente({ nombreCliente, unidad, color }: { nombr
   if (casos.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        No se encontró ninguna garantía de <b>{nombreCliente}</b> en {unidad}
-        {excluidos.size > 0 && <span> ({excluidos.size} desligada{excluidos.size === 1 ? "" : "s"} a mano).</span>}
+        No se encontró ninguna garantía de <b>{nombreCliente}</b> en {unidad}.
+        {totalNombre > 0 && <span> (Sí hay {totalNombre} garantía{totalNombre === 1 ? "" : "s"} con ese nombre en otras unidades.)</span>}
+        {excluidos.size > 0 && <span> {excluidos.size} desligada{excluidos.size === 1 ? "" : "s"} a mano.</span>}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {casos.map((c) => {
         const dat = extra[c.id];
         return (
-          <div key={c.id} className="rounded-xl border border-border bg-card p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-sm font-semibold" style={{ color }}><Landmark className="h-4 w-4" /> {c.expediente || "Sin expediente"}</p>
-                <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground"><MapPin className="mt-0.5 h-3 w-3 shrink-0" /> {c.direccion_garantia || "—"}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Crédito: {c.no_credito || "—"}</p>
-                <select value={(c as any).tipo_garantia || ""} onChange={(e) => setTipoGarantia(c.id, e.target.value)} className="mt-1 rounded-md border border-input bg-background px-2 py-1 text-[11px]">
-                  <option value="">Tipo de garantía…</option>
-                  {TIPOS_GARANTIA.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <button onClick={() => quitar(c.id)} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] text-muted-foreground hover:border-red-300 hover:text-red-600"><X className="h-3 w-3" /> Quitar de este cliente</button>
+          <div key={c.id} className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: AZUL }}><Landmark className="h-4 w-4" /> {c.expediente || "Sin expediente"}</p>
+              <button onClick={() => quitar(c.id)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] text-muted-foreground hover:border-red-300 hover:text-red-600"><X className="h-3 w-3" /> Quitar de este cliente</button>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-              {unidad === "URRJ" ? (
-                dat ? (
-                  <>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${veredictoColor((dat as Predictamen).dictamen_final || (dat as Predictamen).dictamen_sugerido)}`}>Dictamen: {veredictoTxt((dat as Predictamen).dictamen_final || (dat as Predictamen).dictamen_sugerido)}</span>
-                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{(dat as Predictamen).terminado ? "Terminado" : "En proceso"}</span>
-                  </>
-                ) : <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">Sin pre-dictamen</span>
-              ) : (
-                dat ? (
-                  <>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${veredictoColor((dat as Dictamen).juridico)}`}>Jurídico: {veredictoTxt((dat as Dictamen).juridico)}</span>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${veredictoColor((dat as Dictamen).registral)}`}>Registral: {veredictoTxt((dat as Dictamen).registral)}</span>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${veredictoColor((dat as Dictamen).veredicto)}`}>Final: {veredictoTxt((dat as Dictamen).veredicto)}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground"><PenLine className="h-3 w-3" /> {contarFirmas((dat as Dictamen).firmas)}/5 firmas</span>
-                  </>
-                ) : <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">Sin dictamen</span>
-              )}
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground"><FileText className="h-3 w-3" /> {docsN[c.id] ?? 0} documentos</span>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Seccion icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />} titulo="Antecedente de la garantía">
+                <Dato label="Dirección de la garantía" valor={c.direccion_garantia} importante />
+                <Dato label="No. de crédito" valor={c.no_credito} importante />
+                <Dato label="Entidad" valor={c.entidad} />
+                <div className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="text-xs text-muted-foreground">Tipo de garantía</span>
+                  <select value={(c as any).tipo_garantia || ""} onChange={(e) => setTipoGarantia(c.id, e.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-xs">
+                    <option value="">Sin clasificar</option>
+                    {TIPOS_GARANTIA.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </Seccion>
+
+              <Seccion icon={<PenLine className="h-4 w-4" style={{ color: AZUL }} />} titulo={unidad === "URRJ" ? "Pre-dictamen" : "Dictamen"}>
+                {unidad === "URRJ" ? (
+                  dat ? (
+                    <>
+                      <Dato label="Dictamen" valor={veredictoTxt((dat as Predictamen).dictamen_final || (dat as Predictamen).dictamen_sugerido)} />
+                      <Dato label="Estatus" valor={(dat as Predictamen).terminado ? "Terminado" : "En proceso"} />
+                    </>
+                  ) : <Dato label="Dictamen" valor={null} importante />
+                ) : (
+                  dat ? (
+                    <>
+                      <Dato label="Jurídico" valor={veredictoTxt((dat as Dictamen).juridico)} />
+                      <Dato label="Registral" valor={veredictoTxt((dat as Dictamen).registral)} />
+                      <Dato label="Veredicto final" valor={veredictoTxt((dat as Dictamen).veredicto)} />
+                      <Dato label="Firmas" valor={`${contarFirmas((dat as Dictamen).firmas)}/5`} />
+                    </>
+                  ) : <Dato label="Dictamen" valor={null} importante />
+                )}
+                <Dato label="Documentos en el sistema" valor={String(docsN[c.id] ?? 0)} />
+              </Seccion>
             </div>
           </div>
         );
