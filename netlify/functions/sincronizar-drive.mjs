@@ -137,10 +137,12 @@ export default async (req) => {
     return new Response(JSON.stringify({ ok: false, error: "Método no permitido" }), { status: 405 });
   }
   try {
-    const { casoId, carpetaId } = await req.json();
+    const { casoId, carpetaId, area, noCredito, soloContar } = await req.json();
     if (!casoId || !carpetaId) {
       return new Response(JSON.stringify({ ok: false, error: "Faltan casoId o carpetaId." }), { status: 400 });
     }
+    // Carpeta base en el almacén: área/número de crédito (nueva) si viene; si no, casoId (como antes).
+    const carpetaBase = area ? `${area}/${noCredito || casoId}` : casoId;
 
     const serviceKey = process.env.SUPABASE_SERVICE_KEY;
     if (!serviceKey) {
@@ -167,6 +169,16 @@ export default async (req) => {
     const archivos = await listarArchivos(accessToken, carpetaId);
     const pendientes = archivos.filter((f) => !yaCopiados.has(f.id) && planDeDescarga(f.mimeType));
 
+    // Modo "solo contar": solo avisa cuántos faltan, no copia nada (para el panel "Documentos fijos").
+    if (soloContar) {
+      return new Response(JSON.stringify({
+        ok: true,
+        total: archivos.length,
+        copiados: yaCopiados.size,
+        pendientes: pendientes.length,
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
     let copiados = 0;
     const errores = [];
     const tanda = pendientes.slice(0, MAX_POR_TANDA);
@@ -177,7 +189,7 @@ export default async (req) => {
         if (tam && tam > LIMITE_BYTES) { errores.push(`${f.name}: muy grande (${Math.round(tam / 1048576)} MB)`); continue; }
         const plan = planDeDescarga(f.mimeType);
         const buf = await descargarDeDrive(accessToken, f, plan);
-        const path = `${casoId}/${f.id}${plan.sufijo}`;
+        const path = `${carpetaBase}/${f.id}${plan.sufijo}`;
         await subirAStorage(serviceKey, path, buf, plan.mimeFinal);
         await anotarCopia(serviceKey, {
           caso_id: casoId,
