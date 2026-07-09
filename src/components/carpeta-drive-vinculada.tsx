@@ -611,7 +611,7 @@ export function CarpetaDriveVinculada({
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {docsPag.map((a) => (
                   <div key={a.id} className="overflow-hidden rounded-lg border border-border bg-white">
                     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -625,7 +625,7 @@ export function CarpetaDriveVinculada({
                       <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tipoLegible(a.mimeType)}</span>
                       {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
                     </div>
-                    <button onClick={() => setDocSel(a)} className="group relative block h-40 w-full bg-muted" title="Ampliar vista previa">
+                    <button onClick={() => setDocSel(a)} className="group relative block h-56 w-full bg-muted" title="Ampliar vista previa">
                       {(copias[a.id]?.mime || a.mimeType || "").startsWith("image/") && urlsCopia[a.id] ? (
                         <img src={urlsCopia[a.id]} alt={a.name} loading="lazy" className="h-full w-full object-contain bg-white" />
                       ) : urlsCopia[a.id] ? (
