@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
+import { DocumentosFijos } from "@/components/documentos-fijos";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
 import { IndicadorRepetido } from "@/components/indicador-repetido";
@@ -582,11 +583,14 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       {/* ===== DOCUMENTOS (Drive + movimientos) ===== */}
       {modulo === "documentos" && (
         <div className="space-y-4">
-          <CarpetaDriveVinculada
-            caso={casoLV}
-            area="URRJ"
-            onGuardar={(campos) => guardarDatos(campos as Partial<RefGarantia>, () => {})}
-          />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <CarpetaDriveVinculada
+              caso={casoLV}
+              area="URRJ"
+              onGuardar={(campos) => guardarDatos(campos as Partial<RefGarantia>, () => {})}
+            />
+            <DocumentosFijos caso={casoLV} area="URRJ" />
+          </div>
           <DocumentosGarantia area="URRJ" caso={casoLV} />
         </div>
       )}
