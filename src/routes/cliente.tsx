@@ -192,9 +192,9 @@ function ClientePage() {
             )
           )}
           {/* ============ URRJ / UCP / UCM (datos reales por nombre) ============ */}
-          {modulo === "urrj" && <GarantiasModuloCliente nombreCliente={nombre} unidad="URRJ" color="#5B3A9E" />}
-          {modulo === "ucp" && <GarantiasModuloCliente nombreCliente={nombre} unidad="UCP" color="#0B6FA8" />}
-          {modulo === "ucm" && <GarantiasModuloCliente nombreCliente={nombre} unidad="UCM" color="#0F6E56" />}
+          {modulo === "urrj" && <GarantiasModuloCliente nombreCliente={nombre} unidad="URRJ" />}
+          {modulo === "ucp" && <GarantiasModuloCliente nombreCliente={nombre} unidad="UCP" />}
+          {modulo === "ucm" && <GarantiasModuloCliente nombreCliente={nombre} unidad="UCM" />}
 
           {/* ============ UDP — en construcción, todavía no tiene su ficha propia ============ */}
           {modulo === "udp" && (
