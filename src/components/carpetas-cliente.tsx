@@ -1,148 +1,92 @@
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Check, X, Pencil, Loader2, Save, FolderOpen, Gavel, MapPin } from "lucide-react";
-import type { ClienteJuicio } from "@/components/clientes-juicio";
+import { useEffect, useState } from "react";
+import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
+import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
+import { DocumentosFijos } from "@/components/documentos-fijos";
+import { BotonVerDoc } from "@/components/visor-documento";
+import { resolverEntrada } from "@/lib/drive-explorar";
+import { Loader2, Plus, FileText, Trash2, ExternalLink, FolderOpen } from "lucide-react";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
-const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(v) || 0);
-const num = (v: any) => { const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")); return isFinite(n) ? n : 0; };
 
-const DOCS: { k: keyof ClienteJuicio; label: string }[] = [
-  { k: "doc_ine", label: "INE" }, { k: "doc_comprobante", label: "Comprobante" }, { k: "doc_acta_nac", label: "Acta nac." },
-  { k: "doc_curp", label: "CURP" }, { k: "doc_csf", label: "CSF" }, { k: "doc_acta_matri", label: "Acta matri." },
-];
+interface Item { id: string; tipo: string; drive_carpeta_id: string; drive_carpeta_nombre: string | null; mime: string | null; }
 
-// Ficha del cliente en una ventana compacta: General · Garantía · Documentos · Pagos.
-export function ClienteFichaPanel({ cliente, juicio, onUpdated, onCerrar }: {
-  cliente: ClienteJuicio; juicio?: { id?: string | null; expediente?: string | null }; onUpdated?: () => void; onCerrar: () => void;
-}) {
-  const navigate = useNavigate();
-  const [edit, setEdit] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [f, setF] = useState({
-    valor_inmueble: String(cliente.valor_inmueble ?? ""),
-    apartado_monto: String(cliente.apartado_monto ?? ""), apartado_fecha: (cliente.apartado_fecha || "").slice(0, 10),
-    pago35_monto: String(cliente.pago35_monto ?? ""), pago35_fecha: (cliente.pago35_fecha || "").slice(0, 10),
-    pago50_monto: String(cliente.pago50_monto ?? ""), pago50_fecha: (cliente.pago50_fecha || "").slice(0, 10),
-    finiquito_monto: String(cliente.finiquito_monto ?? ""), finiquito_fecha: (cliente.finiquito_fecha || "").slice(0, 10),
-  });
-  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+// Documentos del cliente: las CARPETAS y ARCHIVOS de Drive que quiera (más de uno).
+// Carpetas -> módulo completo (CarpetaDriveVinculada: sincronizar, copia fija, vista previa).
+// Archivos -> tarjeta con vista previa. Las copias fijas quedan bajo el juicio (visibles al equipo).
+export function CarpetasCliente({ casoId, clienteNombre, expediente }: { casoId: string; clienteNombre: string; expediente?: string | null }) {
+  const [items, setItems] = useState<Item[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [link, setLink] = useState("");
+  const [agregando, setAgregando] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const calcPagado = () => {
-    let p = num(f.apartado_monto);
-    if (num(f.pago35_monto) && f.pago35_fecha) p += num(f.pago35_monto);
-    if (num(f.pago50_monto) && f.pago50_fecha) p += num(f.pago50_monto);
-    if (num(f.finiquito_monto) && f.finiquito_fecha) p += num(f.finiquito_monto);
-    return p;
+  const cargar = () => fetch(`${SUPABASE_URL}/rest/v1/cliente_carpeta?select=id,tipo,drive_carpeta_id,drive_carpeta_nombre,mime&caso_id=eq.${casoId}&cliente_nombre=eq.${encodeURIComponent(clienteNombre)}&order=created_at.asc`, { headers })
+    .then((r) => (r.ok ? r.json() : [])).then(setItems).catch(() => {}).finally(() => setCargando(false));
+  useEffect(() => { setCargando(true); cargar(); }, [casoId, clienteNombre]);
+
+  const agregar = async () => {
+    if (!link.trim()) return;
+    setAgregando(true); setErr(null);
+    const r = await resolverEntrada(link.trim());
+    if (!r.ok || !r.item?.id) { setErr(r.error || "No se pudo leer ese enlace de Drive."); setAgregando(false); return; }
+    const esCarpeta = (r.item.mimeType || "").includes("folder");
+    await fetch(`${SUPABASE_URL}/rest/v1/cliente_carpeta`, { method: "POST", headers, body: JSON.stringify({ caso_id: casoId, cliente_nombre: clienteNombre, tipo: esCarpeta ? "carpeta" : "archivo", drive_carpeta_id: r.item.id, drive_carpeta_nombre: r.item.name, mime: r.item.mimeType }) });
+    setLink(""); setAgregando(false); cargar();
   };
-  const total = edit ? num(f.valor_inmueble) : Number(cliente.total) || 0;
-  const pagado = edit ? calcPagado() : Number(cliente.pagado) || 0;
-  const saldo = edit ? total - pagado : Number(cliente.saldo) || 0;
-  const nDocs = DOCS.filter((d) => cliente[d.k]).length;
+  const quitar = async (id: string) => { await fetch(`${SUPABASE_URL}/rest/v1/cliente_carpeta?id=eq.${id}`, { method: "DELETE", headers }); cargar(); };
 
-  const guardar = async () => {
-    setGuardando(true);
-    try {
-      const t = num(f.valor_inmueble), pg = calcPagado();
-      const body: any = {
-        valor_inmueble: t, total: t, pagado: pg, saldo: t - pg,
-        apartado_monto: num(f.apartado_monto), apartado_fecha: f.apartado_fecha || null,
-        pago35_monto: num(f.pago35_monto), pago35_fecha: f.pago35_fecha || null,
-        pago50_monto: num(f.pago50_monto), pago50_fecha: f.pago50_fecha || null,
-        finiquito_monto: num(f.finiquito_monto), finiquito_fecha: f.finiquito_fecha || null,
-      };
-      await fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?id=eq.${cliente.id}`, { method: "PATCH", headers, body: JSON.stringify(body) });
-      setEdit(false); onUpdated?.();
-    } finally { setGuardando(false); }
-  };
-
-  const filaPago = (label: string, mk: keyof typeof f, fk: keyof typeof f) => (
-    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 py-1 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      {edit ? <input inputMode="decimal" value={f[mk]} onChange={(e) => set(mk, e.target.value)} className="w-24 rounded-md border border-input px-2 py-1 text-right" placeholder="0" />
-        : <span className="text-right font-medium">{fmtMXN(f[mk])}</span>}
-      {edit ? <input type="date" value={f[fk]} onChange={(e) => set(fk, e.target.value)} className="rounded-md border border-input px-2 py-1 text-[11px]" />
-        : <span className="pl-2 text-right text-[11px] text-muted-foreground">{f[fk] || "—"}</span>}
-    </div>
-  );
-
-  const inicial = (cliente.nombre || "?").trim().charAt(0).toUpperCase();
+  if (cargando) return <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-        {/* Encabezado */}
-        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style={{ background: "#2E6DA8" }}>{inicial}</div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{cliente.nombre || "Cliente"}</p>
-            <p className="text-xs text-muted-foreground">Folio <span className="font-medium text-[color:#2E6DA8]">{cliente.folio || "—"}</span></p>
-          </div>
-          <button onClick={onCerrar} className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+    <div className="space-y-3 p-3">
+      {items.map((it) => it.tipo === "carpeta"
+        ? <CarpetaItem key={it.id} casoId={casoId} expediente={expediente} fila={it} onQuitar={() => quitar(it.id)} />
+        : <ArchivoItem key={it.id} fila={it} onQuitar={() => quitar(it.id)} />)}
+      {items.length === 0 && <p className="text-xs text-muted-foreground">Este cliente aún no tiene carpetas ni archivos vinculados. Agrega los que quieras abajo.</p>}
+
+      <div className="rounded-lg border border-dashed border-border p-2.5">
+        <p className="mb-1.5 text-[11px] font-medium">Vincular carpeta o archivo del cliente</p>
+        <div className="flex flex-wrap gap-2">
+          <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Pega el enlace de una carpeta o un archivo de Drive…" className="min-w-0 flex-1 rounded-md border border-input px-2 py-1.5 text-sm" />
+          <button onClick={agregar} disabled={agregando || !link.trim()} className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#2E6DA8" }}>{agregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Vincular</button>
         </div>
-
-        <div className="space-y-4 p-5">
-          {/* Garantía vinculada */}
-          <div>
-            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"><MapPin className="h-3.5 w-3.5" /> Garantía vinculada</p>
-            <p className="text-sm">{cliente.domicilio_garantia || "—"}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">Valor: <b className="text-foreground">{fmtMXN(cliente.valor_inmueble)}</b></span>
-              {cliente.firmo_cambio && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800">Firmó cambio</span>}
-              {juicio?.id && juicio?.expediente && (
-                <button onClick={() => navigate({ to: "/ucm-ficha", search: { id: juicio.id } as any })} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-[11px] font-medium hover:bg-muted">
-                  <Gavel className="h-3 w-3" /> Ver juicio {juicio.expediente}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Documentos */}
-          <div className="border-t border-border pt-4">
-            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"><FolderOpen className="h-3.5 w-3.5" /> Documentos · {nDocs}/6</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DOCS.map((d) => (
-                <span key={d.k} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${cliente[d.k] ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-muted/40 text-muted-foreground"}`}>
-                  {cliente[d.k] ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} {d.label}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Pagos y saldo */}
-          <div className="border-t border-border pt-4">
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"><Save className="h-3.5 w-3.5" /> Pagos y saldo</p>
-              {!edit ? (
-                <button onClick={() => setEdit(true)} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-[11px] font-medium hover:bg-muted"><Pencil className="h-3 w-3" /> Editar</button>
-              ) : (
-                <div className="flex gap-1">
-                  <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Guardar</button>
-                  <button onClick={() => setEdit(false)} className="rounded-md border border-input px-2 py-0.5 text-[11px] hover:bg-muted">Cancelar</button>
-                </div>
-              )}
-            </div>
-            {edit && (
-              <div className="mb-1 grid grid-cols-[1fr_auto] items-center gap-2 py-1 text-xs">
-                <span className="text-muted-foreground">Valor del inmueble</span>
-                <input inputMode="decimal" value={f.valor_inmueble} onChange={(e) => set("valor_inmueble", e.target.value)} className="w-24 rounded-md border border-input px-2 py-1 text-right" />
-              </div>
-            )}
-            <div className="divide-y divide-border/60">
-              {filaPago("Apartado", "apartado_monto", "apartado_fecha")}
-              {filaPago("Pago 35%", "pago35_monto", "pago35_fecha")}
-              {filaPago("Pago 50%", "pago50_monto", "pago50_fecha")}
-              {filaPago("Finiquito", "finiquito_monto", "finiquito_fecha")}
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-2.5 text-xs">
-              <span>Valor<br /><b>{fmtMXN(total)}</b></span>
-              <span>Pagado<br /><b className="text-emerald-700">{fmtMXN(pagado)}</b></span>
-              <span>Saldo<br /><b className="text-[color:#2E6DA8]">{fmtMXN(saldo)}</b></span>
-            </div>
-          </div>
-        </div>
+        <p className="mt-1 text-[10px] text-muted-foreground">Detecta solo si es carpeta o archivo. Puedes agregar los que quieras (varias carpetas y varios archivos).</p>
+        {err && <p className="mt-1 text-xs text-amber-700">{err}</p>}
       </div>
+    </div>
+  );
+}
+
+// Carpeta -> módulo completo de Drive (reutiliza CarpetaDriveVinculada)
+function CarpetaItem({ casoId, expediente, fila, onQuitar }: { casoId: string; expediente?: string | null; fila: Item; onQuitar: () => void }) {
+  const casoVirtual = { id: casoId, expediente: expediente ?? null, drive_carpeta_id: fila.drive_carpeta_id, drive_carpeta_nombre: fila.drive_carpeta_nombre } as unknown as CasoJuridico;
+  const guardar = async (campos: Record<string, string>) => {
+    await fetch(`${SUPABASE_URL}/rest/v1/cliente_carpeta?id=eq.${fila.id}`, { method: "PATCH", headers, body: JSON.stringify({ drive_carpeta_id: campos.drive_carpeta_id, drive_carpeta_nombre: campos.drive_carpeta_nombre }) });
+  };
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"><FolderOpen className="h-3.5 w-3.5 text-[color:#2E6DA8]" /> Carpeta del cliente</span>
+        <button onClick={onQuitar} title="Quitar carpeta" className="rounded-md p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
+      </div>
+      <div className="p-2 space-y-2">
+        <CarpetaDriveVinculada key={fila.drive_carpeta_id} caso={casoVirtual} area="UCM" onGuardar={guardar} />
+        <DocumentosFijos caso={casoVirtual} area="UCM" />
+      </div>
+    </div>
+  );
+}
+
+// Archivo suelto -> tarjeta con vista previa
+function ArchivoItem({ fila, onQuitar }: { fila: Item; onQuitar: () => void }) {
+  const drive = `https://drive.google.com/file/d/${fila.drive_carpeta_id}/view`;
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border p-2.5">
+      <FileText className="h-4 w-4 shrink-0 text-[color:#2E6DA8]" />
+      <span className="min-w-0 flex-1 truncate text-sm" title={fila.drive_carpeta_nombre || ""}>{fila.drive_carpeta_nombre || "Archivo"}</span>
+      <BotonVerDoc driveId={fila.drive_carpeta_id} nombre={fila.drive_carpeta_nombre} label="Ver" className="inline-flex items-center gap-1 text-xs text-[color:#2E6DA8] hover:underline" />
+      <a href={drive} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>
+      <button onClick={onQuitar} title="Quitar archivo" className="rounded-md p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
     </div>
   );
 }
