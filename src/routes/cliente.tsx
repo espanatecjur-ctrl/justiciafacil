@@ -7,8 +7,9 @@ import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 import { CarpetasCliente } from "@/components/carpetas-cliente";
 import { GarantiasModuloCliente } from "@/components/garantias-modulo-cliente";
+import { AtencionClienteJC } from "@/components/atencion-cliente-jc";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
-import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen, LayoutGrid, Users } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen, LayoutGrid, Users, Headphones } from "lucide-react";
 
 export const Route = createFileRoute("/cliente")({
   validateSearch: (s: Record<string, unknown>) => ({ nombre: typeof s.nombre === "string" ? s.nombre : "" }),
@@ -35,7 +36,7 @@ function ClientePage() {
   const [cargando, setCargando] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [solicitar, setSolicitar] = useState<Cli | null>(null);
-  const [modulo, setModulo] = useState<"general" | "documentos" | "urrj" | "ucp" | "ucm" | "udp">("general");
+  const [modulo, setModulo] = useState<"general" | "documentos" | "urrj" | "ucp" | "ucm" | "udp" | "jurisconecta">("general");
 
   // Búsqueda tolerante: exacto -> amplio por el primer nombre + comparación normalizada
   // (ignora acentos y la anotación "(Cambio a...)"), para que la encuentre venga de donde venga.
@@ -138,6 +139,9 @@ function ClientePage() {
                 <Gavel className="h-4 w-4" /> {t.label}
               </button>
             ))}
+            <button onClick={() => setModulo("jurisconecta")} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === "jurisconecta" ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === "jurisconecta" ? { background: "#2E6DA8" } : undefined}>
+              <Headphones className="h-4 w-4" /> JurisConecta
+            </button>
           </div>
 
           {/* ============ GENERAL ============ */}
@@ -204,6 +208,9 @@ function ClientePage() {
               <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">Aquí se va a ver la información de UDP de este cliente — todavía no está conectada. Lo armamos en un siguiente paso.</p>
             </Card>
           )}
+
+          {/* ============ JURISCONECTA (solo lectura, en vivo) ============ */}
+          {modulo === "jurisconecta" && <AtencionClienteJC nombreCliente={nombre} />}
         </>
       )}
 
