@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { Card } from "@/components/ui/card";
 import {
   clienteJCPorNombre,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/juris-clientes";
 import { Loader2, Headphones, Mail, MessageCircle, Video, StickyNote, Phone, ListChecks } from "lucide-react";
 
-const ICONO: Record<string, JSX.Element> = {
+const ICONO: Record<string, ReactElement> = {
   correo: <Mail className="h-3.5 w-3.5" />,
   whatsapp: <MessageCircle className="h-3.5 w-3.5" />,
   videollamada: <Video className="h-3.5 w-3.5" />,
@@ -68,7 +68,7 @@ export function AtencionClienteJC({ nombreCliente }: { nombreCliente: string }) 
   }
 
   // Une comunicaciones + llamadas en una sola línea de tiempo, más nuevo primero.
-  type Evento = { fecha: string; icono: JSX.Element; titulo: string; detalle: string | null; autor: string | null };
+  type Evento = { fecha: string; icono: ReactElement; titulo: string; detalle: string | null; autor: string | null };
   const eventos: Evento[] = [
     ...comunicaciones.map((c) => ({
       fecha: c.created_at,
