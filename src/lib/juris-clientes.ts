@@ -63,7 +63,31 @@ export async function clienteJCPorId(id: string): Promise<ClienteJC | null> {
   }
 }
 
-// Resultado de la verificación de doble venta.
+// Trae TODOS los clientes de JurisConecta (para comparar contra los de aquí).
+// Pagina de 1000 en 1000 por si acaso, aunque hoy no se necesite.
+export async function todosClientesJC(): Promise<ClienteJC[]> {
+  const out: ClienteJC[] = [];
+  let desde = 0;
+  const PAGINA = 1000;
+  for (;;) {
+    try {
+      const r = await fetch(
+        `${JC_URL}/rest/v1/clientes?select=${SELECT}&eliminado=eq.false&order=nombre.asc&offset=${desde}&limit=${PAGINA}`,
+        { headers: jcHeaders }
+      );
+      if (!r.ok) break;
+      const lote: ClienteJC[] = await r.json();
+      out.push(...lote);
+      if (lote.length < PAGINA) break;
+      desde += PAGINA;
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
+
 export interface ChequeoDobleVenta {
   garantiaOcupada: ClienteJC[];   // clientes que ya tienen esta garantía
   clienteConGarantia: ClienteJC[]; // esta persona ya tiene otra garantía
