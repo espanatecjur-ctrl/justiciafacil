@@ -12,6 +12,12 @@ import {
   listarColaboradores,
   TIPOS_EVENTO, ESTILO_EVENTO, type Evento, type Colaborador,
 } from "@/lib/evento-agenda";
+import { buscarClientesJC, clienteJCPorNombre, type ClienteJC } from "@/lib/juris-clientes";
+import {
+  crearTareaEspejoJC, crearSolicitudClienteJF, marcarTareaJC,
+  estadoSolicitudJF, vincularSolicitudJF, descartarSolicitudJF,
+} from "@/lib/tareas-jc";
+import { AlertTriangle, MoreVertical, Loader2, Search } from "lucide-react";
 
 // Grupo al que pertenece cada rol (para armar "el equipo jurídico").
 const GRUPO_DE_ROL: Record<string, string> = Object.fromEntries(ROLES.map((r) => [r.codigo, r.grupo]));
@@ -109,7 +115,9 @@ function Calendario() {
   // Marca una tarea como hecha/pendiente de un clic (sin abrir el modal).
   const toggleHecha = async (e: Evento) => {
     if (!e.id) return;
-    await actualizarEvento(e.id, { estado: e.estado === "hecho" ? "pendiente" : "hecho" });
+    const nuevo = e.estado === "hecho" ? "pendiente" : "hecho";
+    await actualizarEvento(e.id, { estado: nuevo });
+    if (e.jc_tarea_id) marcarTareaJC(e.jc_tarea_id, nuevo === "hecho" ? "hecha" : "pendiente");
     recargar();
   };
 
@@ -198,6 +206,7 @@ function Calendario() {
                         )}
                         {e.hora && <span className="font-mono text-[10px] opacity-80">{e.hora}</span>}
                         <span className="truncate">{e.titulo || "(sin título)"}</span>
+                        {e.cliente_estado === "no_encontrado" && <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600" aria-label="Cliente no encontrado en JurisConecta" />}
                         {e.asignado_a && <span className="ml-auto shrink-0 rounded-full bg-white/60 px-1 text-[9px] font-medium">👤 {nombrePorCorreo[e.asignado_a] || "?"}</span>}
                       </button>
                     );
@@ -233,17 +242,76 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
   const [ocupado, setOcupado] = useState(false);
   const editar = !!evento.id;
 
+  // ---- Cliente (para reflejar la tarea en JurisConecta) ----
+  const [clienteTexto, setClienteTexto] = useState(evento.cliente_nombre ?? "");
+  const [clienteSel, setClienteSel] = useState<ClienteJC | null>(null);
+  const [sugerencias, setSugerencias] = useState<ClienteJC[]>([]);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [mostrarSug, setMostrarSug] = useState(false);
+  useEffect(() => {
+    if (clienteSel && clienteTexto === clienteSel.nombre) { setSugerencias([]); return; }
+    const q = clienteTexto.trim();
+    if (q.length < 3) { setSugerencias([]); return; }
+    const t = setTimeout(() => {
+      setBuscandoCliente(true);
+      buscarClientesJC(q).then(setSugerencias).finally(() => setBuscandoCliente(false));
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteTexto]);
+  const elegirCliente = (c: ClienteJC) => { setClienteSel(c); setClienteTexto(c.nombre || ""); setSugerencias([]); setMostrarSug(false); };
+
+  // ---- Estado de la solicitud (si este evento quedó pendiente de vincular en JurisConecta) ----
+  const [solEstado, setSolEstado] = useState<"pendiente" | "vinculada" | "creada" | "descartada" | null>(evento.cliente_estado === "no_encontrado" ? "pendiente" : null);
+  useEffect(() => {
+    if (!evento.jc_solicitud_id) return;
+    estadoSolicitudJF(evento.jc_solicitud_id).then((r) => { if (r) setSolEstado(r.estado); });
+  }, [evento.jc_solicitud_id]);
+  const [menuSol, setMenuSol] = useState(false);
+  const [vinculandoOtro, setVinculandoOtro] = useState(false);
+  const [resolviendo, setResolviendo] = useState(false);
+
+  const resolverVincular = async (c: ClienteJC) => {
+    if (!evento.jc_solicitud_id) return;
+    setResolviendo(true);
+    const correo = await correoActual();
+    const r = await vincularSolicitudJF(evento.jc_solicitud_id, c, {
+      tipo, titulo: titulo.trim(), detalle: nota || null, fecha: fecha || null,
+      asignadoCorreo: asignadoA, asignadoNombre: colabs.find((x) => x.correo === asignadoA)?.nombre || null,
+      autorCorreo: correo || null,
+    }, correo || "JusticiaFácil");
+    if (r.ok) {
+      await actualizarEvento(evento.id!, { cliente_estado: "vinculado", cliente_jc_id: c.id });
+      setSolEstado("vinculada");
+    }
+    setResolviendo(false); setVinculandoOtro(false); setMenuSol(false);
+  };
+  const resolverDescartar = async () => {
+    if (!evento.jc_solicitud_id) return;
+    setResolviendo(true);
+    const correo = await correoActual();
+    const ok = await descartarSolicitudJF(evento.jc_solicitud_id, correo || "JusticiaFácil");
+    if (ok) { await actualizarEvento(evento.id!, { cliente_estado: null }); setSolEstado("descartada"); }
+    setResolviendo(false); setMenuSol(false);
+  };
+
   const guardar = async () => {
     if (!titulo.trim() || !fecha) return;
     setOcupado(true);
     const asignado = asignadoA || null;
     const correo = await correoActual();
+    const clienteNombreVal = clienteTexto.trim() || null;
+    const campos = { titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado, cliente_nombre: clienteNombreVal };
+
+    let eventoId = evento.id || null;
     if (editar) {
-      await actualizarEvento(evento.id!, { titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado });
+      await actualizarEvento(evento.id!, campos);
     } else {
-      await crearEvento({ titulo: titulo.trim(), tipo, fecha, hora: hora || null, nota: nota || null, estado: tipo === "tarea" ? estado : null, asignado_a: asignado, creado_por: correo || null });
+      const r = await crearEvento({ ...campos, creado_por: correo || null });
+      eventoId = r.id || null;
     }
-    // Aviso (campanita) al asignado, si no soy yo mismo y cambió el asignado.
+
+    // Aviso (campanita, JusticiaFácil) al asignado, si no soy yo mismo y cambió el asignado.
     if (asignado && asignado !== correo && asignado !== (evento.asignado_a ?? null)) {
       await crearNotificacion({
         para: asignado,
@@ -251,6 +319,22 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
         enlace: "/calendario",
       });
     }
+
+    // ---- Espejo hacia JurisConecta: solo si hay cliente + asignado, y es nuevo o cambió ----
+    const cambioVinculo = clienteNombreVal !== (evento.cliente_nombre ?? null) || asignado !== (evento.asignado_a ?? null) || !evento.cliente_estado;
+    if (eventoId && clienteNombreVal && asignado && cambioVinculo) {
+      const asignadoNombre = colabs.find((x) => x.correo === asignado)?.nombre || null;
+      const datos = { tipo, titulo: titulo.trim(), detalle: nota || null, fecha: fecha || null, asignadoCorreo: asignado, asignadoNombre, autorCorreo: correo || null };
+      const match = clienteSel && clienteSel.nombre === clienteNombreVal ? clienteSel : await clienteJCPorNombre(clienteNombreVal);
+      if (match) {
+        const espejo = await crearTareaEspejoJC(match, datos);
+        await actualizarEvento(eventoId, { cliente_estado: "vinculado", cliente_jc_id: match.id, jc_tarea_id: espejo.tareaId || null });
+      } else {
+        const sol = await crearSolicitudClienteJF({ ...datos, nombreCliente: clienteNombreVal, jfEventoId: eventoId });
+        await actualizarEvento(eventoId, { cliente_estado: "no_encontrado", jc_solicitud_id: sol.solicitudId || null });
+      }
+    }
+
     setOcupado(false);
     onGuardado();
   };
@@ -306,6 +390,61 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
             <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
               className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </div>
+          <div className="relative">
+            <label className="text-[11px] font-medium text-muted-foreground">Cliente (opcional — para que se refleje en JurisConecta)</label>
+            <div className="relative mt-0.5">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                value={clienteTexto}
+                onChange={(e) => { setClienteTexto(e.target.value); setClienteSel(null); setMostrarSug(true); }}
+                onFocus={() => setMostrarSug(true)}
+                placeholder="Nombre del cliente…"
+                className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm"
+              />
+              {buscandoCliente && <Loader2 className="absolute right-2.5 top-2.5 h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+            {mostrarSug && sugerencias.length > 0 && (
+              <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-md border border-input bg-white shadow-lg">
+                {sugerencias.map((c) => (
+                  <button key={c.id} onClick={() => elegirCliente(c)} className="block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-muted">
+                    {c.nombre} {c.codigo && <span className="text-[10px] text-muted-foreground">· {c.codigo}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            {clienteSel && <p className="mt-1 text-[11px] text-emerald-700">✓ Vinculado con este cliente en JurisConecta</p>}
+            {!clienteSel && clienteTexto.trim() && evento.cliente_estado === "vinculado" && clienteTexto === evento.cliente_nombre && (
+              <p className="mt-1 text-[11px] text-emerald-700">✓ Ya vinculado en JurisConecta</p>
+            )}
+          </div>
+
+          {/* Solicitud pendiente: el cliente no se encontró en JurisConecta al guardar */}
+          {evento.jc_solicitud_id && solEstado === "pendiente" && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+              <div className="flex items-start justify-between gap-2">
+                <p className="flex items-start gap-1.5"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> No se encontró "{evento.cliente_nombre}" en JurisConecta. Queda pendiente de resolver (aquí o allá).</p>
+                <div className="relative shrink-0">
+                  <button onClick={() => setMenuSol((v) => !v)} className="rounded-md p-1 hover:bg-amber-100"><MoreVertical className="h-4 w-4" /></button>
+                  {menuSol && (
+                    <div className="absolute right-0 z-10 mt-1 w-52 rounded-md border border-input bg-white py-1 text-foreground shadow-lg">
+                      <button onClick={() => { setVinculandoOtro(true); setMenuSol(false); }} className="block w-full px-3 py-1.5 text-left text-xs hover:bg-muted">🔗 Vincular con otro cliente</button>
+                      <button disabled className="block w-full px-3 py-1.5 text-left text-xs text-muted-foreground/60">✓ Conservar (crear nuevo) — hazlo desde JurisConecta</button>
+                      <button onClick={resolverDescartar} disabled={resolviendo} className="block w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50">🗑 Eliminar solicitud</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {vinculandoOtro && (
+                <div className="mt-2 space-y-1.5 border-t border-amber-200 pt-2">
+                  <BuscadorClienteJC onElegir={resolverVincular} ocupado={resolviendo} />
+                </div>
+              )}
+            </div>
+          )}
+          {solEstado === "vinculada" && <p className="text-[11px] text-emerald-700">✓ La solicitud ya se vinculó con un cliente en JurisConecta.</p>}
+          {solEstado === "creada" && <p className="text-[11px] text-emerald-700">✓ Se creó el cliente en JurisConecta a partir de esta solicitud.</p>}
+          {solEstado === "descartada" && <p className="text-[11px] text-muted-foreground">Esta solicitud fue descartada.</p>}
+
           <div>
             <label className="text-[11px] font-medium text-muted-foreground">Asignar a (opcional)</label>
             <select value={asignadoA} onChange={(e) => setAsignadoA(e.target.value)}
@@ -333,6 +472,35 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Buscador chiquito para "Vincular con otro cliente" (dentro de la solicitud pendiente).
+function BuscadorClienteJC({ onElegir, ocupado }: { onElegir: (c: ClienteJC) => void; ocupado: boolean }) {
+  const [q, setQ] = useState("");
+  const [res, setRes] = useState<ClienteJC[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  useEffect(() => {
+    const texto = q.trim();
+    if (texto.length < 3) { setRes([]); return; }
+    const t = setTimeout(() => { setBuscando(true); buscarClientesJC(texto).then(setRes).finally(() => setBuscando(false)); }, 350);
+    return () => clearTimeout(t);
+  }, [q]);
+  return (
+    <div className="space-y-1.5">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente en JurisConecta…"
+        className="h-8 w-full rounded-md border border-input bg-white px-2.5 text-xs" autoFocus />
+      {buscando && <p className="text-[11px] text-muted-foreground"><Loader2 className="mr-1 inline h-3 w-3 animate-spin" /> Buscando…</p>}
+      {res.length > 0 && (
+        <div className="max-h-32 overflow-y-auto rounded-md border border-input bg-white">
+          {res.map((c) => (
+            <button key={c.id} disabled={ocupado} onClick={() => onElegir(c)} className="block w-full truncate px-2.5 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50">
+              {c.nombre} {c.codigo && <span className="text-[10px] text-muted-foreground">· {c.codigo}</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
