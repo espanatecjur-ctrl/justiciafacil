@@ -87,11 +87,105 @@ export async function todosClientesJC(): Promise<ClienteJC[]> {
   return out;
 }
 
+// ============================================================
+// Atención al Cliente (JurisConecta) — para mostrarla dentro de
+// la ficha de cliente de JusticiaFácil. Todo de solo lectura.
+// ============================================================
+
+export interface ComunicacionJC {
+  id: string;
+  tipo: string; // 'whatsapp' | 'correo' | 'llamada' | 'videollamada' | 'nota'
+  detalle: string | null;
+  autor: string | null;
+  created_at: string;
+}
+
+export interface LlamadaJC {
+  id: string;
+  fecha: string;
+  tipo: string | null; // 'entrante' | 'saliente'
+  resultado: string | null;
+  telefono: string | null;
+}
+
+export interface TareaJC {
+  id: string;
+  titulo: string | null;
+  estado: string | null;
+  fecha_limite: string | null;
+  asignado_a: string | null;
+}
+
+const soloDigitos = (s: string | null | undefined) => (s || "").replace(/\D/g, "").slice(-10);
+
+// Busca el cliente de JurisConecta que mejor empata por nombre (comparación
+// tolerante: sin acentos/mayúsculas). Si no hay match razonable, regresa null.
+export async function clienteJCPorNombre(nombre: string): Promise<ClienteJC | null> {
+  const candidatos = await buscarClientesJC(nombre);
+  if (candidatos.length === 0) return null;
+  const norm = (s: string) =>
+    (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+  const objetivo = norm(nombre);
+  const exacto = candidatos.find((c) => norm(c.nombre || "") === objetivo);
+  if (exacto) return exacto;
+  const palabrasObjetivo = new Set(objetivo.split(" ").filter((w) => w.length > 2));
+  let mejor: ClienteJC | null = null;
+  let mejorScore = 0;
+  for (const c of candidatos) {
+    const palabrasC = new Set(norm(c.nombre || "").split(" ").filter((w) => w.length > 2));
+    let compartidas = 0;
+    for (const w of palabrasObjetivo) if (palabrasC.has(w)) compartidas++;
+    if (compartidas > mejorScore) { mejorScore = compartidas; mejor = c; }
+  }
+  return mejorScore >= 2 ? mejor : null;
+}
+
+export async function comunicacionesJC(clienteId: string): Promise<ComunicacionJC[]> {
+  try {
+    const r = await fetch(
+      `${JC_URL}/rest/v1/comunicaciones_cliente?select=id,tipo,detalle,autor,created_at&cliente_id=eq.${encodeURIComponent(clienteId)}&order=created_at.desc&limit=50`,
+      { headers: jcHeaders }
+    );
+    return r.ok ? await r.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function tareasJC(clienteId: string): Promise<TareaJC[]> {
+  try {
+    const r = await fetch(
+      `${JC_URL}/rest/v1/tareas?select=id,titulo,estado,fecha_limite,asignado_a&cliente_id=eq.${encodeURIComponent(clienteId)}&order=fecha_limite.asc.nullslast&limit=50`,
+      { headers: jcHeaders }
+    );
+    return r.ok ? await r.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function llamadasJC(telefono: string | null, telefono2: string | null): Promise<LlamadaJC[]> {
+  const t1 = soloDigitos(telefono);
+  const t2 = soloDigitos(telefono2);
+  const tels = Array.from(new Set([t1, t2].filter((t) => t.length >= 8)));
+  if (tels.length === 0) return [];
+  try {
+    const filtro = tels.map((t) => `telefono.ilike.*${t}`).join(",");
+    const r = await fetch(
+      `${JC_URL}/rest/v1/llamadas?select=id,fecha,tipo,resultado,telefono&or=(${filtro})&order=fecha.desc&limit=50`,
+      { headers: jcHeaders }
+    );
+    return r.ok ? await r.json() : [];
+  } catch {
+    return [];
+  }
+}
 
 export interface ChequeoDobleVenta {
   garantiaOcupada: ClienteJC[];   // clientes que ya tienen esta garantía
   clienteConGarantia: ClienteJC[]; // esta persona ya tiene otra garantía
 }
+
 
 // Verifica posible doble venta ANTES de vincular:
 //  1) ¿esta garantía (gar_id) ya está tomada por otro cliente?
