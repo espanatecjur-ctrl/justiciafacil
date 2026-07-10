@@ -159,7 +159,7 @@ function ClientesCRM() {
             <button onClick={descargarExcel} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
               <Download className="h-4 w-4" /> Descargar Excel
             </button>
-            <Link to="/clientes/comparador" className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
+            <Link to="/comparador-clientes" className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
               <GitCompare className="h-4 w-4" /> Comparar con JurisConecta
             </Link>
           </div>
