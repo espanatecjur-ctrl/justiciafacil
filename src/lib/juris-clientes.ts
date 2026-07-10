@@ -32,7 +32,7 @@ export interface ClienteJC {
   expediente: string | null;
 }
 
-const SELECT = "id,nombre,curp_rfc,ine,email,telefono,telefono2,domicilio,folio,codigo,area,estatus,garantia,gar_id,expediente";
+const SELECT = "id,nombre,curp_rfc,ine,email,telefono,telefono2,domicilio,folio,codigo,area,estatus,garantia,expediente";
 
 // Busca clientes en JurisConecta por CUALQUIER dato: nombre, CURP/RFC, correo,
 // teléfono o folio. Devuelve TODAS las coincidencias (para detectar duplicados).
