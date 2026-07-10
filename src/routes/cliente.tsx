@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
-import { CarpetasCliente } from "@/components/carpetas-cliente";
+import { DocumentosFijos } from "@/components/documentos-fijos";
 import { GarantiasModuloCliente } from "@/components/garantias-modulo-cliente";
 import { AtencionClienteJC } from "@/components/atencion-cliente-jc";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
+import type { CasoJuridico } from "@/lib/supabase";
 import { ArrowLeft, Loader2, MapPin, Gavel, FileSignature, Check, Eye, Home, FolderOpen, LayoutGrid, Users, Headphones } from "lucide-react";
 
 export const Route = createFileRoute("/cliente")({
@@ -22,7 +23,7 @@ const fmtMXN = (v: any) => new Intl.NumberFormat("es-MX", { style: "currency", c
 const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\(.*$/, "").replace(/\s+/g, " ").trim();
 
 interface Cli extends ClienteJuicio {
-  caso_juridico?: { id: string; expediente: string | null } | null;
+  caso_juridico?: CasoJuridico | null;
   formalizacion_solicitada?: boolean | null; formalizacion_tipo?: string | null;
 }
 const DOCS: (keyof ClienteJuicio)[] = ["doc_ine", "doc_comprobante", "doc_acta_nac", "doc_curp", "doc_csf", "doc_acta_matri"];
@@ -42,7 +43,7 @@ function ClientePage() {
   // (ignora acentos y la anotación "(Cambio a...)"), para que la encuentre venga de donde venga.
   const cargar = async () => {
     if (!nombre) { setCargando(false); return; }
-    const base = `cliente_juicio?select=*,caso_juridico(id,expediente)&en_papelera=eq.false&order=folio.asc`;
+    const base = `cliente_juicio?select=*,caso_juridico(*)&en_papelera=eq.false&order=folio.asc`;
     const q = (filtro: string) => fetch(`${SUPABASE_URL}/rest/v1/${base}&${filtro}`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
     try {
       let rows: Cli[] = await q(`nombre=eq.${encodeURIComponent(nombre)}`);
@@ -181,19 +182,32 @@ function ClientePage() {
           </Card>
           )}
 
-          {/* ============ DOCUMENTOS ============ */}
+          {/* ============ DOCUMENTOS (mismo sistema de "Documentos fijos" que UCM) ============ */}
           {modulo === "documentos" && (
-            juicio?.id ? (
-              <Card className="overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-                  <Users className="h-4 w-4 text-[color:#2E6DA8]" />
-                  <h3 className="text-sm font-semibold">Documentos del cliente (carpetas de Drive)</h3>
+            (() => {
+              const conCarpeta = gars.filter((c) => c.caso_juridico?.id && c.caso_juridico?.drive_carpeta_id);
+              if (conCarpeta.length === 0) {
+                return <Card className="p-6 text-center text-sm text-muted-foreground">Este cliente todavía no tiene una carpeta de Drive vinculada en ninguna de sus garantías — sin eso no se pueden ver los documentos.</Card>;
+              }
+              return (
+                <div className="space-y-4">
+                  {conCarpeta.map((c) => (
+                    <Card key={c.caso_juridico!.id} className="overflow-hidden">
+                      <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+                        <Users className="h-4 w-4 text-[color:#2E6DA8]" />
+                        <h3 className="text-sm font-semibold">
+                          Documentos · {c.domicilio_garantia || c.folio || "Garantía"}
+                          {c.caso_juridico?.unidad ? ` · ${c.caso_juridico.unidad}` : ""}
+                        </h3>
+                      </div>
+                      <div className="p-3">
+                        <DocumentosFijos caso={c.caso_juridico as CasoJuridico} area={c.caso_juridico?.unidad || "UCM"} />
+                      </div>
+                    </Card>
+                  ))}
                 </div>
-                <CarpetasCliente casoId={juicio.id} clienteNombre={nombre} expediente={juicio.expediente} />
-              </Card>
-            ) : (
-              <Card className="p-6 text-center text-sm text-muted-foreground">Este cliente todavía no tiene un juicio vinculado — sin eso no se puede guardar la carpeta de documentos.</Card>
-            )
+              );
+            })()
           )}
           {/* ============ URRJ / UCP / UCM (datos reales por nombre) ============ */}
           {modulo === "urrj" && <GarantiasModuloCliente nombreCliente={nombre} unidad="URRJ" />}
