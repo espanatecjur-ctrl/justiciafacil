@@ -13,6 +13,23 @@
 // ============================================================
 import { JC_URL, jcHeaders, type ClienteJC } from "@/lib/juris-clientes";
 
+/** Colaborador tal como lo guarda JurisConecta (para el selector "Asignar a"). */
+export interface ColaboradorJC { nombre: string; correo: string; rol?: string | null; }
+
+/** Lista los colaboradores activos de JurisConecta (roles y personal registrado allá). */
+export async function listarColaboradoresJC(): Promise<ColaboradorJC[]> {
+  try {
+    const r = await fetch(`${JC_URL}/rest/v1/colaboradores?select=nombre,correo,puesto,rol_sistema&activo=eq.true&order=nombre.asc`, { headers: jcHeaders });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d || [])
+      .filter((c: any) => c.correo)
+      .map((c: any) => ({ nombre: c.nombre, correo: c.correo, rol: c.rol_sistema || c.puesto || null }));
+  } catch {
+    return [];
+  }
+}
+
 export interface DatosTareaEspejo {
   tipo: string;              // "tarea" | "cita" | "evento" | "recordatorio"
   titulo: string;
