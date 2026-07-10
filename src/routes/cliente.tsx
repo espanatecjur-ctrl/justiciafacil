@@ -6,6 +6,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { SolicitarFormalizacion } from "@/components/solicitar-formalizacion";
 import { ClienteFichaPanel } from "@/components/cliente-ficha-panel";
 import { DocumentosFijos } from "@/components/documentos-fijos";
+import { ClienteDocumentos } from "@/components/cliente-documentos";
 import { GarantiasModuloCliente } from "@/components/garantias-modulo-cliente";
 import { AtencionClienteJC } from "@/components/atencion-cliente-jc";
 import type { ClienteJuicio } from "@/components/clientes-juicio";
@@ -234,17 +235,21 @@ function ClientePage() {
 
               if (conCarpeta.length === 0) {
                 return (
-                  <Card className="p-6 text-center text-sm text-muted-foreground">
-                    {buscandoCoincidencias ? (
-                      <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Buscando la carpeta en URRJ, UCP, UCM y UFC…</span>
-                    ) : (
-                      "Este cliente todavía no tiene una carpeta de Drive vinculada, ni en esta garantía ni en ninguna coincidencia de otros módulos (URRJ/UCP/UCM/UFC)."
-                    )}
-                  </Card>
+                  <div className="space-y-4">
+                    <ClienteDocumentos nombreCliente={nombre} />
+                    <Card className="p-6 text-center text-sm text-muted-foreground">
+                      {buscandoCoincidencias ? (
+                        <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Buscando la carpeta en URRJ, UCP, UCM y UFC…</span>
+                      ) : (
+                        "Ninguna garantía de este cliente tiene carpeta de Drive vinculada (ni coincidencia en URRJ/UCP/UCM/UFC)."
+                      )}
+                    </Card>
+                  </div>
                 );
               }
               return (
                 <div className="space-y-4">
+                  <ClienteDocumentos nombreCliente={nombre} />
                   {conCarpeta.map(({ c, casoParaDocs, prestadoDe }) => (
                     <Card key={c.caso_juridico!.id} className="overflow-hidden">
                       <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
