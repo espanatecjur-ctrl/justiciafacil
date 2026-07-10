@@ -1,10 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Search, Users, Loader2, Gavel, Home, Download, UserPlus, X, Save } from "lucide-react";
+import { Search, Users, Loader2, Gavel, Home, Download, UserPlus, X, Save, GitCompare } from "lucide-react";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({ meta: [{ title: "Clientes — JusticiaFácil" }] }),
@@ -159,6 +159,9 @@ function ClientesCRM() {
             <button onClick={descargarExcel} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
               <Download className="h-4 w-4" /> Descargar Excel
             </button>
+            <Link to="/clientes/comparador" className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-muted">
+              <GitCompare className="h-4 w-4" /> Comparar con JurisConecta
+            </Link>
           </div>
         }
       />
