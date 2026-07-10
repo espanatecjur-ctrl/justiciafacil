@@ -15,22 +15,33 @@ import { Route as UfcRouteImport } from './routes/ufc'
 import { Route as UdpRouteImport } from './routes/udp'
 import { Route as UcpFichaRouteImport } from './routes/ucp-ficha'
 import { Route as UcpRouteImport } from './routes/ucp'
+import { Route as UcmFichaRouteImport } from './routes/ucm-ficha'
 import { Route as UcmRouteImport } from './routes/ucm'
 import { Route as TramitesRouteImport } from './routes/tramites'
 import { Route as RecursosRouteImport } from './routes/recursos'
 import { Route as LiquidacionRouteImport } from './routes/liquidacion'
+import { Route as JufaRouteImport } from './routes/jufa'
+import { Route as FirmarRouteImport } from './routes/firmar'
 import { Route as ExpedienteRouteImport } from './routes/expediente'
 import { Route as ExhortosRouteImport } from './routes/exhortos'
+import { Route as DireccionRouteImport } from './routes/direccion'
 import { Route as DictamenIaRouteImport } from './routes/dictamen-ia'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as ConectoresRouteImport } from './routes/conectores'
+import { Route as ComparadorClientesRouteImport } from './routes/comparador-clientes'
+import { Route as ClientesRouteImport } from './routes/clientes'
+import { Route as ClienteRouteImport } from './routes/cliente'
 import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as BoletinesRouteImport } from './routes/boletines'
 import { Route as AmparosRouteImport } from './routes/amparos'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ExpedientesIndexRouteImport } from './routes/expedientes.index'
+import { Route as EscritosIndexRouteImport } from './routes/escritos.index'
 import { Route as ContratosIndexRouteImport } from './routes/contratos.index'
 import { Route as ExpedientesIdRouteImport } from './routes/expedientes.$id'
+import { Route as EscritosNuevaRouteImport } from './routes/escritos.nueva'
+import { Route as EscritosEditorRouteImport } from './routes/escritos.editor'
+import { Route as ContratosNuevaRouteImport } from './routes/contratos.nueva'
 import { Route as ContratosEditorRouteImport } from './routes/contratos.editor'
 
 const UrrjRoute = UrrjRouteImport.update({
@@ -63,6 +74,11 @@ const UcpRoute = UcpRouteImport.update({
   path: '/ucp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UcmFichaRoute = UcmFichaRouteImport.update({
+  id: '/ucm-ficha',
+  path: '/ucm-ficha',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UcmRoute = UcmRouteImport.update({
   id: '/ucm',
   path: '/ucm',
@@ -83,6 +99,16 @@ const LiquidacionRoute = LiquidacionRouteImport.update({
   path: '/liquidacion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JufaRoute = JufaRouteImport.update({
+  id: '/jufa',
+  path: '/jufa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FirmarRoute = FirmarRouteImport.update({
+  id: '/firmar',
+  path: '/firmar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExpedienteRoute = ExpedienteRouteImport.update({
   id: '/expediente',
   path: '/expediente',
@@ -91,6 +117,11 @@ const ExpedienteRoute = ExpedienteRouteImport.update({
 const ExhortosRoute = ExhortosRouteImport.update({
   id: '/exhortos',
   path: '/exhortos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DireccionRoute = DireccionRouteImport.update({
+  id: '/direccion',
+  path: '/direccion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DictamenIaRoute = DictamenIaRouteImport.update({
@@ -106,6 +137,21 @@ const ConfiguracionRoute = ConfiguracionRouteImport.update({
 const ConectoresRoute = ConectoresRouteImport.update({
   id: '/conectores',
   path: '/conectores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComparadorClientesRoute = ComparadorClientesRouteImport.update({
+  id: '/comparador-clientes',
+  path: '/comparador-clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesRoute = ClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClienteRoute = ClienteRouteImport.update({
+  id: '/cliente',
+  path: '/cliente',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CalendarioRoute = CalendarioRouteImport.update({
@@ -133,6 +179,11 @@ const ExpedientesIndexRoute = ExpedientesIndexRouteImport.update({
   path: '/expedientes/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EscritosIndexRoute = EscritosIndexRouteImport.update({
+  id: '/escritos/',
+  path: '/escritos/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContratosIndexRoute = ContratosIndexRouteImport.update({
   id: '/contratos/',
   path: '/contratos/',
@@ -141,6 +192,21 @@ const ContratosIndexRoute = ContratosIndexRouteImport.update({
 const ExpedientesIdRoute = ExpedientesIdRouteImport.update({
   id: '/expedientes/$id',
   path: '/expedientes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EscritosNuevaRoute = EscritosNuevaRouteImport.update({
+  id: '/escritos/nueva',
+  path: '/escritos/nueva',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EscritosEditorRoute = EscritosEditorRouteImport.update({
+  id: '/escritos/editor',
+  path: '/escritos/editor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContratosNuevaRoute = ContratosNuevaRouteImport.update({
+  id: '/contratos/nueva',
+  path: '/contratos/nueva',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContratosEditorRoute = ContratosEditorRouteImport.update({
@@ -154,15 +220,22 @@ export interface FileRoutesByFullPath {
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
   '/calendario': typeof CalendarioRoute
+  '/cliente': typeof ClienteRoute
+  '/clientes': typeof ClientesRoute
+  '/comparador-clientes': typeof ComparadorClientesRoute
   '/conectores': typeof ConectoresRoute
   '/configuracion': typeof ConfiguracionRoute
   '/dictamen-ia': typeof DictamenIaRoute
+  '/direccion': typeof DireccionRoute
   '/exhortos': typeof ExhortosRoute
   '/expediente': typeof ExpedienteRoute
+  '/firmar': typeof FirmarRoute
+  '/jufa': typeof JufaRoute
   '/liquidacion': typeof LiquidacionRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
   '/ucm': typeof UcmRoute
+  '/ucm-ficha': typeof UcmFichaRoute
   '/ucp': typeof UcpRoute
   '/ucp-ficha': typeof UcpFichaRoute
   '/udp': typeof UdpRoute
@@ -170,8 +243,12 @@ export interface FileRoutesByFullPath {
   '/ufc-ficha': typeof UfcFichaRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
+  '/contratos/nueva': typeof ContratosNuevaRoute
+  '/escritos/editor': typeof EscritosEditorRoute
+  '/escritos/nueva': typeof EscritosNuevaRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
   '/contratos/': typeof ContratosIndexRoute
+  '/escritos/': typeof EscritosIndexRoute
   '/expedientes/': typeof ExpedientesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -179,15 +256,22 @@ export interface FileRoutesByTo {
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
   '/calendario': typeof CalendarioRoute
+  '/cliente': typeof ClienteRoute
+  '/clientes': typeof ClientesRoute
+  '/comparador-clientes': typeof ComparadorClientesRoute
   '/conectores': typeof ConectoresRoute
   '/configuracion': typeof ConfiguracionRoute
   '/dictamen-ia': typeof DictamenIaRoute
+  '/direccion': typeof DireccionRoute
   '/exhortos': typeof ExhortosRoute
   '/expediente': typeof ExpedienteRoute
+  '/firmar': typeof FirmarRoute
+  '/jufa': typeof JufaRoute
   '/liquidacion': typeof LiquidacionRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
   '/ucm': typeof UcmRoute
+  '/ucm-ficha': typeof UcmFichaRoute
   '/ucp': typeof UcpRoute
   '/ucp-ficha': typeof UcpFichaRoute
   '/udp': typeof UdpRoute
@@ -195,8 +279,12 @@ export interface FileRoutesByTo {
   '/ufc-ficha': typeof UfcFichaRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
+  '/contratos/nueva': typeof ContratosNuevaRoute
+  '/escritos/editor': typeof EscritosEditorRoute
+  '/escritos/nueva': typeof EscritosNuevaRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
   '/contratos': typeof ContratosIndexRoute
+  '/escritos': typeof EscritosIndexRoute
   '/expedientes': typeof ExpedientesIndexRoute
 }
 export interface FileRoutesById {
@@ -205,15 +293,22 @@ export interface FileRoutesById {
   '/amparos': typeof AmparosRoute
   '/boletines': typeof BoletinesRoute
   '/calendario': typeof CalendarioRoute
+  '/cliente': typeof ClienteRoute
+  '/clientes': typeof ClientesRoute
+  '/comparador-clientes': typeof ComparadorClientesRoute
   '/conectores': typeof ConectoresRoute
   '/configuracion': typeof ConfiguracionRoute
   '/dictamen-ia': typeof DictamenIaRoute
+  '/direccion': typeof DireccionRoute
   '/exhortos': typeof ExhortosRoute
   '/expediente': typeof ExpedienteRoute
+  '/firmar': typeof FirmarRoute
+  '/jufa': typeof JufaRoute
   '/liquidacion': typeof LiquidacionRoute
   '/recursos': typeof RecursosRoute
   '/tramites': typeof TramitesRoute
   '/ucm': typeof UcmRoute
+  '/ucm-ficha': typeof UcmFichaRoute
   '/ucp': typeof UcpRoute
   '/ucp-ficha': typeof UcpFichaRoute
   '/udp': typeof UdpRoute
@@ -221,8 +316,12 @@ export interface FileRoutesById {
   '/ufc-ficha': typeof UfcFichaRoute
   '/urrj': typeof UrrjRoute
   '/contratos/editor': typeof ContratosEditorRoute
+  '/contratos/nueva': typeof ContratosNuevaRoute
+  '/escritos/editor': typeof EscritosEditorRoute
+  '/escritos/nueva': typeof EscritosNuevaRoute
   '/expedientes/$id': typeof ExpedientesIdRoute
   '/contratos/': typeof ContratosIndexRoute
+  '/escritos/': typeof EscritosIndexRoute
   '/expedientes/': typeof ExpedientesIndexRoute
 }
 export interface FileRouteTypes {
@@ -232,15 +331,22 @@ export interface FileRouteTypes {
     | '/amparos'
     | '/boletines'
     | '/calendario'
+    | '/cliente'
+    | '/clientes'
+    | '/comparador-clientes'
     | '/conectores'
     | '/configuracion'
     | '/dictamen-ia'
+    | '/direccion'
     | '/exhortos'
     | '/expediente'
+    | '/firmar'
+    | '/jufa'
     | '/liquidacion'
     | '/recursos'
     | '/tramites'
     | '/ucm'
+    | '/ucm-ficha'
     | '/ucp'
     | '/ucp-ficha'
     | '/udp'
@@ -248,8 +354,12 @@ export interface FileRouteTypes {
     | '/ufc-ficha'
     | '/urrj'
     | '/contratos/editor'
+    | '/contratos/nueva'
+    | '/escritos/editor'
+    | '/escritos/nueva'
     | '/expedientes/$id'
     | '/contratos/'
+    | '/escritos/'
     | '/expedientes/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -257,15 +367,22 @@ export interface FileRouteTypes {
     | '/amparos'
     | '/boletines'
     | '/calendario'
+    | '/cliente'
+    | '/clientes'
+    | '/comparador-clientes'
     | '/conectores'
     | '/configuracion'
     | '/dictamen-ia'
+    | '/direccion'
     | '/exhortos'
     | '/expediente'
+    | '/firmar'
+    | '/jufa'
     | '/liquidacion'
     | '/recursos'
     | '/tramites'
     | '/ucm'
+    | '/ucm-ficha'
     | '/ucp'
     | '/ucp-ficha'
     | '/udp'
@@ -273,8 +390,12 @@ export interface FileRouteTypes {
     | '/ufc-ficha'
     | '/urrj'
     | '/contratos/editor'
+    | '/contratos/nueva'
+    | '/escritos/editor'
+    | '/escritos/nueva'
     | '/expedientes/$id'
     | '/contratos'
+    | '/escritos'
     | '/expedientes'
   id:
     | '__root__'
@@ -282,15 +403,22 @@ export interface FileRouteTypes {
     | '/amparos'
     | '/boletines'
     | '/calendario'
+    | '/cliente'
+    | '/clientes'
+    | '/comparador-clientes'
     | '/conectores'
     | '/configuracion'
     | '/dictamen-ia'
+    | '/direccion'
     | '/exhortos'
     | '/expediente'
+    | '/firmar'
+    | '/jufa'
     | '/liquidacion'
     | '/recursos'
     | '/tramites'
     | '/ucm'
+    | '/ucm-ficha'
     | '/ucp'
     | '/ucp-ficha'
     | '/udp'
@@ -298,8 +426,12 @@ export interface FileRouteTypes {
     | '/ufc-ficha'
     | '/urrj'
     | '/contratos/editor'
+    | '/contratos/nueva'
+    | '/escritos/editor'
+    | '/escritos/nueva'
     | '/expedientes/$id'
     | '/contratos/'
+    | '/escritos/'
     | '/expedientes/'
   fileRoutesById: FileRoutesById
 }
@@ -308,15 +440,22 @@ export interface RootRouteChildren {
   AmparosRoute: typeof AmparosRoute
   BoletinesRoute: typeof BoletinesRoute
   CalendarioRoute: typeof CalendarioRoute
+  ClienteRoute: typeof ClienteRoute
+  ClientesRoute: typeof ClientesRoute
+  ComparadorClientesRoute: typeof ComparadorClientesRoute
   ConectoresRoute: typeof ConectoresRoute
   ConfiguracionRoute: typeof ConfiguracionRoute
   DictamenIaRoute: typeof DictamenIaRoute
+  DireccionRoute: typeof DireccionRoute
   ExhortosRoute: typeof ExhortosRoute
   ExpedienteRoute: typeof ExpedienteRoute
+  FirmarRoute: typeof FirmarRoute
+  JufaRoute: typeof JufaRoute
   LiquidacionRoute: typeof LiquidacionRoute
   RecursosRoute: typeof RecursosRoute
   TramitesRoute: typeof TramitesRoute
   UcmRoute: typeof UcmRoute
+  UcmFichaRoute: typeof UcmFichaRoute
   UcpRoute: typeof UcpRoute
   UcpFichaRoute: typeof UcpFichaRoute
   UdpRoute: typeof UdpRoute
@@ -324,8 +463,12 @@ export interface RootRouteChildren {
   UfcFichaRoute: typeof UfcFichaRoute
   UrrjRoute: typeof UrrjRoute
   ContratosEditorRoute: typeof ContratosEditorRoute
+  ContratosNuevaRoute: typeof ContratosNuevaRoute
+  EscritosEditorRoute: typeof EscritosEditorRoute
+  EscritosNuevaRoute: typeof EscritosNuevaRoute
   ExpedientesIdRoute: typeof ExpedientesIdRoute
   ContratosIndexRoute: typeof ContratosIndexRoute
+  EscritosIndexRoute: typeof EscritosIndexRoute
   ExpedientesIndexRoute: typeof ExpedientesIndexRoute
 }
 
@@ -373,6 +516,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UcpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ucm-ficha': {
+      id: '/ucm-ficha'
+      path: '/ucm-ficha'
+      fullPath: '/ucm-ficha'
+      preLoaderRoute: typeof UcmFichaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ucm': {
       id: '/ucm'
       path: '/ucm'
@@ -401,6 +551,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LiquidacionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/jufa': {
+      id: '/jufa'
+      path: '/jufa'
+      fullPath: '/jufa'
+      preLoaderRoute: typeof JufaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/firmar': {
+      id: '/firmar'
+      path: '/firmar'
+      fullPath: '/firmar'
+      preLoaderRoute: typeof FirmarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/expediente': {
       id: '/expediente'
       path: '/expediente'
@@ -413,6 +577,13 @@ declare module '@tanstack/react-router' {
       path: '/exhortos'
       fullPath: '/exhortos'
       preLoaderRoute: typeof ExhortosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/direccion': {
+      id: '/direccion'
+      path: '/direccion'
+      fullPath: '/direccion'
+      preLoaderRoute: typeof DireccionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dictamen-ia': {
@@ -434,6 +605,27 @@ declare module '@tanstack/react-router' {
       path: '/conectores'
       fullPath: '/conectores'
       preLoaderRoute: typeof ConectoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comparador-clientes': {
+      id: '/comparador-clientes'
+      path: '/comparador-clientes'
+      fullPath: '/comparador-clientes'
+      preLoaderRoute: typeof ComparadorClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes': {
+      id: '/clientes'
+      path: '/clientes'
+      fullPath: '/clientes'
+      preLoaderRoute: typeof ClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cliente': {
+      id: '/cliente'
+      path: '/cliente'
+      fullPath: '/cliente'
+      preLoaderRoute: typeof ClienteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/calendario': {
@@ -471,6 +663,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpedientesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/escritos/': {
+      id: '/escritos/'
+      path: '/escritos'
+      fullPath: '/escritos/'
+      preLoaderRoute: typeof EscritosIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contratos/': {
       id: '/contratos/'
       path: '/contratos'
@@ -483,6 +682,27 @@ declare module '@tanstack/react-router' {
       path: '/expedientes/$id'
       fullPath: '/expedientes/$id'
       preLoaderRoute: typeof ExpedientesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/escritos/nueva': {
+      id: '/escritos/nueva'
+      path: '/escritos/nueva'
+      fullPath: '/escritos/nueva'
+      preLoaderRoute: typeof EscritosNuevaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/escritos/editor': {
+      id: '/escritos/editor'
+      path: '/escritos/editor'
+      fullPath: '/escritos/editor'
+      preLoaderRoute: typeof EscritosEditorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contratos/nueva': {
+      id: '/contratos/nueva'
+      path: '/contratos/nueva'
+      fullPath: '/contratos/nueva'
+      preLoaderRoute: typeof ContratosNuevaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contratos/editor': {
@@ -500,15 +720,22 @@ const rootRouteChildren: RootRouteChildren = {
   AmparosRoute: AmparosRoute,
   BoletinesRoute: BoletinesRoute,
   CalendarioRoute: CalendarioRoute,
+  ClienteRoute: ClienteRoute,
+  ClientesRoute: ClientesRoute,
+  ComparadorClientesRoute: ComparadorClientesRoute,
   ConectoresRoute: ConectoresRoute,
   ConfiguracionRoute: ConfiguracionRoute,
   DictamenIaRoute: DictamenIaRoute,
+  DireccionRoute: DireccionRoute,
   ExhortosRoute: ExhortosRoute,
   ExpedienteRoute: ExpedienteRoute,
+  FirmarRoute: FirmarRoute,
+  JufaRoute: JufaRoute,
   LiquidacionRoute: LiquidacionRoute,
   RecursosRoute: RecursosRoute,
   TramitesRoute: TramitesRoute,
   UcmRoute: UcmRoute,
+  UcmFichaRoute: UcmFichaRoute,
   UcpRoute: UcpRoute,
   UcpFichaRoute: UcpFichaRoute,
   UdpRoute: UdpRoute,
@@ -516,8 +743,12 @@ const rootRouteChildren: RootRouteChildren = {
   UfcFichaRoute: UfcFichaRoute,
   UrrjRoute: UrrjRoute,
   ContratosEditorRoute: ContratosEditorRoute,
+  ContratosNuevaRoute: ContratosNuevaRoute,
+  EscritosEditorRoute: EscritosEditorRoute,
+  EscritosNuevaRoute: EscritosNuevaRoute,
   ExpedientesIdRoute: ExpedientesIdRoute,
   ContratosIndexRoute: ContratosIndexRoute,
+  EscritosIndexRoute: EscritosIndexRoute,
   ExpedientesIndexRoute: ExpedientesIndexRoute,
 }
 export const routeTree = rootRouteImport
