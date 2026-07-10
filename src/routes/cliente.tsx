@@ -60,6 +60,44 @@ function ClientePage() {
   };
   useEffect(() => { setCargando(true); cargar(); }, [nombre]);
 
+  // Si la garantía en turno no tiene carpeta de Drive propia, buscamos si OTRO
+  // caso (en URRJ/UCP/UCM/UFC) que sea la MISMA garantía sí la tiene — por
+  // folio de garantía, dirección, expediente o cliente — y "prestamos" esa carpeta.
+  const [carpetaPorCoincidencia, setCarpetaPorCoincidencia] = useState<Record<string, CasoJuridico>>({});
+  const [buscandoCoincidencias, setBuscandoCoincidencias] = useState(false);
+  useEffect(() => {
+    const faltantes = gars.filter((c) => c.caso_juridico?.id && !c.caso_juridico?.drive_carpeta_id);
+    if (faltantes.length === 0) { setCarpetaPorCoincidencia({}); return; }
+    let vivo = true;
+    setBuscandoCoincidencias(true);
+    fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&drive_carpeta_id=not.is.null&archivado=eq.false`, { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((todos: CasoJuridico[]) => {
+        if (!vivo) return;
+        const mapa: Record<string, CasoJuridico> = {};
+        for (const c of faltantes) {
+          const caso = c.caso_juridico!;
+          const g = norm((caso as any).gar_id || "");
+          const dir = norm(caso.direccion_garantia || "");
+          const exp = norm(caso.expediente || "");
+          const cli = caso.cliente_id ? "id:" + caso.cliente_id : norm(caso.cliente_nombre || "");
+          const match = todos.find((o) => {
+            if (!o.id || o.id === caso.id) return false;
+            if (g.length >= 3 && norm((o as any).gar_id || "") === g) return true;
+            if (dir.length >= 6 && norm(o.direccion_garantia || "") === dir) return true;
+            if (exp.length >= 3 && norm(o.expediente || "") === exp) return true;
+            const ocli = o.cliente_id ? "id:" + o.cliente_id : norm(o.cliente_nombre || "");
+            if (cli.length >= 3 && ocli === cli) return true;
+            return false;
+          });
+          if (match) mapa[caso.id] = match;
+        }
+        setCarpetaPorCoincidencia(mapa);
+      })
+      .finally(() => { if (vivo) setBuscandoCoincidencias(false); });
+    return () => { vivo = false; };
+  }, [gars]);
+
   const totalValor = useMemo(() => gars.reduce((a, c) => a + (Number(c.total) || 0), 0), [gars]);
   const totalSaldo = useMemo(() => gars.reduce((a, c) => a + (Number(c.saldo) || 0), 0), [gars]);
   const juicio = gars[0]?.caso_juridico;
@@ -185,13 +223,29 @@ function ClientePage() {
           {/* ============ DOCUMENTOS (mismo sistema de "Documentos fijos" que UCM) ============ */}
           {modulo === "documentos" && (
             (() => {
-              const conCarpeta = gars.filter((c) => c.caso_juridico?.id && c.caso_juridico?.drive_carpeta_id);
+              const conCarpeta = gars
+                .filter((c) => c.caso_juridico?.id)
+                .map((c) => {
+                  const propio = c.caso_juridico!.drive_carpeta_id ? c.caso_juridico! : null;
+                  const prestado = !propio ? carpetaPorCoincidencia[c.caso_juridico!.id] : null;
+                  return { c, casoParaDocs: propio || prestado, prestadoDe: prestado ? prestado.unidad : null };
+                })
+                .filter((x) => x.casoParaDocs);
+
               if (conCarpeta.length === 0) {
-                return <Card className="p-6 text-center text-sm text-muted-foreground">Este cliente todavía no tiene una carpeta de Drive vinculada en ninguna de sus garantías — sin eso no se pueden ver los documentos.</Card>;
+                return (
+                  <Card className="p-6 text-center text-sm text-muted-foreground">
+                    {buscandoCoincidencias ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Buscando la carpeta en URRJ, UCP, UCM y UFC…</span>
+                    ) : (
+                      "Este cliente todavía no tiene una carpeta de Drive vinculada, ni en esta garantía ni en ninguna coincidencia de otros módulos (URRJ/UCP/UCM/UFC)."
+                    )}
+                  </Card>
+                );
               }
               return (
                 <div className="space-y-4">
-                  {conCarpeta.map((c) => (
+                  {conCarpeta.map(({ c, casoParaDocs, prestadoDe }) => (
                     <Card key={c.caso_juridico!.id} className="overflow-hidden">
                       <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
                         <Users className="h-4 w-4 text-[color:#2E6DA8]" />
@@ -199,9 +253,14 @@ function ClientePage() {
                           Documentos · {c.domicilio_garantia || c.folio || "Garantía"}
                           {c.caso_juridico?.unidad ? ` · ${c.caso_juridico.unidad}` : ""}
                         </h3>
+                        {prestadoDe && (
+                          <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            Carpeta encontrada en {prestadoDe}
+                          </span>
+                        )}
                       </div>
                       <div className="p-3">
-                        <DocumentosFijos caso={c.caso_juridico as CasoJuridico} area={c.caso_juridico?.unidad || "UCM"} />
+                        <DocumentosFijos caso={casoParaDocs as CasoJuridico} area={casoParaDocs!.unidad || "UCM"} />
                       </div>
                     </Card>
                   ))}
