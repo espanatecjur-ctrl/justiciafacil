@@ -30,6 +30,12 @@ export interface Evento {
   asignado_a?: string | null; // correo del colaborador al que se le asignó (Fase 1)
   creado_por?: string | null;
   created_at?: string | null;
+  // ---- Puente con JurisConecta (cliente) ----
+  cliente_nombre?: string | null;         // nombre del cliente tecleado/elegido
+  cliente_jc_id?: string | null;          // id del cliente en JurisConecta, si se encontró
+  cliente_estado?: "vinculado" | "no_encontrado" | null;
+  jc_tarea_id?: string | null;            // tarea-espejo creada en JurisConecta
+  jc_solicitud_id?: string | null;        // solicitud pendiente en JurisConecta (si no se encontró)
 }
 
 /** Persona del equipo (para asignar tareas). */
@@ -75,14 +81,16 @@ export async function listarProximos(n: number = 6): Promise<Evento[]> {
   }
 }
 
-export async function crearEvento(e: Omit<Evento, "id" | "created_at">): Promise<{ ok: boolean; error?: string }> {
+export async function crearEvento(e: Omit<Evento, "id" | "created_at">): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/evento_agenda`, {
       method: "POST",
-      headers: { ...headers, Prefer: "return=minimal" },
+      headers: { ...headers, Prefer: "return=representation" },
       body: JSON.stringify({ ...e, estado: e.tipo === "tarea" ? (e.estado ?? "pendiente") : e.estado ?? null }),
     });
-    return { ok: res.ok, error: res.ok ? undefined : `Supabase ${res.status}` };
+    if (!res.ok) return { ok: false, error: `Supabase ${res.status}` };
+    const creado = await res.json();
+    return { ok: true, id: creado?.[0]?.id };
   } catch (err) {
     return { ok: false, error: String((err as Error)?.message || err) };
   }
