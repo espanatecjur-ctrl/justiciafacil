@@ -14,17 +14,21 @@
 import { JC_URL, jcHeaders, type ClienteJC } from "@/lib/juris-clientes";
 
 /** Colaborador tal como lo guarda JurisConecta (para el selector "Asignar a"). */
-export interface ColaboradorJC { nombre: string; correo: string; rol?: string | null; }
+export interface ColaboradorJC { nombre: string; correo: string; rol?: string | null; area?: string | null; }
+
+// El área "juridico" es el equipo que trabaja del lado de JusticiaFácil; el
+// resto (dirección, comercial, atención, contabilidad, tecnología) es interno de JurisConecta.
+export const plataformaDeAreaJC = (area?: string | null) => (area || "").toLowerCase() === "juridico" ? "⚖️ JusticiaFácil" : "🏢 JurisConecta";
 
 /** Lista los colaboradores activos de JurisConecta (roles y personal registrado allá). */
 export async function listarColaboradoresJC(): Promise<ColaboradorJC[]> {
   try {
-    const r = await fetch(`${JC_URL}/rest/v1/colaboradores?select=nombre,correo,puesto,rol_sistema&activo=eq.true&order=nombre.asc`, { headers: jcHeaders });
+    const r = await fetch(`${JC_URL}/rest/v1/colaboradores?select=nombre,correo,puesto,rol_sistema,area&activo=eq.true&order=nombre.asc`, { headers: jcHeaders });
     if (!r.ok) return [];
     const d = await r.json();
     return (d || [])
       .filter((c: any) => c.correo)
-      .map((c: any) => ({ nombre: c.nombre, correo: c.correo, rol: c.rol_sistema || c.puesto || null }));
+      .map((c: any) => ({ nombre: c.nombre, correo: c.correo, rol: c.rol_sistema || c.puesto || null, area: c.area || null }));
   } catch {
     return [];
   }
