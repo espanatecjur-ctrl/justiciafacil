@@ -16,6 +16,7 @@ import { buscarClientesJC, clienteJCPorNombre, type ClienteJC } from "@/lib/juri
 import {
   crearTareaEspejoJC, crearSolicitudClienteJF, marcarTareaJC,
   estadoSolicitudJF, vincularSolicitudJF, descartarSolicitudJF,
+  listarColaboradoresJC,
 } from "@/lib/tareas-jc";
 import { AlertTriangle, MoreVertical, Loader2, Search } from "lucide-react";
 
@@ -45,7 +46,23 @@ function Calendario() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [editando, setEditando] = useState<Evento | null>(null); // null = modal cerrado
   const [colabs, setColabs] = useState<Colaborador[]>([]);
-  useEffect(() => { listarColaboradores().then(setColabs); }, []);
+  useEffect(() => {
+    // Aislados: si falla el directorio de JurisConecta (tabla más restringida por
+    // tener teléfonos/extensiones), igual se debe cargar el propio de JusticiaFácil.
+    listarColaboradores().then(setColabs).catch(() => setColabs([]));
+    listarColaboradoresJC().then((jc) => {
+      if (jc.length === 0) return;
+      setColabs((prev) => {
+        const porCorreo = new Map<string, Colaborador>();
+        for (const c of prev) porCorreo.set((c.correo || "").trim().toLowerCase(), c);
+        for (const c of jc) { // JurisConecta complementa; no pisa lo que ya vino de JusticiaFácil
+          const k = (c.correo || "").trim().toLowerCase();
+          if (!porCorreo.has(k)) porCorreo.set(k, { nombre: c.nombre, correo: c.correo, rol: c.rol });
+        }
+        return Array.from(porCorreo.values()).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+      });
+    }).catch(() => {});
+  }, []);
   const [correoYo, setCorreoYo] = useState<string | null>(null);
   useEffect(() => { correoActual().then(setCorreoYo); }, []);
   const [rolYo, setRolYo] = useState("");
@@ -239,8 +256,13 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
   const [nota, setNota] = useState(evento.nota ?? "");
   const [estado, setEstado] = useState(evento.estado ?? "pendiente");
   const [asignadoA, setAsignadoA] = useState(evento.asignado_a ?? "");
+  const [modoCorreo, setModoCorreo] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const editar = !!evento.id;
+  useEffect(() => {
+    if (asignadoA && colabs.length > 0 && !colabs.some((c) => c.correo === asignadoA)) setModoCorreo(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colabs]);
 
   // ---- Cliente (para reflejar la tarea en JurisConecta) ----
   const [clienteTexto, setClienteTexto] = useState(evento.cliente_nombre ?? "");
@@ -447,13 +469,23 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
 
           <div>
             <label className="text-[11px] font-medium text-muted-foreground">Asignar a (opcional)</label>
-            <select value={asignadoA} onChange={(e) => setAsignadoA(e.target.value)}
-              className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-              <option value="">— Sin asignar —</option>
-              {colabs.map((c) => (
-                <option key={c.correo} value={c.correo}>{c.nombre}{c.rol ? ` (${c.rol})` : ""}</option>
-              ))}
-            </select>
+            {!modoCorreo ? (
+              <select value={colabs.some((c) => c.correo === asignadoA) ? asignadoA : ""}
+                onChange={(e) => { if (e.target.value === "__otro__") { setModoCorreo(true); } else { setAsignadoA(e.target.value); } }}
+                className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">— Sin asignar —</option>
+                {colabs.map((c) => (
+                  <option key={c.correo} value={c.correo}>{c.nombre}{c.rol ? ` (${c.rol})` : ""}</option>
+                ))}
+                <option value="__otro__">✏️ Escribir correo directo…</option>
+              </select>
+            ) : (
+              <div className="mt-0.5 flex gap-1.5">
+                <input value={asignadoA} onChange={(e) => setAsignadoA(e.target.value)} placeholder="correo@diipadesarrollos.com" autoFocus
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                <button type="button" onClick={() => { setModoCorreo(false); setAsignadoA(""); }} className="shrink-0 rounded-md border border-input px-2 text-xs text-muted-foreground hover:bg-muted">✕</button>
+              </div>
+            )}
           </div>
           {tipo === "tarea" && (
             <label className="flex items-center gap-2 text-sm">
