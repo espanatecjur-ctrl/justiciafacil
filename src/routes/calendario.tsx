@@ -16,7 +16,7 @@ import { buscarClientesJC, clienteJCPorNombre, type ClienteJC } from "@/lib/juri
 import {
   crearTareaEspejoJC, crearSolicitudClienteJF, marcarTareaJC,
   estadoSolicitudJF, vincularSolicitudJF, descartarSolicitudJF,
-  listarColaboradoresJC,
+  listarColaboradoresJC, plataformaDeAreaJC,
 } from "@/lib/tareas-jc";
 import { AlertTriangle, MoreVertical, Loader2, Search } from "lucide-react";
 
@@ -57,7 +57,7 @@ function Calendario() {
         for (const c of prev) porCorreo.set((c.correo || "").trim().toLowerCase(), c);
         for (const c of jc) { // JurisConecta complementa; no pisa lo que ya vino de JusticiaFácil
           const k = (c.correo || "").trim().toLowerCase();
-          if (!porCorreo.has(k)) porCorreo.set(k, { nombre: c.nombre, correo: c.correo, rol: c.rol });
+          if (!porCorreo.has(k)) porCorreo.set(k, { nombre: c.nombre, correo: c.correo, rol: [c.rol, plataformaDeAreaJC(c.area)].filter(Boolean).join(" · ") });
         }
         return Array.from(porCorreo.values()).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
       });
