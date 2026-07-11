@@ -20,6 +20,7 @@ interface Cli {
   doc_ine: boolean | null; doc_comprobante: boolean | null; doc_acta_nac: boolean | null;
   doc_curp: boolean | null; doc_csf: boolean | null; doc_acta_matri: boolean | null;
   formalizacion_solicitada: boolean | null;
+  origen: string | null; nota_origen: string | null; validado_jc: boolean | null;
   caso_juridico?: { id: string; expediente: string | null; unidad: string | null; entidad: string | null; no_credito: string | null } | null;
 }
 const DOCS: (keyof Cli)[] = ["doc_ine", "doc_comprobante", "doc_acta_nac", "doc_curp", "doc_csf", "doc_acta_matri"];
@@ -78,10 +79,10 @@ function ClientesCRM() {
 
   // Un renglón por cliente (agrupa sus garantías), con el área más avanzada entre todas sus garantías.
   const filas = useMemo(() => {
-    const m = new Map<string, { nombre: string; nGar: number; valor: number; saldo: number; docsMin: number; formalizadas: number; areas: Set<string>; entidades: Set<string>; folios: string[]; expedientes: string[]; caso_id?: string }>();
+    const m = new Map<string, { nombre: string; nGar: number; valor: number; saldo: number; docsMin: number; formalizadas: number; areas: Set<string>; entidades: Set<string>; folios: string[]; expedientes: string[]; caso_id?: string; pendienteValidar: boolean }>();
     for (const c of filtrados) {
       const nk = (c.nombre || "—").toLowerCase().trim();
-      if (!m.has(nk)) m.set(nk, { nombre: c.nombre || "—", nGar: 0, valor: 0, saldo: 0, docsMin: 6, formalizadas: 0, areas: new Set(), entidades: new Set(), folios: [], expedientes: [], caso_id: c.caso_juridico?.id });
+      if (!m.has(nk)) m.set(nk, { nombre: c.nombre || "—", nGar: 0, valor: 0, saldo: 0, docsMin: 6, formalizadas: 0, areas: new Set(), entidades: new Set(), folios: [], expedientes: [], caso_id: c.caso_juridico?.id, pendienteValidar: false });
       const f = m.get(nk)!;
       f.nGar += 1; f.valor += Number(c.total) || 0; f.saldo += Number(c.saldo) || 0;
       f.docsMin = Math.min(f.docsMin, nDocs(c));
@@ -90,6 +91,7 @@ function ClientesCRM() {
       if (c.caso_juridico?.entidad) f.entidades.add(c.caso_juridico.entidad);
       if (c.folio) f.folios.push(c.folio);
       if (c.caso_juridico?.expediente) f.expedientes.push(c.caso_juridico.expediente);
+      if (c.origen === "jurisconecta" && !c.validado_jc) f.pendienteValidar = true;
     }
     return [...m.values()].map((f) => {
       // la más avanzada de sus áreas, según el orden de la operación
@@ -215,7 +217,10 @@ function ClientesCRM() {
                 <tbody className="divide-y divide-border">
                   {filasPagina.map((f) => (
                     <tr key={f.nombre} onClick={() => navigate({ to: "/cliente", search: { nombre: f.nombre } as any })} className="cursor-pointer hover:bg-muted/30">
-                      <td className="px-3 py-2.5 font-medium">{f.nombre}</td>
+                      <td className="px-3 py-2.5 font-medium">
+                        {f.nombre}
+                        {f.pendienteValidar && <span className="ml-1.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 border border-sky-200">🔵 Desde JurisConecta · sin validar</span>}
+                      </td>
                       <td className="px-3 py-2.5 text-center"><span className="inline-flex items-center gap-1 text-[color:#2E6DA8] font-medium"><Home className="h-3 w-3" /> {f.nGar}</span></td>
                       <td className="px-3 py-2.5"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span></td>
                       <td className="px-3 py-2.5 text-muted-foreground">{[...f.entidades].join(" / ") || "—"}</td>
@@ -239,6 +244,7 @@ function ClientesCRM() {
                   <p className="truncate text-[13px] font-semibold">{f.nombre}</p>
                   <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${areaClase[f.areaActual] || "bg-muted text-muted-foreground border-border"}`}>{f.areaActual}</span>
                 </div>
+                {f.pendienteValidar && <span className="mt-0.5 inline-block rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold text-sky-700">🔵 Desde JurisConecta · sin validar</span>}
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
                   <span className="inline-flex items-center gap-0.5 font-medium text-[color:#2E6DA8]"><Home className="h-2.5 w-2.5" /> {f.nGar}</span>
                   <span>Saldo: <b className="text-[color:#2E6DA8]">{fmtMXN(f.saldo)}</b></span>
