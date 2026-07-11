@@ -26,6 +26,7 @@ const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\
 interface Cli extends ClienteJuicio {
   caso_juridico?: CasoJuridico | null;
   formalizacion_solicitada?: boolean | null; formalizacion_tipo?: string | null;
+  origen?: string | null; nota_origen?: string | null; validado_jc?: boolean | null;
 }
 const DOCS: (keyof ClienteJuicio)[] = ["doc_ine", "doc_comprobante", "doc_acta_nac", "doc_curp", "doc_csf", "doc_acta_matri"];
 const nDocs = (c: Cli) => DOCS.filter((k) => c[k]).length;
@@ -60,6 +61,25 @@ function ClientePage() {
     }
   };
   useEffect(() => { setCargando(true); cargar(); }, [nombre]);
+
+  // Filas que llegaron automáticamente desde JurisConecta y siguen sin validar.
+  const pendientesValidar = useMemo(() => gars.filter((c) => c.origen === "jurisconecta" && !c.validado_jc), [gars]);
+  const [validando, setValidando] = useState(false);
+  const validarDesdeJC = async () => {
+    if (pendientesValidar.length === 0) return;
+    setValidando(true);
+    const { correoActual } = await import("@/lib/auth");
+    const correo = await correoActual();
+    await Promise.all(pendientesValidar.map((c) =>
+      fetch(`${SUPABASE_URL}/rest/v1/cliente_juicio?id=eq.${c.id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ validado_jc: true, validado_jc_por: correo || "JusticiaFácil", validado_jc_en: new Date().toISOString() }),
+      })
+    ));
+    setValidando(false);
+    cargar();
+  };
 
   // Si la garantía en turno no tiene carpeta de Drive propia, buscamos si OTRO
   // caso (en URRJ/UCP/UCM/UFC) que sea la MISMA garantía sí la tiene — por
@@ -157,6 +177,20 @@ function ClientePage() {
                 {Object.entries(porTipo.tipos).map(([t, n]) => (
                   <span key={t} className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[11px] text-foreground">{t}: <b>{n}</b></span>
                 ))}
+              </div>
+            </Card>
+          )}
+
+          {pendientesValidar.length > 0 && (
+            <Card className="border-sky-200 bg-sky-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-sky-900">🔵 Este cliente se creó automáticamente desde JurisConecta — pendiente de validar</p>
+                  <pre className="mt-1.5 whitespace-pre-wrap font-sans text-xs text-sky-800">{pendientesValidar[0].nota_origen}</pre>
+                </div>
+                <button onClick={validarDesdeJC} disabled={validando} className="shrink-0 rounded-md bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
+                  {validando ? "Validando…" : "✓ Validar cliente"}
+                </button>
               </div>
             </Card>
           )}
