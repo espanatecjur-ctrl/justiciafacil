@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
-import { Loader2, Send, Paperclip, Plus, Search, X, Users2, MessageCircle } from "lucide-react";
+import { Loader2, Send, Paperclip, Plus, Search, X, Users2, MessageCircle, Phone, Video } from "lucide-react";
 import { nombreActual } from "@/lib/auth";
 import { listarColaboradores } from "@/lib/evento-agenda";
 import { listarColaboradoresJC, plataformaDeAreaJC } from "@/lib/tareas-jc";
 import { GrabadorVoz } from "@/components/grabador-voz";
+import { LlamadaChat } from "@/components/llamada-chat";
 import {
   fetchCanales, crearCanal, buscarOCrearDirecto, fetchUltimosMensajes,
   fetchMensajes, enviarMensaje, subirArchivoChat, suscribirCanalPolling,
@@ -131,6 +132,17 @@ function ChatInterno() {
     if (c) { await cargarLista(); setCanalSel(c); }
   };
 
+  // ===== Llamada de voz/video (misma sala que JurisConecta: "JurisConecta-"+canalId) =====
+  const [llamada, setLlamada] = useState<{ sala: string; soloAudio: boolean } | null>(null);
+  const llamar = async (video: boolean) => {
+    if (!yo || !canalSel) return;
+    const sala = `JurisConecta-${canalSel.id}`;
+    const etiqueta = video ? "🎥 Videollamada" : "📞 Llamada de voz";
+    await enviarMensaje({ canalId: canalSel.id, autorNombre: yo.nombre, autorArea: yo.area, texto: etiqueta });
+    cargarLista();
+    setLlamada({ sala, soloAudio: !video });
+  };
+
   return (
     <div className="flex h-[calc(100vh-2rem)] flex-col">
       <PageHeader eyebrow="Núcleo" title="Chat interno" description="Conectado con JurisConecta: los grupos y chats directos son los mismos de los dos lados." />
@@ -196,7 +208,9 @@ function ChatInterno() {
             <>
               <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm" style={{ background: (canalSel.color || "#64748B") + "22" }}>{canalSel.emoji || "💬"}</div>
-                <p className="text-sm font-semibold">{canalSel.nombre}</p>
+                <p className="flex-1 text-sm font-semibold">{canalSel.nombre}</p>
+                <button onClick={() => llamar(false)} title="Llamada de voz" className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><Phone className="h-4 w-4" /></button>
+                <button onClick={() => llamar(true)} title="Videollamada" className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"><Video className="h-4 w-4" /></button>
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
                 {cargandoMsgs ? (
@@ -239,6 +253,7 @@ function ChatInterno() {
           )}
         </div>
       </div>
+      {llamada && yo && <LlamadaChat sala={llamada.sala} nombre={yo.nombre} soloAudio={llamada.soloAudio} onCerrar={() => setLlamada(null)} />}
     </div>
   );
 }
