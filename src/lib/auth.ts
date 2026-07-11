@@ -55,3 +55,22 @@ export async function usuarioActualEtiqueta(): Promise<string> {
   const rol = await rolActual();
   return rol ? `${rol} · ${correo}` : correo;
 }
+
+/** Nombre para mostrar del usuario actual: primero busca en JurisConecta (directorio
+ *  canónico de toda la empresa), y si no está, en JusticiaFácil; al final usa el correo. */
+export async function nombreActual(): Promise<{ nombre: string; area: string | null; correo: string } | null> {
+  const correo = await correoActual();
+  if (!correo) return null;
+  try {
+    const { JC_URL, jcHeaders } = await import("@/lib/juris-clientes");
+    const r = await fetch(`${JC_URL}/rest/v1/colaboradores?select=nombre,area&correo=eq.${encodeURIComponent(correo)}&limit=1`, { headers: jcHeaders });
+    const d = r.ok ? await r.json() : [];
+    if (d?.[0]?.nombre) return { nombre: d[0].nombre, area: d[0].area ?? null, correo };
+  } catch { /* sigue con JusticiaFácil */ }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=nombre&correo=eq.${encodeURIComponent(correo)}&limit=1`, { headers: _sbHeaders });
+    const d = r.ok ? await r.json() : [];
+    if (d?.[0]?.nombre) return { nombre: d[0].nombre, area: null, correo };
+  } catch { /* usa el correo como último recurso */ }
+  return { nombre: correo.split("@")[0], area: null, correo };
+}
