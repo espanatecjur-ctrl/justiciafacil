@@ -55,7 +55,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string }) {
+export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, administradoraInicial, numeroCreditoInicial, direccionInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; administradoraInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [verBanner, setVerBanner] = useState(false);
@@ -72,7 +72,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
   // estadoRobot se calcula más abajo con x.estado
   const [x, setX] = useState<Record<string, string>>({
-    caso_id: "", expediente: "", juzgado: "", estado: "Sinaloa", deudor: "", rfc: "", ubicacion: "",
+    caso_id: "", expediente: "", numeroCredito: "", juzgado: "", estado: "Sinaloa", deudor: "", rfc: "", ubicacion: "",
     acreedor: "", tipoAcreedor: "", materia: "", tipoJuicio: "Hipotecario", copropietarios: "",
     descripcionCoincide: "", fuenteRevisada: "", fechaUltimoAuto: "", etapa: "",
     emplazamiento: "", sentenciaEjecutoriada: "", tercosFiscalLaboral: "", almonedaConvocada: "", sospechaUsura: "",
@@ -97,6 +97,17 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
+  }, []);
+
+  // Datos básicos del paso previo (administradora, número de crédito, dirección).
+  useEffect(() => {
+    if (!administradoraInicial && !numeroCreditoInicial && !direccionInicial) return;
+    setX((p) => ({
+      ...p,
+      acreedor: p.acreedor || administradoraInicial || p.acreedor,
+      numeroCredito: p.numeroCredito || numeroCreditoInicial || p.numeroCredito,
+      ubicacion: p.ubicacion || direccionInicial || p.ubicacion,
+    }));
   }, []);
 
   const r1 = useMemo(() => veredictoHito1({ descripcionCoincide: x.descripcionCoincide, fuenteRevisada: x.fuenteRevisada }), [x.descripcionCoincide, x.fuenteRevisada]);
@@ -257,6 +268,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Demandado-vendedor (nombre)"><input className={inp} value={x.deudor} onChange={(e) => set("deudor", e.target.value)} /></Campo>
+              <Campo label="Número de crédito"><input className={inp} value={x.numeroCredito} onChange={(e) => set("numeroCredito", e.target.value)} /></Campo>
               <Campo label="RFC del demandado"><input className={inp} value={x.rfc} onChange={(e) => set("rfc", e.target.value)} /></Campo>
               <Campo label="Dirección de la garantía"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
               <Campo label="Acreedor original (demandante)"><input className={inp} value={x.acreedor} onChange={(e) => set("acreedor", e.target.value)} /></Campo>
