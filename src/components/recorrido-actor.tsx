@@ -180,7 +180,7 @@ export function RecorridoActor({
       setD((p) => {
         const notas = (hallazgosIniciales || []).filter((h) => !p.anotacionesHumanas.includes(h.split("\n")[0]));
         const sep = p.anotacionesHumanas.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
+        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, deudor: p.deudor || deudorInicial || p.deudor, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
   }, []);
