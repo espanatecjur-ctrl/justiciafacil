@@ -53,7 +53,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string }) {
+export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, numeroCreditoInicial, direccionInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
@@ -69,7 +69,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
   const [fElabora, setFElabora] = useState<DatosFirma | null>(null);
   const [fValida, setFValida] = useState<DatosFirma | null>(null);
   const [x, setX] = useState<Record<string, string>>({
-    caso_id: "", expediente: "", juzgado: "", estado: "Sinaloa",
+    caso_id: "", expediente: "", numeroCredito: "", juzgado: "", estado: "Sinaloa",
     deCujus: "", fechaDefuncion: "", hayActaDefuncion: "", ubicacion: "", casaANombreDeCujus: "",
     hayTestamento: "", via: "", heredero: "", caso: "B", fuenteRevisada: "",
     herederosNoLocalizados: "", testamentoImpugnado: "", controversiaHerederos: "", adjudicacionProtocolizada: "",
@@ -94,6 +94,16 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
         return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
+  }, []);
+
+  // Datos básicos del paso previo (número de crédito, dirección).
+  useEffect(() => {
+    if (!numeroCreditoInicial && !direccionInicial) return;
+    setX((p) => ({
+      ...p,
+      numeroCredito: p.numeroCredito || numeroCreditoInicial || p.numeroCredito,
+      ubicacion: p.ubicacion || direccionInicial || p.ubicacion,
+    }));
   }, []);
 
   const r1 = useMemo(() => veredictoSuc1({ hayActaDefuncion: x.hayActaDefuncion, casaANombreDeCujus: x.casaANombreDeCujus, fuenteRevisada: x.fuenteRevisada }), [x.hayActaDefuncion, x.casaANombreDeCujus, x.fuenteRevisada]);
@@ -239,6 +249,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
             </Campo>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="De cujus (fallecido)"><input className={inp} value={x.deCujus} onChange={(e) => set("deCujus", e.target.value)} /></Campo>
+              <Campo label="Número de crédito"><input className={inp} value={x.numeroCredito} onChange={(e) => set("numeroCredito", e.target.value)} /></Campo>
               <Campo label="Fecha de defunción"><input type="date" className={inp} value={x.fechaDefuncion} onChange={(e) => set("fechaDefuncion", e.target.value)} /></Campo>
               <Campo label="¿Hay acta de defunción?"><SiNo v={x.hayActaDefuncion} on={(v) => set("hayActaDefuncion", v)} /></Campo>
               <Campo label="Dirección de la casa/garantía"><input className={inp} value={x.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
