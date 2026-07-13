@@ -59,6 +59,21 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
 // Bloquea si el crédito, expediente, dirección o cliente ya existe en otra
 // garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
 const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+/** Busca un pre-dictamen VIGENTE por número de crédito (dato manual, no es el expediente).
+ *  Se usa en el paso "Datos básicos" antes de elegir posición: si el crédito ya está
+ *  registrado, no se deja seguir — se manda a ver/re-dictaminar el que ya existe. */
+export async function buscarPredictamenPorCredito(numeroCredito?: string | null): Promise<PredictamenExistente | null> {
+  const cred = normRO(numeroCredito);
+  if (!cred) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,caso_id,expediente,datos&vigente=eq.true&en_papelera=eq.false&limit=1000`, { headers });
+    if (!res.ok) return null;
+    const rows: any[] = await res.json();
+    const row = rows.find((x) => cred === normRO(x?.datos?.numeroCredito));
+    return row ? { id: row.id, folio: row.folio, posicion: row.posicion, caso_id: row.caso_id, expediente: row.expediente } : null;
+  } catch { return null; }
+}
 export async function motivoRepetidoURRJ(payload: any): Promise<string | null> {
   const cred = normRO(payload?.datos?.numeroCredito);
   const exp = normRO(payload?.expediente);
