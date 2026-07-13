@@ -51,7 +51,7 @@ const FASES = [
 ];
 
 interface Datos {
-  caso_id: string; expediente: string; juzgado: string; ubicacion: string; deudor: string;
+  caso_id: string; expediente: string; numeroCredito: string; juzgado: string; ubicacion: string; deudor: string;
   quienCede: string; queCede: string; tipoJuicio: string; posicion: string; estado: string;
   // H1 registral
   hipotecaInscrita: string; prelacion: string; propietario: string; anotaciones: string;
@@ -75,7 +75,7 @@ interface Datos {
 }
 
 const VACIO: Datos = {
-  caso_id: "", expediente: "", juzgado: "", ubicacion: "", deudor: "",
+  caso_id: "", expediente: "", numeroCredito: "", juzgado: "", ubicacion: "", deudor: "",
   quienCede: "", queCede: QUE_CEDE[0], tipoJuicio: "Hipotecario", posicion: "Actor", estado: "Sinaloa",
   hipotecaInscrita: "", prelacion: "", propietario: "", anotaciones: "",
   etapa: "", sentenciaFirme: "", situacion: "", ultimaActuacion: "",
@@ -125,6 +125,7 @@ export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
   onResultados, modoFicha = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial,
+  administradoraInicial, numeroCreditoInicial, direccionInicial,
 }: {
   casos: any[];
   onVolver: () => void;
@@ -145,6 +146,10 @@ export function RecorridoActor({
   expedienteInicial?: string;
   deudorInicial?: string;
   juzgadoInicial?: string;
+  /** Datos básicos capturados ANTES de elegir posición (pantalla "elegir"). */
+  administradoraInicial?: string;
+  numeroCreditoInicial?: string;
+  direccionInicial?: string;
 }) {
   const [paso, setPaso] = useState(0);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
@@ -178,6 +183,18 @@ export function RecorridoActor({
         return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
+  }, []);
+
+  // Datos básicos del paso previo (administradora, número de crédito, dirección): se
+  // precargan una sola vez y no pisan lo que ya haya en el formulario (ej. re-dictaminar).
+  useEffect(() => {
+    if (!administradoraInicial && !numeroCreditoInicial && !direccionInicial) return;
+    setD((p) => ({
+      ...p,
+      quienCede: p.quienCede || administradoraInicial || p.quienCede,
+      numeroCredito: p.numeroCredito || numeroCreditoInicial || p.numeroCredito,
+      ubicacion: p.ubicacion || direccionInicial || p.ubicacion,
+    }));
   }, []);
 
   const set = (k: keyof Datos, v: string) => setD((p) => ({ ...p, [k]: v }));
@@ -368,7 +385,7 @@ export function RecorridoActor({
   ].join("\n");
 
   if (verRegistral) {
-    const precReg: PrecargaRegistral = { acreditado: d.deudor || undefined, numeroCredito: d.expediente || undefined, direccion: d.ubicacion || undefined };
+    const precReg: PrecargaRegistral = { acreditado: d.deudor || undefined, numeroCredito: d.numeroCredito || d.expediente || undefined, direccion: d.ubicacion || undefined };
     return <DictamenRegistral precarga={precReg} casoId={d.caso_id || undefined} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} onVolver={() => setVerRegistral(false)} />;
   }
 
@@ -487,6 +504,7 @@ export function RecorridoActor({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Expediente"><input className={inp} value={d.expediente} onChange={(e) => set("expediente", e.target.value)} onBlur={() => checarExiste(d.expediente, d.caso_id)} /></Campo>
+              <Campo label="Número de crédito"><input className={inp} value={d.numeroCredito} onChange={(e) => set("numeroCredito", e.target.value)} /></Campo>
               <Campo label="Juzgado"><input className={inp} value={d.juzgado} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
               <Campo label="Ubicación del inmueble"><input className={inp} value={d.ubicacion} onChange={(e) => set("ubicacion", e.target.value)} /></Campo>
               <Campo label="Deudor"><input className={inp} value={d.deudor} onChange={(e) => set("deudor", e.target.value)} /></Campo>
