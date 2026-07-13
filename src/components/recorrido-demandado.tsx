@@ -94,7 +94,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         const prev = p.anotaciones || "";
         const notas = (hallazgosIniciales || []).filter((h) => !prev.includes(h.split("\n")[0]));
         const sep = prev.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
+        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, deudor: p.deudor || deudorInicial || p.deudor, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
       });
     }
   }, []);
