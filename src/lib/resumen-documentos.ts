@@ -26,7 +26,7 @@ export async function generarResumenIA(clave: string, documentos: { nombre: stri
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documentos }),
     });
     const data = await r.json();
-    if (!r.ok || !data.ok) return { ok: false, error: data.error || `Error ${r.status}` };
+    if (!r.ok || !data.ok) return { ok: false, error: (data.error || `Error ${r.status}`) + (data.crudo ? ` — respuesta: ${data.crudo.slice(0, 200)}` : "") };
     const fila: ResumenDocumentosCache = { clave, resumenes: data.resumenes || [], modelo: data.modelo || null };
     await fetch(`${SUPABASE_URL}/rest/v1/resumen_documentos_ia`, {
       method: "POST", headers: { ...headers, Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(fila),
