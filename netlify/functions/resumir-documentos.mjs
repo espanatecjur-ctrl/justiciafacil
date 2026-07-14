@@ -65,7 +65,7 @@ No inventes contenido que no esté en el documento — si no se puede leer, di "
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 2000, responseMimeType: "application/json" },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 6000, responseMimeType: "application/json" },
       }),
     });
     const data = await resp.json();
@@ -73,10 +73,22 @@ No inventes contenido que no esté en el documento — si no se puede leer, di "
       const msg = data?.error?.message || "Error al hablar con Gemini.";
       return new Response(JSON.stringify({ ok: false, error: msg }), { status: resp.status });
     }
-    const texto = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
+    const cand = data?.candidates?.[0];
+    const texto = cand?.content?.parts?.map((p) => p.text).join("") || "";
+    if (!texto) {
+      const razon = cand?.finishReason || "desconocida";
+      return new Response(JSON.stringify({ ok: false, error: `La IA no regresó texto (motivo: ${razon}). Prueba con menos documentos.` }), { status: 502 });
+    }
+    // Extractor tolerante: por si Google agrega ```json o texto alrededor del arreglo.
     let resumenes;
     try { resumenes = JSON.parse(texto); }
-    catch { return new Response(JSON.stringify({ ok: false, error: "La IA no regresó un JSON válido.", crudo: texto.slice(0, 500) }), { status: 502 }); }
+    catch {
+      const m = texto.match(/\[[\s\S]*\]/);
+      if (m) { try { resumenes = JSON.parse(m[0]); } catch { /* sigue null */ } }
+    }
+    if (!resumenes) {
+      return new Response(JSON.stringify({ ok: false, error: "La IA no regresó un JSON válido.", crudo: texto.slice(0, 800) }), { status: 502 });
+    }
 
     return new Response(JSON.stringify({ ok: true, resumenes, modelo: MODELO }), {
       status: 200, headers: { "Content-Type": "application/json" },
