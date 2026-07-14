@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { type Precarga, buscarPredictamenVigenteCompleto, buscarPredictamenPorCredito } from "@/lib/predictamen-guardar";
+import { obtenerResumenCacheado, generarResumenIA, type ResumenDocumentosCache } from "@/lib/resumen-documentos";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Scale, ScrollText, Plus, Upload } from "lucide-react";
@@ -41,6 +42,22 @@ function URRJ() {
   const [fichaGar, setFichaGar] = useState<RefGarantia | null>(null);
   const [subVista, setSubVista] = useState<"solicitudes" | "historial">("solicitudes");
   const [importarAbierto, setImportarAbierto] = useState(false);
+  const [resumenDocs, setResumenDocs] = useState<ResumenDocumentosCache | null>(null);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [errorResumen, setErrorResumen] = useState<string | null>(null);
+  useEffect(() => {
+    if (!solicitudActiva?.id) { setResumenDocs(null); return; }
+    obtenerResumenCacheado(solicitudActiva.id).then(setResumenDocs);
+  }, [solicitudActiva?.id]);
+  const resumenDe = (nombre: string) => resumenDocs?.resumenes.find((r) => r.nombre === nombre);
+  const generarResumen = async () => {
+    if (!solicitudActiva?.id || !solicitudActiva.documentos?.length) return;
+    setCargandoResumen(true); setErrorResumen(null);
+    const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos);
+    setCargandoResumen(false);
+    if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); return; }
+    setResumenDocs(r.cache!);
+  };
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
@@ -171,15 +188,34 @@ function URRJ() {
           )}
           {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) > 0 && (
             <div className="rounded-xl border border-border bg-white p-4">
-              <p className="text-sm font-semibold">📎 Documentos de esta solicitud ({solicitudActiva.documentos!.length})</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Revísalos antes de elegir la posición — de ahí sale el criterio para el pre-dictamen.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">📎 Documentos de esta solicitud ({solicitudActiva.documentos!.length})</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Revísalos antes de elegir la posición — de ahí sale el criterio para el pre-dictamen.</p>
+                </div>
+                {!resumenDocs && (
+                  <button onClick={generarResumen} disabled={cargandoResumen}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
+                    {cargandoResumen ? "✨ Leyendo…" : "✨ Generar resumen de cada documento"}
+                  </button>
+                )}
+              </div>
+              {errorResumen && <p className="mt-1 text-xs text-red-600">{errorResumen}</p>}
               <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                {solicitudActiva.documentos!.map((d, i) => (
-                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 truncate rounded-md border border-border bg-muted/20 px-2 py-1.5 text-xs text-[color:var(--teal)] hover:bg-muted">
-                    <span className="truncate">📄 {d.nombre}</span>
-                  </a>
-                ))}
+                {solicitudActiva.documentos!.map((d, i) => {
+                  const r = resumenDe(d.nombre);
+                  return (
+                    <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
+                      className="rounded-md border border-border bg-muted/20 px-2 py-1.5 text-xs text-[color:var(--teal)] hover:bg-muted">
+                      <span className="block truncate font-medium">📄 {d.nombre}</span>
+                      {r && (
+                        <span className="mt-0.5 block truncate whitespace-normal text-[11px] font-normal text-muted-foreground">
+                          <span className="rounded bg-purple-100 px-1 py-0.5 font-medium text-purple-800">{r.tipo}</span> · {r.resumen}
+                        </span>
+                      )}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}
