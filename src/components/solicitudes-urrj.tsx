@@ -57,7 +57,7 @@ export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: Solicitu
     const t = q.trim().toLowerCase();
     if (!t) return lista;
     return lista.filter((s) => {
-      const campos = [s.expediente, s.cliente, s.juzgado, s.nota, s.tipo_dictamen, s.administradora_codigo];
+      const campos = [s.expediente, s.cliente, s.juzgado, s.nota, s.tipo_dictamen, s.administradora_codigo, s.numero_credito];
       if (verNombreReal) campos.push(nombreDe(s.administradora_codigo));
       return campos.filter(Boolean).join(" ").toLowerCase().includes(t);
     });
@@ -80,7 +80,7 @@ export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: Solicitu
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder={verNombreReal ? "Busca por expediente, cliente, código o administradora…" : "Busca por expediente, cliente, código de administradora…"}
+          placeholder={verNombreReal ? "Busca por crédito, expediente, cliente, código o administradora…" : "Busca por crédito, expediente, cliente, código de administradora…"}
           className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm"
         />
       </div>
@@ -99,7 +99,7 @@ export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: Solicitu
             <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold">
-                  Exp. {s.expediente || "—"}{s.cliente ? <span className="font-normal text-muted-foreground"> · {s.cliente}</span> : null}
+                  Exp. {s.expediente || "—"}{s.numero_credito ? <span className="font-normal text-muted-foreground"> · Créd. {s.numero_credito}</span> : null}{s.cliente ? <span className="font-normal text-muted-foreground"> · {s.cliente}</span> : null}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   <Paperclip className="mr-1 inline h-3 w-3" />{s.documentos?.length || 0} documento(s){s.juzgado ? ` · ${s.juzgado}` : ""}
