@@ -168,6 +168,80 @@ export async function listarPredictamenesParaSelector(): Promise<PredictamenOpci
   } catch { return []; }
 }
 
+// ============================================================
+//  Importación masiva de cartera (Excel → borradores "Pendiente")
+// ------------------------------------------------------------
+//  Se usa desde "Importar cartera" en URRJ. Cada fila del Excel se
+//  convierte en un pre-dictamen borrador (igual que el checkpoint
+//  de "Datos básicos"), listo para que URRJ lo tome y dictamine.
+//  La regla de oro es por NÚMERO DE CRÉDITO: si ya existe, se salta.
+// ============================================================
+export interface FilaCartera {
+  estado?: string;
+  cartera?: string;
+  numeroCredito: string;
+  deudor?: string;
+  terreno?: number | string;
+  construccion?: number | string;
+  calle?: string;
+  colonia?: string;
+  ciudad?: string;
+  estadoPropiedad?: string;
+  cp?: string;
+  gps?: string;
+  adeudoInicial?: number | string;
+  valorGarantia?: number | string;
+  etapaProcesal?: string;
+  creditoInfonavit?: number | string;
+  saldoInfonavit?: number | string;
+  minimo?: number | string;
+  administradoraCodigo?: string;
+}
+
+/** Trae todos los números de crédito que YA existen en pre-dictámenes vigentes,
+ *  en un solo viaje — para revisar duplicados de un lote completo sin hacer
+ *  una consulta por cada fila del Excel. */
+export async function listarCreditosExistentes(): Promise<Set<string>> {
+  const norm = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=datos&vigente=eq.true&en_papelera=eq.false&limit=5000`, { headers });
+    if (!res.ok) return new Set();
+    const rows: any[] = await res.json();
+    return new Set(rows.map((r) => norm(r?.datos?.numeroCredito)).filter(Boolean));
+  } catch { return new Set(); }
+}
+
+/** Crea un lote de borradores "Pendiente" de un jalón (varias filas en un solo
+ *  POST). Se usa en tandas (ej. de 50 en 50) para no saturar la petición. */
+export async function crearBorradoresEnLote(filas: FilaCartera[]): Promise<{ ok: boolean; error?: string; creados: number }> {
+  if (!filas.length) return { ok: true, creados: 0 };
+  const cuerpo = filas.map((f) => ({
+    posicion: null, tipo_juicio: null, expediente: null, juzgado: null,
+    estado: f.estado || null, dictamen_sugerido: null, dictamen_final: null,
+    datos: {
+      numeroCredito: f.numeroCredito, cartera: f.cartera || "", deudor: f.deudor || "",
+      terreno: f.terreno ?? null, construccion: f.construccion ?? null,
+      calle: f.calle || "", colonia: f.colonia || "", ciudad: f.ciudad || "",
+      estadoPropiedad: f.estadoPropiedad || "", cp: f.cp || "", gps: f.gps || "",
+      ubicacion: [f.calle, f.colonia, f.ciudad, f.estadoPropiedad, f.cp].filter(Boolean).join(", "),
+      adeudoInicial: f.adeudoInicial ?? null, valorGarantia: f.valorGarantia ?? null,
+      etapaProcesal: f.etapaProcesal || "", creditoInfonavit: f.creditoInfonavit ?? null,
+      saldoInfonavit: f.saldoInfonavit ?? null, minimo: f.minimo ?? null,
+      administradoraCodigo: f.administradoraCodigo || "", borrador: true, origenImportacion: true,
+    },
+    resultados: null, vigente: true, en_papelera: false, version: 1,
+  }));
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
+      method: "POST", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify(cuerpo),
+    });
+    return { ok: res.ok, error: res.ok ? undefined : `Supabase ${res.status}`, creados: res.ok ? cuerpo.length : 0 };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e), creados: 0 };
+  }
+}
+
+
 export async function guardarPredictamen(payload: any, precargar?: Precarga | null, datosPDF?: any, opts?: { reglaOroURRJ?: boolean }): Promise<string | null> {
   // Regla de oro: solo al crear una garantía NUEVA (no al re-dictaminar).
   if (opts?.reglaOroURRJ && !precargar) {
