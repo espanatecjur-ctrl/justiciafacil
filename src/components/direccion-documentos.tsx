@@ -7,7 +7,7 @@ import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarTodo, esCarpeta, previewDeId } from "@/lib/drive-explorar";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { listarAdministradoras, puedeVerNombreReal, crearAdministradora, type Administradora } from "@/lib/administradoras";
-import { listarPredictamenesParaSelector, type PredictamenOpcion } from "@/lib/predictamen-guardar";
+import { listarPredictamenesParaSelector, adjuntarDocumentosAPredictamen, type PredictamenOpcion } from "@/lib/predictamen-guardar";
 import {
   casosParaSelector, subirDocPredictamen, crearSolicitudPredictamen, listarSolicitudesPredictamen,
   vincularCarpetaAGarantia, areaDeGarantia,
@@ -36,7 +36,7 @@ export function DireccionDocumentos() {
   useEffect(() => { listarPredictamenesParaSelector().then(setPredictamenes); }, []);
   // Cuando se elige un resultado del historial de URRJ que NO tiene caso_id
   // todavía, se guardan sus datos aquí (no hay fila de caso_juridico que leer).
-  const [garantiaManual, setGarantiaManual] = useState<{ expediente?: string | null; cliente?: string | null; juzgado?: string | null } | null>(null);
+  const [garantiaManual, setGarantiaManual] = useState<{ predictamenId?: string; expediente?: string | null; cliente?: string | null; juzgado?: string | null } | null>(null);
 
   // Administradora: se guarda el CÓDIGO. El nombre real solo se pinta/edita si eres DGE.
   const [administradoraCodigo, setAdministradoraCodigo] = useState("");
@@ -116,7 +116,7 @@ export function DireccionDocumentos() {
   // así que se guardan sus datos directo y se manda con caso_id vacío.
   const elegirDesdeURRJ = (p: PredictamenOpcion) => {
     setCasoId(p.caso_id || "");
-    setGarantiaManual({ expediente: p.expediente, cliente: p.cliente, juzgado: p.juzgado });
+    setGarantiaManual({ predictamenId: p.id, expediente: p.expediente, cliente: p.cliente, juzgado: p.juzgado });
     setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null);
   };
 
@@ -169,6 +169,12 @@ export function DireccionDocumentos() {
       const conCarpeta = !!carpetaSel;
       if (carpetaSel && casoId) {
         await vincularCarpetaAGarantia(casoId, carpetaSel.id, carpetaSel.nombre);
+      }
+      // Si la garantía venía del historial de URRJ (sin caso_juridico todavía), los
+      // documentos también se guardan directo en la ficha de ese pre-dictamen —
+      // así "tiene espacio" aunque no exista una garantía formal aún.
+      if (!casoId && garantiaManual?.predictamenId) {
+        await adjuntarDocumentosAPredictamen(garantiaManual.predictamenId, todos);
       }
       setMsg(conCarpeta ? "Enviado ✓ · carpeta reflejada en la garantía" : "Enviado a pre-dictaminar ✓");
       setCasoId(""); setNota(""); setDocs([]); setAdministradoraCodigo(""); setGarantiaManual(null);
