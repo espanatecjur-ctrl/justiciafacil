@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { enviarCorreo } from "@/lib/enviar-correo";
@@ -55,7 +55,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, administradoraInicial, numeroCreditoInicial, direccionInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; administradoraInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string }) {
+export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, administradoraInicial, numeroCreditoInicial, direccionInicial, borradorId }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; administradoraInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string; borradorId?: string | null }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [verBanner, setVerBanner] = useState(false);
@@ -180,6 +180,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     };
     try {
       await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
+      if (borradorId) descartarBorrador(borradorId);
       registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Demandado · Decisión: ${decision}` });
       setGuardado("Pre-dictamen (Demandado) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
