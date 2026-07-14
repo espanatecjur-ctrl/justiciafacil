@@ -182,6 +182,8 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       juzgado: garantia.juzgado || "",
       deudor: garantia.deudor || garantia.cliente_nombre || "",
       ubicacion: garantia.direccion_garantia || "",
+      numeroCredito: predJur?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || "",
+      quienCede: predJur?.datos?.quienCede || (garantia as any).administradora || "",
     },
   };
 
