@@ -38,6 +38,7 @@ function URRJ() {
   const [crearNuevo, setCrearNuevo] = useState(false);
   const [permisos, setPermisos] = useState<string[]>([]);
   const [fichaGar, setFichaGar] = useState<RefGarantia | null>(null);
+  const [subVista, setSubVista] = useState<"solicitudes" | "historial">("solicitudes");
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
@@ -150,14 +151,26 @@ function URRJ() {
                   <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
                 </button>
               </div>
-              <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
+
+              {/* Sub-módulos: Solicitudes por dictaminar / Historial de pre-dictámenes.
+                  Se ven uno a la vez para no amontonar la pantalla. */}
+              <div className="flex gap-2 border-b border-border pt-1">
+                <button onClick={() => setSubVista("solicitudes")}
+                  className={`rounded-t-md px-3 py-2 text-sm font-semibold ${subVista === "solicitudes" ? "border-b-2 border-[color:var(--teal)] text-[color:var(--teal)]" : "text-muted-foreground hover:text-foreground"}`}>
+                  Solicitudes por dictaminar
+                </button>
+                <button onClick={() => setSubVista("historial")}
+                  className={`rounded-t-md px-3 py-2 text-sm font-semibold ${subVista === "historial" ? "border-b-2 border-[color:var(--teal)] text-[color:var(--teal)]" : "text-muted-foreground hover:text-foreground"}`}>
+                  Historial de pre-dictámenes
+                </button>
+              </div>
+
+              {subVista === "solicitudes" ? (
+                <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
+              ) : (
+                <HistorialPredictamen onReDictaminar={reDictaminar} onReDictaminarRegistral={reDictaminarRegistral} onVerFichaVieja={verFichaVieja} />
+              )}
             </>
-          )}
-          {!solicitudActiva && !crearNuevo && (
-            <div className="pt-1">
-              <p className="mb-2 text-sm font-semibold text-muted-foreground">Registro de pre-dictámenes (jurídico)</p>
-              <HistorialPredictamen onReDictaminar={reDictaminar} onReDictaminarRegistral={reDictaminarRegistral} onVerFichaVieja={verFichaVieja} />
-            </div>
           )}
           {crearNuevo && (
             <div>
