@@ -60,6 +60,25 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
 // garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
 const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
+/** Adjunta referencias de documentos a la ficha de un pre-dictamen (borrador o
+ *  normal), para que "tenga espacio" aunque todavía no exista un caso_juridico
+ *  formal. Se guardan dentro de datos.documentos (lectura + escritura, porque
+ *  es un jsonb y hay que combinarlo, no solo pisarlo). */
+export async function adjuntarDocumentosAPredictamen(id: string, documentos: { nombre: string; url: string }[]): Promise<void> {
+  if (!id || !documentos.length) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${id}&select=datos`, { headers });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const datosActuales = rows?.[0]?.datos || {};
+    const previos: any[] = Array.isArray(datosActuales.documentos) ? datosActuales.documentos : [];
+    const combinados = [...previos, ...documentos.filter((d) => !previos.some((p) => p.url === d.url))];
+    await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${id}`, {
+      method: "PATCH", headers, body: JSON.stringify({ datos: { ...datosActuales, documentos: combinados } }),
+    });
+  } catch { /* si falla, los documentos igual quedan en la solicitud */ }
+}
+
 /** Guarda un "borrador" en cuanto se captura el número de crédito (antes de elegir
  *  posición). Así el trabajo no se pierde aunque no se termine el dictamen en ese
  *  momento: queda en el historial marcado como "Pendiente". Se marca con
