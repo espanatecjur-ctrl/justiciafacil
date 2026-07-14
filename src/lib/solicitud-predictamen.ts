@@ -19,6 +19,7 @@ export interface SolicitudPredictamen {
   juzgado?: string | null;
   area?: string | null;          // URRJ / UCP / UFC / UDP — a qué área van los documentos
   tipo_dictamen?: string | null; // Registral / Jurídico — para qué dictamen son
+  administradora_codigo?: string | null; // código de la administradora (el nombre real solo lo ve DGE)
   nota?: string | null;
   documentos?: DocRef[] | null;
   estado?: string | null;
