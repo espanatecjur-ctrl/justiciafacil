@@ -6,7 +6,7 @@
 // POST { documentos: [{ nombre, url }] } -> { ok, resumenes: [{ nombre, tipo, resumen }] }
 // ============================================================
 
-const MODELO = "gemini-2.5-flash-lite"; // el más barato — aquí solo pedimos resúmenes cortos
+const MODELO = "gemini-2.5-flash"; // 2.5-flash-lite ya no está disponible para llaves nuevas de Google
 const MAX_DOCUMENTOS = 20;
 const LIMITE_BYTES_DOC = 15 * 1024 * 1024;
 
