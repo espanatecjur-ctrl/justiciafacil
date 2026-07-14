@@ -196,6 +196,7 @@ export function DireccionDocumentos() {
               predictamenes={area === "URRJ" ? predictamenes : []}
               seleccionManual={garantiaManual}
               onElegirDesdeURRJ={elegirDesdeURRJ}
+              area={area}
             />
           </div>
 
@@ -417,7 +418,7 @@ export function DireccionDocumentos() {
 // Selector de garantía BUSCABLE — escribes nombre o expediente
 // y filtra las coincidencias (en vez de un dropdown largo).
 // ============================================================
-function SelectorGarantiaBuscable({ casos, casoId, onElegir, predictamenes = [], seleccionManual, onElegirDesdeURRJ }: {
+function SelectorGarantiaBuscable({ casos, casoId, onElegir, predictamenes = [], seleccionManual, onElegirDesdeURRJ, area }: {
   casos: CasoOpcion[];
   casoId: string;
   onElegir: (id: string) => void;
@@ -425,6 +426,8 @@ function SelectorGarantiaBuscable({ casos, casoId, onElegir, predictamenes = [],
   predictamenes?: PredictamenOpcion[];
   seleccionManual?: { expediente?: string | null; cliente?: string | null; juzgado?: string | null } | null;
   onElegirDesdeURRJ?: (p: PredictamenOpcion) => void;
+  /** Área elegida arriba (URRJ/UCP/UFC/UDP): solo se buscan garantías de esa unidad. */
+  area?: string;
 }) {
   const [q, setQ] = useState("");
   const [abierto, setAbierto] = useState(false);
@@ -443,9 +446,10 @@ function SelectorGarantiaBuscable({ casos, casoId, onElegir, predictamenes = [],
     c.expediente, c.cliente_nombre, c.no_credito, c.direccion_garantia,
     c.juzgado, c.entidad, c.unidad, c.gar_id, c.cliente_codigo, areaDeGarantia(c.unidad),
   ].filter(Boolean).join(" "));
+  const casosDeEsaArea = area ? casos.filter((c) => areaDeGarantia(c.unidad) === area) : casos;
   const resultadosCasos = (filtro
-    ? casos.filter((c) => refDe(c).includes(filtro))
-    : casos
+    ? casosDeEsaArea.filter((c) => refDe(c).includes(filtro))
+    : casosDeEsaArea
   ).slice(0, 40);
 
   // Del historial URRJ: solo los que NO tienen ya una fila en caso_juridico
