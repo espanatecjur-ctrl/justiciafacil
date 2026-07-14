@@ -43,6 +43,11 @@ export interface RefGarantia {
   cliente_nombre?: string;
   deudor?: string;
   entidad?: string;
+  /** Cuando se abre desde el Historial: el crédito y el id exacto del
+   *  pre-dictamen, para enlazar documentos y datos sin depender de que
+   *  haya expediente o caso_id (los borradores "Pendiente" no siempre los tienen). */
+  numeroCredito?: string;
+  predictamenId?: string;
 }
 
 function VeredictoBadge({ label, dic }: { label: string; dic: Dictamen }) {
@@ -94,7 +99,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [vista, setVista] = useState<VistaPosicion>("elegir");
   const [permisos, setPermisos] = useState<string[]>([]);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
-  const [docs, setDocs] = useState<{ nombre: string; url: string }[]>([]);
+  const [docsSolicitudes, setDocsSolicitudes] = useState<{ nombre: string; url: string }[]>([]);
   const [jur, setJur] = useState<Dictamen>(null);
   const [reg, setReg] = useState<Dictamen>(null);
   const [folio, setFolio] = useState<string>("");
@@ -134,7 +139,8 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       setJur(u?.dic_juridico ?? null);
       setReg(u?.dic_registral ?? null);
     }).catch(() => {});
-    const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
+    const filtro = garantia.predictamenId ? `id=eq.${garantia.predictamenId}`
+      : garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
@@ -145,18 +151,28 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       .then((rows: any[]) => setPredReg(rows?.[0] || null))
       .catch(() => {});
   };
-  useEffect(recargarEstado, [garantia.id, garantia.expediente]);
+  useEffect(recargarEstado, [garantia.id, garantia.expediente, garantia.predictamenId]);
 
   useEffect(() => {
-    const filtro = garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    // Solo el registro de ESTA área (URRJ). Lo que la Dirección mandó a otras áreas no se mezcla aquí.
+    // Documentos: se juntan de dos fuentes y nunca se repiten (por URL) —
+    // 1) lo que ya está adjunto directo en la ficha del pre-dictamen (borrador),
+    // 2) lo que mandó Dirección en la(s) solicitud(es) — buscadas por caso_id,
+    //    expediente, O número de crédito (los borradores "Pendiente" muchas
+    //    veces solo tienen crédito, sin expediente ni caso_id todavía).
+    const condiciones = [
+      garantia.id ? `caso_id.eq.${garantia.id}` : null,
+      garantia.expediente ? `expediente.eq.${encodeURIComponent(garantia.expediente)}` : null,
+      garantia.numeroCredito ? `numero_credito.eq.${encodeURIComponent(garantia.numeroCredito)}` : null,
+    ].filter(Boolean) as string[];
+    const filtro = condiciones.length === 0 ? "id=eq.0" : condiciones.length === 1 ? condiciones[0].replace(".eq.", "=eq.") : `or=(${condiciones.join(",")})`;
     fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos,created_at&${filtro}&area=eq.URRJ&order=created_at.desc&limit=50`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => {
         const todos: { nombre: string; url: string }[] = [];
         for (const row of rows) for (const d of (row.documentos || [])) if (d?.url) todos.push({ nombre: d.nombre || "documento", url: d.url });
-        setDocs(todos);
-      }).catch(() => setDocs([]));
+        for (const row of rows) for (const d of (row.documentos || [])) if (d?.url) todos.push({ nombre: d.nombre || "documento", url: d.url });
+        setDocsSolicitudes(todos);
+      }).catch(() => setDocsSolicitudes([]));
   }, [garantia.id, garantia.expediente]);
 
   useEffect(() => {
@@ -175,13 +191,28 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
 
+  // Documentos que se ven en la ficha: los que llegaron por solicitud(es) +
+  // los que ya quedaron adjuntos directo en datos.documentos del borrador
+  // (por ejemplo cuando se mandó sin caso_juridico todavía). Sin repetidos (por URL).
+  const docs = useMemo(() => {
+    const deBorrador: { nombre: string; url: string }[] = Array.isArray(predJur?.datos?.documentos) ? predJur.datos.documentos : [];
+    const vistos = new Set<string>();
+    const combinados: { nombre: string; url: string }[] = [];
+    for (const d of [...docsSolicitudes, ...deBorrador]) {
+      if (!d?.url || vistos.has(d.url)) continue;
+      vistos.add(d.url);
+      combinados.push(d);
+    }
+    return combinados;
+  }, [docsSolicitudes, predJur]);
+
   const precargaJuridico: Precarga = {
     datos: {
       caso_id: garantia.id || "",
-      expediente: garantia.expediente || "",
-      juzgado: garantia.juzgado || "",
-      deudor: garantia.deudor || garantia.cliente_nombre || "",
-      ubicacion: garantia.direccion_garantia || "",
+      expediente: garantia.expediente || predJur?.expediente || predJur?.datos?.expediente || "",
+      juzgado: garantia.juzgado || predJur?.datos?.juzgado || "",
+      deudor: garantia.deudor || garantia.cliente_nombre || predJur?.datos?.deudor || "",
+      ubicacion: garantia.direccion_garantia || predJur?.datos?.ubicacion || "",
       numeroCredito: predJur?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || "",
       quienCede: predJur?.datos?.quienCede || (garantia as any).administradora || "",
     },
