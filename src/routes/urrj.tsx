@@ -107,6 +107,8 @@ function URRJ() {
       cliente_nombre: f.datos?.deudor || f.cliente || "",
       deudor: f.datos?.deudor || "",
       entidad: f.datos?.estado || "",
+      numeroCredito: f.datos?.numeroCredito || "",
+      predictamenId: f.id || undefined,
     });
   };
   const reDictaminarRegistral = (f: any) => {
