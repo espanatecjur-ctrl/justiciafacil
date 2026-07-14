@@ -125,6 +125,30 @@ export async function motivoRepetidoURRJ(payload: any): Promise<string | null> {
   return null;
 }
 
+export interface PredictamenOpcion {
+  id: string; caso_id: string | null; expediente: string | null; folio: string | null;
+  cliente: string | null; juzgado: string | null; no_credito: string | null; direccion: string | null;
+  borrador?: boolean;
+}
+
+/** Lista el historial de URRJ (pre-dictámenes vigentes, incluidos los "Pendiente")
+ *  en un formato listo para el buscador de garantías de "Documentos → pre-dictamen".
+ *  Así se puede encontrar una garantía que ya está en URRJ aunque todavía no
+ *  tenga fila en caso_juridico (por ejemplo, un borrador recién capturado). */
+export async function listarPredictamenesParaSelector(): Promise<PredictamenOpcion[]> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,caso_id,expediente,juzgado,datos&vigente=eq.true&en_papelera=eq.false&order=created_at.desc&limit=500`, { headers });
+    if (!res.ok) return [];
+    const rows: any[] = await res.json();
+    return rows.map((p) => ({
+      id: p.id, caso_id: p.caso_id || null, expediente: p.expediente || null, folio: p.folio || null,
+      cliente: p.datos?.deudor || p.datos?.deCujus || null, juzgado: p.juzgado || null,
+      no_credito: p.datos?.numeroCredito || null, direccion: p.datos?.ubicacion || null,
+      borrador: !!p.datos?.borrador,
+    }));
+  } catch { return []; }
+}
+
 export async function guardarPredictamen(payload: any, precargar?: Precarga | null, datosPDF?: any, opts?: { reglaOroURRJ?: boolean }): Promise<string | null> {
   // Regla de oro: solo al crear una garantía NUEVA (no al re-dictaminar).
   if (opts?.reglaOroURRJ && !precargar) {
