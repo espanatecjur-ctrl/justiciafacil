@@ -7,7 +7,7 @@ import { clienteContactoCampos, clienteEstadoCivilCampos, clienteApoderadoCampos
 export interface PlantillaCampo {
   id: string;
   label: string;
-  tipo: "text" | "textarea" | "number" | "date" | "select" | "checkbox" | "lista" | "vinculo";
+  tipo: "text" | "textarea" | "number" | "date" | "select" | "checkbox" | "lista" | "vinculo" | "imagen";
   opciones?: string[];
   requerido?: boolean;
   dependeDe?: { campo: string; valor: string | boolean };
