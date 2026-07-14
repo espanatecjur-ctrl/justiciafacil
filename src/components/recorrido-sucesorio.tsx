@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
@@ -53,7 +53,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, numeroCreditoInicial, direccionInicial }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string }) {
+export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, numeroCreditoInicial, direccionInicial, borradorId }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string; borradorId?: string | null }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
@@ -155,6 +155,7 @@ export function RecorridoSucesorio({ casos, onVolver, precargar, puedeFirmarElab
     };
     try {
       await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
+      if (borradorId) descartarBorrador(borradorId);
       registrarEvento({ caso_id: x.caso_id || null, expediente: x.expediente || null, tipo: "dictamen_juridico", resultado: consolidado.txt, firma_elabora: fElabora?.nombre || null, firma_valida: fValida?.nombre || null, detalle: `Sucesorio · Decisión: ${decision}` });
       setGuardado("Pre-dictamen (Sucesorio) guardado: " + decision);
     } catch (e: any) { setGuardado("No se pudo guardar: " + e.message); }
