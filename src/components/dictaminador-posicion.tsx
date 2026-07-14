@@ -11,7 +11,7 @@
 // ============================================================
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito } from "@/lib/predictamen-guardar";
+import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, descartarBorrador } from "@/lib/predictamen-guardar";
 import { Scale, Bot } from "lucide-react";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
@@ -60,12 +60,21 @@ export function DictaminadorPosicion({
   const [direccionIni, setDireccionIni] = useState("");
   const [yaExisteCredito, setYaExisteCredito] = useState<PredictamenExistente | null>(null);
   const [revisandoCredito, setRevisandoCredito] = useState(false);
+  const [borradorId, setBorradorId] = useState<string | null>(null);
+  const [borradorGuardado, setBorradorGuardado] = useState(false);
   const revisarCredito = async () => {
     if (!numeroCreditoIni.trim()) { setYaExisteCredito(null); return; }
     setRevisandoCredito(true);
     const ex = await buscarPredictamenPorCredito(numeroCreditoIni);
     setYaExisteCredito(ex);
     setRevisandoCredito(false);
+    // Checkpoint: en cuanto el crédito quede validado como único, se guarda un
+    // borrador "Pendiente" en el historial — así no se pierde nada si no se
+    // termina el dictamen ahorita. Solo se crea una vez por sesión.
+    if (!ex && !borradorId) {
+      const id = await guardarBorrador({ numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni, expediente: expedienteIni });
+      if (id) { setBorradorId(id); setBorradorGuardado(true); }
+    }
   };
 
   // robot al inicio: expediente + partes + hallazgos que se llevarán al recorrido
@@ -110,6 +119,7 @@ export function DictaminadorPosicion({
               <label className="mb-1 block text-xs font-medium">Número de crédito</label>
               <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={numeroCreditoIni} onChange={(e) => setNumeroCreditoIni(e.target.value)} onBlur={revisarCredito} placeholder="No es el expediente" />
               {revisandoCredito && <p className="mt-1 text-[11px] text-muted-foreground">Revisando si ya existe…</p>}
+              {borradorGuardado && !yaExisteCredito && <p className="mt-1 text-[11px] font-medium text-amber-700">● Guardado como <b>Pendiente</b> en el historial.</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Dirección de la garantía</label>
@@ -124,7 +134,7 @@ export function DictaminadorPosicion({
                 {yaExisteCredito.caso_id && (
                   <Link to="/expediente" search={{ id: yaExisteCredito.caso_id, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
                 )}
-                <button onClick={() => { setNumeroCreditoIni(""); setYaExisteCredito(null); }} className="text-xs font-medium text-muted-foreground underline">Borrar y capturar otro crédito</button>
+                <button onClick={() => { setNumeroCreditoIni(""); setYaExisteCredito(null); setBorradorId(null); setBorradorGuardado(false); }} className="text-xs font-medium text-muted-foreground underline">Borrar y capturar otro crédito</button>
               </div>
             </div>
           )}
@@ -181,9 +191,9 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} />;
-  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} />;
-  if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
+  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
+  if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Tramites") return <RecorridoTramites casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   return null;
