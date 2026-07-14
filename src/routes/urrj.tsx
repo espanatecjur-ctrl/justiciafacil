@@ -1,91 +1,30 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { type Precarga } from "@/lib/predictamen-guardar";
-import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
-import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, ScrollText, Plus } from "lucide-react";
+// ============================================================
+//  Solicitudes pendientes de URRJ (gate de entrada al dictamen)
+// ------------------------------------------------------------
+//  El abogado NO dictamina en el aire: parte de una solicitud que
+//  la Dirección ya envió (documentos + "están completos"). Cada
+//  solicitud dice a qué dictamen va: Jurídico o Registral.
+//
+//  Administradora: en toda la tarjeta se ve el CÓDIGO. El nombre
+//  real solo se resuelve y se pinta si el rol es DGE/Super_Admin.
+// ============================================================
+import { useEffect, useMemo, useState } from "react";
+import { Inbox, Paperclip, FileText, ArrowRight, RefreshCw, Search } from "lucide-react";
+import { listarSolicitudesPredictamen, type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
+import { listarAdministradoras, puedeVerNombreReal, type Administradora } from "@/lib/administradoras";
 import { getAuth } from "@/lib/auth";
-import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
-import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
-import { DictamenRegistral } from "@/components/dictamen-registral";
-import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
-import { HistorialPredictamen } from "@/components/historial-predictamen";
-import { RegistroURRJ } from "@/components/registro-urrj";
-import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
-export const Route = createFileRoute("/urrj")({
-  head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
-  validateSearch: (s: Record<string, unknown>): { soloRegistro?: boolean; registral?: boolean; exp?: string; cliente?: string; caso?: string } => ({
-    soloRegistro: s.soloRegistro === true || s.soloRegistro === "true",
-    registral: s.registral === true || s.registral === "true",
-    exp: typeof s.exp === "string" ? s.exp : undefined,
-    cliente: typeof s.cliente === "string" ? s.cliente : undefined,
-    caso: typeof s.caso === "string" ? s.caso : undefined,
-  }),
-  component: URRJ,
-});
+const headersDb = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-const NAVY = "#0B1E3A";
-const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
-
-function URRJ() {
-  const [casos, setCasos] = useState<any[]>([]);
+export function SolicitudesURRJ({ onDictaminar }: { onDictaminar: (sol: SolicitudPredictamen) => void }) {
+  const [lista, setLista] = useState<SolicitudPredictamen[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [verTodas, setVerTodas] = useState(false);
+  const [q, setQ] = useState("");
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
-  const [vista, setVista] = useState<VistaPosicion>("elegir");
-  const { soloRegistro, registral, exp, cliente, caso } = Route.useSearch();
-  const [precargar, setPrecargar] = useState<Precarga | null>(null);
-  const [solicitudActiva, setSolicitudActiva] = useState<SolicitudPredictamen | null>(null);
-  const [crearNuevo, setCrearNuevo] = useState(false);
-  const [permisos, setPermisos] = useState<string[]>([]);
-  const [fichaGar, setFichaGar] = useState<RefGarantia | null>(null);
-  const [subVista, setSubVista] = useState<"solicitudes" | "historial">("solicitudes");
-  useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
-  const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
-  const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
-
-  const dictaminarSolicitud = (sol: SolicitudPredictamen) => {
-    setSolicitudActiva(sol);
-    setPrecargar({
-      datos: {
-        caso_id: sol.caso_id || "",
-        expediente: sol.expediente || "",
-        juzgado: sol.juzgado || "",
-        deudor: sol.cliente || "",
-      },
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  const reDictaminar = (fila: any) => {
-    const map: Record<string, VistaPosicion> = { Actor: "Actor", Demandado: "Demandado", Sucesorio: "Sucesorio", Contingencia: "Contingencia", "Trámite administrativo": "Tramites" };
-    const v = map[fila.posicion];
-    if (!v) { alert("No se pudo identificar la posición de este pre-dictamen."); return; }
-    const nota = prompt("Nota de cambios (opcional): ¿qué cambió o qué vas a agregar en esta nueva versión?") || "";
-    setPrecargar({ datos: fila.datos || {}, antecedenteId: fila.id, version: fila.version || 1, cambios: nota });
-    setVista(v);
-  };
-  const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
-  const puedePrecioPiso = ["DGE", "Super_Admin"].includes(rolUsuario || "");
-  const navigate = useNavigate();
-  const verFichaVieja = (f: any) => {
-    // La solicitud/pre-dictamen YA trae su información (expediente, cliente).
-    // Aquí arranca el proceso (cuando llegan los documentos): NO se exige vincular
-    // una garantía. Abrimos la ficha por expediente; el FichaURRJ se alimenta del
-    // pre-dictamen y del registral por expediente o por caso_id.
-    setFichaGar({
-      id: f.caso_id || undefined,
-      expediente: f.expediente || "",
-      direccion_garantia: f.datos?.ubicacion || "",
-      juzgado: f.datos?.juzgado || f.juzgado || "",
-      cliente_nombre: f.datos?.deudor || f.cliente || "",
-      deudor: f.datos?.deudor || "",
-      entidad: f.datos?.estado || "",
-    });
-  };
-  const reDictaminarRegistral = (f: any) => {
-    setSolicitudActiva({ tipo_dictamen: "Registral", cliente: f.datos?.deudor || "", expediente: f.expediente || "", caso_id: f.caso_id || "" } as any);
-    setPrecargar({ datos: { caso_id: f.caso_id || "", expediente: f.expediente || "" } });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const [administradoras, setAdministradoras] = useState<Administradora[]>([]);
+  const verNombreReal = puedeVerNombreReal(rolUsuario);
 
   useEffect(() => {
     (async () => {
@@ -94,127 +33,106 @@ function URRJ() {
         const { data } = await auth.auth.getSession();
         const correo = data.session?.user?.email;
         if (!correo) return;
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers: headersDb });
         const j = r.ok ? await r.json() : [];
         setRolUsuario(j?.[0]?.rol ?? null);
-      } catch { /* si falla, queda sin permiso de admin */ }
+      } catch { /* si falla, se queda sin rol y no ve nombres reales */ }
     })();
   }, []);
 
-  useEffect(() => {
-    fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente,juzgado,entidad,cliente_nombre,direccion_garantia&order=expediente.asc&limit=300`, { headers })
-      .then((r) => (r.ok ? r.json() : [])).then(setCasos).catch(() => {});
-  }, []);
+  useEffect(() => { if (verNombreReal) listarAdministradoras().then(setAdministradoras); }, [verNombreReal]);
+  const nombreDe = (codigo?: string | null) => administradoras.find((a) => a.codigo === codigo)?.nombre;
 
-  // Si llegamos desde "Continuar con el registral" (del recorrido jurídico),
-  // abrimos directo el dictamen registral con el expediente ya cargado.
-  useEffect(() => {
-    if (registral) {
-      setSolicitudActiva({ tipo_dictamen: "Registral", expediente: exp || "", cliente: cliente || "", caso_id: caso || "" } as any);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registral]);
+  const cargar = () => {
+    setCargando(true);
+    listarSolicitudesPredictamen("pendiente")
+      .then((l) => setLista(l.filter((s) => s.area === "URRJ")))
+      .finally(() => setCargando(false));
+  };
+  useEffect(cargar, []);
 
-  const dictaminacion = (
-    <div className="space-y-5">
-      {vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
-        <DictamenRegistral
-          precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.expediente || "", direccion: "" }}
-          casoId={solicitudActiva.caso_id || ""}
-          onVolver={volver}
-          puedeFirmarElabora={puede("firmar_elabora")}
-          puedeValidar={puede("validar")}
-          puedePrecioPiso={puedePrecioPiso}
-        />
-      ) : vista === "elegir" ? (
-        <>
-          {solicitudActiva && (
-            <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-4">
-              <p className="text-sm font-semibold text-[color:var(--teal)]">
-                Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "\u2014"}
-                {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
-              <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
-            </div>
-          )}
-          {!solicitudActiva && !crearNuevo && (
-            <>
-              <div className="flex flex-wrap justify-end gap-2">
-                <button onClick={() => setCrearNuevo(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
-                  <Plus className="h-3.5 w-3.5" /> Crear pre-dictamen (boletín → posición)
-                </button>
-                <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
-                  <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
-                </button>
-              </div>
+  // Buscador inteligente: filtra por expediente, cliente, juzgado, nota,
+  // código de administradora y — solo si eres DGE — también por el nombre real.
+  const filtradas = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return lista;
+    return lista.filter((s) => {
+      const campos = [s.expediente, s.cliente, s.juzgado, s.nota, s.tipo_dictamen, s.administradora_codigo];
+      if (verNombreReal) campos.push(nombreDe(s.administradora_codigo));
+      return campos.filter(Boolean).join(" ").toLowerCase().includes(t);
+    });
+  }, [lista, q, verNombreReal, administradoras]);
 
-              {/* Sub-módulos: Solicitudes por dictaminar / Historial de pre-dictámenes.
-                  Se ven uno a la vez para no amontonar la pantalla. */}
-              <div className="flex gap-2 border-b border-border pt-1">
-                <button onClick={() => setSubVista("solicitudes")}
-                  className={`rounded-t-md px-3 py-2 text-sm font-semibold ${subVista === "solicitudes" ? "border-b-2 border-[color:var(--teal)] text-[color:var(--teal)]" : "text-muted-foreground hover:text-foreground"}`}>
-                  Solicitudes por dictaminar
-                </button>
-                <button onClick={() => setSubVista("historial")}
-                  className={`rounded-t-md px-3 py-2 text-sm font-semibold ${subVista === "historial" ? "border-b-2 border-[color:var(--teal)] text-[color:var(--teal)]" : "text-muted-foreground hover:text-foreground"}`}>
-                  Historial de pre-dictámenes
-                </button>
-              </div>
-
-              {subVista === "solicitudes" ? (
-                <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
-              ) : (
-                <HistorialPredictamen onReDictaminar={reDictaminar} onReDictaminarRegistral={reDictaminarRegistral} onVerFichaVieja={verFichaVieja} />
-              )}
-            </>
-          )}
-          {crearNuevo && (
-            <div>
-              <button onClick={volver} className="text-xs font-medium text-muted-foreground underline">← Cancelar y volver a solicitudes</button>
-            </div>
-          )}
-        </>
-      ) : null}
-
-      {solicitudActiva?.tipo_dictamen !== "Registral" && (solicitudActiva || vista !== "elegir" || crearNuevo) && (
-        <DictaminadorPosicion
-          casos={casos}
-          vista={vista}
-          onVista={setVista}
-          precargar={precargar}
-          onVolver={volver}
-          puedeElaborar={puede("elaborar")}
-          puedeFirmarElabora={puede("firmar_elabora")}
-          puedeValidar={puede("validar")}
-          puedeAdmin={puedeAdmin}
-          puedePrecioPiso={puedePrecioPiso}
-        />
-      )}
-    </div>
-  );
-
-  // Ficha del pre-dictamen abierta desde el historial (se alimenta de sus dictámenes)
-  if (fichaGar) {
-    return <FichaURRJ garantia={fichaGar} onVolver={() => setFichaGar(null)} />;
-  }
+  const visibles = verTodas ? filtradas : filtradas.slice(0, 3);
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, #0C5C46)` }}>
-        <div className="flex items-center gap-2">
-          <Scale className="h-6 w-6" style={{ color: "#C2A24C" }} />
-          <div>
-            <h1 className="text-xl font-bold">URRJ · Dictaminación</h1>
-            <p className="text-sm text-white/70">Unidad de Resolución Jurídica · dictaminación y registro de garantías</p>
-          </div>
-        </div>
+    <div className="rounded-xl border border-border bg-white p-5">
+      <div className="flex items-center gap-2">
+        <Inbox className="h-5 w-5 text-[color:var(--teal)]" />
+        <h3 className="font-display text-base font-semibold">Solicitudes de URRJ para dictaminar</h3>
+        <button onClick={cargar} className="ml-auto inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs hover:bg-muted">
+          <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin" : ""}`} /> Actualizar
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">Estas son las garantías que la Dirección ya envió con sus documentos. Elige una para dictaminar.</p>
+
+      <div className="relative mt-3">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder={verNombreReal ? "Busca por expediente, cliente, código o administradora…" : "Busca por expediente, cliente, código de administradora…"}
+          className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm"
+        />
       </div>
 
-      <RegistroURRJ onReDictaminar={reDictaminar} dictaminar={dictaminacion} />
+      {cargando ? (
+        <p className="mt-4 text-sm text-muted-foreground">Cargando…</p>
+      ) : lista.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/20 p-5 text-center text-sm text-muted-foreground">
+          No hay solicitudes pendientes para URRJ. La Dirección debe enviar los documentos desde “Documentos → pre-dictamen”.
+        </div>
+      ) : filtradas.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/20 p-5 text-center text-sm text-muted-foreground">Sin resultados para “{q}”.</div>
+      ) : (
+        <div className="mt-3 divide-y divide-border">
+          {visibles.map((s) => (
+            <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">
+                  Exp. {s.expediente || "—"}{s.cliente ? <span className="font-normal text-muted-foreground"> · {s.cliente}</span> : null}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <Paperclip className="mr-1 inline h-3 w-3" />{s.documentos?.length || 0} documento(s){s.juzgado ? ` · ${s.juzgado}` : ""}
+                </p>
+                {s.nota && <p className="mt-0.5 text-xs italic text-muted-foreground">“{s.nota}”</p>}
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.tipo_dictamen === "Registral" ? "bg-amber-100 text-amber-800" : "bg-[color:var(--teal)]/10 text-[color:var(--teal)]"}`}>
+                    Dictamen {s.tipo_dictamen || "Jurídico"}
+                  </span>
+                  {s.administradora_codigo && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-mono font-semibold text-slate-700" title={verNombreReal ? (nombreDe(s.administradora_codigo) || "") : "Solo DGE ve el nombre real"}>
+                      {s.administradora_codigo}
+                      {verNombreReal && nombreDe(s.administradora_codigo) && <span className="font-sans font-normal text-slate-500">· {nombreDe(s.administradora_codigo)}</span>}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => onDictaminar(s)}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-white"
+                style={{ background: "#0C5C46" }}
+              >
+                <FileText className="h-4 w-4" /> Dictaminar <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          {filtradas.length > 3 && (
+            <button onClick={() => setVerTodas((v) => !v)} className="w-full py-2 text-center text-xs font-medium text-[color:var(--teal)] hover:underline">
+              {verTodas ? "Ver menos" : `Ver todas (${filtradas.length})`}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
