@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
@@ -482,6 +483,7 @@ export function RecorridoActor({
         {paso === 0 && (
           <div className="space-y-4">
             <H titulo="0 · Datos mínimos / admisión" sub="Lo básico para abrir el expediente." />
+            <AnalisisDocumentalIA posicion="Actor" casoId={d.caso_id || undefined} expediente={d.expediente || undefined} numeroCredito={d.numeroCredito || undefined} />
             {expedienteInicial && d.expediente && expedienteInicial !== d.expediente && !ignorarBoletin && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                 <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
