@@ -1,515 +1,788 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
-import { plantillas, renderContrato, valoresIniciales } from "@/lib/contract-templates";
-import { listarEstadosPlantilla, setEstadoPlantilla } from "@/lib/plantilla-estado";
-import { listarPlantillasCustom } from "@/lib/plantilla-custom";
-import { listarGrupos, crearGrupo, eliminarGrupo, listarAsignaciones, asignarPlantillaGrupo, type Grupo } from "@/lib/plantilla-grupo";
-import type { PlantillaContrato } from "@/lib/contract-templates";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { plantillas, renderContrato, valoresIniciales, type PlantillaCampo } from "@/lib/contract-templates";
+import type { ContratoTipo } from "@/lib/legal-types";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Loader2, MoreVertical, PenLine, Archive, Trash2, LayoutGrid, Inbox, FileCheck2, Archive as ArchiveIcon, Eye, X, RotateCcw, FolderPlus, FolderInput, Layers } from "lucide-react";
-import { SolicitudesContratoTabla } from "@/components/solicitudes-contrato-tabla";
-import { listarContratos, actualizarEstadoContrato, type ContratoGenerado } from "@/lib/contrato-generado";
-import { listarEnvios, type EnvioRegistro } from "@/lib/enviar-correo";
-import { contarContratosPendientes } from "@/lib/resumen-inicio";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Download, FileText, Eye, PenLine, RefreshCw, Save, Check, Mail, X } from "lucide-react";
+import { z } from "zod";
+import { SelectorApoderado } from "@/components/selector-apoderado";
+import { VinculoRegistros } from "@/components/vinculo-registros";
+import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
+import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
+import { guardarContrato, listarCartasCambio, siguienteFolio, marcarEnviado, type ContratoGenerado } from "@/lib/contrato-generado";
+import { enviarCorreo, textoABase64 } from "@/lib/enviar-correo";
 
-export const Route = createFileRoute("/contratos/")({
-  head: () => ({ meta: [{ title: "Contratos — SIGA-DIIPA" }] }),
-  component: ContratosIndex,
+const searchSchema = z.object({ tipo: z.string().optional() });
+
+export const Route = createFileRoute("/contratos/editor")({
+  head: () => ({ meta: [{ title: "Editor de Contratos — SIGA-DIIPA" }] }),
+  validateSearch: searchSchema,
+  component: EditorContratos,
 });
 
-const estadoTono: Record<string, string> = {
-  generado: "bg-emerald-100 text-emerald-900",
-  archivado: "bg-slate-100 text-slate-800",
-  papelera: "bg-red-100 text-red-900",
-};
-
-function fmtFecha(iso?: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+function CampoControl({
+  campo,
+  valor,
+  onChange,
+}: {
+  campo: PlantillaCampo;
+  valor: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  switch (campo.tipo) {
+    case "textarea":
+      return <Textarea value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} rows={3} />;
+    case "select":
+      return (
+        <select
+          value={(valor as string) ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          <option value="">—</option>
+          {campo.opciones?.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      );
+    case "checkbox":
+      return (
+        <div className="flex items-center gap-2 pt-1">
+          <Checkbox checked={!!valor} onCheckedChange={(v) => onChange(!!v)} id={campo.id} />
+          <Label htmlFor={campo.id} className="text-sm font-normal">Sí</Label>
+        </div>
+      );
+    case "number":
+      return <Input type="number" value={(valor as number) ?? ""} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : "")} />;
+    case "date":
+      return <Input type="date" value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+    case "lista": {
+      const filas = Array.isArray(valor) ? (valor as Record<string, unknown>[]) : [];
+      const sub = campo.subcampos ?? [];
+      const setFilas = (nuevo: Record<string, unknown>[]) => onChange(nuevo);
+      return (
+        <div className="space-y-2">
+          {filas.map((fila, i) => (
+            <div key={i} className="rounded-md border border-border bg-muted/20 p-2.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-muted-foreground">#{i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => setFilas(filas.filter((_, j) => j !== i))}
+                  className="text-[11px] font-medium text-red-600 hover:underline"
+                >
+                  Quitar
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {sub.map((sc) => (
+                  <div key={sc.id}>
+                    <label className="text-[11px] text-muted-foreground">{sc.label}</label>
+                    <CampoControl
+                      campo={sc}
+                      valor={fila[sc.id]}
+                      onChange={(v) => {
+                        const copia = filas.map((f) => ({ ...f }));
+                        copia[i] = { ...copia[i], [sc.id]: v };
+                        setFilas(copia);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setFilas([...filas, {}])}
+            className="rounded-md border border-dashed border-input px-3 py-1.5 text-xs font-medium text-foreground/70 hover:bg-muted"
+          >
+            + Agregar {campo.label.toLowerCase()}
+          </button>
+        </div>
+      );
+    }
+    case "vinculo":
+      return <VinculoRegistros fuente={campo.fuente ?? "clientes"} valor={valor} onChange={(v) => onChange(v)} />;
+    case "imagen": {
+      const url = typeof valor === "string" ? valor : "";
+      const onArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => onChange(String(reader.result));
+        reader.readAsDataURL(file);
+        e.target.value = "";
+      };
+      return (
+        <div className="flex items-center gap-3">
+          {url ? (
+            <>
+              <img src={url} alt="Ficha" className="h-16 w-16 rounded border border-border object-cover" />
+              <label className="cursor-pointer rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                Cambiar ficha
+                <input type="file" accept="image/*" className="hidden" onChange={onArchivo} />
+              </label>
+              <button type="button" onClick={() => onChange("")} className="text-xs font-medium text-red-600 hover:underline">
+                Quitar
+              </button>
+            </>
+          ) : (
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-input px-3 py-1.5 text-xs font-medium text-foreground/70 hover:bg-muted">
+              + Agregar Ficha
+              <input type="file" accept="image/*" className="hidden" onChange={onArchivo} />
+            </label>
+          )}
+        </div>
+      );
+    }
+    default:
+      return <Input value={(valor as string) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+  }
 }
 
-type TabKey = "plantillas" | "solicitudes" | "generados" | "archivo";
-
-const TABS: { key: TabKey; label: string; icon: typeof LayoutGrid }[] = [
-  { key: "plantillas", label: "Plantillas", icon: LayoutGrid },
-  { key: "solicitudes", label: "Solicitudes", icon: Inbox },
-  { key: "generados", label: "Generados", icon: FileCheck2 },
-  { key: "archivo", label: "Archivo", icon: ArchiveIcon },
-];
-
-function ContratosIndex() {
-  const [tab, setTab] = useState<TabKey>("plantillas");
-  const [solPend, setSolPend] = useState(0);
-  const [nGen, setNGen] = useState(0);
-  const [nArch, setNArch] = useState(0);
-  const [nPlant, setNPlant] = useState(plantillas.length);
-
+function EditorContratos() {
+  const { tipo: tipoQuery } = Route.useSearch();
+  const [tipo, setTipo] = useState<ContratoTipo>((tipoQuery as ContratoTipo) || "prestacion_servicios");
+  const [custom, setCustom] = useState<import("@/lib/contract-templates").PlantillaContrato | null>(null);
   useEffect(() => {
-    contarContratosPendientes().then(setSolPend);
-    listarContratos("generado").then((l) => setNGen(l.length));
-    listarPlantillasCustom().then((c) => setNPlant(plantillas.length + c.length));
-    Promise.all([listarContratos("archivado"), listarContratos("papelera")])
-      .then(([a, p]) => setNArch(a.length + p.length));
+    if (!plantillas.find((p) => p.tipo === tipo)) {
+      import("@/lib/plantilla-custom").then((m) => m.obtenerPlantillaCustom(tipo).then(setCustom));
+    } else {
+      setCustom(null);
+    }
+  }, [tipo]);
+  const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? custom ?? plantillas[0], [tipo, custom]);
+  const [valores, setValores] = useState<Record<string, unknown>>({});
+  const [apoderadoId, setApoderadoId] = useState<string>("");
+  // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
+  const [apoderados, setApoderados] = useState<Apoderado[]>([]);
+  useEffect(() => { cargarApoderados().then(setApoderados); }, []);
+
+  // Cartas de Cambio registradas, para auto-llenar el Contrato (Parte C).
+  const [cartas, setCartas] = useState<ContratoGenerado[]>([]);
+  useEffect(() => {
+    if (tipo === "contrato_cambio") listarCartasCambio().then(setCartas);
+  }, [tipo]);
+
+  // Copia los datos de una Carta registrada al Contrato (mismo mapeo que el Paquete).
+  function autollenarDesdeCarta(v: Record<string, unknown>) {
+    setValores((cur) => {
+      const nuevo = { ...cur };
+      Object.values(APODERADO_KEYS).forEach((k) => { if (v[k] != null) nuevo[k] = v[k]; });
+      if (v.nombreCliente) nuevo.nombreCliente = v.nombreCliente;
+      if (v.folioContratoAnterior) nuevo.folioContratoAnterior = v.folioContratoAnterior;
+      if (v.valorOperacion) nuevo.valorOperacion = v.valorOperacion;
+      if (v.garantiaCambio) nuevo.garantiaNueva = v.garantiaCambio;
+      return nuevo;
+    });
+  }
+  const [modo, setModo] = useState<"preview" | "word">("preview");
+  // "Semilla" = el contrato ya llenado que se carga al editor Word.
+  // Se congela al entrar (o al Regenerar) para no borrar los cambios manuales.
+  const [semillaWord, setSemillaWord] = useState<string>("");
+  const [claveWord, setClaveWord] = useState(0);
+  // Lo que de verdad hay ahorita en el editor Word (con ediciones a mano e
+  // imágenes ya insertadas). El Word/PDF que se manda por correo se arma
+  // desde AQUÍ, no desde los datos en crudo — para que salga completo.
+  const [htmlEditado, setHtmlEditado] = useState<string>("");
+
+  // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
+  // Al quitarlo, se borran esas mismas llaves.
+  // Pasa los datos de la Carta de Cambio al Contrato de Cambio (Paquete de Cambio).
+  // Conserva el apoderado y mapea los campos que comparten.
+  function llenarContrato() {
+    setValores((v) => {
+      const nuevo: Record<string, unknown> = {};
+      Object.values(APODERADO_KEYS).forEach((k) => { if (v[k] != null) nuevo[k] = v[k]; });
+      if (v.nombreCliente) nuevo.nombreCliente = v.nombreCliente;
+      if (v.folioContratoAnterior) nuevo.folioContratoAnterior = v.folioContratoAnterior;
+      if (v.valorOperacion) nuevo.valorOperacion = v.valorOperacion;
+      if (v.garantiaCambio) nuevo.garantiaNueva = v.garantiaCambio; // la garantía del cambio
+      return nuevo;
+    });
+    setTipo("contrato_cambio");
+    setModo("preview");
+    setFolioGuardado(null);
+    setFechaGenerado(null);
+    setFechaEnviado(null);
+  }
+
+  function seleccionarApoderado(a: Apoderado | null) {
+    setApoderadoId(a?.id ?? "");
+    setValores((s) => {
+      const limpio = { ...s };
+      Object.values(APODERADO_KEYS).forEach((k) => delete limpio[k]);
+      return a ? { ...limpio, ...valoresApoderado(a) } : limpio;
+    });
+  }
+
+  const camposVisibles = plantilla.campos.filter((c) => {
+    if (!c.dependeDe) return true;
+    return valores[c.dependeDe.campo] === c.dependeDe.valor;
+  });
+
+  // Siembra valores por defecto (p. ej. la cláusula de participación editable)
+  // sin pisar lo que ya haya escrito la persona.
+  useEffect(() => {
+    const defs = valoresIniciales(plantilla);
+    setValores((v) => {
+      const merged = { ...v };
+      for (const k in defs) if (merged[k] === undefined) merged[k] = defs[k];
+      return merged;
+    });
+  }, [plantilla]);
+
+  const cuerpo = renderContrato(plantilla, valores);
+
+  // Guardar el documento con folio real (Parte A/D).
+  const [guardando, setGuardando] = useState(false);
+  const [folioGuardado, setFolioGuardado] = useState<string | null>(null);
+
+  // ── Parte 1: encabezado (folio en vivo · fechas · quién solicita) ──────────
+  // Folio de vista previa: se calcula al elegir el tipo; el real se fija al guardar.
+  const [folioPreview, setFolioPreview] = useState<string>("");
+  useEffect(() => {
+    let vivo = true;
+    siguienteFolio(tipo).then((f) => { if (vivo) setFolioPreview(f); });
+    return () => { vivo = false; };
+  }, [tipo, folioGuardado]);
+
+  // Fechas que se registran solas.
+  const [fechaGenerado, setFechaGenerado] = useState<string | null>(null);
+  const [fechaEnviado, setFechaEnviado] = useState<string | null>(null);
+
+  // Campos INTERNOS (no se imprimen en el documento): quién solicita y a nombre de quién.
+  const [solicitadoPor, setSolicitadoPor] = useState("");
+  const [aNombreDe, setANombreDe] = useState("");
+
+  const fmtFechaHora = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : null;
+
+  // Registra el documento una sola vez y devuelve su folio (o el ya asignado).
+  async function obtenerFolio(): Promise<string | null> {
+    if (folioGuardado) return folioGuardado;
+    setGuardando(true);
+    const apo = apoderados.find((a) => a.id === apoderadoId);
+    const cuantiaNum = parseFloat(String(valores.valorOperacion ?? "").replace(/[^0-9.]/g, "")) || null;
+    const folioDoc = String(valores.folioCarta ?? valores.numeroOficio ?? "").trim();
+    const ahoraIso = new Date().toISOString();
+    const r = await guardarContrato({
+      tipo,
+      nombre_documento: plantilla.nombre,
+      titulo: plantilla.nombre + (folioDoc ? ` — ${folioDoc}` : ""),
+      nombre_cliente: String(valores.nombreCliente ?? ""),
+      apoderado: apo?.nombre ?? "",
+      // Los campos internos (quién solicita) viajan dentro de `valores` — no se imprimen.
+      valores: { ...valores, solicitadoPor, aNombreDe } as Record<string, unknown>,
+      cuerpo,
+      cuantia: cuantiaNum,
+      estado: "generado",
+      fecha_generado: ahoraIso,
+    });
+    setGuardando(false);
+    if (r.ok && r.folio) { setFolioGuardado(r.folio); setFechaGenerado(ahoraIso); return r.folio; }
+    return null;
+  }
+
+  async function guardar() {
+    const folio = await obtenerFolio();
+    if (!folio) window.alert("No se pudo guardar. ¿Corriste el SQL de contrato_generado en el proyecto correcto?");
+  }
+
+  // Encabezado de folio que se estampa en cada documento exportado/impreso.
+  // Incluye fecha de elaboración y, si ya se mandó, fecha de envío por correo.
+  function encabezadoFolio(folio: string | null) {
+    if (!folio) return "BORRADOR — documento sin folio registrado";
+    const elab = fmtFechaHora(fechaGenerado) ?? new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+    const env = fmtFechaHora(fechaEnviado);
+    return `Folio: ${folio}    ·    Elaborado: ${elab}${env ? `    ·    Enviado: ${env}` : ""}`;
+  }
+
+  // Enviar por correo (sin auto-envío): el mensaje se arma en su propio banner.
+  const [mostrarEnviar, setMostrarEnviar] = useState(false);
+  const [correoPara, setCorreoPara] = useState("");
+  const [asuntoMail, setAsuntoMail] = useState("");
+  const [mensajeMail, setMensajeMail] = useState("");
+  const [copiado, setCopiado] = useState(false);
+  const [ccMail, setCcMail] = useState("");
+  const [ccoMail, setCcoMail] = useState("");
+  const [enviandoSistema, setEnviandoSistema] = useState(false);
+  const [resultadoEnvio, setResultadoEnvio] = useState("");
+
+  // Arma el documento como archivo Word (.doc) en base64, para adjuntarlo.
+  // OJO: usa contenidoActualHtml() — lo que de verdad está en pantalla
+  // (ediciones a mano + ficha ya insertada), no los datos en crudo.
+  function construirAdjuntoWord(folio: string | null) {
+    const enc = encabezadoFolio(folio);
+    const contenido = contenidoActualHtml();
+    const html =
+      `\ufeff<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>` +
+      `<head><meta charset='utf-8'><title>${plantilla.nombre}</title>` +
+      `<style>@page{size:21.59cm 27.94cm;margin:2.5cm}body{font-family:'Georgia',serif;font-size:12pt;line-height:1.5;color:#000}img{max-width:100%}</style></head>` +
+      `<body><p style="text-align:right;font-size:9pt;color:#555">${enc}</p>` +
+      `<h2 style="text-align:center;text-transform:uppercase">${plantilla.nombre}</h2>` +
+      `${contenido}</body></html>`;
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.doc`, tipo: "application/msword", base64: textoABase64(html) };
+  }
+
+  // Arma el documento como PDF real (jsPDF se carga solo al enviar).
+  // El texto sale completo del machote; si ya se adjuntó la ficha
+  // fotográfica, se agrega como página final (jsPDF no puede insertar el
+  // resto de las ediciones a mano hechas en el editor — para eso, usa
+  // "Imprimir / PDF" desde dentro del editor, ese sí sale con todo).
+  async function construirAdjuntoPdf(folio: string | null) {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
+    const margen = 56;
+    const ancho = doc.internal.pageSize.getWidth() - margen * 2;
+    const altoPag = doc.internal.pageSize.getHeight();
+    let y = margen;
+    // Folio + fechas (elaborado / enviado)
+    doc.setFont("times", "italic"); doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(encabezadoFolio(folio), margen, y, { maxWidth: ancho });
+    y += 20;
+    // Título
+    doc.setFont("times", "bold"); doc.setFontSize(13); doc.setTextColor(0);
+    doc.text(plantilla.nombre.toUpperCase(), doc.internal.pageSize.getWidth() / 2, y, { align: "center", maxWidth: ancho });
+    y += 26;
+    // Cuerpo
+    doc.setFont("times", "normal"); doc.setFontSize(11);
+    const ficha = typeof valores.fichaFotografica === "string" && (valores.fichaFotografica as string).startsWith("data:")
+      ? (valores.fichaFotografica as string) : null;
+    const textoPdf = ficha ? cuerpo.split(MARCADOR_FICHA).join("(fotografía anexa en la última página de este PDF)") : cuerpo;
+    const lineas = doc.splitTextToSize(textoPdf, ancho);
+    for (const linea of lineas) {
+      if (y > altoPag - margen) { doc.addPage(); y = margen; }
+      doc.text(linea, margen, y);
+      y += 15;
+    }
+    // Ficha fotográfica: página aparte, centrada y a escala.
+    if (ficha) {
+      try {
+        doc.addPage();
+        const props = doc.getImageProperties(ficha);
+        const formato = ficha.startsWith("data:image/png") ? "PNG" : "JPEG";
+        const wMax = ancho, hMax = altoPag - margen * 2;
+        const escala = Math.min(wMax / props.width, hMax / props.height, 1);
+        const w = props.width * escala, h = props.height * escala;
+        doc.addImage(ficha, formato, margen + (wMax - w) / 2, margen, w, h);
+      } catch { /* si el formato de imagen no es compatible con jsPDF, se omite sin tronar el envío */ }
+    }
+    const base64 = doc.output("datauristring").split(",")[1];
+    return { nombre: `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.pdf`, tipo: "application/pdf", base64 };
+  }
+
+  async function enviarDesdeSistema() {
+    if (!correoPara.trim()) { setResultadoEnvio("Escribe al menos un correo en 'Para'."); return; }
+    setEnviandoSistema(true);
+    setResultadoEnvio("");
+    const folio = await obtenerFolio();
+    const word = construirAdjuntoWord(folio);
+    const pdf = await construirAdjuntoPdf(folio);
+    const r = await enviarCorreo({
+      para: correoPara,
+      cc: ccMail,
+      cco: ccoMail,
+      asunto: asuntoMail,
+      mensaje: mensajeMail,
+      folio: folio,
+      adjuntos: [word, pdf],
+    });
+    setEnviandoSistema(false);
+    if (r.ok) {
+      const iso = new Date().toISOString();
+      setFechaEnviado(iso);
+      if (folio) await marcarEnviado(folio, iso);
+    }
+    setResultadoEnvio(r.ok ? "Enviado ✓ (con Word y PDF adjuntos)" : `No se pudo enviar: ${r.error || "revisa la configuración de Resend en Netlify"}`);
+  }
+
+  async function abrirEnviar() {
+    const folio = await obtenerFolio(); // registra y asegura folio
+    setAsuntoMail(`${plantilla.nombre}${folio ? ` — Folio ${folio}` : ""}`);
+    setMensajeMail(
+      `Estimado(a):\n\n` +
+      `Adjunto el documento "${plantilla.nombre}"${folio ? ` con folio ${folio}` : ""} para su revisión.\n\n` +
+      `[ Recuerda ADJUNTAR el archivo descargado (Word o PDF) antes de enviar. ]\n\n` +
+      `Atentamente,\nDIIPA · Inmuebles Accesibles`,
+    );
+    setCopiado(false);
+    setMostrarEnviar(true);
+  }
+
+  const linkGmail = () =>
+    `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(correoPara)}&su=${encodeURIComponent(asuntoMail)}&body=${encodeURIComponent(mensajeMail)}`;
+  const linkOutlook = () =>
+    `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(correoPara)}&subject=${encodeURIComponent(asuntoMail)}&body=${encodeURIComponent(mensajeMail)}`;
+  const linkMailto = () =>
+    `mailto:${encodeURIComponent(correoPara)}?subject=${encodeURIComponent(asuntoMail)}&body=${encodeURIComponent(mensajeMail)}`;
+
+  async function copiarMensaje() {
+    try {
+      await navigator.clipboard.writeText(`Para: ${correoPara}\nAsunto: ${asuntoMail}\n\n${mensajeMail}`);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch { /* nada */ }
+  }
+
+  // Reelaborar: si venimos de la tabla con datos guardados, los cargamos (Parte E).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("reelaborar_contrato");
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.tipo) setTipo(d.tipo as ContratoTipo);
+        if (d.valores) setValores(d.valores as Record<string, unknown>);
+        setFolioGuardado(null); // reelaborar = documento nuevo, folio nuevo
+        sessionStorage.removeItem("reelaborar_contrato");
+      }
+    } catch { /* nada */ }
   }, []);
 
+  // Marca en el machote de Acta de Entrega-Recepción de Posesión donde va la
+  // fotografía del ANEXO. Al pasar a Editar, si ya se adjuntó la ficha
+  // (campo tipo "imagen"), se cambia sola por la imagen real.
+  const MARCADOR_FICHA = "[FOTOGRAFÍA DE LA GARANTÍA — se inserta automáticamente al agregar la ficha]";
+  function construirSemillaWord(): string {
+    let html = textoPlanoAHtml(cuerpo);
+    const ficha = valores.fichaFotografica;
+    if (typeof ficha === "string" && ficha.startsWith("data:")) {
+      html = html.split(MARCADOR_FICHA).join(
+        `<img src="${ficha}" style="max-width:420px;display:block;margin:10px auto"/>`,
+      );
+    }
+    return html;
+  }
+  // Lo que hay que usar AHORA MISMO para descargar/enviar: si ya se entró al
+  // editor, lo que de verdad está en pantalla (htmlEditado, con ediciones a
+  // mano); si no, se arma fresco desde los datos (incluida la ficha).
+  function contenidoActualHtml(): string {
+    if (modo === "word" && htmlEditado) return htmlEditado;
+    return construirSemillaWord();
+  }
+  // Entrar al editor: registra folio y congela el contrato actual.
+  async function entrarWord() {
+    await obtenerFolio();
+    const semilla = construirSemillaWord();
+    setSemillaWord(semilla);
+    setHtmlEditado(semilla);
+    setClaveWord((k) => k + 1);
+    setModo("word");
+  }
+  // Regenerar: vuelve a cargar desde los datos (descarta cambios manuales).
+  function regenerarWord() {
+    if (!window.confirm("Esto vuelve a armar el documento desde los datos y se perderán los cambios que hiciste a mano. ¿Continuar?")) return;
+    const semilla = construirSemillaWord();
+    setSemillaWord(semilla);
+    setHtmlEditado(semilla);
+    setClaveWord((k) => k + 1);
+  }
+
+  async function exportarTxt() {
+    const folio = await obtenerFolio();
+    const texto = `${encabezadoFolio(folio)}\n\n${cuerpo}`;
+    const blob = new Blob([texto], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportarHtml() {
+    const folio = await obtenerFolio();
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${plantilla.nombre}</title>
+<style>body{font-family:'Libre Baskerville',Georgia,serif;max-width:780px;margin:40px auto;padding:0 40px;line-height:1.7;color:#1a1a1a}
+h1{font-size:18px;text-align:center;text-transform:uppercase;letter-spacing:.08em}
+.folio{text-align:right;font-size:11px;color:#555;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:14px}
+pre{white-space:pre-wrap;font-family:inherit;font-size:14px}</style></head>
+<body><div class="folio">${encabezadoFolio(folio)}</div><h1>${plantilla.nombre}</h1><pre>${cuerpo.replace(/</g, "&lt;")}</pre></body></html>`;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(folio ?? plantilla.nombre).replace(/\s+/g, "_")}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function imprimir() {
+    const folio = await obtenerFolio();
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><title>${plantilla.nombre}</title>
+<style>body{font-family:'Libre Baskerville',Georgia,serif;max-width:780px;margin:40px auto;padding:0 40px;line-height:1.7}
+h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:.08em}
+.folio{text-align:right;font-size:10px;color:#555;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:12px}
+pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
+<body><div class="folio">${encabezadoFolio(folio)}</div><h1>${plantilla.nombre}</h1><pre>${cuerpo.replace(/</g, "&lt;")}</pre>
+<script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.close();
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Documentos"
-        title="Contratos"
-        description="Plantillas auto-llenables, solicitudes y contratos generados."
+        title="Editor de Contratos"
+        description="Selecciona una plantilla, llena los datos y exporta el documento listo para revisión o firma."
         actions={
-          <div className="flex gap-2">
-            <Link to="/contratos/nueva">
-              <Button variant="outline"><LayoutGrid className="h-4 w-4 mr-1.5" /> Nueva plantilla</Button>
-            </Link>
-            <Link to="/contratos/editor">
-              <Button className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
-                <Plus className="h-4 w-4 mr-1.5" /> Nuevo contrato
-              </Button>
-            </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {folioGuardado ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-900">
+                <Check className="h-3.5 w-3.5" /> Guardado · {folioGuardado}
+              </span>
+            ) : folioPreview ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900" title="Número tentativo; se fija al generar">
+                Se asignará · {folioPreview}
+              </span>
+            ) : null}
+            <Button onClick={guardar} disabled={guardando} className="bg-[#0B1E3A] hover:bg-[#0B1E3A]/90 text-white">
+              <Save className="h-4 w-4 mr-1.5" /> {guardando ? "Guardando…" : "Guardar"}
+            </Button>
+            <Button variant="outline" onClick={exportarTxt}><Download className="h-4 w-4 mr-1.5" /> TXT</Button>
+            <Button variant="outline" onClick={exportarHtml}><Download className="h-4 w-4 mr-1.5" /> HTML</Button>
+            <Button onClick={imprimir} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+              <FileText className="h-4 w-4 mr-1.5" /> Imprimir / PDF
+            </Button>
+            <Button onClick={abrirEnviar} className="bg-[#C2A24C] hover:bg-[#C2A24C]/90 text-[#0B1E3A]">
+              <Mail className="h-4 w-4 mr-1.5" /> Enviar
+            </Button>
           </div>
         }
       />
 
-      {/* Indicadores que llevan a su pestaña */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicador n={String(nPlant)} l="Plantillas" activo={tab === "plantillas"} onClick={() => setTab("plantillas")} tono="text-[#0B1E3A]" />
-        <Indicador n={String(solPend)} l="Solicitudes pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
-        <Indicador n={String(nGen)} l="Contratos generados" activo={tab === "generados"} onClick={() => setTab("generados")} tono="text-emerald-600" />
-        <Indicador n={String(nArch)} l="Archivados / papelera" activo={tab === "archivo"} onClick={() => setTab("archivo")} tono="text-slate-600" />
-      </div>
+      {mostrarEnviar && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => !enviandoSistema && setMostrarEnviar(false)}>
+          <div className="my-4 w-[94vw] max-w-6xl rounded-xl bg-white p-7 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="flex items-center gap-2 text-base font-bold text-[#0B1E3A]">
+                <Mail className="h-5 w-5" /> Enviar por correo
+              </p>
+              <button onClick={() => setMostrarEnviar(false)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+            </div>
 
-      {/* Pestañas */}
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const on = tab === t.key;
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition ${on ? "border-[color:var(--teal)] font-semibold text-[color:var(--teal)]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-              <Icon className="h-4 w-4" /> {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {tab === "plantillas" && <PanelPlantillas />}
-      {tab === "solicitudes" && <SolicitudesContratoTabla />}
-      {tab === "generados" && <ContratosExistentes estados={["generado"]} vacio="Aún no hay contratos guardados. Genera uno en el Editor y pícale “Guardar”." />}
-      {tab === "archivo" && <ContratosExistentes estados={["archivado", "papelera"]} vacio="No hay contratos archivados ni en papelera." />}
-    </div>
-  );
-}
-
-function Indicador({ n, l, activo, onClick, tono }: { n: string; l: string; activo: boolean; onClick: () => void; tono: string }) {
-  return (
-    <button onClick={onClick} className={`legal-card p-4 text-left transition hover:border-[color:var(--teal)] ${activo ? "border-[color:var(--teal)] ring-1 ring-[color:var(--teal)]/30" : ""}`}>
-      <p className="text-xs text-muted-foreground">{l}</p>
-      <p className={`mt-1 font-display text-2xl font-bold leading-none ${tono}`}>{n}</p>
-    </button>
-  );
-}
-
-function PanelPlantillas() {
-  const navigate = useNavigate();
-  const [estados, setEstados] = useState<Record<string, string>>({});
-  const [customs, setCustoms] = useState<PlantillaContrato[]>([]);
-  const [grupos, setGrupos] = useState<Grupo[]>([]);
-  const [asig, setAsig] = useState<Record<string, string>>({});
-  const [preview, setPreview] = useState<string | null>(null);
-  const [nuevoPaq, setNuevoPaq] = useState(false);
-  const [elaborar, setElaborar] = useState<Grupo | null>(null);
-  const [cargando, setCargando] = useState(true);
-
-  // Trae TODO junto y actualiza en un solo render (evita el parpadeo
-  // de que las plantillas se vean "sueltas" antes de caer en su paquete).
-  const recargar = () =>
-    Promise.all([listarEstadosPlantilla(), listarGrupos(), listarAsignaciones(), listarPlantillasCustom()])
-      .then(([e, g, a, c]) => { setEstados(e); setGrupos(g); setAsig(a); setCustoms(c); })
-      .finally(() => setCargando(false));
-  useEffect(() => { recargar(); }, []);
-
-  const cambiar = async (tipo: string, estado: string) => { await setEstadoPlantilla(tipo, estado); recargar(); };
-  const mover = async (tipo: string, grupoId: string | null) => { await asignarPlantillaGrupo(tipo, grupoId); recargar(); };
-  const borrarGrupo = async (id: string) => { if (window.confirm("¿Eliminar este paquete? Las plantillas quedan como individuales.")) { await eliminarGrupo(id); recargar(); } };
-
-  const todas = [...plantillas, ...customs];
-  const activas = todas.filter((p) => (estados[p.tipo] || "activa") === "activa");
-  const plantillaPreview = todas.find((p) => p.tipo === preview) || null;
-
-  const tarjeta = (p: PlantillaContrato) => (
-    <div key={p.tipo} className="legal-card group relative p-4 transition hover:border-[color:var(--teal)] hover:shadow-md">
-      <div className="absolute right-2 top-2 flex gap-0.5">
-        <button onClick={() => setPreview(p.tipo)} title="Vista previa" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Eye className="h-4 w-4" /></button>
-        <MenuPlantilla
-          grupos={grupos}
-          grupoActual={asig[p.tipo] || null}
-          onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })}
-          onMover={(g) => mover(p.tipo, g)}
-          onArchivar={() => cambiar(p.tipo, "archivada")}
-          onPapelera={() => cambiar(p.tipo, "papelera")}
-        />
-      </div>
-      <button onClick={() => navigate({ to: "/contratos/editor", search: { tipo: p.tipo } })} className="block w-full text-left">
-        <FileText className="mb-2 h-6 w-6 text-[color:var(--teal)]" />
-        <p className="pr-12 font-display text-sm font-bold leading-tight group-hover:text-[color:var(--teal)]">{p.nombre}</p>
-        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.descripcion}</p>
-      </button>
-    </div>
-  );
-
-  const individuales = activas.filter((p) => !asig[p.tipo] || !grupos.some((g) => g.id === asig[p.tipo]));
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Contratos agrupados en paquetes por fase. El ojo muestra la vista previa.</p>
-        <Button variant="outline" size="sm" onClick={() => setNuevoPaq(true)}><FolderPlus className="h-4 w-4 mr-1.5" /> Nuevo paquete</Button>
-      </div>
-
-      {cargando ? (
-        <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando plantillas…</div>
-      ) : (<>
-      {/* Paquetes */}
-      {grupos.map((g) => {
-        const items = activas.filter((p) => asig[p.tipo] === g.id);
-        return (
-          <div key={g.id} className="rounded-xl border border-border bg-muted/20 p-4">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-[color:var(--teal)]" />
-                  <span className="font-display text-base font-semibold">{g.nombre || "Paquete"}</span>
-                  {g.fase && <span className="rounded-full bg-[color:var(--teal)]/15 px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--teal)]">Fase · {g.fase}</span>}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Columna izquierda: formulario */}
+              <div className="grid content-start gap-2">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Para (correo)</label>
+                  <input type="email" value={correoPara} onChange={(e) => setCorreoPara(e.target.value)} placeholder="correo@cliente.com"
+                    className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
                 </div>
-                {g.descripcion && <p className="mt-0.5 text-xs text-muted-foreground">{g.descripcion}</p>}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
+                  <input value={asuntoMail} onChange={(e) => setAsuntoMail(e.target.value)}
+                    className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-medium text-muted-foreground">Copia (CC)</label>
+                    <input value={ccMail} onChange={(e) => setCcMail(e.target.value)} placeholder="opcional"
+                      className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-muted-foreground">Copia oculta (CCO)</label>
+                    <input value={ccoMail} onChange={(e) => setCcoMail(e.target.value)} placeholder="escondidos"
+                      className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground">Mensaje</label>
+                  <textarea value={mensajeMail} onChange={(e) => setMensajeMail(e.target.value)} rows={12}
+                    className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                {items.length > 0 && <button onClick={() => setElaborar(g)} className="inline-flex items-center gap-1 rounded-md bg-[color:var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[color:var(--teal)]/90"><PenLine className="h-3.5 w-3.5" /> Elaborar paquete</button>}
-                <button onClick={() => borrarGrupo(g.id)} className="text-xs text-red-600 hover:underline">Eliminar</button>
+
+              {/* Columna derecha: vista previa del documento */}
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground">Vista previa del documento que se enviará</label>
+                <div className="mt-0.5 h-[62vh] overflow-y-auto rounded-md border border-border bg-[oklch(0.99_0.005_85)] p-5">
+                  <p className="mb-1 text-right text-[11px] text-muted-foreground">{folioGuardado ? `Folio: ${folioGuardado}` : folioPreview ? `Se asignará: ${folioPreview}` : "Se registrará al enviar"}</p>
+                  <p className="mb-3 text-center text-sm font-bold uppercase">{plantilla.nombre}</p>
+                  <pre className="whitespace-pre-wrap font-display text-[13px] leading-relaxed text-foreground">{cuerpo}</pre>
+                </div>
+                <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
+                  <Check className="h-3.5 w-3.5" /> Se adjuntan automáticamente <b>Word</b> y <b>PDF</b>.
+                </p>
               </div>
             </div>
-            {items.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Sin plantillas. Usa el ⋮ de una tarjeta → “Mover a paquete”.</p>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">{items.map(tarjeta)}</div>
-            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <Button onClick={enviarDesdeSistema} disabled={enviandoSistema} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+                <Mail className="h-4 w-4 mr-1.5" /> {enviandoSistema ? "Enviando…" : "Enviar desde el sistema"}
+              </Button>
+              {resultadoEnvio && (
+                <span className={`text-xs font-medium ${resultadoEnvio.startsWith("Enviado") ? "text-emerald-700" : "text-red-700"}`}>{resultadoEnvio}</span>
+              )}
+              <span className="flex-1" />
+              <span className="text-[11px] text-muted-foreground">o abrir en:</span>
+              <Button variant="outline" size="sm" onClick={() => window.open(linkGmail(), "_blank")}>Gmail</Button>
+              <Button variant="outline" size="sm" onClick={() => window.open(linkOutlook(), "_blank")}>Outlook</Button>
+              <Button variant="outline" size="sm" onClick={copiarMensaje}>{copiado ? "Copiado ✓" : "Copiar"}</Button>
+            </div>
           </div>
-        );
-      })}
-
-      {/* Individuales */}
-      <div>
-        <p className="mb-2 font-display text-sm font-semibold text-muted-foreground">{grupos.length ? "Individuales (sin paquete)" : "Plantillas"}</p>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">{individuales.map(tarjeta)}</div>
-      </div>
-      </>)}
-
-      {plantillaPreview && <PreviewPlantilla plantilla={plantillaPreview} onCerrar={() => setPreview(null)} onElaborar={() => navigate({ to: "/contratos/editor", search: { tipo: plantillaPreview.tipo } })} />}
-
-      {nuevoPaq && <ModalNuevoPaquete onCerrar={() => setNuevoPaq(false)} onCreado={() => { setNuevoPaq(false); recargar(); }} />}
-
-      {elaborar && (
-        <ModalElaborarPaquete
-          grupo={elaborar}
-          items={activas.filter((p) => asig[p.tipo] === elaborar.id)}
-          onCerrar={() => setElaborar(null)}
-          onElaborar={(tipo) => navigate({ to: "/contratos/editor", search: { tipo } })}
-        />
+        </div>
       )}
 
-      {!cargando && (() => {
-        const ocultas = todas.filter((p) => ["archivada", "papelera"].includes(estados[p.tipo] || ""));
-        if (!ocultas.length) return null;
-        return (
-          <div className="mt-2 rounded-lg border border-dashed border-border p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">Plantillas ocultas (archivadas / en papelera)</p>
-            <div className="flex flex-wrap gap-2">
-              {ocultas.map((p) => (
-                <span key={p.tipo} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs">
-                  {p.nombre} <span className="text-[10px] uppercase text-muted-foreground">{estados[p.tipo]}</span>
-                  <button onClick={() => cambiar(p.tipo, "activa")} title="Restaurar" className="text-[color:var(--teal)] hover:opacity-70"><RotateCcw className="h-3.5 w-3.5" /></button>
-                </span>
+      <Card className="legal-card p-4">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Plantilla</Label>
+        <select
+          value={tipo}
+          onChange={(e) => {
+            setTipo(e.target.value as ContratoTipo);
+            const a = apoderados.find((x) => x.id === apoderadoId);
+            setValores(a ? { ...valoresApoderado(a) } : {});
+            setFolioGuardado(null);
+            setFechaGenerado(null);
+            setFechaEnviado(null);
+          }}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {plantillas.map((p) => <option key={p.tipo} value={p.tipo}>{p.nombre}</option>)}
+        </select>
+        <p className="mt-2 text-xs text-muted-foreground">{plantilla.descripcion}</p>
+      </Card>
+
+      <Card className="legal-card p-4">
+        <p className="font-display font-bold text-sm mb-3">
+          Encabezado del contrato{" "}
+          <span className="text-[11px] font-normal text-muted-foreground">(uso interno — no se imprime en el documento)</span>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label className="text-xs font-medium">Folio</Label>
+            <div className="mt-1 flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 font-mono text-sm">
+              {folioGuardado ? folioGuardado : folioPreview ? `Se asignará: ${folioPreview}` : "…"}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs font-medium">Solicitado por</Label>
+            <Input className="mt-1" value={solicitadoPor} onChange={(e) => setSolicitadoPor(e.target.value)} placeholder="Quién pide el contrato" />
+          </div>
+          <div>
+            <Label className="text-xs font-medium">A nombre de / para quién</Label>
+            <Input className="mt-1" value={aNombreDe} onChange={(e) => setANombreDe(e.target.value)} placeholder="Nombre (texto libre)" />
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <b>Elaborado</b> y <b>Enviado</b> se registran solos: al generar y al mandar por correo.
+          {fechaGenerado && ` · Elaborado: ${fmtFechaHora(fechaGenerado)}`}
+          {fechaEnviado && ` · Enviado: ${fmtFechaHora(fechaEnviado)}`}
+        </p>
+      </Card>
+
+      <SelectorApoderado
+        apoderados={apoderados}
+        value={apoderadoId}
+        onSelect={seleccionarApoderado}
+      />
+
+      {tipo === "contrato_cambio" && (
+        <div className="rounded-lg border border-[color:var(--gold,#C2A24C)]/40 bg-amber-50/60 px-4 py-3">
+          <label className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+            Auto-llenar desde una Carta de Cambio registrada
+          </label>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const c = cartas.find((x) => x.id === e.target.value);
+              if (c?.valores) autollenarDesdeCarta(c.valores as Record<string, unknown>);
+            }}
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">
+              {cartas.length ? "— Escoge una carta registrada —" : "No hay cartas guardadas todavía"}
+            </option>
+            {cartas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.folio || "s/folio"} · {c.nombre_cliente || "sin cliente"}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-amber-800/80">
+            Jala cliente, folio anterior, garantía y valor de la carta que escojas. Lo demás lo completas abajo.
+          </p>
+        </div>
+      )}
+
+      {tipo === "carta_cambio" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-4 py-3">
+          <p className="text-sm text-foreground/80">
+            <span className="font-semibold">Paquete de Cambio:</span> al terminar la Carta, pasa sus datos al Contrato de Cambio (cliente, folio anterior, garantía y valor).
+          </p>
+          <Button onClick={llenarContrato} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
+            <FileText className="h-4 w-4 mr-1.5" /> Llenar Contrato de Cambio →
+          </Button>
+        </div>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
+        <Card className="legal-card">
+          <CardContent className="p-5 max-h-[70vh] overflow-y-auto">
+            <p className="font-display font-bold text-base mb-4">Datos del contrato</p>
+            <div className="space-y-3">
+              {camposVisibles.map((c) => (
+                <div key={c.id}>
+                  <Label className="text-xs font-medium">
+                    {c.label}{c.requerido && <span className="text-[color:var(--legal)] ml-0.5">*</span>}
+                  </Label>
+                  <div className="mt-1">
+                    <CampoControl campo={c} valor={valores[c.id]} onChange={(v) => setValores((s) => ({ ...s, [c.id]: v }))} />
+                  </div>
+                  {c.ayuda && <p className="mt-0.5 text-[11px] text-muted-foreground">{c.ayuda}</p>}
+                </div>
               ))}
             </div>
-          </div>
-        );
-      })()}
-    </div>
-  );
-}
+          </CardContent>
+        </Card>
 
-function ModalElaborarPaquete({ grupo, items, onCerrar, onElaborar }: { grupo: Grupo; items: PlantillaContrato[]; onCerrar: () => void; onElaborar: (tipo: string) => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-1 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-[#0B1E3A]">Elaborar paquete · {grupo.nombre}</p>
-          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
-        <p className="mb-3 text-xs text-muted-foreground">Se elaboran en este orden. Al abrir uno, llénalo y guárdalo; luego regresa y sigue con el siguiente.</p>
-        <div className="space-y-2">
-          {items.map((p, i) => (
-            <div key={p.tipo} className="flex items-center gap-3 rounded-lg border border-border p-3">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color:var(--teal)]/15 text-xs font-semibold text-[color:var(--teal)]">{i + 1}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight">{p.nombre}</p>
-                <p className="line-clamp-1 text-xs text-muted-foreground">{p.descripcion}</p>
+        <Card className="legal-card bg-[oklch(0.99_0.005_85)]">
+          <CardContent className="p-4 md:p-6">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="inline-flex rounded-md border border-border overflow-hidden">
+                <button
+                  onClick={() => setModo("preview")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${modo === "preview" ? "bg-[color:var(--teal)] text-white" : "bg-background text-foreground/70 hover:bg-muted"}`}
+                >
+                  <Eye className="h-3.5 w-3.5" /> Vista previa
+                </button>
+                <button
+                  onClick={entrarWord}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${modo === "word" ? "bg-[color:var(--teal)] text-white" : "bg-background text-foreground/70 hover:bg-muted"}`}
+                >
+                  <PenLine className="h-3.5 w-3.5" /> Editar
+                </button>
               </div>
-              <Button size="sm" onClick={() => onElaborar(p.tipo)} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white"><PenLine className="mr-1 h-3.5 w-3.5" /> Elaborar</Button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModalNuevoPaquete({ onCerrar, onCreado }: { onCerrar: () => void; onCreado: () => void }) {
-  const [nombre, setNombre] = useState("");
-  const [fase, setFase] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [ocupado, setOcupado] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const guardar = async () => {
-    if (!nombre.trim()) return;
-    setOcupado(true); setError(null);
-    const r = await crearGrupo(nombre.trim(), fase.trim(), descripcion.trim());
-    setOcupado(false);
-    if (r.ok) onCreado();
-    else setError("No se pudo guardar el paquete (" + (r.error || "") + "). Revisa que hayas corrido el SQL de plantilla_grupo en Supabase.");
-  };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-base font-bold text-[#0B1E3A]">Nuevo paquete</p>
-          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground">Nombre del paquete</label>
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Paquete de Cambio" className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" autoFocus />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground">Fase / etapa</label>
-            <input value={fase} onChange={(e) => setFase(e.target.value)} placeholder="Ej. Cambio · Compra · Cierre" className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground">¿Para qué son? (breve)</label>
-            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
-          {error && <span className="mr-auto text-[11px] font-medium text-red-700">{error}</span>}
-          <Button variant="outline" size="sm" onClick={onCerrar}>Cancelar</Button>
-          <Button size="sm" disabled={ocupado || !nombre.trim()} onClick={guardar} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">{ocupado ? "Guardando…" : "Crear paquete"}</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MenuPlantilla({ grupos, grupoActual, onElaborar, onMover, onArchivar, onPapelera }: { grupos: Grupo[]; grupoActual: string | null; onElaborar: () => void; onMover: (g: string | null) => void; onArchivar: () => void; onPapelera: () => void }) {
-  const [abierto, setAbierto] = useState(false);
-  return (
-    <div className="relative inline-block text-left">
-      <button onClick={() => setAbierto((v) => !v)} title="Acciones" className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-        <MoreVertical className="h-4 w-4" />
-      </button>
-      {abierto && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 z-20 mt-1 max-h-72 w-56 overflow-auto rounded-md border border-border bg-white py-1 shadow-lg">
-            <button onClick={() => { setAbierto(false); onElaborar(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><PenLine className="h-3.5 w-3.5" /> Elaborar para un cliente</button>
-            {grupos.length > 0 && (
-              <>
-                <p className="flex items-center gap-1.5 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase text-muted-foreground"><FolderInput className="h-3 w-3" /> Mover a paquete</p>
-                {grupos.map((g) => (
-                  <button key={g.id} onClick={() => { setAbierto(false); onMover(g.id); }} className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted ${grupoActual === g.id ? "font-semibold text-[color:var(--teal)]" : ""}`}>
-                    <Layers className="h-3.5 w-3.5" /> {g.nombre}
-                  </button>
-                ))}
-                {grupoActual && <button onClick={() => { setAbierto(false); onMover(null); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted"><X className="h-3.5 w-3.5" /> Quitar de paquete</button>}
-              </>
-            )}
-            <div className="my-1 border-t border-border" />
-            <button onClick={() => { setAbierto(false); onArchivar(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><Archive className="h-3.5 w-3.5" /> Archivar</button>
-            <button onClick={() => { setAbierto(false); onPapelera(); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /> Mover a papelera</button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PreviewPlantilla({ plantilla, onCerrar, onElaborar }: { plantilla: typeof plantillas[number]; onCerrar: () => void; onElaborar: () => void }) {
-  const texto = renderContrato(plantilla, valoresIniciales(plantilla));
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="flex max-h-[82vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <p className="font-display text-sm font-bold text-[#0B1E3A]">Vista previa · {plantilla.nombre}</p>
-          <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="flex-1 overflow-auto px-6 py-5">
-          <pre className="whitespace-pre-wrap font-serif text-[13px] leading-relaxed text-foreground/90">{texto}</pre>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
-          <Button variant="outline" size="sm" onClick={onCerrar}>Cerrar</Button>
-          <Button size="sm" onClick={onElaborar} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white"><PenLine className="mr-1.5 h-4 w-4" /> Elaborar</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContratosExistentes({ estados, vacio }: { estados: string[]; vacio: string }) {
-  const [lista, setLista] = useState<ContratoGenerado[]>([]);
-  const [envios, setEnvios] = useState<Record<string, EnvioRegistro>>({});
-  const [cargando, setCargando] = useState(true);
-
-  const recargar = () => {
-    setCargando(true);
-    Promise.all(estados.map((e) => listarContratos(e)))
-      .then((arrs) => setLista(arrs.flat().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))))
-      .finally(() => setCargando(false));
-    listarEnvios().then((arr) => {
-      const mapa: Record<string, EnvioRegistro> = {};
-      for (const e of arr) if (e.folio && !mapa[e.folio]) mapa[e.folio] = e;
-      setEnvios(mapa);
-    });
-  };
-  useEffect(() => { recargar(); }, [estados.join(",")]); // eslint-disable-line
-
-  return (
-    <Card className="legal-card overflow-hidden">
-      {cargando ? (
-        <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>
-      ) : lista.length === 0 ? (
-        <div className="p-4 text-sm text-muted-foreground">{vacio}</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-2.5">Folio</th>
-                <th className="text-left px-4 py-2.5">Documento</th>
-                <th className="text-left px-4 py-2.5">Cliente</th>
-                <th className="text-left px-4 py-2.5">Firma (apoderado)</th>
-                <th className="text-left px-4 py-2.5">Fecha</th>
-                <th className="text-left px-4 py-2.5">Cuantía</th>
-                <th className="text-left px-4 py-2.5">Estado</th>
-                <th className="text-left px-4 py-2.5">Correo</th>
-                <th className="text-right px-4 py-2.5">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lista.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold">{c.folio || "—"}</td>
-                  <td className="px-4 py-3">{c.nombre_documento || "—"}</td>
-                  <td className="px-4 py-3">{c.nombre_cliente ? <Link to="/cliente" search={{ nombre: c.nombre_cliente }} className="font-medium text-[color:var(--teal)] hover:underline">{c.nombre_cliente}</Link> : "—"}</td>
-                  <td className="px-4 py-3 text-xs">{c.apoderado || "—"}</td>
-                  <td className="px-4 py-3 tabular-nums text-xs">{fmtFecha(c.fecha_generado || c.created_at)}</td>
-                  <td className="px-4 py-3 tabular-nums">{c.cuantia ? `$ ${Number(c.cuantia).toLocaleString("es-MX")}` : "—"}</td>
-                  <td className="px-4 py-3"><Badge className={`capitalize ${estadoTono[c.estado || "generado"] || ""}`}>{c.estado || "generado"}</Badge></td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const e = c.folio ? envios[c.folio] : undefined;
-                      if (!e) return <span className="text-xs text-muted-foreground">—</span>;
-                      if (e.estado === "abierto") {
-                        const t = e.abierto_at ? new Date(e.abierto_at).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-                        return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={`Abierto ${t}`}>Abierto ✓</span>;
-                      }
-                      return <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">Enviado</span>;
-                    })()}
-                    {c.fecha_enviado && (
-                      <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">Enviado: {fmtFecha(c.fecha_enviado)}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right"><MenuAcciones c={c} onCambio={recargar} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function MenuAcciones({ c, onCambio }: { c: ContratoGenerado; onCambio: () => void }) {
-  const [abierto, setAbierto] = useState(false);
-  const [ver, setVer] = useState(false);
-  const navigate = useNavigate();
-
-  const reelaborar = () => {
-    sessionStorage.setItem("reelaborar_contrato", JSON.stringify({ tipo: c.tipo, valores: c.valores ?? {} }));
-    navigate({ to: "/contratos/editor", search: c.tipo ? { tipo: c.tipo } : {} });
-  };
-  const cambiarEstado = async (estado: string) => {
-    setAbierto(false);
-    if (c.id) { await actualizarEstadoContrato(c.id, estado); onCambio(); }
-  };
-
-  return (
-    <div className="relative inline-block text-left">
-      <button onClick={() => setAbierto((v) => !v)} className="rounded-md p-1.5 hover:bg-muted" title="Acciones">
-        <MoreVertical className="h-4 w-4" />
-      </button>
-      {abierto && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-52 rounded-md border border-border bg-white py-1 shadow-lg">
-            <button onClick={() => { setAbierto(false); setVer(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-[color:var(--teal)] hover:bg-muted">
-              <Eye className="h-3.5 w-3.5" /> Mirar contrato elaborado
-            </button>
-            <button onClick={reelaborar} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-              <PenLine className="h-3.5 w-3.5" /> Reelaborar
-            </button>
-            {c.estado !== "archivado" && (
-              <button onClick={() => cambiarEstado("archivado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-                <Archive className="h-3.5 w-3.5" /> Archivar
-              </button>
-            )}
-            {c.estado === "papelera" ? (
-              <button onClick={() => cambiarEstado("generado")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-                <PenLine className="h-3.5 w-3.5" /> Restaurar
-              </button>
-            ) : (
-              <button onClick={() => cambiarEstado("papelera")} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
-                <Trash2 className="h-3.5 w-3.5" /> Mover a papelera
-              </button>
-            )}
-          </div>
-        </>
-      )}
-
-      {ver && (
-        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/40 p-4" onClick={() => setVer(false)}>
-          <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
-              <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold" title={c.nombre_documento || c.titulo || ""}>{c.nombre_documento || c.titulo || "Contrato elaborado"}</h3>
-                <p className="text-[11px] text-muted-foreground">{c.folio || ""}{c.nombre_cliente ? ` · ${c.nombre_cliente}` : ""}</p>
-              </div>
-              <button onClick={() => setVer(false)} className="shrink-0 rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="overflow-auto p-6">
-              {c.cuerpo ? (
-                <div className="mx-auto max-w-2xl whitespace-pre-wrap text-justify text-[13px] leading-relaxed text-gray-800" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>{c.cuerpo}</div>
-              ) : (
-                <p className="text-center text-sm text-muted-foreground">Este contrato no tiene contenido guardado para mostrar.</p>
+              {modo === "word" && (
+                <Button variant="outline" size="sm" onClick={regenerarWord} title="Volver a armar desde los datos">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Regenerar
+                </Button>
               )}
             </div>
-          </div>
-        </div>
-      )}
+
+            {modo === "preview" ? (
+              <>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center mb-1">Vista previa</p>
+                <h2 className="font-display text-base font-bold uppercase tracking-wide text-center mb-6">{plantilla.nombre}</h2>
+                <pre className="whitespace-pre-wrap font-display text-[13px] leading-relaxed text-foreground">{cuerpo}</pre>
+                <div className="mt-10 grid grid-cols-2 gap-8 text-center text-xs text-muted-foreground">
+                  <div><div className="border-t border-foreground/50 pt-1">Parte A</div></div>
+                  <div><div className="border-t border-foreground/50 pt-1">Parte B</div></div>
+                </div>
+              </>
+            ) : (
+              <EditorWord key={claveWord} initialHtml={semillaWord} titulo={plantilla.nombre} folio={folioGuardado} onCambio={setHtmlEditado} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
