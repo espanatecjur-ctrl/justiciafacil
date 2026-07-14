@@ -55,7 +55,23 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
   } catch { return null; }
 }
 
-// Regla de oro (URRJ): no se pueden crear garantías repetidas.
+/** Igual que buscarPredictamenVigente, pero trae también `datos` y `version` —
+ *  se usa para enlazar correctamente el antecedente cuando se dictamina desde
+ *  una Solicitud (para no dejar dos filas "vigente" del mismo expediente). */
+export async function buscarPredictamenVigenteCompleto(expediente?: string | null, casoId?: string | null): Promise<(PredictamenExistente & { datos?: any; version?: number }) | null> {
+  const conds: string[] = [];
+  if (casoId) conds.push(`caso_id.eq.${casoId}`);
+  if (expediente && expediente.trim()) conds.push(`expediente.eq.${encodeURIComponent(expediente.trim())}`);
+  if (conds.length === 0) return null;
+  const filtro = conds.length === 1 ? conds[0].replace(".eq.", "=eq.") : `or=(${conds.join(",")})`;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,caso_id,expediente,datos,version&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.[0] || null;
+  } catch { return null; }
+}
+
 // Bloquea si el crédito, expediente, dirección o cliente ya existe en otra
 // garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
 const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
