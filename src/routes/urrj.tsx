@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { type Precarga } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, ScrollText, Plus } from "lucide-react";
+import { Scale, ScrollText, Plus, Upload } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
@@ -12,6 +12,7 @@ import { type SolicitudPredictamen } from "@/lib/solicitud-predictamen";
 import { HistorialPredictamen } from "@/components/historial-predictamen";
 import { RegistroURRJ } from "@/components/registro-urrj";
 import { FichaURRJ, type RefGarantia } from "@/components/ficha-urrj";
+import { ImportarCarteraURRJ } from "@/components/importar-cartera-urrj";
 
 export const Route = createFileRoute("/urrj")({
   head: () => ({ meta: [{ title: "URRJ — Pre-dictamen — JusticiaFácil" }] }),
@@ -39,6 +40,7 @@ function URRJ() {
   const [permisos, setPermisos] = useState<string[]>([]);
   const [fichaGar, setFichaGar] = useState<RefGarantia | null>(null);
   const [subVista, setSubVista] = useState<"solicitudes" | "historial">("solicitudes");
+  const [importarAbierto, setImportarAbierto] = useState(false);
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
@@ -169,7 +171,15 @@ function URRJ() {
                   className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
                   <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
                 </button>
+                <button onClick={() => setImportarAbierto(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                  <Upload className="h-3.5 w-3.5" /> Importar cartera (Excel)
+                </button>
               </div>
+
+              {importarAbierto && (
+                <ImportarCarteraURRJ onCerrar={() => setImportarAbierto(false)} onImportado={() => setSubVista("historial")} />
+              )}
 
               {/* Sub-módulos: Solicitudes por dictaminar / Historial de pre-dictámenes.
                   Se ven uno a la vez para no amontonar la pantalla. */}
