@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Upload, FileText, X, Loader2, Check, Send, Paperclip, HardDrive, FolderCheck, Folder } from "lucide-react";
 import { usuarioActualEtiqueta, getAuth } from "@/lib/auth";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarTodo, esCarpeta, previewDeId } from "@/lib/drive-explorar";
+import { listarTodo, esCarpeta, previewDeId, sincronizarCarpeta } from "@/lib/drive-explorar";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { listarAdministradoras, puedeVerNombreReal, crearAdministradora, type Administradora } from "@/lib/administradoras";
 import { listarPredictamenesParaSelector, adjuntarDocumentosAPredictamen, type PredictamenOpcion } from "@/lib/predictamen-guardar";
@@ -168,8 +168,17 @@ export function DireccionDocumentos() {
       // Si escogió una carpeta de Drive, la reflejamos en la ficha de la garantía
       // (solo si hay caso_juridico vinculado; los del historial URRJ sin caso_id no aplican).
       const conCarpeta = !!carpetaSel;
+      let msgCopia = "";
       if (carpetaSel && casoId) {
         await vincularCarpetaAGarantia(casoId, carpetaSel.id, carpetaSel.nombre);
+        // Copia fija: descarga los documentos de esa carpeta al almacén del
+        // sistema, para que también se vean en "Ficha → Documentos". Se
+        // reintenta unas cuantas veces por si la carpeta trae muchos archivos.
+        for (let intento = 0; intento < 5; intento++) {
+          const s = await sincronizarCarpeta(casoId, carpetaSel.id, area, caso?.no_credito || undefined, caso?.cliente_nombre || undefined);
+          if (!s.ok) { msgCopia = " · aviso: no se pudo copiar a la ficha (" + (s.error || "") + ")"; break; }
+          if (!s.restantes || s.restantes <= 0) { msgCopia = " · copia fija lista en la ficha ✓"; break; }
+        }
       }
       // Si la garantía venía del historial de URRJ (sin caso_juridico todavía), los
       // documentos también se guardan directo en la ficha de ese pre-dictamen —
@@ -177,7 +186,7 @@ export function DireccionDocumentos() {
       if (!casoId && garantiaManual?.predictamenId) {
         await adjuntarDocumentosAPredictamen(garantiaManual.predictamenId, todos);
       }
-      setMsg(conCarpeta ? "Enviado ✓ · carpeta reflejada en la garantía" : "Enviado a pre-dictaminar ✓");
+      setMsg((conCarpeta ? "Enviado ✓ · carpeta reflejada en la garantía" : "Enviado a pre-dictaminar ✓") + msgCopia);
       setCasoId(""); setNota(""); setDocs([]); setAdministradoraCodigo(""); setGarantiaManual(null);
       setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null);
       recargar();
