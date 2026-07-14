@@ -9,7 +9,7 @@
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { guardarPredictamen, buscarPredictamenVigente, diffDatos, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
@@ -125,7 +125,7 @@ export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
   onResultados, modoFicha = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial,
-  administradoraInicial, numeroCreditoInicial, direccionInicial,
+  administradoraInicial, numeroCreditoInicial, direccionInicial, borradorId,
 }: {
   casos: any[];
   onVolver: () => void;
@@ -150,6 +150,9 @@ export function RecorridoActor({
   administradoraInicial?: string;
   numeroCreditoInicial?: string;
   direccionInicial?: string;
+  /** Id del borrador "Pendiente" creado en el paso de Datos básicos, para
+   *  descartarlo al guardar el pre-dictamen real (no dejar duplicado). */
+  borradorId?: string | null;
 }) {
   const [paso, setPaso] = useState(0);
   const [mostrarBoletin, setMostrarBoletin] = useState(false);
@@ -312,6 +315,7 @@ export function RecorridoActor({
     };
     try {
       await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
+      if (borradorId) descartarBorrador(borradorId);
       registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: `Decisión: ${decision}` });
       setGuardado(`Pre-dictamen guardado: ${decision}`);
     } catch (e: any) {
