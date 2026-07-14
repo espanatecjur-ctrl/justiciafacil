@@ -60,6 +60,38 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
 // garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
 const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
+/** Guarda un "borrador" en cuanto se captura el número de crédito (antes de elegir
+ *  posición). Así el trabajo no se pierde aunque no se termine el dictamen en ese
+ *  momento: queda en el historial marcado como "Pendiente". Se marca con
+ *  datos.borrador = true para distinguirlo de un pre-dictamen real. */
+export async function guardarBorrador(datos: { numeroCredito?: string; administradora?: string; direccion?: string; expediente?: string }): Promise<string | null> {
+  const body = {
+    posicion: null, tipo_juicio: null, expediente: datos.expediente || null,
+    juzgado: null, estado: null, dictamen_sugerido: null, dictamen_final: null,
+    datos: { numeroCredito: datos.numeroCredito || "", quienCede: datos.administradora || "", ubicacion: datos.direccion || "", borrador: true },
+    resultados: null, vigente: true, en_papelera: false, version: 1,
+  };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
+      method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.[0]?.id ?? null;
+  } catch { return null; }
+}
+
+/** Descarta el borrador (lo manda a la papelera) porque ya se guardó el
+ *  pre-dictamen real — para no dejar un registro "Pendiente" duplicado. */
+export async function descartarBorrador(id?: string | null): Promise<void> {
+  if (!id) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${id}`, {
+      method: "PATCH", headers, body: JSON.stringify({ en_papelera: true, vigente: false }),
+    });
+  } catch { /* si falla, el borrador se puede limpiar después a mano */ }
+}
+
 /** Busca un pre-dictamen VIGENTE por número de crédito (dato manual, no es el expediente).
  *  Se usa en el paso "Datos básicos" antes de elegir posición: si el crédito ya está
  *  registrado, no se deja seguir — se manda a ver/re-dictaminar el que ya existe. */
