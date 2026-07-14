@@ -206,7 +206,17 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
           </div>
         )}
 
-        {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+        {err && (
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-red-600">{err}</p>
+            {estado === "bcs" && (
+              <a href="https://e-tribunalbcs.mx/AccesoLibre/LiAcuerdosBusqueda.aspx" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+                Buscarlo directo en el sitio del Tribunal de BCS ↗ (exp. {exp || "—"})
+              </a>
+            )}
+          </div>
+        )}
 
         <div className="mt-3 flex items-center gap-2">
           <button onClick={buscar} disabled={cargando} className="flex items-center gap-2 rounded-md bg-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
@@ -222,10 +232,21 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
       {res && (
         <div className="rounded-xl border border-border bg-card p-4">
           {acuerdos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No se encontraron acuerdos para ese expediente en ese juzgado{res.motivo ? ` (${res.motivo})` : ""}.
-              Verifica el número, el juzgado y la jurisdicción.
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                No se encontraron acuerdos para ese expediente en ese juzgado{res.motivo ? ` (${res.motivo})` : ""}.
+                Verifica el número, el juzgado y la jurisdicción.
+              </p>
+              {estado === "bcs" && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">El robot de La Paz a veces dice "vacío" aunque el expediente sí exista (el sitio del Tribunal es difícil de leer automáticamente).</p>
+                  <a href="https://e-tribunalbcs.mx/AccesoLibre/LiAcuerdosBusqueda.aspx" target="_blank" rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                    Buscarlo directo en el sitio del Tribunal ↗ (exp. {exp || "—"})
+                  </a>
+                </div>
+              )}
+            </div>
           ) : (
             <>
               <div className="mb-3 border-b border-border pb-2">
