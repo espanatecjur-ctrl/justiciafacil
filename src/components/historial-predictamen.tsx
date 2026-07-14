@@ -30,6 +30,7 @@ function dicColor(d?: string | null) {
 }
 function situacion(f: Fila): { label: string; cls: string } {
   if (f.terminado) return { label: "✓ Terminado", cls: "bg-muted text-muted-foreground border border-border" };
+  if (f.datos?.borrador) return { label: "● Pendiente", cls: "bg-amber-100 text-amber-800 font-semibold" };
   const d = (f.dictamen_sugerido || "").toUpperCase();
   if (d.includes("POSITIVO") || (d.includes("RECUPERABLE") && !d.includes("NO"))) return { label: "Litigable", cls: "bg-emerald-50 text-emerald-700" };
   if (d.includes("NEGATIVO") || d.includes("NO LITIGABLE")) return { label: "No litigable", cls: "bg-red-50 text-red-700" };
