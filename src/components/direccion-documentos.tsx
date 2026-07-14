@@ -2,14 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, X, Loader2, Check, Send, Paperclip, HardDrive, FolderCheck, Folder } from "lucide-react";
-import { usuarioActualEtiqueta } from "@/lib/auth";
+import { usuarioActualEtiqueta, getAuth } from "@/lib/auth";
 import { ExploradorDrive } from "@/components/explorador-drive";
 import { listarTodo, esCarpeta, previewDeId } from "@/lib/drive-explorar";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { listarAdministradoras, puedeVerNombreReal, crearAdministradora, type Administradora } from "@/lib/administradoras";
 import {
   casosParaSelector, subirDocPredictamen, crearSolicitudPredictamen, listarSolicitudesPredictamen,
   vincularCarpetaAGarantia, areaDeGarantia,
   type CasoOpcion, type DocRef, type SolicitudPredictamen,
 } from "@/lib/solicitud-predictamen";
+
+const headersDb = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
 export function DireccionDocumentos() {
   const [casos, setCasos] = useState<CasoOpcion[]>([]);
@@ -23,6 +27,45 @@ export function DireccionDocumentos() {
   const [msg, setMsg] = useState<string | null>(null);
   const [lista, setLista] = useState<SolicitudPredictamen[]>([]);
   const inputFile = useRef<HTMLInputElement>(null);
+
+  // Administradora: se guarda el CÓDIGO. El nombre real solo se pinta/edita si eres DGE.
+  const [administradoraCodigo, setAdministradoraCodigo] = useState("");
+  const [administradoras, setAdministradoras] = useState<Administradora[]>([]);
+  const [rolUsuario, setRolUsuario] = useState<string | null>(null);
+  const verNombreReal = puedeVerNombreReal(rolUsuario);
+  const [nuevoCodigo, setNuevoCodigo] = useState("");
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [agregandoAdmin, setAgregandoAdmin] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        const correo = data.session?.user?.email;
+        if (!correo) return;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers: headersDb });
+        const j = r.ok ? await r.json() : [];
+        setRolUsuario(j?.[0]?.rol ?? null);
+      } catch { /* si falla, se queda sin rol */ }
+    })();
+    listarAdministradoras().then(setAdministradoras);
+  }, []);
+
+  const agregarAdministradora = async () => {
+    if (!nuevoCodigo.trim() || !nuevoNombre.trim()) return;
+    setAgregandoAdmin(true);
+    const r = await crearAdministradora(nuevoCodigo, nuevoNombre);
+    setAgregandoAdmin(false);
+    if (r.ok) {
+      const lista = await listarAdministradoras();
+      setAdministradoras(lista);
+      setAdministradoraCodigo(nuevoCodigo.trim());
+      setNuevoCodigo(""); setNuevoNombre("");
+    } else {
+      setMsg("No se pudo guardar la administradora: " + (r.error || ""));
+    }
+  };
 
   // --- Escoger una carpeta de Drive (en vez de subir archivo por archivo) ---
   const [carpetaSel, setCarpetaSel] = useState<{ id: string; nombre: string } | null>(null);
@@ -95,6 +138,7 @@ export function DireccionDocumentos() {
       juzgado: caso?.juzgado ?? null,
       area,
       tipo_dictamen: usaTipo ? tipoDictamen : null,
+      administradora_codigo: administradoraCodigo || null,
       nota: nota || null,
       documentos: todos,
       solicitado_por: quien,
@@ -107,7 +151,7 @@ export function DireccionDocumentos() {
         await vincularCarpetaAGarantia(casoId, carpetaSel.id, carpetaSel.nombre);
       }
       setMsg(conCarpeta ? "Enviado ✓ · carpeta reflejada en la garantía" : "Enviado a pre-dictaminar ✓");
-      setCasoId(""); setNota(""); setDocs([]);
+      setCasoId(""); setNota(""); setDocs([]); setAdministradoraCodigo("");
       setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null);
       recargar();
     } else {
@@ -156,6 +200,38 @@ export function DireccionDocumentos() {
                   <option value="Jurídico">Jurídico (¿es litigable?)</option>
                   <option value="Registral">Registral (RPPC)</option>
                 </select>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">Administradora</label>
+            <select value={administradoraCodigo} onChange={(e) => setAdministradoraCodigo(e.target.value)}
+              className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <option value="">— Sin especificar —</option>
+              {administradoras.map((a) => (
+                <option key={a.codigo} value={a.codigo}>{a.codigo}{verNombreReal ? ` · ${a.nombre}` : ""}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {verNombreReal ? "Ves el nombre real porque tu rol es DGE. Los demás roles solo ven el código." : "Solo ves el código; el nombre real de la administradora solo lo ve el rol DGE."}
+            </p>
+            {verNombreReal && (
+              <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-dashed border-border p-2">
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground">Código nuevo</label>
+                  <input value={nuevoCodigo} onChange={(e) => setNuevoCodigo(e.target.value)} placeholder="ADM-004"
+                    className="mt-0.5 h-8 w-28 rounded-md border border-input bg-background px-2 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground">Nombre real</label>
+                  <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} placeholder="Nombre de la administradora"
+                    className="mt-0.5 h-8 w-48 rounded-md border border-input bg-background px-2 text-xs" />
+                </div>
+                <button type="button" onClick={agregarAdministradora} disabled={agregandoAdmin || !nuevoCodigo.trim() || !nuevoNombre.trim()}
+                  className="h-8 rounded-md bg-[color:var(--teal)] px-3 text-xs font-semibold text-white disabled:opacity-50">
+                  {agregandoAdmin ? "Guardando…" : "+ Agregar al catálogo"}
+                </button>
               </div>
             )}
           </div>
