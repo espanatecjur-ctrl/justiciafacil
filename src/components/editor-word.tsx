@@ -10,7 +10,7 @@
 //  Exporta a Word (.doc, editable, con el formato) e Imprimir / PDF.
 //  Usa document.execCommand (lo trae el navegador) — sin librerías.
 // ============================================================
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bold, Italic, Underline as UnderlineIcon,
@@ -88,7 +88,7 @@ function BtnHerramienta({ onClick, title, children }: { onClick: () => void; tit
   );
 }
 
-export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string; titulo: string; folio?: string | null }) {
+export function EditorWord({ initialHtml, titulo, folio, onCambio }: { initialHtml: string; titulo: string; folio?: string | null; onCambio?: (html: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const folioLinea = folio ? `Folio: ${folio}` : "BORRADOR — documento sin folio registrado";
   const folioHtml = `<p style="text-align:right;font-size:9pt;color:#555;border-bottom:1px solid #ddd;padding-bottom:4px;margin:0 0 10px">${folioLinea}</p>`;
@@ -100,7 +100,13 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
   const cmd = (comando: string, valor?: string) => {
     document.execCommand(comando, false, valor);
     ref.current?.focus();
+    avisarCambio();
   };
+
+  // Le avisa al padre (Editor de Contratos) el HTML actual, para que el
+  // Word/PDF que se manda por correo salga con lo que de verdad está en
+  // pantalla (ediciones a mano + imágenes ya insertadas), no con datos viejos.
+  const avisarCambio = () => { if (onCambio) onCambio(ref.current?.innerHTML ?? ""); };
 
   // Guarda dónde está el cursor para poder insertar la imagen ahí.
   const guardarRango = () => {
@@ -122,6 +128,7 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
       ref.current?.focus();
       restaurarRango();
       document.execCommand("insertImage", false, String(reader.result));
+      avisarCambio();
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -204,6 +211,10 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
     );
     w.document.close();
   }
+
+  // Avisa el contenido inicial una vez montado (por si se descarga/envía sin
+  // tocar nada, para que igual tenga el HTML real, no algo desactualizado).
+  useEffect(() => { avisarCambio(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
@@ -306,6 +317,7 @@ export function EditorWord({ initialHtml, titulo, folio }: { initialHtml: string
           onKeyUp={guardarRango}
           onMouseUp={guardarRango}
           onBlur={guardarRango}
+          onInput={avisarCambio}
           className="doc-editable relative z-10 min-h-[58vh] max-h-[66vh] overflow-y-auto bg-transparent px-4 py-5 text-[14px] text-black sm:px-8 sm:py-6"
           style={{ fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1.7 }}
           dangerouslySetInnerHTML={{ __html: initialHtml }}
