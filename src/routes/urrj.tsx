@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { type Precarga, buscarPredictamenVigenteCompleto } from "@/lib/predictamen-guardar";
+import { type Precarga, buscarPredictamenVigenteCompleto, buscarPredictamenPorCredito } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Scale, ScrollText, Plus, Upload } from "lucide-react";
@@ -48,10 +48,14 @@ function URRJ() {
   const dictaminarSolicitud = async (sol: SolicitudPredictamen) => {
     setSolicitudActiva(sol);
     // Antes de arrancar: ¿esta garantía YA tiene un pre-dictamen vigente en el
-    // historial? Si sí, se enlaza como antecedente — así al guardar el nuevo
-    // se marca el viejo como versión anterior, en vez de dejar dos filas
-    // "vigente" del mismo expediente (que se verían como repetidas).
-    const previo = await buscarPredictamenVigenteCompleto(sol.expediente, sol.caso_id);
+    // historial? Se busca primero por expediente/caso, y si no aparece nada
+    // (común en las importadas que solo traen número de crédito), se intenta
+    // también por crédito — así se enlaza como antecedente y no se duplica.
+    let previo = await buscarPredictamenVigenteCompleto(sol.expediente, sol.caso_id);
+    if (!previo && sol.numero_credito) {
+      const porCredito = await buscarPredictamenPorCredito(sol.numero_credito);
+      if (porCredito) previo = await buscarPredictamenVigenteCompleto(porCredito.expediente, porCredito.caso_id);
+    }
     if (previo) {
       setPrecargar({
         datos: {
@@ -60,6 +64,7 @@ function URRJ() {
           expediente: sol.expediente || previo.expediente || "",
           juzgado: sol.juzgado || previo.datos?.juzgado || "",
           deudor: sol.cliente || previo.datos?.deudor || "",
+          numeroCredito: sol.numero_credito || previo.datos?.numeroCredito || "",
         },
         antecedenteId: previo.id,
         version: previo.version || 1,
@@ -72,6 +77,7 @@ function URRJ() {
           expediente: sol.expediente || "",
           juzgado: sol.juzgado || "",
           deudor: sol.cliente || "",
+          numeroCredito: sol.numero_credito || "",
         },
       });
     }
