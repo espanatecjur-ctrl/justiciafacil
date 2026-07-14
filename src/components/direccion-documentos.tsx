@@ -158,6 +158,7 @@ export function DireccionDocumentos() {
       area,
       tipo_dictamen: usaTipo ? tipoDictamen : null,
       administradora_codigo: administradoraCodigo || null,
+      numero_credito: caso?.no_credito ?? null,
       nota: nota || null,
       documentos: todos,
       solicitado_por: quien,
