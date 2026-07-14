@@ -59,6 +59,8 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
   const distritos = useMemo(() => Array.from(new Set(cat.map((c) => c.nombre_distrito))).sort(), [cat]);
   const juzgados = useMemo(() => cat.filter((c) => c.nombre_distrito === distrito), [cat, distrito]);
 
+  const [abortCtrl, setAbortCtrl] = useState<AbortController | null>(null);
+
   const buscar = async () => {
     if (!exp.trim()) { setErr("Escribe el número de expediente (ej. 448/2024)."); return; }
     let url = "";
@@ -76,15 +78,33 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
       url = `${ROBOT}/${endpoint}?exp=${encodeURIComponent(exp.trim())}&judged=${encodeURIComponent(jalCode)}`;
     }
     setErr(null); setCargando(true); setRes(null);
+    // Tope de tiempo: si el boletín (sobre todo el de La Paz) no contesta, no lo
+    // dejamos esperando para siempre. A los 90s se cancela solo y avisa.
+    const ctrl = new AbortController();
+    setAbortCtrl(ctrl);
+    const tope = setTimeout(() => ctrl.abort("timeout"), 90000);
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: ctrl.signal });
+      if (!r.ok) { setErr(`El boletín contestó con un error (código ${r.status}). Intenta de nuevo en un momento.`); return; }
       setRes(await r.json());
-    } catch {
-      setErr("No se pudo conectar con el robot. Intenta de nuevo en un momento.");
+    } catch (e: any) {
+      const razon = ctrl.signal.reason;
+      if (razon === "manual") {
+        setErr("Búsqueda cancelada.");
+      } else if (e?.name === "AbortError" || ctrl.signal.aborted) {
+        setErr(estado === "bcs"
+          ? "El boletín de La Paz no contestó a tiempo (90 segundos). A veces el sitio del Tribunal de BCS está lento o caído. Intenta de nuevo en unos minutos."
+          : "El robot tardó demasiado y se canceló la búsqueda. Intenta de nuevo.");
+      } else {
+        setErr("No se pudo conectar con el robot. Intenta de nuevo en un momento.");
+      }
     } finally {
+      clearTimeout(tope);
       setCargando(false);
+      setAbortCtrl(null);
     }
   };
+  const cancelarBusqueda = () => { abortCtrl?.abort("manual"); };
 
   const acuerdos = res?.acuerdos || [];
   const party = acuerdos[0];
@@ -188,10 +208,15 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
 
         {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
 
-        <button onClick={buscar} disabled={cargando} className="mt-3 flex items-center gap-2 rounded-md bg-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-          {cargando ? <><Loader2 className="h-4 w-4 animate-spin" /> Consultando el boletín del Tribunal…</> : <><Search className="h-4 w-4" /> Buscar</>}
-        </button>
-        {cargando && <p className="mt-2 text-xs text-muted-foreground">El robot está abriendo el boletín y leyendo el expediente. Suele tardar entre 15 y 50 segundos — déjalo trabajar, no recargues la página.</p>}
+        <div className="mt-3 flex items-center gap-2">
+          <button onClick={buscar} disabled={cargando} className="flex items-center gap-2 rounded-md bg-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            {cargando ? <><Loader2 className="h-4 w-4 animate-spin" /> Consultando el boletín del Tribunal…</> : <><Search className="h-4 w-4" /> Buscar</>}
+          </button>
+          {cargando && (
+            <button onClick={cancelarBusqueda} className="rounded-md border border-input px-3 py-2 text-xs font-medium hover:bg-muted">Cancelar</button>
+          )}
+        </div>
+        {cargando && <p className="mt-2 text-xs text-muted-foreground">El robot está abriendo el boletín y leyendo el expediente. Suele tardar entre 15 y 50 segundos{estado === "bcs" ? " (La Paz a veces tarda más)" : ""} — si pasan 90 segundos se cancela solo.</p>}
       </div>
 
       {res && (
