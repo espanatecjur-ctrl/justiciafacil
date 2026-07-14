@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { type Precarga } from "@/lib/predictamen-guardar";
+import { type Precarga, buscarPredictamenVigenteCompleto } from "@/lib/predictamen-guardar";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Scale, ScrollText, Plus, Upload } from "lucide-react";
@@ -45,16 +45,36 @@ function URRJ() {
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
   const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
 
-  const dictaminarSolicitud = (sol: SolicitudPredictamen) => {
+  const dictaminarSolicitud = async (sol: SolicitudPredictamen) => {
     setSolicitudActiva(sol);
-    setPrecargar({
-      datos: {
-        caso_id: sol.caso_id || "",
-        expediente: sol.expediente || "",
-        juzgado: sol.juzgado || "",
-        deudor: sol.cliente || "",
-      },
-    });
+    // Antes de arrancar: ¿esta garantía YA tiene un pre-dictamen vigente en el
+    // historial? Si sí, se enlaza como antecedente — así al guardar el nuevo
+    // se marca el viejo como versión anterior, en vez de dejar dos filas
+    // "vigente" del mismo expediente (que se verían como repetidas).
+    const previo = await buscarPredictamenVigenteCompleto(sol.expediente, sol.caso_id);
+    if (previo) {
+      setPrecargar({
+        datos: {
+          ...(previo.datos || {}),
+          caso_id: sol.caso_id || previo.caso_id || "",
+          expediente: sol.expediente || previo.expediente || "",
+          juzgado: sol.juzgado || previo.datos?.juzgado || "",
+          deudor: sol.cliente || previo.datos?.deudor || "",
+        },
+        antecedenteId: previo.id,
+        version: previo.version || 1,
+        cambios: "Re-dictaminado desde Solicitudes URRJ",
+      });
+    } else {
+      setPrecargar({
+        datos: {
+          caso_id: sol.caso_id || "",
+          expediente: sol.expediente || "",
+          juzgado: sol.juzgado || "",
+          deudor: sol.cliente || "",
+        },
+      });
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const reDictaminar = (fila: any) => {
