@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { enviarCorreo } from "@/lib/enviar-correo";
@@ -238,6 +239,7 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 0 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">0 · Datos básicos</p>
+            <AnalisisDocumentalIA posicion="Demandado" casoId={x.caso_id || undefined} expediente={x.expediente || undefined} numeroCredito={x.numeroCredito || undefined} />
             {expedienteInicial && x.expediente && expedienteInicial !== x.expediente && !ignorarBoletin && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                 <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
