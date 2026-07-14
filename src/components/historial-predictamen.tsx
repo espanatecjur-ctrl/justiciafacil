@@ -86,7 +86,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
   const filtradas = useMemo(() => {
     const t = q.trim().toLowerCase();
     let arr = filas;
-    if (t) arr = filas.filter((f) => [f.folio, f.posicion, f.tipo_juicio, f.expediente, f.juzgado, f.estado, f.dictamen_sugerido, f.dictamen_final, f.datos?.ubicacion, f.datos?.deudor, f.datos?.deCujus, f.datos?.heredero, f.datos?.acreedor].filter(Boolean).join(" ").toLowerCase().includes(t));
+    if (t) arr = filas.filter((f) => [f.folio, f.posicion, f.tipo_juicio, f.expediente, f.juzgado, f.estado, f.dictamen_sugerido, f.dictamen_final, f.datos?.ubicacion, f.datos?.deudor, f.datos?.deCujus, f.datos?.heredero, f.datos?.acreedor, f.datos?.numeroCredito, f.datos?.quienCede, f.datos?.cartera].filter(Boolean).join(" ").toLowerCase().includes(t));
     // No repetir en el historial: solo el más reciente por garantía/expediente.
     // (filas viene ordenado por created_at desc, así que el primero por clave es el último.)
     const vistos = new Set<string>();
