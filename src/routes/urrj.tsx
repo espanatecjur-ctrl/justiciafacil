@@ -135,8 +135,27 @@ function URRJ() {
                 Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "\u2014"}
                 {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Ahora elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Revisa primero los documentos y luego elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
+            </div>
+          )}
+          {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-border bg-white p-4">
+              <p className="text-sm font-semibold">📎 Documentos de esta solicitud ({solicitudActiva.documentos!.length})</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Revísalos antes de elegir la posición — de ahí sale el criterio para el pre-dictamen.</p>
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                {solicitudActiva.documentos!.map((d, i) => (
+                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 truncate rounded-md border border-border bg-muted/20 px-2 py-1.5 text-xs text-[color:var(--teal)] hover:bg-muted">
+                    <span className="truncate">📄 {d.nombre}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) === 0 && (
+            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+              Esta solicitud llegó sin documentos adjuntos. Verifica con la Dirección antes de dictaminar.
             </div>
           )}
           {!solicitudActiva && !crearNuevo && (
