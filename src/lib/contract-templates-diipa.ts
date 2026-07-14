@@ -419,6 +419,160 @@ _______________________________          _______________________________
 Testigo                                   Testigo`;
 
 // ----------------------------------------------------------------------------
+//  ACTA DE ENTREGA-RECEPCIÓN DE POSESIÓN (sin traslación de dominio pleno)
+// ------------------------------------------------------------------------
+//  Machote de la diligencia de desalojo/entrega (Operación Tlajomulco y
+//  similares): se entrega SOLO la posesión, con reserva de dominio hasta
+//  liquidar. Distinto del Acta de Finiquito (esa es al 100% pagado).
+//  La ficha fotográfica se adjunta con el campo tipo "imagen" (botón
+//  "Agregar Ficha" en el formulario) y se inserta sola en el anexo.
+// ----------------------------------------------------------------------------
+const actaEntregaPosesionCampos: PlantillaCampo[] = [
+  { id: "folioGarantia", label: "Folio de la garantía", tipo: "text", ayuda: "Ej. GAR-0123" },
+  { id: "nombreGarantia", label: "Nombre/clave de la garantía", tipo: "text", requerido: true, ayuda: "Ej. Las Primaveras 28" },
+  { id: "identificacionRegistral", label: "Identificación registral", tipo: "text", ayuda: "Ej. Manzana \"O\", lote 21" },
+  { id: "domicilioGarantia", label: "Domicilio completo de la garantía", tipo: "textarea", requerido: true },
+  { id: "estatusInmueble", label: "Estatus del inmueble", tipo: "text", ayuda: "Ej. Habitada · obra vandalizada (previo a la diligencia)" },
+  { id: "fraccionamiento", label: "Fraccionamiento / desarrollo", tipo: "text", valorInicial: "Fraccionamiento Residencial San Antonio, Tlajomulco de Zúñiga, Jalisco" },
+  { id: "municipioActa", label: "Municipio/Estado donde se firma el acta", tipo: "text", valorInicial: "Tlajomulco de Zúñiga, Jalisco" },
+  { id: "diaEntrega", label: "Día de la entrega", tipo: "text" },
+  { id: "mesEntrega", label: "Mes de la entrega", tipo: "text" },
+  { id: "anioEntrega", label: "Año de la entrega", tipo: "text", valorInicial: "2026" },
+  { id: "horaEntrega", label: "Hora de la entrega", tipo: "text" },
+  { id: "expedienteOrigen", label: "Expediente de origen (juicio)", tipo: "textarea", valorInicial: "Juicio Ordinario Mercantil 1393/2017 — Juzgado Octavo de Jurisdicción Concurrente, Monterrey, N.L." },
+  { id: "numeroExhorto", label: "Número de exhorto", tipo: "text", valorInicial: "82/2026" },
+  { id: "juzgadoExhorto", label: "Juzgado exhortado", tipo: "text", valorInicial: "Juzgado Primero de lo Civil de Tlajomulco de Zúñiga, Jalisco" },
+  { id: "nombreCliente", label: "Nombre completo de LA RECEPTORA / el Cliente", tipo: "text", requerido: true },
+  ...clienteContactoCampos,
+  ...clienteApoderadoCampos,
+  { id: "valorOperacion", label: "Valor total de la operación (MXN)", tipo: "text", requerido: true, ayuda: "Ej. 235,000.00" },
+  { id: "montoApartado", label: "1. Apartado — importe (MXN)", tipo: "text" },
+  { id: "estadoApartado", label: "1. Apartado — estado", tipo: "select", opciones: ["Pagado", "Pendiente"], valorInicial: "Pagado" },
+  { id: "montoPagoUno", label: "2. Pago 35% — importe (MXN)", tipo: "text" },
+  { id: "estadoPagoUno", label: "2. Pago 35% — estado", tipo: "select", opciones: ["Pagado", "Pendiente"], valorInicial: "Pendiente" },
+  { id: "montoPagoDos", label: "3. Pago 50% — importe (MXN)", tipo: "text" },
+  { id: "estadoPagoDos", label: "3. Pago 50% — estado", tipo: "select", opciones: ["Pagado", "Pendiente"], valorInicial: "Pendiente" },
+  { id: "montoFiniquito", label: "4. Finiquito — importe (MXN)", tipo: "text" },
+  { id: "estadoFiniquito", label: "4. Finiquito — estado", tipo: "select", opciones: ["Pagado", "Pendiente"], valorInicial: "Pendiente" },
+  { id: "fichaFotografica", label: "Ficha fotográfica del catálogo (ANEXO)", tipo: "imagen", ayuda: "Se inserta sola en el anexo del acta al pasar a Editar." },
+  { id: "notasAdicionales", label: "Notas adicionales (estado real, incidencias, presentes, etc.)", tipo: "textarea" },
+  ...testigosCampo,
+];
+
+const actaEntregaPosesionCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
+RFC DII2204206J5 · Exhorto {{numeroExhorto}}
+
+ACTA DE ENTREGA-RECEPCIÓN DE POSESIÓN
+
+{{nombreGarantia}} — {{nombreCliente}}
+
+Entrega de posesión material y jurídica sin traslación de dominio pleno
+
+I. COMPARECIENTES
+
+En {{municipioActa}}, en la fecha señalada en el apartado II, comparecen: por una parte, DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V., representada por {{apoderadoNombre}}, en su carácter de {{apoderadoCargo}}, a quien se denominará «LA ENTREGANTE»; y por la otra, {{nombreCliente}}{{#clienteComparecePorApoderado}}, representado(a) en este acto por su apoderado {{nombreApoderadoCliente}}, según consta en {{poderApoderadoCliente}}{{/clienteComparecePorApoderado}}, a quien se denominará «LA RECEPTORA»; quienes hacen constar lo siguiente:
+
+II. IDENTIFICACIÓN DE LA GARANTÍA Y DE LA DILIGENCIA
+
+Garantía: {{nombreGarantia}}
+Identificación registral: {{identificacionRegistral}}
+Domicilio: {{domicilioGarantia}}
+Estatus del inmueble: {{estatusInmueble}}
+Valor de la operación: $ {{valorOperacion}} M.N.
+Fecha de entrega: {{diaEntrega}} de {{mesEntrega}} de {{anioEntrega}}
+Hora: {{horaEntrega}} horas
+Expediente de origen: {{expedienteOrigen}}
+Exhorto: {{numeroExhorto}} — {{juzgadoExhorto}}
+
+III. ANTECEDENTE PROCESAL Y ORIGEN DE LA POSESIÓN
+
+a) Carácter de LA ENTREGANTE. LA ENTREGANTE comparece dentro del expediente señalado en el apartado II, en virtud de la cesión de derechos litigiosos correspondiente y en su carácter de adjudicataria por remate judicial del inmueble materia del procedimiento.
+
+b) Exhorto y diligencia de desalojo. Para la ejecución de la adjudicación y la toma de posesión material y jurídica, el Juzgado de origen ordenó librar el exhorto señalado, autoridad exhortada que ordenó y practicó la diligencia de desalojo correspondiente.
+
+c) Origen de la posesión que se transmite. Mediante la diligencia de desalojo practicada, LA ENTREGANTE, en su carácter de parte actora y adjudicataria, obtuvo la posesión material y jurídica de la garantía identificada en el apartado II, conforme al artículo 1412 bis 2º del Código de Comercio. Encontrándose LA ENTREGANTE en la posesión así legalmente obtenida, por virtud del presente acto la transmite a LA RECEPTORA, en los términos y con las reservas que se establecen en los apartados IV y VI.
+
+d) Fundamento. Artículos 1412 bis 1º, 1412 bis 2º, 1071, 1072 y 1257 del Código de Comercio; artículos 477, 500, 509 y 651 del Código de Procedimientos Civiles del Estado de Jalisco, de aplicación supletoria conforme al artículo 1054 del Código de Comercio; y artículos 2029 y 2031 del Código Civil Federal en materia de cesión de derechos.
+
+IV. ENTREGA DE POSESIÓN
+
+LA ENTREGANTE, encontrándose en la posesión obtenida conforme al apartado III, entrega a LA RECEPTORA, y ésta recibe de conformidad, la posesión material, jurídica y pacífica de la garantía identificada en el apartado II, junto con las llaves correspondientes, en el estado físico en que se encuentra (cuerpo cierto), libre de ocupantes.
+
+La garantía se entrega libre de adeudos anteriores por concepto de agua, energía eléctrica y predial, a cargo de LA ENTREGANTE hasta la fecha de esta acta.
+
+La garantía NO se entrega libre de gravámenes, limitaciones de dominio ni afectaciones registrales, por lo que LA ENTREGANTE no manifiesta, garantiza ni se obliga respecto de dichos aspectos, los cuales son ajenos al objeto de la presente acta.
+
+A partir de este acto, los consumos, contribuciones, conservación, custodia y riesgos corren por cuenta de LA RECEPTORA.
+
+LA RECEPTORA manifiesta haber inspeccionado la garantía y recibirla a su entera satisfacción, sin reserva respecto de su estado físico.
+
+V. ESTADO DE CUENTA Y CALENDARIO DE LIQUIDACIÓN
+
+1. Apartado: $ {{montoApartado}} — {{estadoApartado}} (fijo, garantía de intención ya cubierta)
+2. Pago 35%: $ {{montoPagoUno}} — {{estadoPagoUno}} (a la firma del contrato)
+3. Pago 50%: $ {{montoPagoDos}} — {{estadoPagoDos}} (exigible dentro de los 8 días siguientes y, en todo caso, a más tardar el día de la entrega de la posesión)
+4. Finiquito: $ {{montoFiniquito}} — {{estadoFiniquito}} (exigible al momento en que el Juzgado ordene la escrituración, no a la firma de la escritura)
+TOTAL OPERACIÓN: $ {{valorOperacion}}
+
+a) 85%. LA RECEPTORA deberá encontrarse al corriente del 85% del valor de la operación dentro de los ocho (8) días siguientes, y en todo caso a más tardar el día de la entrega de la posesión, con independencia de que la escritura se encuentre o no otorgada, toda vez que su otorgamiento depende exclusivamente de la notaría y del Juzgado.
+
+b) Finiquito. El remanente correspondiente al finiquito será exigible al momento en que el Juzgado ordene la escrituración —y no a la firma de la escritura—, según se especifica expresamente en el presente instrumento.
+
+VI. RESERVA DE DOMINIO
+
+Las partes convienen que la presente entrega transmite únicamente la posesión, y NO la propiedad ni el dominio pleno de la garantía. LA ENTREGANTE se reserva el dominio hasta la liquidación total del precio. En consecuencia, la traslación de dominio y el otorgamiento de la escritura definitiva quedan condicionados a dicha liquidación. Hasta en tanto, LA RECEPTORA detenta la posesión en calidad de poseedora derivada y no podrá enajenar, gravar, hipotecar, ceder ni transmitir por título alguno la garantía ni los derechos derivados de este acto.
+
+VII. COMPENSACIÓN POR MORA
+
+De no cubrirse cualquiera de los pagos en los plazos señalados, LA RECEPTORA incurrirá en mora de pleno derecho, sin necesidad de requerimiento previo (artículos 2104 y 2105 del Código Civil Federal), y cubrirá a LA ENTREGANTE una compensación por mora del 5% (cinco por ciento) mensual sobre las cantidades vencidas, computada por cada mes o fracción de retraso, con fundamento en los artículos 1840 y 1843 del Código Civil Federal, 78 y 362 del Código de Comercio y relativos del Código Civil del Estado de Jalisco. Conforme al artículo 1843 del Código Civil Federal, dicha compensación no excederá en ningún caso del valor de la obligación principal.
+
+VIII. CONSECUENCIAS DE LA FALTA DE LIQUIDACIÓN
+
+De no liquidarse el precio en los plazos pactados, y sin necesidad de declaración judicial previa ni requerimiento, se actualizarán las siguientes consecuencias:
+
+a) Honorarios devengados. Las cantidades entregadas por LA RECEPTORA quedarán a favor de LA ENTREGANTE en concepto de honorarios devengados por los servicios de gestión legal, judicial y notarial efectivamente prestados (artículo 2606 del Código Civil Federal), sin que proceda devolución alguna.
+
+b) Restitución de la garantía. LA ENTREGANTE podrá exigir la restitución inmediata de la posesión, quedando LA RECEPTORA obligada a devolverla y desocuparla, en atención a la reserva de dominio del apartado VI.
+
+c) Daños y perjuicios. Por tratarse las cantidades retenidas de honorarios devengados y no de pena convencional, LA ENTREGANTE se reserva el derecho de reclamar los daños y perjuicios ocasionados sobre el capital empleado en la operación (artículos 2107 a 2109 del Código Civil Federal).
+
+LA RECEPTORA manifiesta comprender y aceptar plenamente el alcance de lo anterior.
+
+IX. MANIFESTACIONES FINALES
+
+La presente acta no constituye título traslativo de dominio ni sustituye la escritura pública definitiva.
+
+Las fechas de escrituración y de entrega dependen del Juzgado y de las notarías, por lo que su retraso no es imputable a LA ENTREGANTE ni libera a LA RECEPTORA de sus obligaciones de pago.
+
+En lo no previsto se estará al contrato celebrado entre las partes, que subsiste en todos sus términos.
+
+Las partes se someten a la jurisdicción de los tribunales competentes de Guadalajara, Jalisco, renunciando a cualquier otro fuero.
+
+Leída que fue la presente acta y enteradas las partes de su contenido, valor y alcance legal, la firman de conformidad por duplicado, recibiendo LA RECEPTORA las llaves de la garantía en este mismo acto.
+
+Testigo: _______________________________          Testigo: _______________________________
+
+_______________________________          _______________________________
+
+LA ENTREGANTE                             LA RECEPTORA
+
+{{apoderadoNombre}}                       {{nombreCliente}}
+(DIIPA, S.A. de C.V.)
+
+{{#hayTestigos}}
+TESTIGOS DESIGNADOS
+{{#each testigos}}{{item.n}}. {{item.nombre}}   {{item.identificacion}}
+{{/each testigos}}{{/hayTestigos}}
+
+ANEXO — FICHA FOTOGRÁFICA DEL CATÁLOGO
+{{fraccionamiento}}
+
+[FOTOGRAFÍA DE LA GARANTÍA — se inserta automáticamente al agregar la ficha]
+
+NOTAS ADICIONALES (estado real del inmueble, incidencias, presentes, etc.)
+{{notasAdicionales}}`;
+
+// ----------------------------------------------------------------------------
 //  Export: se suma al arreglo `plantillas` de contract-templates.ts
 // ----------------------------------------------------------------------------
 
@@ -721,5 +875,12 @@ export const plantillasDiipa: PlantillaContrato[] = [
     descripcion: "Cierre del expediente: conclusión del servicio, liquidación total (100%) y finiquito. Imprime solo la modalidad de cierre elegida (A/B/C). Apoderado auto-llenado.",
     campos: actaFiniquitoCampos,
     cuerpo: actaFiniquitoCuerpo,
+  },
+  {
+    tipo: "acta_entrega_posesion",
+    nombre: "Acta de Entrega-Recepción de Posesión (sin dominio pleno)",
+    descripcion: "Diligencia de desalojo/entrega: transmite SOLO la posesión, con reserva de dominio hasta liquidar (Operación Tlajomulco y similares). Incluye calendario de pagos, compensación por mora y anexo con ficha fotográfica auto-insertable. Apoderado auto-llenado.",
+    campos: actaEntregaPosesionCampos,
+    cuerpo: actaEntregaPosesionCuerpo,
   },
 ];
