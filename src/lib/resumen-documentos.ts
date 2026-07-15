@@ -32,7 +32,7 @@ export async function obtenerResumenPorClaveCaso(claveCaso: string): Promise<Res
   } catch { return null; }
 }
 
-const TAMANO_TANDA = 6; // debe coincidir con MAX_DOCUMENTOS de la función de Netlify
+const TAMANO_TANDA = 1; // de uno en uno — con más, algunos documentos grandes se pasan del tiempo permitido
 
 async function llamarResumirDocumentos(documentos: { nombre: string; url: string }[]): Promise<{ ok: boolean; error?: string; resumenes?: ResumenDoc[]; datos_generales?: DatosGeneralesIA | null; modelo?: string }> {
   try {
