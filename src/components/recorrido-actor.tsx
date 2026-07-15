@@ -11,6 +11,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
+import { claveAnalisis, obtenerAnalisisCacheado } from "@/lib/analisis-ia";
+import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
@@ -201,6 +203,18 @@ export function RecorridoActor({
     }));
   }, []);
 
+  // Resumen de documentos + análisis IA ya generados (si existen) — se
+  // incluyen al final del PDF del dictamen. No gastan IA aquí, solo leen
+  // lo que ya se guardó en caché.
+  const [resumenParaPDF, setResumenParaPDF] = useState<{ nombre: string; tipo: string; resumen: string }[] | null>(null);
+  const [analisisParaPDF, setAnalisisParaPDF] = useState<any>(null);
+  const claveCasoIA = claveAnalisis({ numeroCredito: d.numeroCredito, expediente: d.expediente, caso_id: d.caso_id });
+  useEffect(() => {
+    if (!claveCasoIA) { setResumenParaPDF(null); setAnalisisParaPDF(null); return; }
+    obtenerResumenPorClaveCaso(claveCasoIA).then((r) => setResumenParaPDF(r?.resumenes || null));
+    obtenerAnalisisCacheado(claveCasoIA, "Actor").then((a) => setAnalisisParaPDF(a?.respuestas || null));
+  }, [claveCasoIA]);
+
   const set = (k: keyof Datos, v: string) => setD((p) => ({ ...p, [k]: v }));
 
   const usaUsucapion = d.posicion === "Sucesorio" || d.quienPosee === "Tercero / invasor";
@@ -351,6 +365,8 @@ export function RecorridoActor({
         margenObjetivo: d.margenObjetivo,
       },
       boletines: hallazgos,
+      resumenDocumentos: resumenParaPDF,
+      analisisIA: analisisParaPDF,
     };
   };
 
