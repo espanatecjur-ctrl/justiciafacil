@@ -63,9 +63,11 @@ Responde ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada d
 Si un dato no aparece en los documentos, usa null o "no determinado" — NUNCA inventes fechas, expedientes ni cifras.
 `.trim();
 
+const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
+
 async function descargarComoBase64(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`No se pudo descargar (${r.status})`);
+  const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+  if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
   const mime = r.headers.get("content-type") || "application/pdf";
@@ -100,7 +102,8 @@ export default async (req) => {
       }
     }
     if (parts.length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: "No se pudo leer ninguno de los documentos." }), { status: 400 });
+      const primerError = analizados.find((a) => a.error)?.error || "motivo desconocido";
+      return new Response(JSON.stringify({ ok: false, error: `No se pudo leer ninguno de los documentos (ej: ${primerError}).` }), { status: 400 });
     }
 
     parts.push({ text: `Eres un abogado analista de DIIPA. Lee TODOS los documentos adjuntos de este expediente (posición de DIIPA: ${posicion || "no especificada"}) y contesta el cuestionario de "estado actual de la carpeta". ${ESQUEMA_RESPUESTA}` });
