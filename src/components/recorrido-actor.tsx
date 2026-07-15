@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
-import { claveAnalisis, obtenerAnalisisCacheado } from "@/lib/analisis-ia";
+import { claveAnalisis, obtenerAnalisisCacheado, introAnalisis } from "@/lib/analisis-ia";
 import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
@@ -214,6 +214,26 @@ export function RecorridoActor({
     obtenerResumenPorClaveCaso(claveCasoIA).then((r) => setResumenParaPDF(r?.resumenes || null));
     obtenerAnalisisCacheado(claveCasoIA, "Actor").then((a) => setAnalisisParaPDF(a?.respuestas || null));
   }, [claveCasoIA]);
+  const [mostrarSugerenciasIA, setMostrarSugerenciasIA] = useState(true);
+  const demandasDetectadas = useMemo(() => {
+    const arr = analisisParaPDF?.estado_actual?.demandas;
+    return Array.isArray(arr) ? arr : [];
+  }, [analisisParaPDF]);
+  // Qué tipos de documento son relevantes para cada una de las 8 fases —
+  // así se resaltan solo los que aplican a donde vas, no todos siempre.
+  const TIPOS_POR_FASE: string[][] = [
+    ["Contrato", "Solicitud"],                                                          // 0 Datos mínimos
+    ["Verificación", "Comprobante"],                                                    // 1 Verificación registral
+    ["Demanda", "Auto Judicial", "Emplazamiento", "Contestación de Demanda", "Acuerdo", "Notificación"], // 2 Estado procesal
+    ["Acuerdo", "Auto Judicial", "Demanda"],                                            // 3 Prescripción y caducidad
+    ["Otro", "Notificación"],                                                           // 4 Posesión y ocupantes
+    ["Verificación", "Comprobante"],                                                    // 5 Cargas ocultas
+    ["Comprobante", "Contrato"],                                                        // 6 Cálculo de intereses
+    ["Dictamen"],                                                                       // 7 Dictamen y firmas
+  ];
+  const tiposDeEstaFase = TIPOS_POR_FASE[paso] || [];
+  const docsDeEstaFase = (resumenParaPDF || []).filter((r) => tiposDeEstaFase.includes(r.tipo));
+  const docsOtrasFases = (resumenParaPDF || []).filter((r) => !tiposDeEstaFase.includes(r.tipo));
 
   const set = (k: keyof Datos, v: string) => setD((p) => ({ ...p, [k]: v }));
 
@@ -491,6 +511,70 @@ export function RecorridoActor({
             <Link to="/urrj" className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-white">Re-dictaminar (ir al Registro URRJ)</Link>
             <button onClick={() => setYaExiste(null)} className="text-xs font-medium text-muted-foreground underline">Ignorar por ahora</button>
           </div>
+        </div>
+      )}
+
+      {/* Sugerencias de IA: visibles en TODAS las fases (no solo la 0), con lo
+          que ya se leyó de los documentos — la última actuación, si hay varias
+          demandas/expedientes (para elegir cuál usar), y qué documentos hay. */}
+      {(analisisParaPDF || (resumenParaPDF && resumenParaPDF.length > 0)) && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+          <button type="button" onClick={() => setMostrarSugerenciasIA((v) => !v)} className="flex w-full items-center justify-between text-left">
+            <span className="text-xs font-semibold text-purple-900">✨ Sugerencias de la IA (de los documentos leídos)</span>
+            <span className="text-[11px] text-purple-700">{mostrarSugerenciasIA ? "Ocultar ▲" : "Ver ▼"}</span>
+          </button>
+          {mostrarSugerenciasIA && (
+            <div className="mt-2 space-y-2 text-xs text-purple-900">
+              {paso === 0 && analisisParaPDF && introAnalisis(analisisParaPDF) && (
+                <div className="rounded-md border border-purple-300 bg-white p-2">
+                  <p className="font-semibold text-purple-900">📋 Resumen del estado de la carpeta (según los documentos):</p>
+                  <p className="mt-1 leading-relaxed text-purple-800">{introAnalisis(analisisParaPDF)}</p>
+                </div>
+              )}
+              {demandasDetectadas.length > 1 && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-2">
+                  <p className="font-semibold text-amber-900">⚠️ Se detectaron {demandasDetectadas.length} demandas/expedientes distintos en los documentos.</p>
+                  <p className="mt-0.5 text-amber-800">Elige cuál usar en "Datos mínimos" (expediente y deudor) — la IA no adivina cuál es la principal:</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {demandasDetectadas.map((dm: any, i: number) => (
+                      <button key={i} type="button"
+                        onClick={() => setD((p) => ({ ...p, expediente: dm.expediente_juzgado || p.expediente, deudor: p.deudor || "" }))}
+                        className="rounded-md border border-amber-400 bg-white px-2 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100">
+                        Usar: {dm.expediente_juzgado || `Demanda ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {analisisParaPDF?.estado_actual?.ultima_actuacion?.fecha && (
+                <p><b>Última actuación:</b> {analisisParaPDF.estado_actual.ultima_actuacion.fecha} — pidió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_pidio || "—"} — resolvió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_resolvio || "—"}</p>
+              )}
+              {analisisParaPDF?.prescripcion?.esta_prescrita && (
+                <p><b>Prescripción:</b> {analisisParaPDF.prescripcion.esta_prescrita} — {analisisParaPDF.prescripcion.motivo || ""}</p>
+              )}
+              {resumenParaPDF && resumenParaPDF.length > 0 && (
+                <div>
+                  <p className="font-semibold">📄 Documentos de ESTA fase ({FASES[paso]}) · {docsDeEstaFase.length}:</p>
+                  {docsDeEstaFase.length === 0 ? (
+                    <p className="text-purple-600">Ninguno de los documentos leídos parece corresponder a esta fase — revisa "otros documentos" abajo por si aplica alguno.</p>
+                  ) : (
+                    <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+                      {docsDeEstaFase.map((r, i) => <li key={i}><b>{r.tipo}</b> — {r.nombre}: {r.resumen}</li>)}
+                    </ul>
+                  )}
+                  {docsOtrasFases.length > 0 && (
+                    <details className="mt-1.5">
+                      <summary className="cursor-pointer text-[11px] text-purple-600 hover:underline">Otros documentos disponibles ({docsOtrasFases.length}) — de otras fases</summary>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-purple-700">
+                        {docsOtrasFases.map((r, i) => <li key={i}><b>{r.tipo}</b> — {r.nombre}: {r.resumen}</li>)}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+              <p className="text-[10px] italic text-purple-600">Esto es apoyo de IA — revisa contra los documentos originales antes de decidir.</p>
+            </div>
+          )}
         </div>
       )}
 
