@@ -45,6 +45,7 @@ function URRJ() {
   const [importarAbierto, setImportarAbierto] = useState(false);
   const [resumenDocs, setResumenDocs] = useState<ResumenDocumentosCache | null>(null);
   const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [progresoIA, setProgresoIA] = useState<{ hecho: number; total: number; nombre: string } | null>(null);
   const [errorResumen, setErrorResumen] = useState<string | null>(null);
   const [analisisDocs, setAnalisisDocs] = useState<AnalisisIA | null>(null);
   const claveCasoSolicitud = solicitudActiva?.numero_credito || solicitudActiva?.expediente || solicitudActiva?.caso_id
@@ -97,7 +98,8 @@ function URRJ() {
     // respaldo para que SÍ se genere y se vea aquí (no se bloquea).
     if (!analisisDocs) {
       const claveParaAnalisis = claveCaso || solicitudActiva.id;
-      const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos);
+      const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos, (hecho, total, nombre) => setProgresoIA({ hecho, total, nombre }));
+      setProgresoIA(null);
       if (rA.ok && rA.analisis) {
         setAnalisisDocs(rA.analisis);
         // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
@@ -254,6 +256,9 @@ function URRJ() {
                   </button>
                 )}
               </div>
+              {progresoIA && progresoIA.hecho < progresoIA.total && (
+                <p className="mt-1 text-xs font-medium text-purple-700">✨ Leyendo documento {progresoIA.hecho + 1} de {progresoIA.total}{progresoIA.nombre ? `: ${progresoIA.nombre}` : ""}…</p>
+              )}
               {errorResumen && <p className="mt-1 text-xs text-red-600">{errorResumen}</p>}
               <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
                 {documentosOrdenados.map((d, i) => {
