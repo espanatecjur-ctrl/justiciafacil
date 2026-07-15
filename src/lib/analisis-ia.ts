@@ -35,6 +35,16 @@ export async function obtenerAnalisisCacheado(clave: string, posicion: string): 
   } catch { return null; }
 }
 
+const esperar = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+/** ¿Es un error de "se acabó la cuota gratis por ahora" de Google? Si sí,
+ *  saca cuántos segundos pide esperar (Google lo manda en el mensaje). */
+function segundosDeEspera(mensaje: string): number | null {
+  if (!/quota|429|resource_exhausted/i.test(mensaje)) return null;
+  const m = mensaje.match(/retry in ([\d.]+)s/i);
+  return m ? Math.ceil(parseFloat(m[1])) + 2 : 25; // +2s de margen; si no lo dice, 25s por defecto
+}
+
 /** Genera el análisis leyendo LOS DOCUMENTOS DE UNO EN UNO — cada documento
  *  actualiza/completa lo que ya se sabía de los anteriores (nunca lo borra).
  *  Se guarda el avance después de CADA documento, así si algo falla a la
@@ -52,23 +62,45 @@ export async function generarAnalisisIA(
 
   for (let i = 0; i < documentos.length; i++) {
     const doc = documentos[i];
-    onProgreso?.(i, documentos.length, doc.nombre);
-    try {
-      const r = await fetch("/.netlify/functions/analizar-documentos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documento: doc, respuestasPrevias: respuestas, posicion }),
-      });
-      const texto = await r.text();
-      let data: any;
-      try { data = JSON.parse(texto); }
-      catch {
-        analizados.push({ ...doc, error: r.status === 504 || texto.includes("<html") ? "Tiempo agotado leyendo este documento" : `Respuesta inesperada (${r.status})` });
-        continue; // sigue con el siguiente documento, no se detiene todo por uno
+    let intentos = 0;
+    let logrado = false;
+    while (intentos < 4 && !logrado) {
+      intentos++;
+      onProgreso?.(i, documentos.length, intentos > 1 ? `${doc.nombre} (reintento ${intentos - 1})` : doc.nombre);
+      try {
+        const r = await fetch("/.netlify/functions/analizar-documentos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documento: doc, respuestasPrevias: respuestas, posicion }),
+        });
+        const texto = await r.text();
+        let data: any;
+        try { data = JSON.parse(texto); }
+        catch {
+          analizados.push({ ...doc, error: r.status === 504 || texto.includes("<html") ? "Tiempo agotado leyendo este documento" : `Respuesta inesperada (${r.status})` });
+          logrado = true; // no es de cuota, no tiene caso reintentar
+          break;
+        }
+        if (!r.ok || !data.ok) {
+          const espera = segundosDeEspera(data.error || "");
+          if (espera && intentos < 4) {
+            onProgreso?.(i, documentos.length, `Google pidió esperar ${espera}s antes de seguir (límite gratis por minuto)…`);
+            await esperar(espera * 1000);
+            continue; // reintenta el MISMO documento
+          }
+          analizados.push({ ...doc, error: data.error || `Error ${r.status}` });
+          logrado = true;
+          break;
+        }
+        respuestas = data.respuestas;
+        analizados.push(doc);
+        logrado = true;
+      } catch (e) {
+        analizados.push({ ...doc, error: String((e as Error)?.message || e) });
+        logrado = true;
       }
-      if (!r.ok || !data.ok) { analizados.push({ ...doc, error: data.error || `Error ${r.status}` }); continue; }
-      respuestas = data.respuestas;
-      analizados.push(doc);
+    }
+    if (respuestas) {
       // Guarda el avance después de CADA documento — así no se pierde nada
       // si se corta a la mitad (23 documentos pueden tardar un rato).
       const filaParcial: AnalisisIA = {
@@ -76,11 +108,9 @@ export async function generarAnalisisIA(
         documento_nombre: respuestas?.documento_principal?.nombre || null,
         documento_tipo: respuestas?.documento_principal?.tipo || null,
         acto_que_resuelve: respuestas?.documento_principal?.acto_que_resuelve || null,
-        respuestas, documentos_analizados: analizados, modelo: data.modelo || null,
+        respuestas, documentos_analizados: analizados, modelo: "gemini-2.5-flash",
       };
       await guardarAnalisisEnCache(filaParcial);
-    } catch (e) {
-      analizados.push({ ...doc, error: String((e as Error)?.message || e) });
     }
   }
   onProgreso?.(documentos.length, documentos.length, "");
