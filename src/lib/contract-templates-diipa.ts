@@ -474,15 +474,17 @@ En {{municipioActa}}, en la fecha señalada en el apartado II, comparecen: por u
 
 II. IDENTIFICACIÓN DE LA GARANTÍA Y DE LA DILIGENCIA
 
-Garantía: {{nombreGarantia}}
-Identificación registral: {{identificacionRegistral}}
-Domicilio: {{domicilioGarantia}}
-Estatus del inmueble: {{estatusInmueble}}
-Valor de la operación: $ {{valorOperacion}} M.N.
-Fecha de entrega: {{diaEntrega}} de {{mesEntrega}} de {{anioEntrega}}
-Hora: {{horaEntrega}} horas
-Expediente de origen: {{expedienteOrigen}}
-Exhorto: {{numeroExhorto}} — {{juzgadoExhorto}}
+[TABLA2]
+Garantía|{{nombreGarantia}}
+Identificación registral|{{identificacionRegistral}}
+Domicilio|{{domicilioGarantia}}
+Estatus del inmueble|{{estatusInmueble}}
+Valor de la operación|$ {{valorOperacion}} M.N.
+Fecha de entrega|{{diaEntrega}} de {{mesEntrega}} de {{anioEntrega}}
+Hora|{{horaEntrega}} horas
+Expediente de origen|{{expedienteOrigen}}
+Exhorto|{{numeroExhorto}} — {{juzgadoExhorto}}
+[/TABLA2]
 
 III. ANTECEDENTE PROCESAL Y ORIGEN DE LA POSESIÓN
 
@@ -508,11 +510,14 @@ LA RECEPTORA manifiesta haber inspeccionado la garantía y recibirla a su entera
 
 V. ESTADO DE CUENTA Y CALENDARIO DE LIQUIDACIÓN
 
-1. Apartado: $ {{montoApartado}} — {{estadoApartado}} (fijo, garantía de intención ya cubierta)
-2. Pago 35%: $ {{montoPagoUno}} — {{estadoPagoUno}} (a la firma del contrato)
-3. Pago 50%: $ {{montoPagoDos}} — {{estadoPagoDos}} (exigible dentro de los 8 días siguientes y, en todo caso, a más tardar el día de la entrega de la posesión)
-4. Finiquito: $ {{montoFiniquito}} — {{estadoFiniquito}} (exigible al momento en que el Juzgado ordene la escrituración, no a la firma de la escritura)
-TOTAL OPERACIÓN: $ {{valorOperacion}}
+[TABLAPAGOS]
+Concepto|Importe|Estado / Vencimiento
+1. Apartado|$ {{montoApartado}}|{{estadoApartadoCheck}} {{estadoApartado}} (fijo, garantía de intención ya cubierta)
+2. Pago 35%|$ {{montoPagoUno}}|{{estadoPagoUnoCheck}} {{estadoPagoUno}} — a la firma del contrato
+3. Pago 50%|$ {{montoPagoDos}}|{{estadoPagoDosCheck}} {{estadoPagoDos}} — exigible dentro de los 8 días siguientes y, en todo caso, a más tardar el día de la entrega de la posesión
+4. Finiquito|$ {{montoFiniquito}}|{{estadoFiniquitoCheck}} {{estadoFiniquito}} — exigible al momento en que el Juzgado ordene la escrituración, no a la firma de la escritura
+TOTAL OPERACIÓN|$ {{valorOperacion}}|
+[/TABLAPAGOS]
 
 a) 85%. LA RECEPTORA deberá encontrarse al corriente del 85% del valor de la operación dentro de los ocho (8) días siguientes, y en todo caso a más tardar el día de la entrega de la posesión, con independencia de que la escritura se encuentre o no otorgada, toda vez que su otorgamiento depende exclusivamente de la notaría y del Juzgado.
 
@@ -550,14 +555,15 @@ Las partes se someten a la jurisdicción de los tribunales competentes de Guadal
 
 Leída que fue la presente acta y enteradas las partes de su contenido, valor y alcance legal, la firman de conformidad por duplicado, recibiendo LA RECEPTORA las llaves de la garantía en este mismo acto.
 
-Testigo: _______________________________          Testigo: _______________________________
+[FIRMAS]
+Testigo|
+Testigo|
+[/FIRMAS]
 
-_______________________________          _______________________________
-
-LA ENTREGANTE                             LA RECEPTORA
-
-{{apoderadoNombre}}                       {{nombreCliente}}
-(DIIPA, S.A. de C.V.)
+[FIRMAS]
+LA ENTREGANTE|{{apoderadoNombre}}|(DIIPA, S.A. de C.V.)
+LA RECEPTORA|{{nombreCliente}}|
+[/FIRMAS]
 
 {{#hayTestigos}}
 TESTIGOS DESIGNADOS
