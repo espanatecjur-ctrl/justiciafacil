@@ -9,7 +9,7 @@
 // actual (`vista`) y recibe los cambios (`onVista`), para no duplicar la
 // lógica de soloRegistro / re-dictaminar.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, descartarBorrador } from "@/lib/predictamen-guardar";
 import { Scale, Bot } from "lucide-react";
@@ -43,6 +43,11 @@ interface Props {
   /** Si se pasa, se muestra EN LUGAR del selector cuando vista === "elegir"
    *  (JUFA lo usa para mostrar el historial en modo soloRegistro). */
   pantallaElegir?: React.ReactNode;
+  /** Datos generales que la IA detectó al resumir los documentos de la
+   *  solicitud (administradora, crédito, dirección, deudor, juzgado,
+   *  expediente) — se usan para autollenar "Datos básicos" sin pisar lo
+   *  que la persona ya haya escrito. */
+  datosDetectadosIA?: { administradora?: string | null; numero_credito?: string | null; direccion?: string | null; deudor?: string | null; juzgado?: string | null; expediente?: string | null } | null;
 }
 
 export function DictaminadorPosicion({
@@ -53,6 +58,7 @@ export function DictaminadorPosicion({
   onResultados,
   modoFicha = false,
   pantallaElegir,
+  datosDetectadosIA,
 }: Props) {
   // Datos básicos (manuales, antes de elegir posición)
   const [administradoraIni, setAdministradoraIni] = useState("");
@@ -93,6 +99,18 @@ export function DictaminadorPosicion({
     if (d.juzgado) setJuzgadoIni(d.juzgado);
   };
 
+  // Autollenado con lo que la IA detectó al leer los documentos — solo
+  // rellena los campos que sigan VACÍOS (nunca pisa lo que ya se escribió).
+  useEffect(() => {
+    if (!datosDetectadosIA) return;
+    if (!administradoraIni && datosDetectadosIA.administradora) setAdministradoraIni(datosDetectadosIA.administradora);
+    if (!numeroCreditoIni && datosDetectadosIA.numero_credito) setNumeroCreditoIni(datosDetectadosIA.numero_credito);
+    if (!direccionIni && datosDetectadosIA.direccion) setDireccionIni(datosDetectadosIA.direccion);
+    if (!expedienteIni && datosDetectadosIA.expediente) setExpedienteIni(datosDetectadosIA.expediente);
+    if (!deudorIni && datosDetectadosIA.deudor) setDeudorIni(datosDetectadosIA.deudor);
+    if (!juzgadoIni && datosDetectadosIA.juzgado) setJuzgadoIni(datosDetectadosIA.juzgado);
+  }, [datosDetectadosIA]);
+
   // intento de abrir una posición (respeta el candado de elaborar y el crédito duplicado)
   const abrir = (v: VistaPosicion) => {
     if (!puedeElaborar) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; }
@@ -110,6 +128,7 @@ export function DictaminadorPosicion({
         {/* Paso 1: datos básicos manuales (administradora, número de crédito, dirección) */}
         <div className="mb-4 rounded-xl border border-border bg-muted/20 p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">1) Datos básicos de la garantía</p>
+          {datosDetectadosIA && <p className="mb-2 text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos — revisa y corrige si hace falta.</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium">Administradora / banco</label>
