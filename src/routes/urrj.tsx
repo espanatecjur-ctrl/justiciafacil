@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { type Precarga, buscarPredictamenVigenteCompleto, buscarPredictamenPorCredito } from "@/lib/predictamen-guardar";
 import { obtenerResumenCacheado, generarResumenIA, type ResumenDocumentosCache } from "@/lib/resumen-documentos";
+import { obtenerAnalisisCacheado, generarAnalisisIA, guardarAnalisisEnCache, introAnalisis, type AnalisisIA } from "@/lib/analisis-ia";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Scale, ScrollText, Plus, Upload } from "lucide-react";
@@ -45,10 +46,16 @@ function URRJ() {
   const [resumenDocs, setResumenDocs] = useState<ResumenDocumentosCache | null>(null);
   const [cargandoResumen, setCargandoResumen] = useState(false);
   const [errorResumen, setErrorResumen] = useState<string | null>(null);
+  const [analisisDocs, setAnalisisDocs] = useState<AnalisisIA | null>(null);
+  const claveCasoSolicitud = solicitudActiva?.numero_credito || solicitudActiva?.expediente || solicitudActiva?.caso_id || "";
   useEffect(() => {
     if (!solicitudActiva?.id) { setResumenDocs(null); return; }
     obtenerResumenCacheado(solicitudActiva.id).then(setResumenDocs);
   }, [solicitudActiva?.id]);
+  useEffect(() => {
+    if (!claveCasoSolicitud) { setAnalisisDocs(null); return; }
+    obtenerAnalisisCacheado(claveCasoSolicitud, "Actor").then(setAnalisisDocs);
+  }, [claveCasoSolicitud]);
   const resumenDe = (nombre: string) => resumenDocs?.resumenes.find((r) => r.nombre === nombre);
   // Orden lógico del expediente (fase procesal), no el orden en que se subieron.
   const ORDEN_TIPOS = ["Contrato", "Demanda", "Acuerdo", "Auto Judicial", "Emplazamiento", "Contestación de Demanda", "Solicitud", "Notificación", "Comprobante", "Verificación", "Dictamen", "Otro"];
@@ -66,9 +73,20 @@ function URRJ() {
     setCargandoResumen(true); setErrorResumen(null);
     const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
     const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso);
-    setCargandoResumen(false);
-    if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); return; }
+    if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); setCargandoResumen(false); return; }
     setResumenDocs(r.cache!);
+    // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
+    // — solo si hay con qué identificar el caso (crédito/expediente/caso_id).
+    if (claveCaso) {
+      const rA = await generarAnalisisIA(claveCaso, "Actor", solicitudActiva.documentos);
+      if (rA.ok && rA.analisis) {
+        setAnalisisDocs(rA.analisis);
+        // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
+        // la misma respuesta para Demandado SIN volver a gastar IA.
+        await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+      }
+    }
+    setCargandoResumen(false);
   };
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
   const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
@@ -198,6 +216,13 @@ function URRJ() {
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
+          {analisisDocs && introAnalisis(analisisDocs.respuestas) && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+              <p className="text-sm font-semibold text-purple-900">📋 Resumen del estado de la carpeta (según los documentos)</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-purple-800">{introAnalisis(analisisDocs.respuestas)}</p>
+              <p className="mt-2 text-[11px] italic text-purple-600">Esto es apoyo de IA — revisa contra los documentos originales. Verás el cuestionario completo dentro de cada fase al dictaminar.</p>
+            </div>
+          )}
           {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) > 0 && (
             <div className="rounded-xl border border-border bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -208,7 +233,7 @@ function URRJ() {
                 {!resumenDocs && (
                   <button onClick={generarResumen} disabled={cargandoResumen}
                     className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
-                    {cargandoResumen ? "✨ Leyendo…" : "✨ Generar resumen de cada documento"}
+                    {cargandoResumen ? "✨ Leyendo…" : "✨ Leer documentos con IA (resumen + cuestionario)"}
                   </button>
                 )}
               </div>
