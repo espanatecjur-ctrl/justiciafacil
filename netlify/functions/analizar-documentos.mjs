@@ -63,10 +63,16 @@ Responde ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada d
 Si un dato no aparece en los documentos, usa null o "no determinado" — NUNCA inventes fechas, expedientes ni cifras.
 `.trim();
 
+// Llave de servicio (server-side, la misma que ya usa "Documentos Fijos" para
+// leer el almacén privado) — la pública (anon) no alcanza si el bucket no es
+// realmente público, por eso se prueban las dos: primero la de servicio.
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
 
 async function descargarComoBase64(url) {
-  const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+  const intentar = async (key) => fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  let r = SUPABASE_SERVICE_KEY ? await intentar(SUPABASE_SERVICE_KEY) : null;
+  if (!r || !r.ok) r = await intentar(SUPABASE_ANON_KEY);
   if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
