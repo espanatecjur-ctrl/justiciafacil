@@ -56,6 +56,10 @@ export interface DatosPDF {
   } | null;
   /** Cotejo jurídico vs registral (indicadores de anomalías). */
   cotejos?: { campo: string; jur: string; reg: string; estado: string }[];
+  /** Resumen por documento (IA) — se imprime al final del PDF. */
+  resumenDocumentos?: { nombre: string; tipo: string; resumen: string }[] | null;
+  /** Análisis de documentos con IA (cuestionario de estado actual) — al final del PDF. */
+  analisisIA?: any | null;
 }
 
 const mxn = (v: number) => v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -358,6 +362,64 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
       doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(40, 40, 40);
       const lineas = doc.splitTextToSize(d.cambios.nota, W - 2 * M);
       doc.text(lineas, M, y);
+    }
+  }
+
+  // ---- Documentos y análisis con IA (siempre al final del PDF) ----
+  if ((d.resumenDocumentos && d.resumenDocumentos.length) || d.analisisIA) {
+    doc.addPage(); y = 18;
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 24, "F");
+    doc.setFillColor(...GOLD); doc.rect(0, 24, W, 1.2, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+    doc.text("ANEXO · Documentos y análisis con IA", M, 15);
+    y = 34;
+    doc.setTextColor(120, 120, 120); doc.setFont("helvetica", "italic"); doc.setFontSize(9);
+    doc.text("Generado por IA a partir de los documentos adjuntos — es apoyo, no sustituye el criterio del abogado.", M, y); y += 8;
+
+    if (d.resumenDocumentos && d.resumenDocumentos.length) {
+      doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+      doc.text(`Documentos revisados (${d.resumenDocumentos.length})`, M, y); y += 6;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      for (const r of d.resumenDocumentos) {
+        nuevaPaginaSiHace(12);
+        doc.setTextColor(...TEAL); doc.setFont("helvetica", "bold");
+        doc.text(`• ${r.nombre}`, M, y); y += 4.5;
+        doc.setTextColor(90, 90, 90); doc.setFont("helvetica", "normal");
+        const l = doc.splitTextToSize(`[${r.tipo}] ${r.resumen}`, W - 2 * M - 4);
+        doc.text(l, M + 4, y); y += l.length * 4.3 + 3;
+      }
+      y += 3;
+    }
+
+    if (d.analisisIA) {
+      nuevaPaginaSiHace(14);
+      doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+      doc.text("Análisis de estado actual (IA)", M, y); y += 6;
+      const a = d.analisisIA;
+      const ea = a.estado_actual || {};
+      const rr = a.resoluciones_y_recursos || {};
+      const pr = a.prescripcion || {};
+      const filaTxt = (label: string, val: any) => {
+        nuevaPaginaSiHace(8);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(60, 60, 60);
+        const lbl = `${label}: `;
+        doc.text(lbl, M, y);
+        doc.setFont("helvetica", "normal");
+        const ancho = doc.getTextWidth(lbl);
+        const l = doc.splitTextToSize(String(val ?? "—"), W - 2 * M - ancho);
+        doc.text(l, M + ancho, y);
+        y += l.length * 4.6 + 1.5;
+      };
+      filaTxt("¿Jurisdicción voluntaria?", ea.es_jurisdiccion_voluntaria);
+      filaTxt("Última actuación", `${ea.ultima_actuacion?.fecha || "—"} — pidió: ${ea.ultima_actuacion?.que_se_pidio || "—"} — resolvió: ${ea.ultima_actuacion?.que_se_resolvio || "—"}`);
+      filaTxt("Último pago del acreditado", ea.fecha_ultimo_pago_acreditado);
+      const demandas = Array.isArray(ea.demandas) ? ea.demandas : [];
+      filaTxt("Demandas encontradas", demandas.length);
+      demandas.forEach((dm: any, i: number) => filaTxt(`  Demanda ${i + 1}`, `${dm.expediente_juzgado || "—"} · presentación ${dm.fecha_presentacion || "—"} · afecta recuperación: ${dm.afecta_recuperacion_credito || "—"}`));
+      filaTxt("Sentencia", rr.sentencia);
+      filaTxt("Apelación", rr.apelacion);
+      filaTxt("Amparo", rr.amparo);
+      filaTxt("¿Prescrita?", `${pr.esta_prescrita || "—"} — ${pr.motivo || ""}`);
     }
   }
 
