@@ -9,7 +9,7 @@
 import crypto from "crypto";
 
 const MODELO = "gemini-2.5-flash"; // 2.5-flash-lite ya no está disponible para llaves nuevas de Google
-const MAX_DOCUMENTOS = 20;
+const MAX_DOCUMENTOS = 6; // bajado de 20 — el frontend manda varias tandas si hay más
 const LIMITE_BYTES_DOC = 15 * 1024 * 1024;
 
 function base64url(input) {
