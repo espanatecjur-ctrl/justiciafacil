@@ -675,57 +675,153 @@ NOTA — Machote de apoyo para revisión por notario y abogado. Los espacios «_
 
 // ---- Instrucción notarial (carta de instrucción · per-cliente) ----
 const instruccionNotarialCampos: PlantillaCampo[] = [
+  // — A quién se dirige / quién la envía —
+  { id: "destinatarioNombre", label: "Para (nombre del abogado/notario que la recibe)", tipo: "text", requerido: true, ayuda: "Ej. Lic. Cuauhtémoc Serrano" },
+  { id: "destinatarioDepto", label: "Departamento/cargo del destinatario", tipo: "text", valorInicial: "Departamento de Formalizaciones" },
+  { id: "remitenteCadena", label: "De (cadena de representación de DIIPA)", tipo: "textarea", valorInicial: "Erika Paola España Méndez — Administradora Única y DGE, DIIPA, S.A. de C.V. (en su defecto, Elizabeth Rivera; en su defecto, Milton Castro Cervantes)" },
+
+  // — 1. Expediente y escritura base —
+  { id: "numeroJuicio", label: "1. Número de juicio", tipo: "text", valorInicial: "1393/2017" },
+  { id: "juzgadoOrigen", label: "1. Juzgado de origen", tipo: "textarea", valorInicial: "Ordinario Mercantil — Juzgado Octavo de Jurisdicción Concurrente del Primer Distrito Judicial del Estado de Nuevo León (Monterrey, N.L.)" },
+  { id: "numeroExhorto", label: "1. Número de exhorto", tipo: "text", valorInicial: "82/2026" },
+  { id: "juzgadoExhorto", label: "1. Juzgado del exhorto", tipo: "text", valorInicial: "Juzgado Primero de lo Civil de Tlajomulco de Zúñiga, Jalisco" },
+  { id: "numeroEscritura", label: "1. Escritura de cesión a favor de DIIPA (número)", tipo: "text", valorInicial: "854" },
+  { id: "fechaAutoJudicial", label: "1. Fecha del auto que sanciona la cesión", tipo: "text", valorInicial: "31 de marzo de 2025" },
+
+  // — 2. Apoderado que suscribe (se auto-llena con el Selector de Apoderado) —
   ...clienteApoderadoCampos,
-  { id: "manzana", label: "Manzana", tipo: "text", requerido: true },
-  { id: "lote", label: "Lote", tipo: "text", requerido: true },
-  { id: "folioReal", label: "Folio real (registral)", tipo: "text" },
-  { id: "superficie", label: "Superficie (m²)", tipo: "text" },
-  { id: "notario", label: "Notario (número)", tipo: "text" },
-  { id: "dia", label: "Día", tipo: "text" },
-  { id: "mes", label: "Mes", tipo: "text" },
-  { id: "oficioNum", label: "Número de oficio", tipo: "text" },
+
+  // — 3. Garantía objeto de la cesión —
+  { id: "nombreGarantia", label: "3. Nombre/clave de la garantía", tipo: "text", requerido: true, ayuda: "Ej. Los Cedros 14" },
+  { id: "manzana", label: "3. Manzana", tipo: "text", requerido: true },
+  { id: "lote", label: "3. Lote", tipo: "text", requerido: true },
+  { id: "domicilioGarantia", label: "3. Domicilio completo de la garantía", tipo: "textarea", requerido: true },
+  { id: "superficieConstruccion", label: "3. Superficie de construcción (m²)", tipo: "text" },
+  { id: "superficieTerreno", label: "3. Superficie de terreno (m²)", tipo: "text" },
+  { id: "estatusInmueble", label: "3. Estatus del inmueble", tipo: "text", ayuda: "Ej. Habitada / Terminada" },
+  { id: "valorOperacion", label: "3. Valor de la operación (MXN)", tipo: "text", requerido: true, ayuda: "Ej. 235,000.00" },
+
+  // — 4. Cesionario (cliente) —
+  { id: "nombreCliente", label: "4. Nombre completo del cesionario", tipo: "text", requerido: true },
+  { id: "curpCliente", label: "4. CURP del cesionario", tipo: "text" },
+  { id: "rfcCliente", label: "4. RFC del cesionario", tipo: "text" },
+  { id: "domicilioCliente", label: "4. Domicilio del cesionario", tipo: "textarea" },
+  { id: "telefonoCliente", label: "4. Teléfono del cesionario", tipo: "text" },
+  { id: "correoCliente", label: "4. Correo electrónico del cesionario", tipo: "text" },
+  { id: "estadoCivilCliente", label: "4. Estado civil manifestado", tipo: "text", valorInicial: "No especificado en generales recibidas" },
+  { id: "documentosExpediente", label: "4. Documentos en expediente", tipo: "textarea", valorInicial: "INE · Comprobante de domicilio · Acta de nacimiento · CURP · Constancia de Situación Fiscal" },
+
+  // — 5. Honorarios, derechos e impuestos —
+  { id: "honorariosNotariales", label: "5. Honorarios notariales (cesión)", tipo: "text", valorInicial: "$15,000.00 + IVA" },
+  { id: "folios", label: "5. Folios", tipo: "text", valorInicial: "$1,000.00 + IVA" },
+  { id: "impuestoNegociosJuridicos", label: "5. Impuesto sobre Negocios Jurídicos (2%, estatal)", tipo: "text", valorInicial: "A cargo del cesionario" },
 ];
 const instruccionNotarialCuerpo = `DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.
-Inmuebles Accesibles
-Oficina Guadalajara: Calle Agustín Yáñez 2583, Col. Arcos Vallarta, Guadalajara, Jalisco · Tel. 33 3712 4705
-CARTA DE INSTRUCCIÓN NOTARIAL PARA FORMALIZACIÓN DE CESIÓN
-Manzana "{{manzana}}", Lote {{lote}} · Fraccionamiento Residencial San Antonio · Tlajomulco de Zúñiga, Jalisco
-AVISO: Este documento es una carta de instrucción para la elaboración y firma de la cesión. NO constituye cotización de honorarios; los costos se detallan en el oficio de cotización que se acompaña por separado.
-Guadalajara, Jalisco, a {{dia}} de {{mes}} de 2026.
-Oficio (Carta de Instrucción): DIIPA/CI-{{manzana}}{{lote}}/{{oficioNum}}/2026
-C. NOTARIO(A) PÚBLICO(A) No. {{notario}} DEL ESTADO DE JALISCO,
-CON ADSCRIPCIÓN EN TLAJOMULCO DE ZÚÑIGA. P R E S E N T E.
-Por medio del presente, en mi carácter de Administradora Única y Apoderada Legal de DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V. («DIIPA»), giro a usted la presente carta de instrucción para que se sirva elaborar y, en su caso, protocolizar la ACTA DESTACADA DE CONTRATO DE CESIÓN ONEROSA DE DERECHOS ADJUDICATARIOS Y DERECHOS DERIVADOS DE LA EJECUCIÓN DE SENTENCIA, que celebrarán DIIPA, como PARTE CEDENTE, y la persona identificada en el punto III, como PARTE CESIONARIA, respecto de la garantía que se precisa a continuación.
-I. Gestión de formalización a cargo de DIIPA
-Se hace de su conocimiento que DIIPA lleva a su cargo la gestión integral de formalización de esta cesión, la cual consiste en:
-a) Conseguir y designar la notaría que llevará el acto y coordinar con su despacho la fecha de firma.
-b) Citar a la parte cesionaria a la firma, comunicándole únicamente la fecha, hora y lugar de la cita.
-c) Dar seguimiento a la cesión hasta su conclusión: firma del acta, entero de impuestos y derechos, expedición de testimonio e inscripción registral.
-Por dicha gestión, DIIPA percibe un honorario del 5% (cinco por ciento) sobre el valor de la operación, más IVA (16%), ajeno al arancel notarial. De forma independiente, y a cargo de la parte cesionaria, la cesión de derechos litigiosos y derivados de la ejecución de sentencia causa el Impuesto sobre Negocios Jurídicos del Estado de Jalisco a la tasa del 2% sobre el valor (art. 10 fr. III de la Ley de Ingresos del Estado de Jalisco), que la notaría retiene y entera. Ambos conceptos se desglosan en el oficio de cotización respectivo.
-II. Identificación de la garantía
-Manzana "{{manzana}}", Lote {{lote}} del Fraccionamiento Residencial San Antonio, Municipio de Tlajomulco de Zúñiga, Estado de Jalisco, inscrito bajo el folio real número {{folioReal}}, con superficie de {{superficie}} m², con las medidas y colindancias que constan en el acta respectiva y su anexo.
-III. Origen del derecho (tracto)
-Los derechos derivan del Juicio Ordinario Mercantil 1393/2017, del Juzgado Octavo de Jurisdicción Concurrente del Primer Distrito Judicial en Monterrey, Nuevo León, donde se adjudicó por remate judicial la garantía, resolución que causó ejecutoria. Su ejecución se tramita mediante el exhorto 82/2026, ante el Juzgado Primero de lo Civil de Tlajomulco de Zúñiga, Jalisco. La titularidad de DIIPA consta en la escritura número 854, de 13 de febrero de 2025, ante el Notario Público 293 de Culiacán, Sinaloa, sancionada judicialmente el 31 de marzo de 2025.
-IV. Parte cesionaria (a asentar con las identificaciones exhibidas)
-Nombre: ««____»»; nacionalidad: ««____»»; RFC: ««____»»; CURP: ««____»»; domicilio: ««____»»; estado civil: ««____»».
-V. Precio de la cesión
-$ ««____»» (««____»» pesos 00/100 M.N.), cuyo pago total acreditará la parte cesionaria previo a la firma, en los términos del punto VI, inciso c).
-VI. Instrucciones específicas
-a) No se hace entrega física del inmueble; la posesión material y jurídica se rige por la ejecutoria y el exhorto 82/2026.
-b) Los gastos, impuestos (incluido el Impuesto sobre Transmisiones Patrimoniales / traslación de dominio), derechos de inscripción y honorarios notariales serán por cuenta exclusiva de la parte cesionaria.
-c) Previo a la firma, la parte cesionaria acreditará el pago total del precio; sin dicha acreditación no se procederá a firmar.
-d) Se solicita remitir el proyecto de acta al correo erikapaola@diipadesarrollos.com para revisión y aprobación antes de la firma.
-e) La presente instrucción tiene vigencia de 30 (treinta) días naturales desde su emisión.
-VII. Documentación que se acompaña
-(1) Actuaciones del expediente 1393/2017 y del exhorto 82/2026; (2) escritura 854 de cesión a favor de DIIPA; (3) personalidad de DIIPA (escritura 1,809, RFC DII2204206J5) y del poder del apoderado (escritura 2,388, Notaría 234 de Culiacán); (4) identificaciones y generales de la parte cesionaria.
-Sin otro particular, agradezco su atención y quedo a sus órdenes.
-A T E N T A M E N T E
-«____»
-ERIKA PAOLA ESPAÑA MÉNDEZ
-Administradora Única y Apoderada Legal
-Desarrollos Inteligentes de Inmuebles y Propiedades Accesibles, S.A. de C.V.
-erikapaola@diipadesarrollos.com · WhatsApp 33 1881 7553
-NOTA — Documento de apoyo para revisión por notario y abogado; no sustituye el criterio del fedatario. Los espacios ««____»» los completan la notaría y las partes. Plaza: Tlajomulco de Zúñiga, Jalisco.`;
+RFC DII2204206J5 · Operación Tlajomulco · Exhorto {{numeroExhorto}} · Expediente de origen {{numeroJuicio}}
+
+INSTRUCCIÓN NOTARIAL PARA FORMALIZACIÓN DE CESIÓN
+
+{{nombreGarantia}} — {{nombreCliente}}
+
+Para: {{destinatarioNombre}} — {{destinatarioDepto}}
+
+De: {{remitenteCadena}}
+
+Asunto: Elaboración de minuta de cesión de derechos correspondiente a la garantía identificada en el presente instructivo, con base en la escritura pública número {{numeroEscritura}} y sus antecedentes procesales.
+
+1. DATOS DEL EXPEDIENTE Y DE LA ESCRITURA BASE
+
+Juicio de origen: {{juzgadoOrigen}}, expediente {{numeroJuicio}}
+Exhorto: {{numeroExhorto}} — {{juzgadoExhorto}}
+Título de la cesión: Escritura pública número {{numeroEscritura}} (cesión de derechos litigiosos a favor de DIIPA)
+Sanción judicial de la cesión: Auto de fecha {{fechaAutoJudicial}}, que reconoce a DIIPA carácter de parte actora y cesionaria, y declara título subjetivamente válido para transmitir la propiedad
+Carácter de DIIPA: Parte actora y adjudicataria por remate judicial de los inmuebles del procedimiento
+
+2. DATOS DEL APODERADO QUE SUSCRIBE LA CESIÓN
+
+Apoderado {{apoderadoCargo}}: C. {{apoderadoNombre}}
+Instrumento: Escritura pública número {{apoderadoEscritura}}, Notaría {{apoderadoNumNotaria}}, {{apoderadoEstadoNotaria}}
+Vigencia del poder: ⚠ VERIFICAR VIGENCIA ANTES DE LA FIRMA DE LA MINUTA (dato a confirmar por Dirección Jurídica antes de cada firma conjunta)
+
+3. DATOS DE LA GARANTÍA OBJETO DE LA CESIÓN
+
+Garantía: {{nombreGarantia}}
+Identificación registral: Manzana {{manzana}}, Lote {{lote}}
+Domicilio completo: {{domicilioGarantia}}
+Superficie construcción / terreno: {{superficieConstruccion}} / {{superficieTerreno}}
+Estatus: {{estatusInmueble}}
+Valor de la operación: $ {{valorOperacion}} MXN
+
+4. DATOS DEL CESIONARIO (CLIENTE)
+
+Nombre completo: {{nombreCliente}}
+CURP: {{curpCliente}}
+RFC: {{rfcCliente}}
+Domicilio: {{domicilioCliente}}
+Teléfono: {{telefonoCliente}}
+Correo electrónico: {{correoCliente}}
+Estado civil manifestado: {{estadoCivilCliente}}
+Documentos en expediente: {{documentosExpediente}}
+
+5. HONORARIOS, DERECHOS E IMPUESTOS
+
+Honorarios notariales (cesión): {{honorariosNotariales}}
+Folios: {{folios}}
+Impuesto sobre Negocios Jurídicos (2%, estatal): {{impuestoNegociosJuridicos}}
+
+6. INSTRUCCIÓN
+
+Se solicita a {{destinatarioNombre}} elaborar la minuta de cesión de derechos correspondiente a la garantía identificada en el apartado 3, a favor del cesionario identificado en el apartado 4, conforme a los antecedentes y al título contenido en la escritura {{numeroEscritura}} (apartado 1), y suscrita por el apoderado señalado en el apartado 2 (previa verificación de vigencia).
+
+La minuta deberá ser congruente con el contrato de Prestación de Servicios y Promesa de Compraventa sobre Garantías Hipotecarias firmado entre las partes, cuyo contenido es el que se transcribe en el apartado 7 siguiente, particularmente en cuanto a: valor de la operación, calendario de pagos, reserva de dominio hasta la liquidación total, e impuestos y gastos a cargo del cesionario.
+
+Vocabulario obligatorio en la minuta: referirse siempre a «garantía» y «cesión de derechos»; no emplear los términos «inversión», «propiedad» (como sinónimo de dominio pleno antes de la liquidación total), «rendimiento» ni «compraventa» de forma aislada.
+
+7. CLÁUSULAS DEL CONTRATO FIRMADO ENTRE LAS PARTES (TRANSCRIPCIÓN PARA REFERENCIA DEL NOTARIO)
+
+El contrato firmado entre LA PROMITENTE VENDEDORA y el cesionario es de Prestación de Servicios y Promesa de Compraventa sobre Garantías Hipotecarias. A continuación se transcriben, para conocimiento del destinatario, las cláusulas cuyo contenido debe reflejarse o resultar congruente con la minuta de cesión:
+
+SEGUNDA. Naturaleza del contrato.
+Las partes reconocen que esta operación versa sobre una garantía hipotecaria derivada de un procedimiento judicial, y que el contrato es de prestación de servicios y de promesa de compraventa, que se rige por el Código Civil del Estado de Jalisco, el Código Civil Federal de aplicación supletoria y el Código de Comercio. El contrato no es traslativo de dominio ni perfecciona por sí mismo la compraventa; la propiedad se transmitirá únicamente mediante la escritura definitiva, una vez concluido el procedimiento judicial y regularizada la garantía. En tanto ello no ocurra, LA PROMITENTE COMPRADORA no adquiere derecho real alguno.
+
+TERCERA. Forma de pago.
+LA PROMITENTE COMPRADORA cubrirá el valor de la operación conforme al calendario pactado, mediante depósito o transferencia a la cuenta que LA PROMITENTE VENDEDORA indique.
+
+CUARTA. Procedimiento de la cesión y de la gestión notarial.
+1. A la firma del contrato y cubierto el 35% de la operación, LA PROMITENTE VENDEDORA registra el pago y gira la instrucción notarial a la notaría que LA PROMITENTE COMPRADORA elija — la presente instrucción es ese acto.
+2. La notaría emite la cotización; en un plazo aproximado de ocho (8) días posteriores, LA PROMITENTE COMPRADORA liquida con anticipación el primer acto de cesión.
+3. Liquidado lo anterior, el Apoderado General para Pleitos y Cobranzas suscribe las cesiones en firma conjunta (en masa), en la ciudad de Culiacán, Sinaloa, en un plazo aproximado de quince (15) días.
+4. El apoderado presenta las minutas y escritos ante el Juzgado y realiza el apersonamiento de LA PROMITENTE COMPRADORA.
+5. Cuando el Juzgado ordene la escrituración, LA PROMITENTE VENDEDORA comunica la liquidación correspondiente, más el porcentaje restante de honorarios y la totalidad de impuestos y derechos (Cláusula Sexta).
+6. LA PROMITENTE COMPRADORA cubre el saldo cuando menos quince (15) días naturales antes de la fecha de desalojo (Cláusula Séptima).
+7. El Juzgado señala la fecha de desalojo; la diligencia se ejecuta con la presencia de LA PROMITENTE COMPRADORA o persona de su confianza, quien recibe la posesión y las llaves.
+8. Las partes comparecen ante la notaría para el otorgamiento de la escritura o cesión final, momento en que LA PROMITENTE COMPRADORA cubre el finiquito notarial.
+
+QUINTA. Honorarios devengados. Pagos no reembolsables.
+LA PROMITENTE COMPRADORA reconoce que las cantidades entregadas se encuentran devengadas por concepto de la prestación de servicios de gestión de LA PROMITENTE VENDEDORA, conforme al artículo 2606 del Código Civil Federal, por lo que no podrá solicitar su devolución sino hasta la entrega de la garantía y hasta que el asunto procesal se encuentre resuelto.
+
+SEXTA. Impuestos, derechos y gastos a cargo de LA PROMITENTE COMPRADORA.
+Serán por su cuenta, y deberán cubrirse antes de la firma respectiva, de manera enunciativa: el ISAI, los derechos registrales, los honorarios y gastos notariales, y los demás impuestos federales y estatales aplicables.
+
+SÉPTIMA. Saldo previo al desalojo.
+El saldo deberá quedar íntegramente cubierto a más tardar quince (15) días naturales antes de la fecha de desalojo señalada por el Juzgado, como condición para recibir la posesión y las llaves.
+
+OCTAVA. Entrega de posesión y estado de la garantía.
+Ejecutado el desalojo, LA PROMITENTE VENDEDORA entregará la posesión material y jurídica de la garantía en el estado físico en que se encuentre (cuerpo cierto), libre de ocupantes y de adeudos anteriores de agua, energía eléctrica y predial, que corren a cargo de LA PROMITENTE VENDEDORA hasta la fecha de entrega; a partir de ésta, corren por cuenta de LA PROMITENTE COMPRADORA.
+
+DÉCIMA SEGUNDA. Rescisión por falta de pago.
+El incumplimiento de cualquiera de los pagos en los plazos pactados será causa de rescisión inmediata, sin necesidad de declaración judicial previa ni requerimiento. Las cantidades entregadas quedarán a favor de LA PROMITENTE VENDEDORA en concepto de pena convencional (art. 1840 CCF); la garantía y derechos quedarán liberados a favor de LA PROMITENTE VENDEDORA; y, a discreción de ésta, podrá permitirse la restitución del contrato si LA PROMITENTE COMPRADORA cubre las cantidades vencidas más una pena convencional del 15% del valor de la operación, incrementable por cada mes de demora.
+
+DÉCIMA SEXTA. Cambio de titular.
+Si LA PROMITENTE COMPRADORA desea cambiar al titular de la garantía, deberá solicitarlo por escrito y cubrir únicamente el costo del cambio de contrato y de la carta de apartado, sin afectar el avance del procedimiento.
+
+Nota de representación: los actos de representación general de DIIPA (autorización de la presente instrucción, el contrato firmado entre las partes y el acta de entrega-recepción) son suscritos por la Administradora Única, C. Erika Paola España Méndez y, en su defecto, por la C. Elizabeth Rivera o, en su defecto, por el C. Milton Castro Cervantes. La suscripción de la escritura de cesión ante notario corresponde específicamente al Apoderado General para Pleitos y Cobranzas señalado en el apartado 2, conforme al poder judicialmente reconocido en el expediente.
+
+_______________________________
+
+Erika Paola España Méndez
+Administradora Única — DIIPA, S.A. de C.V.
+En su defecto: Elizabeth Rivera · en su defecto: Milton Castro Cervantes`;
 
 // ---- Solicitud de cotización notarial ----
 const solicitudCotizacionCampos: PlantillaCampo[] = [
@@ -821,7 +917,7 @@ export const plantillasDiipa: PlantillaContrato[] = [
   {
     tipo: "instruccion_notarial_diipa",
     nombre: "Instrucción notarial para formalización de cesión (per-cliente)",
-    descripcion: "Carta de instrucción de DIIPA a la notaría para formalizar la cesión de una unidad. Autollenable con manzana, lote, folio real, superficie y apoderado.",
+    descripcion: "Carta de instrucción de DIIPA dirigida a una persona específica (abogado/notario de Formalizaciones), con expediente, apoderado, garantía, cesionario, honorarios e instrucción, más la transcripción de las cláusulas del contrato firmado para referencia del notario. Autollenable con apoderado.",
     campos: instruccionNotarialCampos,
     cuerpo: instruccionNotarialCuerpo,
   },
