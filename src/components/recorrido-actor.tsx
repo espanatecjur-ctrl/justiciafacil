@@ -7,11 +7,13 @@
 //   recibe { casos, onVolver, precargar, puedeFirmarElabora, puedeValidar, puedeAdmin }
 //   y maneja su propio estado, motores, guardado y PDF.
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
-import { claveAnalisis, obtenerAnalisisCacheado, introAnalisis } from "@/lib/analisis-ia";
+import { claveAnalisis, obtenerAnalisisCacheado, introAnalisis, generarAnalisisIA } from "@/lib/analisis-ia";
+import { subirDocPredictamen } from "@/lib/solicitud-predictamen";
+import { generarResumenIA, guardarResumenEnCache } from "@/lib/resumen-documentos";
 import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
@@ -234,6 +236,51 @@ export function RecorridoActor({
   const tiposDeEstaFase = TIPOS_POR_FASE[paso] || [];
   const docsDeEstaFase = (resumenParaPDF || []).filter((r) => tiposDeEstaFase.includes(r.tipo));
   const docsOtrasFases = (resumenParaPDF || []).filter((r) => !tiposDeEstaFase.includes(r.tipo));
+
+  // Subir documentos DIRECTO desde aquí (cuando el pre-dictamen es nuevo y no
+  // viene de una Solicitud con documentos ya adjuntos) — lee, autollena los
+  // campos vacíos, y deja listas las sugerencias para las demás fases.
+  const inputSubirIARef = useRef<HTMLInputElement>(null);
+  const [subiendoIA, setSubiendoIA] = useState(false);
+  const [errorSubidaIA, setErrorSubidaIA] = useState<string | null>(null);
+  const subirYAnalizarAqui = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setSubiendoIA(true); setErrorSubidaIA(null);
+    try {
+      const documentos = await Promise.all(Array.from(files).map((f) => subirDocPredictamen(f)));
+      // 1) Resumen por documento + datos generales (para autollenar) — UNA sola llamada a la IA.
+      const claveTemporal = d.numeroCredito || d.expediente || `directo-${Date.now()}`;
+      const rResumen = await generarResumenIA(claveTemporal, documentos, claveTemporal);
+      if (!rResumen.ok) throw new Error(rResumen.error || "No se pudo leer los documentos.");
+      const dg = rResumen.cache?.datos_generales || {};
+      setD((p) => ({
+        ...p,
+        expediente: p.expediente || dg.expediente || "",
+        numeroCredito: p.numeroCredito || dg.numero_credito || "",
+        juzgado: p.juzgado || dg.juzgado || "",
+        ubicacion: p.ubicacion || dg.direccion || "",
+        deudor: p.deudor || dg.deudor || "",
+        quienCede: p.quienCede || dg.administradora || "",
+      }));
+      setResumenParaPDF(rResumen.cache?.resumenes || []);
+      // Si la clave cambió (ya se conoce el crédito/expediente real), se vuelve
+      // a guardar con esa clave definitiva (solo caché, NO se vuelve a llamar la IA).
+      const claveDefinitiva = dg.numero_credito || dg.expediente || claveTemporal;
+      if (claveDefinitiva !== claveTemporal && rResumen.cache) {
+        await guardarResumenEnCache({ ...rResumen.cache, clave: claveDefinitiva, clave_caso: claveDefinitiva });
+      }
+      // 2) Análisis profundo (el cuestionario completo) — otra llamada, para el
+      //    contenido más rico (jurisdicción voluntaria, demandas, prescripción, etc.).
+      const rAnalisis = await generarAnalisisIA(claveDefinitiva, "Actor", documentos);
+      if (rAnalisis.ok) setAnalisisParaPDF(rAnalisis.analisis!.respuestas);
+    } catch (e) {
+      setErrorSubidaIA(String((e as Error)?.message || e));
+    } finally {
+      setSubiendoIA(false);
+      if (inputSubirIARef.current) inputSubirIARef.current.value = "";
+    }
+  };
+
 
   const set = (k: keyof Datos, v: string) => setD((p) => ({ ...p, [k]: v }));
 
@@ -517,6 +564,20 @@ export function RecorridoActor({
       {/* Sugerencias de IA: visibles en TODAS las fases (no solo la 0), con lo
           que ya se leyó de los documentos — la última actuación, si hay varias
           demandas/expedientes (para elegir cuál usar), y qué documentos hay. */}
+      {!analisisParaPDF && !(resumenParaPDF && resumenParaPDF.length > 0) && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+          <p className="text-xs font-semibold text-purple-900">✨ Sugerencias de la IA</p>
+          <p className="mt-0.5 text-xs text-purple-700">
+            Este pre-dictamen todavía no tiene documentos que la IA haya leído. Si tienes el expediente, contrato, demanda, etc. a la mano, súbelos aquí — se autollenan los campos vacíos y salen sugerencias en cada fase.
+          </p>
+          <button type="button" onClick={() => inputSubirIARef.current?.click()} disabled={subiendoIA}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
+            {subiendoIA ? "✨ Leyendo…" : "✨ Subir documentos y analizar"}
+          </button>
+          <input ref={inputSubirIARef} type="file" accept="image/*,.pdf" multiple className="hidden" onChange={(e) => subirYAnalizarAqui(e.target.files)} />
+          {errorSubidaIA && <p className="mt-1 text-[11px] text-red-600">{errorSubidaIA}</p>}
+        </div>
+      )}
       {(analisisParaPDF || (resumenParaPDF && resumenParaPDF.length > 0)) && (
         <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3">
           <button type="button" onClick={() => setMostrarSugerenciasIA((v) => !v)} className="flex w-full items-center justify-between text-left">
@@ -583,7 +644,6 @@ export function RecorridoActor({
         {paso === 0 && (
           <div className="space-y-4">
             <H titulo="0 · Datos mínimos / admisión" sub="Lo básico para abrir el expediente." />
-            <AnalisisDocumentalIA posicion="Actor" casoId={d.caso_id || undefined} expediente={d.expediente || undefined} numeroCredito={d.numeroCredito || undefined} />
             {expedienteInicial && d.expediente && expedienteInicial !== d.expediente && !ignorarBoletin && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                 <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
