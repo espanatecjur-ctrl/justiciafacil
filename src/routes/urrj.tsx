@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Precarga, buscarPredictamenVigenteCompleto, buscarPredictamenPorCredito } from "@/lib/predictamen-guardar";
 import { obtenerResumenCacheado, generarResumenIA, type ResumenDocumentosCache } from "@/lib/resumen-documentos";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
@@ -50,10 +50,22 @@ function URRJ() {
     obtenerResumenCacheado(solicitudActiva.id).then(setResumenDocs);
   }, [solicitudActiva?.id]);
   const resumenDe = (nombre: string) => resumenDocs?.resumenes.find((r) => r.nombre === nombre);
+  // Orden lógico del expediente (fase procesal), no el orden en que se subieron.
+  const ORDEN_TIPOS = ["Contrato", "Demanda", "Acuerdo", "Auto Judicial", "Emplazamiento", "Contestación de Demanda", "Solicitud", "Notificación", "Comprobante", "Verificación", "Dictamen", "Otro"];
+  const documentosOrdenados = useMemo(() => {
+    const docs = solicitudActiva?.documentos || [];
+    if (!resumenDocs) return docs;
+    return [...docs].sort((a, b) => {
+      const ia = ORDEN_TIPOS.indexOf(resumenDe(a.nombre)?.tipo || "Otro");
+      const ib = ORDEN_TIPOS.indexOf(resumenDe(b.nombre)?.tipo || "Otro");
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+  }, [solicitudActiva?.documentos, resumenDocs]);
   const generarResumen = async () => {
     if (!solicitudActiva?.id || !solicitudActiva.documentos?.length) return;
     setCargandoResumen(true); setErrorResumen(null);
-    const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos);
+    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
+    const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso);
     setCargandoResumen(false);
     if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); return; }
     setResumenDocs(r.cache!);
@@ -202,7 +214,7 @@ function URRJ() {
               </div>
               {errorResumen && <p className="mt-1 text-xs text-red-600">{errorResumen}</p>}
               <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                {solicitudActiva.documentos!.map((d, i) => {
+                {documentosOrdenados.map((d, i) => {
                   const r = resumenDe(d.nombre);
                   return (
                     <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
@@ -285,6 +297,7 @@ function URRJ() {
           puedeValidar={puede("validar")}
           puedeAdmin={puedeAdmin}
           puedePrecioPiso={puedePrecioPiso}
+          datosDetectadosIA={resumenDocs?.datos_generales || null}
         />
       )}
     </div>
