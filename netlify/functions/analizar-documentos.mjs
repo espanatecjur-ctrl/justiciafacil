@@ -19,9 +19,75 @@
 // salida — para que cada análisis cueste centavos de dólar.
 // ============================================================
 
+import crypto from "crypto";
+
 const MODELO = "gemini-2.5-flash";
 const MAX_DOCUMENTOS = 10;
 const LIMITE_BYTES_DOC = 15 * 1024 * 1024; // 15 MB por documento
+
+function base64url(input) {
+  return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+// Token de acceso de Google (para leer archivos que vienen de una carpeta de
+// Drive escogida en "Documentos → pre-dictamen" — esos NO son URLs de
+// Supabase, son links de Google Drive y necesitan este otro tipo de llave).
+let cacheTokenGoogle = null;
+async function obtenerAccessTokenGoogle() {
+  if (cacheTokenGoogle && cacheTokenGoogle.exp > Date.now() / 1000 + 60) return cacheTokenGoogle.token;
+  const credBruto = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (!credBruto) throw new Error("Falta GOOGLE_SERVICE_ACCOUNT en Netlify.");
+  const cred = JSON.parse(credBruto);
+  let privateKey = cred.private_key || "";
+  if (privateKey.includes("\\n")) privateKey = privateKey.replace(/\\n/g, "\n");
+  const ahora = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claim = { iss: cred.client_email, scope: "https://www.googleapis.com/auth/drive.readonly", aud: "https://oauth2.googleapis.com/token", iat: ahora, exp: ahora + 3600 };
+  const sinFirma = base64url(JSON.stringify(header)) + "." + base64url(JSON.stringify(claim));
+  const firma = crypto.createSign("RSA-SHA256").update(sinFirma).sign(privateKey).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const jwt = sinFirma + "." + firma;
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" + encodeURIComponent(jwt),
+  });
+  const data = await resp.json();
+  if (!data.access_token) throw new Error("No se obtuvo access_token de Google: " + JSON.stringify(data));
+  cacheTokenGoogle = { token: data.access_token, exp: ahora + 3600 };
+  return data.access_token;
+}
+
+// Llave de servicio de Supabase (server-side, la misma que usa "Documentos
+// Fijos" para leer el almacén privado) — respaldo: la pública (anon).
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
+const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
+
+async function descargarComoBase64(url) {
+  // ¿Es un link de Google Drive (carpeta escogida en Dirección)? Esos no se
+  // leen con la llave de Supabase — necesitan el token de Google y el
+  // endpoint real de descarga (el link "/preview" es solo un visor HTML).
+  const mDrive = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if (mDrive) {
+    const fileId = mDrive[1];
+    const token = await obtenerAccessTokenGoogle();
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error(`No se pudo descargar de Drive (HTTP ${r.status})`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
+    const mime = r.headers.get("content-type") || "application/pdf";
+    return { base64: buf.toString("base64"), mime };
+  }
+  // Si no, es de Supabase Storage.
+  const intentar = async (key) => fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  let r = SUPABASE_SERVICE_KEY ? await intentar(SUPABASE_SERVICE_KEY) : null;
+  if (!r || !r.ok) r = await intentar(SUPABASE_ANON_KEY);
+  if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
+  const mime = r.headers.get("content-type") || "application/pdf";
+  return { base64: buf.toString("base64"), mime };
+}
 
 // Preguntas fijas (por ahora Actor y Demandado comparten el mismo
 // cuestionario; cuando Paola dé las preguntas específicas de
@@ -62,23 +128,6 @@ Responde ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada d
 
 Si un dato no aparece en los documentos, usa null o "no determinado" — NUNCA inventes fechas, expedientes ni cifras.
 `.trim();
-
-// Llave de servicio (server-side, la misma que ya usa "Documentos Fijos" para
-// leer el almacén privado) — la pública (anon) no alcanza si el bucket no es
-// realmente público, por eso se prueban las dos: primero la de servicio.
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
-const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
-
-async function descargarComoBase64(url) {
-  const intentar = async (key) => fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
-  let r = SUPABASE_SERVICE_KEY ? await intentar(SUPABASE_SERVICE_KEY) : null;
-  if (!r || !r.ok) r = await intentar(SUPABASE_ANON_KEY);
-  if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
-  const buf = Buffer.from(await r.arrayBuffer());
-  if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
-  const mime = r.headers.get("content-type") || "application/pdf";
-  return { base64: buf.toString("base64"), mime };
-}
 
 export default async (req) => {
   if (req.method !== "POST") {
