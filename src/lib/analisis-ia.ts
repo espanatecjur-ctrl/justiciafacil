@@ -47,7 +47,10 @@ export async function generarAnalisisIA(clave: string, posicion: string, documen
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ documentos, posicion }),
     });
-    const data = await r.json();
+    const texto = await r.text();
+    let data: any;
+    try { data = JSON.parse(texto); }
+    catch { return { ok: false, error: r.status === 504 || texto.includes("<html") ? "El servidor tardó demasiado en leer los documentos (tiempo agotado). Intenta con menos documentos a la vez, o vuelve a intentar." : `Respuesta inesperada del servidor (${r.status}).` }; }
     if (!r.ok || !data.ok) return { ok: false, error: data.error || `Error ${r.status}` };
 
     const fila: AnalisisIA = {
