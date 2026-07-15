@@ -47,15 +47,25 @@ function URRJ() {
   const [cargandoResumen, setCargandoResumen] = useState(false);
   const [errorResumen, setErrorResumen] = useState<string | null>(null);
   const [analisisDocs, setAnalisisDocs] = useState<AnalisisIA | null>(null);
-  const claveCasoSolicitud = solicitudActiva?.numero_credito || solicitudActiva?.expediente || solicitudActiva?.caso_id || "";
+  const claveCasoSolicitud = solicitudActiva?.numero_credito || solicitudActiva?.expediente || solicitudActiva?.caso_id
+    || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
   useEffect(() => {
     if (!solicitudActiva?.id) { setResumenDocs(null); return; }
     obtenerResumenCacheado(solicitudActiva.id).then(setResumenDocs);
   }, [solicitudActiva?.id]);
   useEffect(() => {
-    if (!claveCasoSolicitud) { setAnalisisDocs(null); return; }
-    obtenerAnalisisCacheado(claveCasoSolicitud, "Actor").then(setAnalisisDocs);
-  }, [claveCasoSolicitud]);
+    const idSolicitud = solicitudActiva?.id;
+    if (!idSolicitud) { setAnalisisDocs(null); return; }
+    (async () => {
+      if (claveCasoSolicitud) {
+        const porCaso = await obtenerAnalisisCacheado(claveCasoSolicitud, "Actor");
+        if (porCaso) { setAnalisisDocs(porCaso); return; }
+      }
+      // Respaldo: puede haberse guardado con el id de la solicitud (cuando no
+      // había crédito/expediente al momento de generarlo).
+      setAnalisisDocs(await obtenerAnalisisCacheado(idSolicitud, "Actor"));
+    })();
+  }, [claveCasoSolicitud, solicitudActiva?.id]);
   const resumenDe = (nombre: string) => resumenDocs?.resumenes.find((r) => r.nombre === nombre);
   // Orden lógico del expediente (fase procesal), no el orden en que se subieron.
   const ORDEN_TIPOS = ["Contrato", "Demanda", "Acuerdo", "Auto Judicial", "Emplazamiento", "Contestación de Demanda", "Solicitud", "Notificación", "Comprobante", "Verificación", "Dictamen", "Otro"];
@@ -71,23 +81,31 @@ function URRJ() {
   const generarResumen = async () => {
     if (!solicitudActiva?.id || !solicitudActiva.documentos?.length) return;
     setCargandoResumen(true); setErrorResumen(null);
-    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
+    let claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id
+      || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
     // Si ya existe el resumen por documento, no se vuelve a gastar IA en eso —
     // solo se completa lo que falte (el cuestionario).
     if (!resumenDocs) {
       const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso);
       if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); setCargandoResumen(false); return; }
       setResumenDocs(r.cache!);
+      // Usa de inmediato lo que se acaba de detectar (sin esperar al re-render).
+      claveCaso = claveCaso || r.cache?.datos_generales?.numero_credito || r.cache?.datos_generales?.expediente || "";
     }
     // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
-    // — solo si hace falta y hay con qué identificar el caso.
-    if (!analisisDocs && claveCaso) {
-      const rA = await generarAnalisisIA(claveCaso, "Actor", solicitudActiva.documentos);
+    // — si no hay crédito/expediente, se usa el id de la solicitud como
+    // respaldo para que SÍ se genere y se vea aquí (no se bloquea).
+    if (!analisisDocs) {
+      const claveParaAnalisis = claveCaso || solicitudActiva.id;
+      const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos);
       if (rA.ok && rA.analisis) {
         setAnalisisDocs(rA.analisis);
         // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
         // la misma respuesta para Demandado SIN volver a gastar IA.
         await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+        if (!claveCaso) {
+          setErrorResumen("⚠️ Esta solicitud no tenía crédito ni expediente capturado — el cuestionario sí se generó y se ve abajo, pero solo aquí. Si luego capturas el crédito/expediente en la garantía, en Actor/Demandado no lo va a encontrar automático; tendrías que regenerarlo ahí.");
+        }
       } else if (!rA.ok) {
         setErrorResumen(rA.error || "No se pudo generar el cuestionario.");
       }
