@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
-import { claveAnalisis, obtenerAnalisisCacheado, introAnalisis } from "@/lib/analisis-ia";
-import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
+import { claveAnalisis, obtenerAnalisisCacheado, introAnalisis, generarAnalisisIA } from "@/lib/analisis-ia";
+import { obtenerResumenPorClaveCaso, generarResumenIA, guardarResumenEnCache } from "@/lib/resumen-documentos";
+import { subirDocPredictamen } from "@/lib/solicitud-predictamen";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { enviarCorreo } from "@/lib/enviar-correo";
@@ -112,6 +113,45 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
   const tiposDeEstaFase = TIPOS_POR_FASE[paso] || [];
   const docsDeEstaFase = (resumenParaPDF || []).filter((r) => tiposDeEstaFase.includes(r.tipo));
   const docsOtrasFases = (resumenParaPDF || []).filter((r) => !tiposDeEstaFase.includes(r.tipo));
+
+  // Subir documentos DIRECTO desde aquí (cuando el pre-dictamen es nuevo y no
+  // viene de una Solicitud con documentos ya adjuntos).
+  const inputSubirIARef = useRef<HTMLInputElement>(null);
+  const [subiendoIA, setSubiendoIA] = useState(false);
+  const [errorSubidaIA, setErrorSubidaIA] = useState<string | null>(null);
+  const subirYAnalizarAqui = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setSubiendoIA(true); setErrorSubidaIA(null);
+    try {
+      const documentos = await Promise.all(Array.from(files).map((f) => subirDocPredictamen(f)));
+      const claveTemporal = x.numeroCredito || x.expediente || `directo-${Date.now()}`;
+      const rResumen = await generarResumenIA(claveTemporal, documentos, claveTemporal);
+      if (!rResumen.ok) throw new Error(rResumen.error || "No se pudo leer los documentos.");
+      const dg = rResumen.cache?.datos_generales || {};
+      setX((p) => ({
+        ...p,
+        expediente: p.expediente || dg.expediente || "",
+        numeroCredito: p.numeroCredito || dg.numero_credito || "",
+        juzgado: p.juzgado || dg.juzgado || "",
+        ubicacion: p.ubicacion || dg.direccion || "",
+        deudor: p.deudor || dg.deudor || "",
+        acreedor: p.acreedor || dg.administradora || "",
+      }));
+      setResumenParaPDF(rResumen.cache?.resumenes || []);
+      const claveDefinitiva = dg.numero_credito || dg.expediente || claveTemporal;
+      if (claveDefinitiva !== claveTemporal && rResumen.cache) {
+        await guardarResumenEnCache({ ...rResumen.cache, clave: claveDefinitiva, clave_caso: claveDefinitiva });
+      }
+      const rAnalisis = await generarAnalisisIA(claveDefinitiva, "Demandado", documentos);
+      if (rAnalisis.ok) setAnalisisParaPDF(rAnalisis.analisis!.respuestas);
+    } catch (e) {
+      setErrorSubidaIA(String((e as Error)?.message || e));
+    } finally {
+      setSubiendoIA(false);
+      if (inputSubirIARef.current) inputSubirIARef.current.value = "";
+    }
+  };
+
 
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
   const estadoRobot: "sinaloa" | "bcs" | "jalisco" = x.estado === "Jalisco" ? "jalisco" : x.estado === "Baja California Sur" ? "bcs" : "sinaloa";
@@ -267,6 +307,20 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         <div className="flex gap-1">{FASES.map((_, i) => <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < paso ? "#0C5C46" : i === paso ? NAVY : "var(--border,#e5e7eb)" }} />)}</div>
       </div>
 
+      {!analisisParaPDF && !(resumenParaPDF && resumenParaPDF.length > 0) && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+          <p className="text-xs font-semibold text-purple-900">✨ Sugerencias de la IA</p>
+          <p className="mt-0.5 text-xs text-purple-700">
+            Este pre-dictamen todavía no tiene documentos que la IA haya leído. Si tienes el expediente, contrato, demanda, etc. a la mano, súbelos aquí — se autollenan los campos vacíos y salen sugerencias en cada fase.
+          </p>
+          <button type="button" onClick={() => inputSubirIARef.current?.click()} disabled={subiendoIA}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
+            {subiendoIA ? "✨ Leyendo…" : "✨ Subir documentos y analizar"}
+          </button>
+          <input ref={inputSubirIARef} type="file" accept="image/*,.pdf" multiple className="hidden" onChange={(e) => subirYAnalizarAqui(e.target.files)} />
+          {errorSubidaIA && <p className="mt-1 text-[11px] text-red-600">{errorSubidaIA}</p>}
+        </div>
+      )}
       {(analisisParaPDF || (resumenParaPDF && resumenParaPDF.length > 0)) && (
         <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3">
           <button type="button" onClick={() => setMostrarSugerenciasIA((v) => !v)} className="flex w-full items-center justify-between text-left">
@@ -332,7 +386,6 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
         {paso === 0 && (
           <div className="space-y-4">
             <p className="text-base font-semibold">0 · Datos básicos</p>
-            <AnalisisDocumentalIA posicion="Demandado" casoId={x.caso_id || undefined} expediente={x.expediente || undefined} numeroCredito={x.numeroCredito || undefined} />
             {expedienteInicial && x.expediente && expedienteInicial !== x.expediente && !ignorarBoletin && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                 <p className="font-semibold">El boletín que buscaste es de OTRO expediente.</p>
