@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
+import { claveAnalisis, obtenerAnalisisCacheado } from "@/lib/analisis-ia";
+import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 import { Link } from "@tanstack/react-router";
 import { enviarCorreo } from "@/lib/enviar-correo";
@@ -83,6 +85,18 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     promesaSuspensiva: "", escrow: "", poderIrrevocable: "", vendedorAceptaPoder: "", dineroYaEntregado: "", ratificadoNotario: "",
     anotaciones: "",
   });
+
+  // Resumen de documentos + análisis IA ya generados (si existen) — se
+  // incluyen al final del PDF del dictamen.
+  const [resumenParaPDF, setResumenParaPDF] = useState<{ nombre: string; tipo: string; resumen: string }[] | null>(null);
+  const [analisisParaPDF, setAnalisisParaPDF] = useState<any>(null);
+  const claveCasoIA = claveAnalisis({ numeroCredito: x.numeroCredito, expediente: x.expediente, caso_id: x.caso_id });
+  useEffect(() => {
+    if (!claveCasoIA) { setResumenParaPDF(null); setAnalisisParaPDF(null); return; }
+    obtenerResumenPorClaveCaso(claveCasoIA).then((r) => setResumenParaPDF(r?.resumenes || null));
+    obtenerAnalisisCacheado(claveCasoIA, "Demandado").then((a) => setAnalisisParaPDF(a?.respuestas || null));
+  }, [claveCasoIA]);
+
   const set = (k: string, v: string) => setX((p) => ({ ...p, [k]: v }));
   const estadoRobot: "sinaloa" | "bcs" | "jalisco" = x.estado === "Jalisco" ? "jalisco" : x.estado === "Baja California Sur" ? "bcs" : "sinaloa";
   useEffect(() => { if (precargar?.datos) setX((p) => ({ ...p, ...precargar.datos })); }, []);
@@ -203,6 +217,8 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     admin: null, anotaciones: x.anotaciones, firmaElabora: fElabora, firmaValida: fValida, decision,
     cambios: precargar ? { campos: diffDatos(precargar.datos || {}, x), nota: precargar.cambios } : null,
     boletines: hallazgos,
+    resumenDocumentos: resumenParaPDF,
+    analisisIA: analisisParaPDF,
   });
 
   const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
