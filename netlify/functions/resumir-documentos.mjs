@@ -95,15 +95,21 @@ export default async (req) => {
     const parts = [];
     const nombresEnOrden = [];
     const erroresDescarga = [];
-    for (const d of tanda) {
+    // Se descargan TODOS al mismo tiempo (no uno por uno) — si no, con varios
+    // documentos se pasa del tiempo límite de la función. Se mantiene el
+    // ORDEN exacto de "tanda" porque la IA alinea su respuesta por posición.
+    const resultados = await Promise.all(tanda.map(async (d) => {
       try {
         const { base64, mime } = await descargarComoBase64(d.url);
-        parts.push({ inline_data: { mime_type: mime, data: base64 } });
-        nombresEnOrden.push(d.nombre);
+        return { ok: true, nombre: d.nombre, base64, mime };
       } catch (e) {
-        nombresEnOrden.push(d.nombre); // se incluye igual, para que el índice no se desalinee
-        erroresDescarga.push(`${d.nombre}: ${String((e && e.message) || e)}`);
+        return { ok: false, nombre: d.nombre, error: String((e && e.message) || e) };
       }
+    }));
+    for (const res of resultados) {
+      nombresEnOrden.push(res.nombre); // se incluye igual, para que el índice no se desalinee
+      if (res.ok) parts.push({ inline_data: { mime_type: res.mime, data: res.base64 } });
+      else erroresDescarga.push(`${res.nombre}: ${res.error}`);
     }
     if (parts.length === 0) {
       return new Response(JSON.stringify({ ok: false, error: `No se pudo descargar ningún documento (ej: ${erroresDescarga[0] || "motivo desconocido"}). No se generó nada por adivinar.` }), { status: 400 });
