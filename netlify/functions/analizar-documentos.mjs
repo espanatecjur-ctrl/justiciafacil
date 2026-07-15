@@ -22,7 +22,7 @@
 import crypto from "crypto";
 
 const MODELO = "gemini-2.5-flash";
-const MAX_DOCUMENTOS = 10;
+const MAX_DOCUMENTOS = 6; // bajado de 10 — con más, no cabe en los 10s que da Netlify por defecto
 const LIMITE_BYTES_DOC = 15 * 1024 * 1024; // 15 MB por documento
 
 function base64url(input) {
