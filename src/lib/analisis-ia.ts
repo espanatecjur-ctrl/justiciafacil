@@ -40,9 +40,14 @@ const esperar = (ms: number) => new Promise((res) => setTimeout(res, ms));
 /** ¿Es un error de "se acabó la cuota gratis por ahora" de Google? Si sí,
  *  saca cuántos segundos pide esperar (Google lo manda en el mensaje). */
 function segundosDeEspera(mensaje: string): number | null {
-  if (!/quota|429|resource_exhausted/i.test(mensaje)) return null;
-  const m = mensaje.match(/retry in ([\d.]+)s/i);
-  return m ? Math.ceil(parseFloat(m[1])) + 2 : 25; // +2s de margen; si no lo dice, 25s por defecto
+  // Cuota agotada del minuto (Google dice cuánto esperar) O el modelo
+  // saturado por mucha demanda (Google no dice cuánto, se espera un rato fijo).
+  if (/quota|429|resource_exhausted/i.test(mensaje)) {
+    const m = mensaje.match(/retry in ([\d.]+)s/i);
+    return m ? Math.ceil(parseFloat(m[1])) + 2 : 25;
+  }
+  if (/high demand|overloaded|unavailable|503/i.test(mensaje)) return 15;
+  return null;
 }
 
 /** Genera el análisis leyendo LOS DOCUMENTOS DE UNO EN UNO — cada documento
