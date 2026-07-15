@@ -87,7 +87,8 @@ function URRJ() {
     // Si ya existe el resumen por documento, no se vuelve a gastar IA en eso —
     // solo se completa lo que falte (el cuestionario).
     if (!resumenDocs) {
-      const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso);
+      const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso, (hecho, total, msg) => setProgresoIA({ hecho, total, nombre: msg || "" }));
+      setProgresoIA(null);
       if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); setCargandoResumen(false); return; }
       setResumenDocs(r.cache!);
       // Usa de inmediato lo que se acaba de detectar (sin esperar al re-render).
