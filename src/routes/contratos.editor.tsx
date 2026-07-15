@@ -276,10 +276,15 @@ function EditorContratos() {
       const d = data.datos || {};
       const asignar: Record<string, unknown> = {};
       let llenados = 0;
+      // Campos que suenan a dinero (monto, valor, precio, importe, honorarios,
+      // renta, salario, apartado, finiquito, garantia…) se formatean con
+      // comas de miles y 2 decimales al copiarse, igual que en el catálogo.
+      const esCampoDinero = (id: string) => /monto|valor|precio|importe|honorario|renta|salario|finiquito/i.test(id);
       for (const c of campos) {
         const valor = d[c.id];
         if (valor !== undefined && valor !== null && valor !== "" && !valores[c.id]) {
-          asignar[c.id] = valor; llenados++;
+          asignar[c.id] = esCampoDinero(c.id) ? formatoMoneda(valor) : valor;
+          llenados++;
         }
       }
       setValores((s) => ({ ...s, ...asignar }));
@@ -348,6 +353,17 @@ function EditorContratos() {
   const normaliza = (s: string) =>
     (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
+  // Formatea montos con comas de miles y 2 decimales (ej. "235000" -> "235,000.00")
+  // para cuando se copian valores automáticamente (catálogo, cliente, IA).
+  // Si ya viene con formato, o no es un número reconocible, lo deja tal cual.
+  const formatoMoneda = (v: unknown): string => {
+    if (v === null || v === undefined || v === "") return "";
+    const limpio = String(v).replace(/,/g, "").trim();
+    const n = Number(limpio);
+    if (Number.isNaN(n)) return String(v);
+    return n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   function elegirCliente(c: ClienteResultado) {
     setClienteElegido(c);
     setBusquedaCliente("");
@@ -367,9 +383,9 @@ function EditorContratos() {
       if (existe && valor) asignar[campoId] = valor;
     }
     // Si la tabla propia ya trae el valor de la operación verificado, y la
-    // plantilla tiene ese campo vacío, se llena también.
+    // plantilla tiene ese campo vacío, se llena también (con comas de miles).
     if (c.valorOperacion && plantilla.campos.some((x) => x.id === "valorOperacion") && !valores.valorOperacion) {
-      asignar.valorOperacion = c.valorOperacion;
+      asignar.valorOperacion = formatoMoneda(c.valorOperacion);
     }
     setValores((v) => ({ ...v, ...asignar }));
 
@@ -423,11 +439,12 @@ function EditorContratos() {
       fichaFotografica: p.ficha,
       // Montos verificados (Relación de Cobros Tlajomulco) — solo si esta
       // ficha ya tiene operación registrada; si no, no se tocan estos campos.
-      ...(p.valorOperacion ? { valorOperacion: p.valorOperacion } : {}),
-      ...(p.montoApartado ? { montoApartado: p.montoApartado, estadoApartado: p.estadoApartado } : {}),
-      ...(p.montoPagoUno ? { montoPagoUno: p.montoPagoUno, estadoPagoUno: p.estadoPagoUno } : {}),
-      ...(p.montoPagoDos ? { montoPagoDos: p.montoPagoDos, estadoPagoDos: p.estadoPagoDos } : {}),
-      ...(p.montoFiniquito ? { montoFiniquito: p.montoFiniquito, estadoFiniquito: p.estadoFiniquito } : {}),
+      // Se formatean con comas de miles y 2 decimales al copiarse.
+      ...(p.valorOperacion ? { valorOperacion: formatoMoneda(p.valorOperacion) } : {}),
+      ...(p.montoApartado ? { montoApartado: formatoMoneda(p.montoApartado), estadoApartado: p.estadoApartado } : {}),
+      ...(p.montoPagoUno ? { montoPagoUno: formatoMoneda(p.montoPagoUno), estadoPagoUno: p.estadoPagoUno } : {}),
+      ...(p.montoPagoDos ? { montoPagoDos: formatoMoneda(p.montoPagoDos), estadoPagoDos: p.estadoPagoDos } : {}),
+      ...(p.montoFiniquito ? { montoFiniquito: formatoMoneda(p.montoFiniquito), estadoFiniquito: p.estadoFiniquito } : {}),
     }));
   }
 
