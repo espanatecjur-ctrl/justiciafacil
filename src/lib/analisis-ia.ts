@@ -59,15 +59,24 @@ export async function generarAnalisisIA(clave: string, posicion: string, documen
       documentos_analizados: data.documentos_analizados || [],
       modelo: data.modelo || null,
     };
+    await guardarAnalisisEnCache(fila);
+    return { ok: true, analisis: fila };
+  } catch (e) {
+    return { ok: false, error: String((e as Error)?.message || e) };
+  }
+}
+
+/** Solo GUARDA en caché (sin llamar a la IA) — se usa para reaprovechar el
+ *  mismo análisis en otra posición (ej. Actor y Demandado comparten hoy el
+ *  mismo cuestionario) sin gastar IA dos veces. */
+export async function guardarAnalisisEnCache(fila: AnalisisIA): Promise<void> {
+  try {
     await fetch(`${SUPABASE_URL}/rest/v1/analisis_documental_ia`, {
       method: "POST",
       headers: { ...headers, Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify(fila),
     });
-    return { ok: true, analisis: fila };
-  } catch (e) {
-    return { ok: false, error: String((e as Error)?.message || e) };
-  }
+  } catch { /* si falla, se queda solo la posición original — no es grave */ }
 }
 
 /** Arma un texto legible (para descargar) con todas las respuestas del cuestionario. */
