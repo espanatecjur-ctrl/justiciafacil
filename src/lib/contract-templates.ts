@@ -745,11 +745,18 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
     return "";
   });
 
-  // Reemplazo simple {{campo}}
+  // Reemplazo simple {{campo}}. Además, cualquier campo tipo "select" con
+  // valor "Pagado"/"Pendiente" expone una versión {{campoCheck}} con ☑/☐,
+  // para poder marcar casillas en las tablas de estado de cuenta.
   const etiquetaLegible = (key: string) =>
     key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
+  const valoresConCheck: Record<string, unknown> = { ...valores };
+  for (const k of Object.keys(valores)) {
+    if (valores[k] === "Pagado") valoresConCheck[`${k}Check`] = "☑";
+    else if (valores[k] === "Pendiente") valoresConCheck[`${k}Check`] = "☐";
+  }
   texto = texto.replace(/\{\{([a-zA-Z]+)\}\}/g, (_m, key) => {
-    const v = valores[key];
+    const v = valoresConCheck[key];
     if (v === undefined || v === null || v === "") return `[FALTA: ${etiquetaLegible(key)}]`;
     return String(v);
   });
