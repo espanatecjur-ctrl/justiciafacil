@@ -1,28 +1,23 @@
 // ============================================================
-// JusticiaFácil · Analizar documentos con IA (Gemini)
+// JusticiaFácil · Analizar documentos con IA (Gemini) — DE UNO EN UNO
 // ------------------------------------------------------------
-// Lee los documentos de una garantía (PDFs/imágenes) y contesta
-// un cuestionario fijo de "estado actual de la carpeta", además
-// de identificar el documento principal (nombre, tipo, acto que
-// resuelve). Se llama UNA sola vez por garantía+posición — el
-// resultado se guarda en analisis_documental_ia y no se vuelve
-// a generar salvo que el usuario pida "Regenerar" a propósito.
+// Lee UN documento a la vez y COMPLETA el cuestionario de "estado
+// actual de la carpeta" con lo que encuentre ahí — nunca borra lo
+// que ya se sabía de documentos anteriores, solo agrega o precisa.
+// El frontend hace el recorrido documento por documento y va
+// guardando el avance, así nunca se pasa del tiempo por función
+// aunque el expediente traiga 20+ documentos.
 //
-// POST { documentos: [{ nombre, url }], posicion } -> JSON con
-// las respuestas.
+// POST { documento: { nombre, url }, respuestasPrevias: objeto|null, posicion }
+//   -> { ok, respuestas (actualizadas) }
 //
 // Variables de entorno en Netlify:
 //   GEMINI_API_KEY   (la MISMA que ya usa JurisConecta)
-//
-// Control de costo: modelo económico, máximo 10 documentos por
-// llamada, tope de tamaño por documento, y máximo de tokens de
-// salida — para que cada análisis cueste centavos de dólar.
 // ============================================================
 
 import crypto from "crypto";
 
 const MODELO = "gemini-2.5-flash";
-const MAX_DOCUMENTOS = 6; // bajado de 10 — con más, no cabe en los 10s que da Netlify por defecto
 const LIMITE_BYTES_DOC = 15 * 1024 * 1024; // 15 MB por documento
 
 function base64url(input) {
@@ -62,9 +57,6 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
 
 async function descargarComoBase64(url) {
-  // ¿Es un link de Google Drive (carpeta escogida en Dirección)? Esos no se
-  // leen con la llave de Supabase — necesitan el token de Google y el
-  // endpoint real de descarga (el link "/preview" es solo un visor HTML).
   const mDrive = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
   if (mDrive) {
     const fileId = mDrive[1];
@@ -78,7 +70,6 @@ async function descargarComoBase64(url) {
     const mime = r.headers.get("content-type") || "application/pdf";
     return { base64: buf.toString("base64"), mime };
   }
-  // Si no, es de Supabase Storage.
   const intentar = async (key) => fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
   let r = SUPABASE_SERVICE_KEY ? await intentar(SUPABASE_SERVICE_KEY) : null;
   if (!r || !r.ok) r = await intentar(SUPABASE_ANON_KEY);
@@ -89,18 +80,10 @@ async function descargarComoBase64(url) {
   return { base64: buf.toString("base64"), mime };
 }
 
-// Preguntas fijas (por ahora Actor y Demandado comparten el mismo
-// cuestionario; cuando Paola dé las preguntas específicas de
-// Demandado, se separan en dos bloques distintos aquí).
+// Forma fija de las respuestas (para cuando todavía no hay nada acumulado).
 const ESQUEMA_RESPUESTA = `
-Responde ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada de \`\`\`), con esta forma EXACTA:
-
 {
-  "documento_principal": {
-    "nombre": "string — cómo se llama el documento principal que leíste",
-    "tipo": "string — ej. Promoción, Acuerdo, Notificación, Sentencia, Estado de cuenta, Convenio, Otro",
-    "acto_que_resuelve": "string — qué resuelve o para qué sirve ese documento"
-  },
+  "documento_principal": { "nombre": "string", "tipo": "string — ej. Promoción, Acuerdo, Notificación, Sentencia, Estado de cuenta, Convenio, Otro", "acto_que_resuelve": "string" },
   "estado_actual": {
     "es_jurisdiccion_voluntaria": "sí" | "no" | "no determinado",
     "expediente_juzgado_jv": "string o null",
@@ -109,25 +92,13 @@ Responde ÚNICAMENTE con un JSON válido (nada de texto antes o después, nada d
     "notificacion_inicio_jv": "string o null",
     "ultima_actuacion": { "fecha": "string o null", "que_se_pidio": "string o null", "que_se_resolvio": "string o null" },
     "fecha_ultimo_pago_acreditado": "string o null",
-    "demandas": [
-      { "expediente_juzgado": "string", "fecha_presentacion": "string o null", "emplazamiento": "string o null", "afecta_recuperacion_credito": "string" }
-    ]
+    "demandas": [ { "expediente_juzgado": "string", "fecha_presentacion": "string o null", "emplazamiento": "string o null", "afecta_recuperacion_credito": "string" } ]
   },
-  "resoluciones_y_recursos": {
-    "sentencia": "string o null — si existe, resume cuál",
-    "apelacion": "string o null — si se interpuso, resume",
-    "amparo": "string o null — si se promovió, resume"
-  },
+  "resoluciones_y_recursos": { "sentencia": "string o null", "apelacion": "string o null", "amparo": "string o null" },
   "prescripcion": { "esta_prescrita": "sí" | "no" | "no determinado", "motivo": "string" },
-  "documentos_solicitados": { "detalle": "string — qué se pidió de la carpeta y qué se resolvió" },
-  "convenios": {
-    "notificados_firmados_ratificados": "sí" | "no" | "parcial" | "no aplica",
-    "estado_cuenta_firma_perito": "sí" | "no" | "no aplica"
-  }
-}
-
-Si un dato no aparece en los documentos, usa null o "no determinado" — NUNCA inventes fechas, expedientes ni cifras.
-`.trim();
+  "documentos_solicitados": { "detalle": "string" },
+  "convenios": { "notificados_firmados_ratificados": "sí" | "no" | "parcial" | "no aplica", "estado_cuenta_firma_perito": "sí" | "no" | "no aplica" }
+}`.trim();
 
 export default async (req) => {
   if (req.method !== "POST") {
@@ -138,40 +109,41 @@ export default async (req) => {
     return new Response(JSON.stringify({ ok: false, error: "Falta GEMINI_API_KEY en Netlify (la misma llave de JurisConecta)." }), { status: 500 });
   }
   try {
-    const { documentos, posicion } = await req.json();
-    if (!Array.isArray(documentos) || documentos.length === 0) {
+    const { documento, respuestasPrevias, posicion } = await req.json();
+    if (!documento || !documento.url) {
       return new Response(JSON.stringify({ ok: false, error: "No llegó ningún documento." }), { status: 400 });
     }
-    const tanda = documentos.slice(0, MAX_DOCUMENTOS);
 
-    const parts = [];
-    const analizados = [];
-    // Se descargan TODOS al mismo tiempo (no uno por uno) — si no, con varios
-    // documentos se pasa del tiempo límite de la función y Netlify corta a
-    // la mitad (por eso a veces regresaba una página de error en vez de JSON).
-    const resultados = await Promise.all(tanda.map(async (d) => {
-      try {
-        const { base64, mime } = await descargarComoBase64(d.url);
-        return { ok: true, d, base64, mime };
-      } catch (e) {
-        return { ok: false, d, error: String((e && e.message) || e) };
-      }
-    }));
-    for (const res of resultados) {
-      if (res.ok) {
-        parts.push({ inline_data: { mime_type: res.mime, data: res.base64 } });
-        analizados.push({ nombre: res.d.nombre, url: res.d.url });
-      } else {
-        // documento que no se pudo leer: se omite, pero se avisa en la respuesta
-        analizados.push({ nombre: res.d.nombre, url: res.d.url, error: res.error });
-      }
-    }
-    if (parts.length === 0) {
-      const primerError = analizados.find((a) => a.error)?.error || "motivo desconocido";
-      return new Response(JSON.stringify({ ok: false, error: `No se pudo leer ninguno de los documentos (ej: ${primerError}).` }), { status: 400 });
+    let base64, mime;
+    try {
+      const d = await descargarComoBase64(documento.url);
+      base64 = d.base64; mime = d.mime;
+    } catch (e) {
+      return new Response(JSON.stringify({ ok: false, error: `No se pudo leer "${documento.nombre}": ${String((e && e.message) || e)}` }), { status: 400 });
     }
 
-    parts.push({ text: `Eres un abogado analista de DIIPA. Lee TODOS los documentos adjuntos de este expediente (posición de DIIPA: ${posicion || "no especificada"}) y contesta el cuestionario de "estado actual de la carpeta". ${ESQUEMA_RESPUESTA}` });
+    const instruccion = respuestasPrevias
+      ? `Eres un abogado analista de DIIPA (posición de DIIPA: ${posicion || "no especificada"}). Ya tienes este avance del cuestionario de "estado actual de la carpeta", armado con documentos anteriores:
+
+${JSON.stringify(respuestasPrevias)}
+
+Ahora lee ESTE documento nuevo ("${documento.nombre}") y ACTUALIZA el JSON de arriba:
+- Si este documento confirma o completa algo que estaba en null/"no determinado", complétalo.
+- Si este documento trae una demanda que NO está en la lista "demandas", agrégala (no dupliques las que ya estén).
+- Si este documento es una actuación MÁS RECIENTE que la que ya tenías en "ultima_actuacion", reemplázala; si es más vieja, deja la que ya tenías.
+- NUNCA borres ni cambies a null algo que ya estaba bien contestado, a menos que este documento lo contradiga claramente.
+- "documento_principal" describe SIEMPRE el documento MÁS IMPORTANTE que hayas visto hasta ahora (contrato, sentencia o dictamen suelen ser más relevantes que un acuse o una compulsa) — cámbialo solo si este nuevo documento es más relevante que el que tenías.
+
+Responde ÚNICAMENTE con el JSON COMPLETO actualizado (misma forma, nada de texto ni \`\`\` alrededor):
+${ESQUEMA_RESPUESTA}`
+      : `Eres un abogado analista de DIIPA (posición de DIIPA: ${posicion || "no especificada"}). Lee este documento ("${documento.nombre}") y arranca el cuestionario de "estado actual de la carpeta" con lo que encuentres — es apenas el primer documento, así que muchos campos quedarán en null o "no determinado" hasta leer los demás, eso está bien.
+
+Responde ÚNICAMENTE con este JSON (nada de texto ni \`\`\` alrededor):
+${ESQUEMA_RESPUESTA}
+
+Si un dato no aparece en este documento, usa null o "no determinado" — NUNCA inventes fechas, expedientes ni cifras.`;
+
+    const parts = [{ inline_data: { mime_type: mime, data: base64 } }, { text: instruccion }];
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`;
     const resp = await fetch(url, {
@@ -192,7 +164,7 @@ export default async (req) => {
     try { respuestas = JSON.parse(texto); }
     catch { return new Response(JSON.stringify({ ok: false, error: "La IA no regresó un JSON válido.", crudo: texto.slice(0, 500) }), { status: 502 }); }
 
-    return new Response(JSON.stringify({ ok: true, respuestas, documentos_analizados: analizados, modelo: MODELO }), {
+    return new Response(JSON.stringify({ ok: true, respuestas, modelo: MODELO }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
