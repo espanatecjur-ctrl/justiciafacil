@@ -39,9 +39,12 @@ const esperar = (ms: number) => new Promise((res) => setTimeout(res, ms));
 /** ¿Es un error de "se acabó la cuota gratis por ahora" de Google? Si sí,
  *  saca cuántos segundos pide esperar (Google lo manda en el mensaje). */
 function segundosDeEspera(mensaje: string): number | null {
-  if (!/quota|429|resource_exhausted/i.test(mensaje)) return null;
-  const m = mensaje.match(/retry in ([\d.]+)s/i);
-  return m ? Math.ceil(parseFloat(m[1])) + 2 : 25;
+  if (/quota|429|resource_exhausted/i.test(mensaje)) {
+    const m = mensaje.match(/retry in ([\d.]+)s/i);
+    return m ? Math.ceil(parseFloat(m[1])) + 2 : 25;
+  }
+  if (/high demand|overloaded|unavailable|503/i.test(mensaje)) return 15;
+  return null;
 }
 
 async function llamarResumirDocumentos(documentos: { nombre: string; url: string }[], onProgreso?: (msg: string) => void): Promise<{ ok: boolean; error?: string; resumenes?: ResumenDoc[]; datos_generales?: DatosGeneralesIA | null; modelo?: string }> {
