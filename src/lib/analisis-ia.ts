@@ -35,38 +35,69 @@ export async function obtenerAnalisisCacheado(clave: string, posicion: string): 
   } catch { return null; }
 }
 
-/** Genera el análisis (llama a la IA) y lo guarda en caché. Si ya existe
- *  y `forzar` no es true, mejor usar obtenerAnalisisCacheado primero —
- *  esta función SIEMPRE gasta IA cuando se llama. */
-export async function generarAnalisisIA(clave: string, posicion: string, documentos: DocumentoRef[]): Promise<{ ok: boolean; error?: string; analisis?: AnalisisIA }> {
+/** Genera el análisis leyendo LOS DOCUMENTOS DE UNO EN UNO — cada documento
+ *  actualiza/completa lo que ya se sabía de los anteriores (nunca lo borra).
+ *  Se guarda el avance después de CADA documento, así si algo falla a la
+ *  mitad no se pierde lo ya leído — y se puede seguir desde ahí después.
+ *  `onProgreso` (opcional) avisa "leyendo documento 3 de 23", etc. */
+export async function generarAnalisisIA(
+  clave: string, posicion: string, documentos: DocumentoRef[],
+  onProgreso?: (hecho: number, total: number, nombre: string) => void,
+): Promise<{ ok: boolean; error?: string; analisis?: AnalisisIA }> {
   if (!clave) return { ok: false, error: "No hay número de crédito ni expediente para identificar el caso." };
   if (!documentos.length) return { ok: false, error: "No hay documentos para analizar." };
-  try {
-    const r = await fetch("/.netlify/functions/analizar-documentos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentos, posicion }),
-    });
-    const texto = await r.text();
-    let data: any;
-    try { data = JSON.parse(texto); }
-    catch { return { ok: false, error: r.status === 504 || texto.includes("<html") ? "El servidor tardó demasiado en leer los documentos (tiempo agotado). Intenta con menos documentos a la vez, o vuelve a intentar." : `Respuesta inesperada del servidor (${r.status}).` }; }
-    if (!r.ok || !data.ok) return { ok: false, error: data.error || `Error ${r.status}` };
 
-    const fila: AnalisisIA = {
-      clave, posicion,
-      documento_nombre: data.respuestas?.documento_principal?.nombre || null,
-      documento_tipo: data.respuestas?.documento_principal?.tipo || null,
-      acto_que_resuelve: data.respuestas?.documento_principal?.acto_que_resuelve || null,
-      respuestas: data.respuestas,
-      documentos_analizados: data.documentos_analizados || [],
-      modelo: data.modelo || null,
-    };
-    await guardarAnalisisEnCache(fila);
-    return { ok: true, analisis: fila };
-  } catch (e) {
-    return { ok: false, error: String((e as Error)?.message || e) };
+  let respuestas: any = null;
+  const analizados: (DocumentoRef & { error?: string })[] = [];
+
+  for (let i = 0; i < documentos.length; i++) {
+    const doc = documentos[i];
+    onProgreso?.(i, documentos.length, doc.nombre);
+    try {
+      const r = await fetch("/.netlify/functions/analizar-documentos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documento: doc, respuestasPrevias: respuestas, posicion }),
+      });
+      const texto = await r.text();
+      let data: any;
+      try { data = JSON.parse(texto); }
+      catch {
+        analizados.push({ ...doc, error: r.status === 504 || texto.includes("<html") ? "Tiempo agotado leyendo este documento" : `Respuesta inesperada (${r.status})` });
+        continue; // sigue con el siguiente documento, no se detiene todo por uno
+      }
+      if (!r.ok || !data.ok) { analizados.push({ ...doc, error: data.error || `Error ${r.status}` }); continue; }
+      respuestas = data.respuestas;
+      analizados.push(doc);
+      // Guarda el avance después de CADA documento — así no se pierde nada
+      // si se corta a la mitad (23 documentos pueden tardar un rato).
+      const filaParcial: AnalisisIA = {
+        clave, posicion,
+        documento_nombre: respuestas?.documento_principal?.nombre || null,
+        documento_tipo: respuestas?.documento_principal?.tipo || null,
+        acto_que_resuelve: respuestas?.documento_principal?.acto_que_resuelve || null,
+        respuestas, documentos_analizados: analizados, modelo: data.modelo || null,
+      };
+      await guardarAnalisisEnCache(filaParcial);
+    } catch (e) {
+      analizados.push({ ...doc, error: String((e as Error)?.message || e) });
+    }
   }
+  onProgreso?.(documentos.length, documentos.length, "");
+
+  if (!respuestas) {
+    const primerError = analizados.find((a) => a.error)?.error || "motivo desconocido";
+    return { ok: false, error: `No se pudo leer ningún documento (ej: ${primerError}).` };
+  }
+  const filaFinal: AnalisisIA = {
+    clave, posicion,
+    documento_nombre: respuestas?.documento_principal?.nombre || null,
+    documento_tipo: respuestas?.documento_principal?.tipo || null,
+    acto_que_resuelve: respuestas?.documento_principal?.acto_que_resuelve || null,
+    respuestas, documentos_analizados: analizados, modelo: analizados[0] ? "gemini-2.5-flash" : null,
+  };
+  await guardarAnalisisEnCache(filaFinal);
+  return { ok: true, analisis: filaFinal };
 }
 
 /** Solo GUARDA en caché (sin llamar a la IA) — se usa para reaprovechar el
