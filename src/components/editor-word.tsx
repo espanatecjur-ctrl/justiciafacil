@@ -10,7 +10,7 @@
 //  Exporta a Word (.doc, editable, con el formato) e Imprimir / PDF.
 //  Usa document.execCommand (lo trae el navegador) — sin librerías.
 // ============================================================
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bold, Italic, Underline as UnderlineIcon,
@@ -30,6 +30,15 @@ const COLORES = [
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// Tamaño de página usado al exportar/imprimir (@page 21.59×27.94cm, margen
+// 2.5cm — ver exportarWord/imprimir más abajo). A 96px/pulgada (96/2.54 px
+// por cm) da la altura de "una hoja" en pantalla, para dibujar la línea de
+// separación de hojas dentro del editor.
+const CM_A_PX = 96 / 2.54;
+const ALTO_HOJA_PX = 27.94 * CM_A_PX; // ≈ 1056px
+const MARGEN_PX = 2.5 * CM_A_PX; // ≈ 94.5px
+const ALTO_CONTENIDO_HOJA_PX = ALTO_HOJA_PX - 2 * MARGEN_PX; // ≈ 867px
+
 function esEncabezado(linea: string) {
   const letras = linea.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, "");
   if (letras.length < 3 || linea.length > 90) return false;
@@ -40,15 +49,112 @@ function esEncabezado(linea: string) {
 const RE_CLAUSULA = /^((?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|OCTAVA|NOVENA|DÉCIMA|VIGÉSIMA|TRIGÉSIMA)(?:\s+(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|SÉPTIMA|OCTAVA|NOVENA))?\.)\s/;
 const RE_ROMANO = /^([IVXLC]{1,5}\.)\s/;
 
+// ------------------------------------------------------------
+//  Bloques de tabla "de verdad" (bordes, celdas fijas) dentro del
+//  machote de texto plano. Se procesan ANTES de partir por líneas,
+//  para que salgan idénticos al documento original (Word) en vez
+//  de texto suelto — así las casillas de firma y los cuadros de
+//  datos no se mueven ni "se remontan" al editar.
+//
+//  Sintaxis (una fila por línea, columnas separadas por "|"):
+//
+//  [TABLA2]                                   ← 2 columnas: etiqueta | valor
+//  Garantía|Calle San Antonio 9
+//  Domicilio|Calle San Antonio 9, Manzana "A"...
+//  [/TABLA2]
+//
+//  [TABLAPAGOS]                               ← 1a línea = encabezado
+//  Concepto|Importe|Estado
+//  1. Apartado|$20,000.00|☑ Pagado
+//  TOTAL OPERACIÓN|$240,000.00|
+//  [/TABLAPAGOS]                              ← fila "TOTAL…" sale en negritas
+//
+//  [FIRMAS]                                   ← 2 a 4 columnas: casillas de
+//  LA ENTREGANTE|Erika Paola España Méndez|      firma en caja fija (como
+//  LA RECEPTORA|Juan Carlos Gutiérrez|            celdas de Excel)
+//  [/FIRMAS]
+// ------------------------------------------------------------
+function extraerBloquesTabla(texto: string): { texto: string; tablas: string[] } {
+  const tablas: string[] = [];
+  const guardar = (html: string) => {
+    tablas.push(html);
+    return `\u0000TBL${tablas.length - 1}\u0000`;
+  };
+
+  texto = texto.replace(/\[TABLA2\]\n([\s\S]*?)\n\[\/TABLA2\]/g, (_m, body: string) => {
+    const filas = body.split("\n").map((l) => l.trim()).filter(Boolean);
+    const trs = filas
+      .map((f) => {
+        const [etiqueta, ...resto] = f.split("|");
+        const valor = resto.join("|").trim();
+        return (
+          `<tr>` +
+          `<td style="border:1px solid #999;background:#f2f2ef;padding:6px 10px;width:34%;font-weight:bold;vertical-align:top">${esc(etiqueta.trim())}</td>` +
+          `<td style="border:1px solid #999;padding:6px 10px;vertical-align:top">${esc(valor)}</td>` +
+          `</tr>`
+        );
+      })
+      .join("");
+    return guardar(`<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:11pt">${trs}</table>`);
+  });
+
+  texto = texto.replace(/\[TABLAPAGOS\]\n([\s\S]*?)\n\[\/TABLAPAGOS\]/g, (_m, body: string) => {
+    const filas = body.split("\n").map((l) => l.trim()).filter(Boolean);
+    const [encabezado, ...resto] = filas;
+    const th = encabezado
+      .split("|")
+      .map((c) => `<th style="border:1px solid #999;background:#0B1E3A;color:#fff;padding:6px 10px;text-align:left;font-size:10.5pt">${esc(c.trim())}</th>`)
+      .join("");
+    const trs = resto
+      .map((f) => {
+        const cols = f.split("|");
+        const esTotal = /^TOTAL/i.test(cols[0]?.trim() ?? "");
+        const estilo = esTotal
+          ? "border:1px solid #999;background:#f2f2ef;padding:6px 10px;font-weight:bold"
+          : "border:1px solid #999;padding:6px 10px;vertical-align:top";
+        return `<tr>${cols.map((c) => `<td style="${estilo}">${esc(c.trim())}</td>`).join("")}</tr>`;
+      })
+      .join("");
+    return guardar(
+      `<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:10.5pt"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`,
+    );
+  });
+
+  texto = texto.replace(/\[FIRMAS\]\n([\s\S]*?)\n\[\/FIRMAS\]/g, (_m, body: string) => {
+    const filas = body.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (filas.length < 2 || filas.length > 4) return guardar("");
+    const ancho = Math.floor(100 / filas.length);
+    const celdas = filas
+      .map((f) => {
+        const [titulo, nombre, nota] = f.split("|").map((s) => (s ?? "").trim());
+        return (
+          `<td style="width:${ancho}%;border:1px solid #999;padding:0;vertical-align:top">` +
+          `<div style="height:64px;border-bottom:1px solid #333;margin:14px 12px 6px"></div>` +
+          `<div style="text-align:center;font-weight:bold;font-size:10pt;padding:0 6px 2px">${esc(titulo)}</div>` +
+          `<div style="text-align:center;font-size:10pt;padding:0 6px">${esc(nombre)}</div>` +
+          (nota ? `<div style="text-align:center;font-size:9pt;font-style:italic;color:#555;padding:0 6px 8px">${esc(nota)}</div>` : `<div style="padding-bottom:8px"></div>`) +
+          `</td>`
+        );
+      })
+      .join("");
+    return guardar(`<table style="width:100%;border-collapse:collapse;margin:16px 0">` + `<tr>${celdas}</tr>` + `</table>`);
+  });
+
+  return { texto, tablas };
+}
+
 /** Convierte el machote (texto plano) a HTML CON FORMATO (título, negritas, justificado). */
 export function textoPlanoAHtml(texto: string) {
-  const lineas = texto.split("\n");
+  const { texto: textoSinBloques, tablas } = extraerBloquesTabla(texto);
+  const lineas = textoSinBloques.split("\n");
   let enTitulo = true; // bloque superior (título) hasta la primera línea vacía
   let primera = true;
   const out: string[] = [];
   for (const raw of lineas) {
     const linea = raw.replace(/\s+$/, "");
     if (linea.trim() === "") { out.push('<p style="margin:0"><br></p>'); enTitulo = false; continue; }
+    const tokenTabla = linea.trim().match(/^\u0000TBL(\d+)\u0000$/);
+    if (tokenTabla) { out.push(tablas[Number(tokenTabla[1])] ?? ""); enTitulo = false; continue; }
     const t = esc(linea);
     if (enTitulo) {
       const size = primera ? "font-size:15pt" : "font-size:12pt";
@@ -116,6 +222,30 @@ export const EditorWord = forwardRef<EditorWordHandle, { initialHtml: string; ti
   const inputImgRef = useRef<HTMLInputElement>(null);
   const [pie, setPie] = useState("");     // pie de página
   const [marca, setMarca] = useState(""); // marca de agua
+
+  // ---- Separación de hojas (guía visual) ----
+  // Dibuja una línea punteada + etiqueta "Fin de hoja N" cada ALTO_CONTENIDO_HOJA_PX
+  // de contenido, y la mueve junto con el scroll interno del editor, para que
+  // se vea dónde corta cada hoja al imprimir/exportar (aprox.: el navegador
+  // puede variar unos px según fuente instalada).
+  const [scrollTop, setScrollTop] = useState(0);
+  const [altoContenido, setAltoContenido] = useState(0);
+  const medir = () => {
+    if (ref.current) {
+      setAltoContenido(ref.current.scrollHeight);
+      setScrollTop(ref.current.scrollTop);
+    }
+  };
+  useEffect(() => {
+    medir();
+    const el = ref.current;
+    if (!el) return;
+    const obs = new MutationObserver(medir);
+    obs.observe(el, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("resize", medir);
+    return () => { obs.disconnect(); window.removeEventListener("resize", medir); };
+  }, []);
+  const numSeparadores = Math.max(0, Math.floor(altoContenido / ALTO_CONTENIDO_HOJA_PX));
 
   // El padre puede pedir el HTML actual cuando lo necesite (al descargar o
   // enviar), sin que este editor tenga que avisar en cada tecleo — así no se
@@ -343,13 +473,35 @@ export const EditorWord = forwardRef<EditorWordHandle, { initialHtml: string; ti
           contentEditable
           suppressContentEditableWarning
           spellCheck={false}
-          onKeyUp={guardarRango}
+          onKeyUp={(e) => { guardarRango(); medir(); }}
           onMouseUp={guardarRango}
           onBlur={guardarRango}
+          onScroll={medir}
+          onInput={medir}
           className="doc-editable relative z-10 min-h-[58vh] max-h-[66vh] overflow-y-auto bg-transparent px-4 py-5 text-[14px] text-black sm:px-8 sm:py-6"
           style={{ fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1.7 }}
           dangerouslySetInnerHTML={{ __html: initialHtml }}
         />
+        {/* Guía visual de separación de hojas: se mueve con el scroll interno del editor */}
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+          {Array.from({ length: numSeparadores }).map((_, i) => {
+            const top = (i + 1) * ALTO_CONTENIDO_HOJA_PX - scrollTop + 20; // +20 ≈ padding superior del editor
+            if (top < 0 || top > (ref.current?.clientHeight ?? 0)) return null;
+            return (
+              <div key={i} style={{ position: "absolute", left: 0, right: 0, top }}>
+                <div style={{ borderTop: "1px dashed #b0b0b0" }} />
+                <div
+                  style={{
+                    position: "absolute", right: 8, top: 2, fontSize: 9, color: "#888",
+                    background: "rgba(255,255,255,0.9)", padding: "0 4px", fontFamily: "Arial, sans-serif",
+                  }}
+                >
+                  fin de hoja {i + 1} · inicia hoja {i + 2}
+                </div>
+              </div>
+            );
+          })}
+        </div>
         {pie.trim() && (
           <div className="relative z-10 border-t border-dashed border-border px-8 py-2 text-center text-[10px] text-muted-foreground">
             {pie}
