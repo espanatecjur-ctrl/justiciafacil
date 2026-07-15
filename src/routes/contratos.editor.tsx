@@ -159,6 +159,76 @@ function EditorContratos() {
   const plantilla = useMemo(() => plantillas.find((p) => p.tipo === tipo) ?? custom ?? plantillas[0], [tipo, custom]);
   const [valores, setValores] = useState<Record<string, unknown>>({});
   const [apoderadoId, setApoderadoId] = useState<string>("");
+
+  // ---- Leer INE/RFC/CURP y autollenar (IA) ----
+  // Detecta qué "partes" tiene la plantilla actual (Cliente, ParteA, ParteB,
+  // Garante, Cónyuge, etc.) mirando los sufijos de los campos de nombre.
+  const partesDetectadas = useMemo(() => {
+    const sufijos = new Set<string>();
+    for (const c of plantilla.campos) {
+      const m = c.id.match(/^nombre([A-Z][A-Za-z]*)$/);
+      if (m) sufijos.add(m[1]);
+    }
+    return Array.from(sufijos);
+  }, [plantilla]);
+  const [parteId, setParteId] = useState<string>("");
+  useEffect(() => { setParteId(partesDetectadas[0] || ""); }, [partesDetectadas.join(",")]);
+  const inputIdRef = useRef<HTMLInputElement>(null);
+  const [leyendoId, setLeyendoId] = useState(false);
+  const [errorId, setErrorId] = useState<string | null>(null);
+  const [okId, setOkId] = useState<string | null>(null);
+
+  const archivoABase64 = (file: File): Promise<{ base64: string; mime: string }> =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve({ base64: String(r.result).split(",")[1] || "", mime: file.type || "application/pdf" });
+      r.onerror = () => reject(new Error("No se pudo leer el archivo."));
+      r.readAsDataURL(file);
+    });
+
+  const leerIdentificacion = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setLeyendoId(true); setErrorId(null); setOkId(null);
+    try {
+      const documentos = await Promise.all(Array.from(files).map(async (f) => ({ nombre: f.name, ...(await archivoABase64(f)) })));
+      const r = await fetch("/.netlify/functions/leer-identificacion", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documentos }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) { setErrorId(data.error || `Error ${r.status}`); return; }
+      const d = data.datos || {};
+      // Solo llena los campos de la PARTE elegida, y solo si están vacíos.
+      const sufijo = parteId;
+      const asignar: Record<string, unknown> = {};
+      const posibles: [string, any][] = [
+        [`nombre${sufijo}`, d.nombre_completo],
+        [`rfc${sufijo}`, d.rfc],
+        [`curp${sufijo}`, d.curp],
+        [`domicilio${sufijo}`, d.domicilio],
+        [`fechaNacimiento${sufijo}`, d.fecha_nacimiento],
+      ];
+      let llenados = 0;
+      for (const [campoId, valor] of posibles) {
+        const existe = plantilla.campos.some((c) => c.id === campoId);
+        if (existe && valor && !valores[campoId]) { asignar[campoId] = valor; llenados++; }
+      }
+      // Caso especial: si la plantilla trae un solo campo "rfc/curp" combinado (rfcParteB, etc.)
+      const rfcCurpCombo = `rfc${sufijo}`;
+      if (plantilla.campos.some((c) => c.id === rfcCurpCombo && c.label.toLowerCase().includes("curp")) && !valores[rfcCurpCombo] && (d.rfc || d.curp)) {
+        asignar[rfcCurpCombo] = d.rfc || d.curp; llenados++;
+      }
+      setValores((s) => ({ ...s, ...asignar }));
+      setOkId(llenados > 0
+        ? `✓ Se llenaron ${llenados} campo(s) de "${sufijo || "la parte elegida"}" con lo leído (${d.tipo_documento_detectado || "documento"}).`
+        : "La IA leyó el documento pero no encontró campos vacíos para llenar en esta parte (o ya estaban llenos).");
+    } catch (e) {
+      setErrorId(String((e as Error)?.message || e));
+    } finally {
+      setLeyendoId(false);
+      if (inputIdRef.current) inputIdRef.current.value = "";
+    }
+  };
+
   // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
   const [apoderados, setApoderados] = useState<Apoderado[]>([]);
   useEffect(() => { cargarApoderados().then(setApoderados); }, []);
@@ -794,6 +864,30 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         <Card className="legal-card">
           <CardContent className="p-5 max-h-[70vh] overflow-y-auto">
             <p className="font-display font-bold text-base mb-4">Datos del contrato</p>
+
+            {partesDetectadas.length > 0 && (
+              <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50/50 p-3">
+                <p className="text-xs font-semibold text-purple-900">📎 Subir INE / RFC / CURP y autollenar (IA)</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <select value={parteId} onChange={(e) => setParteId(e.target.value)}
+                    className="h-8 rounded-md border border-purple-300 bg-white px-2 text-xs">
+                    {partesDetectadas.map((s) => {
+                      const campoNombre = plantilla.campos.find((c) => c.id === `nombre${s}`);
+                      return <option key={s} value={s}>{campoNombre?.label || s}</option>;
+                    })}
+                  </select>
+                  <button type="button" onClick={() => inputIdRef.current?.click()} disabled={leyendoId}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
+                    {leyendoId ? "✨ Leyendo…" : "✨ Subir y leer"}
+                  </button>
+                  <input ref={inputIdRef} type="file" accept="image/*,.pdf" multiple className="hidden" onChange={(e) => leerIdentificacion(e.target.files)} />
+                </div>
+                <p className="mt-1 text-[11px] text-purple-700">Elige a qué parte pertenece la identificación, sube la foto/PDF (puedes subir varias a la vez: INE, RFC, CURP) y se llenan solo los campos vacíos de esa parte.</p>
+                {errorId && <p className="mt-1 text-[11px] text-red-600">{errorId}</p>}
+                {okId && <p className="mt-1 text-[11px] text-emerald-700">{okId}</p>}
+              </div>
+            )}
+
             <div className="space-y-3">
               {camposVisibles.map((c) => (
                 <div key={c.id}>
