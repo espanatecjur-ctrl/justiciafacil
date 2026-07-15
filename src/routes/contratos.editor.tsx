@@ -229,6 +229,53 @@ function EditorContratos() {
     }
   };
 
+  // ---- Subir CUALQUIER documento (PDF/Word) y autollenar (IA) ----
+  // A diferencia de leerIdentificacion (que solo lee INE/RFC/CURP con un
+  // esquema fijo), esto sirve para CUALQUIER plantilla: manda los campos
+  // de la plantilla abierta (id + etiqueta + opciones) y la IA regresa lo
+  // que encuentre explícitamente en el documento. Solo llena lo que esté
+  // vacío — nunca pisa lo que ya capturaste a mano.
+  const inputDocRef = useRef<HTMLInputElement>(null);
+  const [leyendoDoc, setLeyendoDoc] = useState(false);
+  const [errorDoc, setErrorDoc] = useState<string | null>(null);
+  const [okDoc, setOkDoc] = useState<string | null>(null);
+
+  const leerDocumentoGenerico = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setLeyendoDoc(true); setErrorDoc(null); setOkDoc(null);
+    try {
+      const documentos = await Promise.all(Array.from(files).map(async (f) => ({ nombre: f.name, ...(await archivoABase64(f)) })));
+      // Solo campos "de texto" tiene sentido pedírselos a la IA (no imágenes,
+      // no vínculos a otros registros, no listas de renglones dinámicos).
+      const campos = plantilla.campos
+        .filter((c) => ["text", "textarea", "number", "date", "select"].includes(c.tipo))
+        .map((c) => ({ id: c.id, label: c.label, opciones: c.opciones }));
+      const r = await fetch("/.netlify/functions/leer-documento-generico", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documentos, campos }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) { setErrorDoc(data.error || `Error ${r.status}`); return; }
+      const d = data.datos || {};
+      const asignar: Record<string, unknown> = {};
+      let llenados = 0;
+      for (const c of campos) {
+        const valor = d[c.id];
+        if (valor !== undefined && valor !== null && valor !== "" && !valores[c.id]) {
+          asignar[c.id] = valor; llenados++;
+        }
+      }
+      setValores((s) => ({ ...s, ...asignar }));
+      setOkDoc(llenados > 0
+        ? `✓ Se llenaron ${llenados} campo(s) a partir del documento subido.`
+        : "La IA leyó el documento pero no encontró datos que calzaran con los campos vacíos de esta plantilla.");
+    } catch (e) {
+      setErrorDoc(String((e as Error)?.message || e));
+    } finally {
+      setLeyendoDoc(false);
+      if (inputDocRef.current) inputDocRef.current.value = "";
+    }
+  };
+
   // Apoderados desde Supabase (con la lista de prueba como respaldo inicial).
   const [apoderados, setApoderados] = useState<Apoderado[]>([]);
   useEffect(() => { cargarApoderados().then(setApoderados); }, []);
@@ -887,6 +934,20 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
                 {okId && <p className="mt-1 text-[11px] text-emerald-700">{okId}</p>}
               </div>
             )}
+
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+              <p className="text-xs font-semibold text-amber-900">✨ Subir cualquier documento y autollenar (IA)</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => inputDocRef.current?.click()} disabled={leyendoDoc}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
+                  {leyendoDoc ? "✨ Leyendo…" : "✨ Subir y leer"}
+                </button>
+                <input ref={inputDocRef} type="file" accept=".pdf,.doc,.docx,image/*" multiple className="hidden" onChange={(e) => leerDocumentoGenerico(e.target.files)} />
+              </div>
+              <p className="mt-1 text-[11px] text-amber-700">Sube un acta, contrato firmado, listado de datos, etc. (PDF, Word o foto — hasta 4 a la vez) y se llenan solos los campos vacíos de este formulario que la IA encuentre explícitamente en el documento.</p>
+              {errorDoc && <p className="mt-1 text-[11px] text-red-600">{errorDoc}</p>}
+              {okDoc && <p className="mt-1 text-[11px] text-emerald-700">{okDoc}</p>}
+            </div>
 
             <div className="space-y-3">
               {camposVisibles.map((c) => (
