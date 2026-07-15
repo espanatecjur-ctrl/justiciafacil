@@ -755,9 +755,18 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
     if (valores[k] === "Pagado") valoresConCheck[`${k}Check`] = "☑";
     else if (valores[k] === "Pendiente") valoresConCheck[`${k}Check`] = "☐";
   }
+  // Los campos de APODERADO (DIIPA o del Cliente) no deben salir con la
+  // marca roja "[FALTA: ...]" en medio del párrafo cuando todavía no se
+  // elige apoderado — se deja una sola línea en blanco, limpia, para
+  // llenar a mano después (es normal preparar el machote antes de saber
+  // quién firma).
+  const LINEA_BLANCO_APODERADO = "_".repeat(28);
+  const esCampoApoderado = (key: string) => key.toLowerCase().includes("apoderado");
   texto = texto.replace(/\{\{([a-zA-Z]+)\}\}/g, (_m, key) => {
     const v = valoresConCheck[key];
-    if (v === undefined || v === null || v === "") return `[FALTA: ${etiquetaLegible(key)}]`;
+    if (v === undefined || v === null || v === "") {
+      return esCampoApoderado(key) ? LINEA_BLANCO_APODERADO : `[FALTA: ${etiquetaLegible(key)}]`;
+    }
     return String(v);
   });
 
