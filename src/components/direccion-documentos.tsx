@@ -8,6 +8,8 @@ import { listarTodo, esCarpeta, previewDeId, sincronizarCarpeta } from "@/lib/dr
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { listarAdministradoras, puedeVerNombreReal, crearAdministradora, type Administradora } from "@/lib/administradoras";
 import { listarPredictamenesParaSelector, adjuntarDocumentosAPredictamen, type PredictamenOpcion } from "@/lib/predictamen-guardar";
+import { generarResumenIA } from "@/lib/resumen-documentos";
+import { generarAnalisisIA, guardarAnalisisEnCache } from "@/lib/analisis-ia";
 import {
   casosParaSelector, subirDocPredictamen, crearSolicitudPredictamen, listarSolicitudesPredictamen,
   vincularCarpetaAGarantia, areaDeGarantia,
@@ -140,6 +142,35 @@ export function DireccionDocumentos() {
   };
 
   const quitarCarpeta = () => { setCarpetaSel(null); setDocsCarpeta([]); setErrCarpeta(null); };
+
+  // "Leer con IA" desde aquí mismo (Dirección) — no espera a que URRJ dictamine
+  // para leer los documentos: en cuanto están listos, ya se puede analizar y
+  // dejar guardadas las sugerencias (resumen + cuestionario) para cuando
+  // alguien tome el pre-dictamen, sea Actor o Demandado.
+  const [leyendoIA, setLeyendoIA] = useState(false);
+  const [msgIA, setMsgIA] = useState<string | null>(null);
+  const leerConIA = async () => {
+    const todos = [...docs, ...docsCarpeta];
+    if (!todos.length) { setMsgIA("Sube archivos o escoge una carpeta de Drive primero."); return; }
+    const clave = (caso?.no_credito || garantiaManual?.expediente || caso?.expediente || "").trim();
+    if (!clave) { setMsgIA("Necesito al menos el número de crédito o el expediente de la garantía para poder guardar el análisis — captúralo o elígela de la lista."); return; }
+    setLeyendoIA(true); setMsgIA(null);
+    try {
+      const rResumen = await generarResumenIA(clave, todos, clave);
+      if (!rResumen.ok) throw new Error(rResumen.error || "No se pudo leer los documentos.");
+      const rAnalisis = await generarAnalisisIA(clave, "Actor", todos);
+      if (rAnalisis.ok && rAnalisis.analisis) {
+        // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
+        // la misma respuesta para Demandado SIN volver a gastar IA.
+        await guardarAnalisisEnCache({ ...rAnalisis.analisis, posicion: "Demandado" });
+      }
+      setMsgIA(`✓ Listo — se leyeron ${todos.length} documento(s) y quedaron guardadas las sugerencias para cuando se dictamine (Actor y Demandado).`);
+    } catch (e) {
+      setMsgIA("⚠️ " + String((e as Error)?.message || e));
+    } finally {
+      setLeyendoIA(false);
+    }
+  };
 
   const enviar = async () => {
     if (!casoId && !garantiaManual) { setMsg("Escoge la garantía / expediente."); return; }
@@ -377,7 +408,12 @@ export function DireccionDocumentos() {
             <Button onClick={enviar} disabled={enviando || subiendo} className="bg-[color:var(--teal)] hover:bg-[color:var(--teal)]/90 text-white">
               <Send className="h-4 w-4 mr-1.5" /> {enviando ? "Enviando…" : "Enviar a pre-dictaminar"}
             </Button>
+            <Button onClick={leerConIA} disabled={leyendoIA || (docs.length + docsCarpeta.length === 0)}
+              variant="outline" className="border-purple-300 text-purple-800 hover:bg-purple-50">
+              🤖 {leyendoIA ? "Leyendo…" : "Leer con IA"}
+            </Button>
             {msg && <span className={`text-xs font-medium ${msg.startsWith("Enviado") ? "text-emerald-700" : "text-red-700"}`}>{msg}</span>}
+            {msgIA && <span className={`text-xs font-medium ${msgIA.startsWith("✓") ? "text-emerald-700" : "text-red-700"}`}>{msgIA}</span>}
           </div>
         </div>
       </Card>
