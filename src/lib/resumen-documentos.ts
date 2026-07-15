@@ -34,26 +34,48 @@ export async function obtenerResumenPorClaveCaso(claveCaso: string): Promise<Res
 
 const TAMANO_TANDA = 1; // de uno en uno — con más, algunos documentos grandes se pasan del tiempo permitido
 
-async function llamarResumirDocumentos(documentos: { nombre: string; url: string }[]): Promise<{ ok: boolean; error?: string; resumenes?: ResumenDoc[]; datos_generales?: DatosGeneralesIA | null; modelo?: string }> {
-  try {
-    const r = await fetch("/.netlify/functions/resumir-documentos", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documentos }),
-    });
-    const texto = await r.text();
-    let data: any;
-    try { data = JSON.parse(texto); }
-    catch { return { ok: false, error: r.status === 504 || texto.includes("<html") ? "El servidor tardó demasiado en leer los documentos (tiempo agotado). Intenta con menos documentos a la vez, o vuelve a intentar." : `Respuesta inesperada del servidor (${r.status}).` }; }
-    if (!r.ok || !data.ok) return { ok: false, error: (data.error || `Error ${r.status}`) + (data.crudo ? ` — respuesta: ${data.crudo.slice(0, 200)}` : "") };
-    return { ok: true, resumenes: data.resumenes || [], datos_generales: data.datos_generales || null, modelo: data.modelo };
-  } catch (e) {
-    return { ok: false, error: String((e as Error)?.message || e) };
+const esperar = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+/** ¿Es un error de "se acabó la cuota gratis por ahora" de Google? Si sí,
+ *  saca cuántos segundos pide esperar (Google lo manda en el mensaje). */
+function segundosDeEspera(mensaje: string): number | null {
+  if (!/quota|429|resource_exhausted/i.test(mensaje)) return null;
+  const m = mensaje.match(/retry in ([\d.]+)s/i);
+  return m ? Math.ceil(parseFloat(m[1])) + 2 : 25;
+}
+
+async function llamarResumirDocumentos(documentos: { nombre: string; url: string }[], onProgreso?: (msg: string) => void): Promise<{ ok: boolean; error?: string; resumenes?: ResumenDoc[]; datos_generales?: DatosGeneralesIA | null; modelo?: string }> {
+  for (let intento = 1; intento <= 4; intento++) {
+    try {
+      const r = await fetch("/.netlify/functions/resumir-documentos", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documentos }),
+      });
+      const texto = await r.text();
+      let data: any;
+      try { data = JSON.parse(texto); }
+      catch { return { ok: false, error: r.status === 504 || texto.includes("<html") ? "El servidor tardó demasiado en leer los documentos (tiempo agotado). Intenta con menos documentos a la vez, o vuelve a intentar." : `Respuesta inesperada del servidor (${r.status}).` }; }
+      if (!r.ok || !data.ok) {
+        const mensaje = (data.error || `Error ${r.status}`) + (data.crudo ? ` — respuesta: ${data.crudo.slice(0, 200)}` : "");
+        const espera = segundosDeEspera(mensaje);
+        if (espera && intento < 4) {
+          onProgreso?.(`Google pidió esperar ${espera}s (límite gratis por minuto)…`);
+          await esperar(espera * 1000);
+          continue;
+        }
+        return { ok: false, error: mensaje };
+      }
+      return { ok: true, resumenes: data.resumenes || [], datos_generales: data.datos_generales || null, modelo: data.modelo };
+    } catch (e) {
+      return { ok: false, error: String((e as Error)?.message || e) };
+    }
   }
+  return { ok: false, error: "No se pudo leer después de varios intentos." };
 }
 
 /** Manda los documentos en TANDAS pequeñas (no todos de un jalón) — así cada
  *  llamada siempre cabe dentro del tiempo que da Netlify, sin importar
  *  cuántos documentos traiga la solicitud. Los resultados se juntan en uno solo. */
-export async function generarResumenIA(clave: string, documentos: { nombre: string; url: string }[], claveCaso?: string): Promise<{ ok: boolean; error?: string; cache?: ResumenDocumentosCache }> {
+export async function generarResumenIA(clave: string, documentos: { nombre: string; url: string }[], claveCaso?: string, onProgreso?: (hecho: number, total: number, msg?: string) => void): Promise<{ ok: boolean; error?: string; cache?: ResumenDocumentosCache }> {
   if (!clave) return { ok: false, error: "Falta el identificador de la solicitud." };
   if (!documentos.length) return { ok: false, error: "No hay documentos para resumir." };
   const resumenesJuntos: ResumenDoc[] = [];
@@ -61,7 +83,8 @@ export async function generarResumenIA(clave: string, documentos: { nombre: stri
   let modelo: string | undefined;
   for (let i = 0; i < documentos.length; i += TAMANO_TANDA) {
     const tanda = documentos.slice(i, i + TAMANO_TANDA);
-    const r = await llamarResumirDocumentos(tanda);
+    onProgreso?.(i, documentos.length, tanda[0]?.nombre);
+    const r = await llamarResumirDocumentos(tanda, (msg) => onProgreso?.(i, documentos.length, msg));
     if (!r.ok) return { ok: false, error: r.error + (documentos.length > TAMANO_TANDA ? ` (fallo en el grupo ${Math.floor(i / TAMANO_TANDA) + 1} de ${Math.ceil(documentos.length / TAMANO_TANDA)})` : "") };
     resumenesJuntos.push(...(r.resumenes || []));
     // Se usan los primeros datos generales que salgan con algo (no todas las
@@ -72,6 +95,7 @@ export async function generarResumenIA(clave: string, documentos: { nombre: stri
     }
     modelo = r.modelo || modelo;
   }
+  onProgreso?.(documentos.length, documentos.length);
   const fila: ResumenDocumentosCache = {
     clave, clave_caso: claveCaso || null,
     resumenes: resumenesJuntos, datos_generales: datosGeneralesJuntos,
