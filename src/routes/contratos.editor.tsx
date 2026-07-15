@@ -17,6 +17,24 @@ import { EditorWord, textoPlanoAHtml, type EditorWordHandle } from "@/components
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 import { guardarContrato, listarCartasCambio, siguienteFolio, marcarEnviado, type ContratoGenerado } from "@/lib/contrato-generado";
 import { enviarCorreo, textoABase64 } from "@/lib/enviar-correo";
+import { buscarClientesJC, type ClienteJC } from "@/lib/juris-clientes";
+import { buscarClientesTlajomulco, type ClienteTlajomulco } from "@/lib/clientes-tlajomulco";
+
+/** Resultado unificado del buscador de clientes: combina la tabla propia de
+ *  JusticiaFácil (clientes_tlajomulco) y JurisConecta (solo lectura), para
+ *  que el selector del editor los muestre juntos sin importar de dónde vienen. */
+interface ClienteResultado {
+  id: string;
+  nombre: string;
+  folio: string | null;
+  correo: string | null;
+  telefono: string | null;
+  domicilio: string | null;
+  garantia: string | null;
+  curp_rfc: string | null;
+  valorOperacion: string | null;
+  origen: "JusticiaFácil" | "JurisConecta";
+}
 
 const searchSchema = z.object({ tipo: z.string().optional() });
 
@@ -286,6 +304,84 @@ function EditorContratos() {
     if (tipo === "contrato_cambio") listarCartasCambio().then(setCartas);
   }, [tipo]);
 
+  // ── Elegir cliente (JusticiaFácil + JurisConecta) y autollenar ─────────────
+  // Busca por nombre/correo/teléfono/folio/domicilio en la tabla propia de
+  // JusticiaFácil (clientes_tlajomulco) y en JurisConecta (solo lectura) a la
+  // vez, y junta los resultados. Al elegir uno, llena nombre/teléfono/correo/
+  // domicilio (y valorOperacion si la tabla propia lo trae) de la parte
+  // "Cliente" — y, si la plantilla es de Tlajomulco y la garantía del cliente
+  // hace match con una ficha del catálogo, la elige sola también.
+  const [busquedaCliente, setBusquedaCliente] = useState("");
+  const [resultadosCliente, setResultadosCliente] = useState<ClienteResultado[]>([]);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [clienteElegido, setClienteElegido] = useState<ClienteResultado | null>(null);
+  useEffect(() => {
+    const q = busquedaCliente.trim();
+    if (q.length < 2) { setResultadosCliente([]); return; }
+    let vivo = true;
+    setBuscandoCliente(true);
+    const t = setTimeout(() => {
+      Promise.all([buscarClientesTlajomulco(q), buscarClientesJC(q)]).then(([locales, jc]) => {
+        if (!vivo) return;
+        // Primero los de la tabla propia de JusticiaFácil (prioridad), luego JurisConecta.
+        const combinados: ClienteResultado[] = [
+          ...locales.map((c) => ({
+            id: `local-${c.id}`, nombre: c.nombre, folio: null, correo: c.correo, telefono: c.telefono,
+            domicilio: c.domicilio, garantia: c.domicilio, curp_rfc: null,
+            valorOperacion: c.valor_operacion != null ? String(c.valor_operacion) : null,
+            origen: "JusticiaFácil" as const,
+          })),
+          ...jc.map((c) => ({
+            id: `jc-${c.id}`, nombre: c.nombre ?? "", folio: c.folio, correo: c.email, telefono: c.telefono,
+            domicilio: c.domicilio, garantia: c.garantia, curp_rfc: c.curp_rfc,
+            valorOperacion: null as string | null,
+            origen: "JurisConecta" as const,
+          })),
+        ];
+        setResultadosCliente(combinados);
+        setBuscandoCliente(false);
+      });
+    }, 350);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [busquedaCliente]);
+
+  const normaliza = (s: string) =>
+    (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+
+  function elegirCliente(c: ClienteResultado) {
+    setClienteElegido(c);
+    setBusquedaCliente("");
+    setResultadosCliente([]);
+    const sufijo = "Cliente"; // la mayoría de los machotes usan nombreCliente/telefonoCliente/correoCliente
+    const asignar: Record<string, unknown> = {};
+    const posibles: [string, unknown][] = [
+      [`nombre${sufijo}`, c.nombre],
+      [`telefono${sufijo}`, c.telefono],
+      [`correo${sufijo}`, c.correo],
+      [`domicilio${sufijo}`, c.domicilio],
+      [`rfc${sufijo}`, c.curp_rfc],
+      [`curp${sufijo}`, c.curp_rfc],
+    ];
+    for (const [campoId, valor] of posibles) {
+      const existe = plantilla.campos.some((x) => x.id === campoId);
+      if (existe && valor) asignar[campoId] = valor;
+    }
+    // Si la tabla propia ya trae el valor de la operación verificado, y la
+    // plantilla tiene ese campo vacío, se llena también.
+    if (c.valorOperacion && plantilla.campos.some((x) => x.id === "valorOperacion") && !valores.valorOperacion) {
+      asignar.valorOperacion = c.valorOperacion;
+    }
+    setValores((v) => ({ ...v, ...asignar }));
+
+    // Si es un machote de Tlajomulco y la garantía del cliente calza con una
+    // ficha del catálogo (por calle/número), la selecciona sola.
+    if (esTlajomulco && catalogo.length && c.garantia) {
+      const gNorm = normaliza(c.garantia);
+      const match = catalogo.find((p) => gNorm.includes(normaliza(p.calle)));
+      if (match) elegirDelCatalogo(match.id);
+    }
+  }
+
   // ── Catálogo Tlajomulco (Fraccionamiento San Antonio) ──────────────────────
   // Solo aplica a los machotes del "apartado Tlajomulco". Se carga aparte
   // (import perezoso) porque trae las fotos de las 50 fichas y pesa varios MB;
@@ -325,6 +421,13 @@ function EditorContratos() {
       superficieTerreno: p.terreno,
       fraccionamiento: `${p.fraccionamiento}, ${p.municipio}`,
       fichaFotografica: p.ficha,
+      // Montos verificados (Relación de Cobros Tlajomulco) — solo si esta
+      // ficha ya tiene operación registrada; si no, no se tocan estos campos.
+      ...(p.valorOperacion ? { valorOperacion: p.valorOperacion } : {}),
+      ...(p.montoApartado ? { montoApartado: p.montoApartado, estadoApartado: p.estadoApartado } : {}),
+      ...(p.montoPagoUno ? { montoPagoUno: p.montoPagoUno, estadoPagoUno: p.estadoPagoUno } : {}),
+      ...(p.montoPagoDos ? { montoPagoDos: p.montoPagoDos, estadoPagoDos: p.estadoPagoDos } : {}),
+      ...(p.montoFiniquito ? { montoFiniquito: p.montoFiniquito, estadoFiniquito: p.estadoFiniquito } : {}),
     }));
   }
 
@@ -842,6 +945,52 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         onSelect={seleccionarApoderado}
       />
 
+      <div className="rounded-lg border border-purple-200 bg-purple-50/40 px-4 py-3">
+        <label className="text-xs font-semibold uppercase tracking-wide text-purple-800">
+          🔍 Elegir cliente (JusticiaFácil / JurisConecta) y autollenar
+        </label>
+        {clienteElegido ? (
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-purple-100 px-3 py-1 font-medium text-purple-900">
+              {clienteElegido.nombre}{clienteElegido.folio ? ` · ${clienteElegido.folio}` : ""}
+              <span className="ml-1 text-[10px] font-normal text-purple-500">({clienteElegido.origen})</span>
+            </span>
+            <button type="button" onClick={() => { setClienteElegido(null); }}
+              className="text-xs text-purple-700 underline">
+              cambiar
+            </button>
+          </div>
+        ) : (
+          <div className="relative mt-1">
+            <input
+              value={busquedaCliente}
+              onChange={(e) => setBusquedaCliente(e.target.value)}
+              placeholder="Nombre, correo, teléfono o folio del cliente…"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+            {buscandoCliente && <p className="mt-1 text-[11px] text-muted-foreground">Buscando…</p>}
+            {resultadosCliente.length > 0 && (
+              <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-purple-200 bg-white shadow-lg">
+                {resultadosCliente.map((c) => (
+                  <button key={c.id} type="button" onClick={() => elegirCliente(c)}
+                    className="block w-full border-b border-purple-100 px-3 py-2 text-left text-xs last:border-0 hover:bg-purple-50">
+                    <span className="font-medium text-purple-900">{c.nombre}</span>
+                    {c.folio && <span className="ml-1 text-purple-600">· {c.folio}</span>}
+                    <span className="ml-1 rounded bg-purple-50 px-1 text-[9px] font-semibold text-purple-500">{c.origen}</span>
+                    <br />
+                    <span className="text-muted-foreground">{[c.correo, c.telefono, c.garantia].filter(Boolean).join(" · ")}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <p className="mt-1 text-[11px] text-purple-700">
+          Busca al cliente ya dado de alta en JusticiaFácil o JurisConecta y llena solo(a) nombre, teléfono, correo y domicilio de esta plantilla.
+          {esTlajomulco && " Si su garantía calza con una ficha del catálogo de abajo, también se elige sola."}
+        </p>
+      </div>
+
       {esTlajomulco && (
         <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-4 py-3">
           <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--teal)]">
@@ -858,12 +1007,14 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
             {catalogo.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.id === RECOMENDADA_ID ? "★ " : ""}{p.calle} — Manzana {p.manzana}, Lote {p.lote} · {p.estatusOcupacion} / {p.estatusObra}
+                {p.clienteReferencia ? ` · ${p.clienteReferencia}` : ""}{p.valorOperacion ? ` · $${Number(p.valorOperacion).toLocaleString("es-MX")}` : ""}
               </option>
             ))}
           </select>
           <p className="mt-1 text-[11px] text-[color:var(--teal)]/80">
             Llena garantía, manzana, lote, domicilio, superficie, estatus y la ficha fotográfica de una sola vez.
             {" "}★ = recomendada (Las Primaveras 28: terminada, con la información más completa de las 50).
+            {" "}Las fichas con cliente y $ ya traen también el estado de cuenta verificado (apartado, 35%, 50%, finiquito).
           </p>
         </div>
       )}
