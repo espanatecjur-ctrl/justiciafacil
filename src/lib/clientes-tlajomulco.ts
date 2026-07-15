@@ -21,12 +21,13 @@ export interface ClienteTlajomulco {
 
 const SELECT = "id,nombre,nombre_original,correo,telefono,domicilio,valor_operacion";
 
-/** Busca por nombre, correo, teléfono o domicilio. Solo lectura. */
+/** Busca por nombre, nombre ORIGINAL (antes de un cambio de cliente), correo,
+ *  teléfono o domicilio. Solo lectura. */
 export async function buscarClientesTlajomulco(texto: string): Promise<ClienteTlajomulco[]> {
   const q = (texto || "").trim();
   if (q.length < 2) return [];
   const enc = encodeURIComponent(`%${q}%`);
-  const filtro = `or=(nombre.ilike.${enc},correo.ilike.${enc},telefono.ilike.${enc},domicilio.ilike.${enc})`;
+  const filtro = `or=(nombre.ilike.${enc},nombre_original.ilike.${enc},correo.ilike.${enc},telefono.ilike.${enc},domicilio.ilike.${enc})`;
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/clientes_tlajomulco?select=${SELECT}&${filtro}&limit=25`, { headers });
     if (!r.ok) return [];
