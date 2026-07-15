@@ -746,9 +746,11 @@ export function renderContrato(plantilla: PlantillaContrato, valores: Record<str
   });
 
   // Reemplazo simple {{campo}}
+  const etiquetaLegible = (key: string) =>
+    key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
   texto = texto.replace(/\{\{([a-zA-Z]+)\}\}/g, (_m, key) => {
     const v = valores[key];
-    if (v === undefined || v === null || v === "") return `____${key}____`;
+    if (v === undefined || v === null || v === "") return `[FALTA: ${etiquetaLegible(key)}]`;
     return String(v);
   });
 
