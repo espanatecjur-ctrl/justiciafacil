@@ -10,9 +10,11 @@ const MODELO = "gemini-2.5-flash"; // 2.5-flash-lite ya no está disponible para
 const MAX_DOCUMENTOS = 20;
 const LIMITE_BYTES_DOC = 15 * 1024 * 1024;
 
+const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
+
 async function descargarComoBase64(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`No se pudo descargar (${r.status})`);
+  const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+  if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
   const mime = r.headers.get("content-type") || "application/pdf";
@@ -36,6 +38,7 @@ export default async (req) => {
 
     const parts = [];
     const nombresEnOrden = [];
+    const erroresDescarga = [];
     for (const d of tanda) {
       try {
         const { base64, mime } = await descargarComoBase64(d.url);
@@ -43,7 +46,11 @@ export default async (req) => {
         nombresEnOrden.push(d.nombre);
       } catch (e) {
         nombresEnOrden.push(d.nombre); // se incluye igual, para que el índice no se desalinee
+        erroresDescarga.push(`${d.nombre}: ${String((e && e.message) || e)}`);
       }
+    }
+    if (parts.length === 0) {
+      return new Response(JSON.stringify({ ok: false, error: `No se pudo descargar ningún documento (ej: ${erroresDescarga[0] || "motivo desconocido"}). No se generó nada por adivinar.` }), { status: 400 });
     }
 
     const instruccion = `Aquí van ${nombresEnOrden.length} documentos de un expediente legal, EN ESTE ORDEN:
