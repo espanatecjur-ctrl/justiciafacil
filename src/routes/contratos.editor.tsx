@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { PageHeader } from "@/components/page-header";
 import { plantillas, renderContrato, valoresIniciales, type PlantillaCampo } from "@/lib/contract-templates";
 import type { ContratoTipo } from "@/lib/legal-types";
@@ -13,7 +13,7 @@ import { Download, FileText, Eye, PenLine, RefreshCw, Save, Check, Mail, X } fro
 import { z } from "zod";
 import { SelectorApoderado } from "@/components/selector-apoderado";
 import { VinculoRegistros } from "@/components/vinculo-registros";
-import { EditorWord, textoPlanoAHtml } from "@/components/editor-word";
+import { EditorWord, textoPlanoAHtml, type EditorWordHandle } from "@/components/editor-word";
 import { valoresApoderado, cargarApoderados, APODERADO_KEYS, type Apoderado } from "@/lib/apoderados";
 import { guardarContrato, listarCartasCambio, siguienteFolio, marcarEnviado, type ContratoGenerado } from "@/lib/contrato-generado";
 import { enviarCorreo, textoABase64 } from "@/lib/enviar-correo";
@@ -228,10 +228,10 @@ function EditorContratos() {
   // Se congela al entrar (o al Regenerar) para no borrar los cambios manuales.
   const [semillaWord, setSemillaWord] = useState<string>("");
   const [claveWord, setClaveWord] = useState(0);
-  // Lo que de verdad hay ahorita en el editor Word (con ediciones a mano e
-  // imágenes ya insertadas). El Word/PDF que se manda por correo se arma
-  // desde AQUÍ, no desde los datos en crudo — para que salga completo.
-  const [htmlEditado, setHtmlEditado] = useState<string>("");
+  // Referencia al editor Word para pedirle su contenido REAL justo antes de
+  // descargar/enviar (no guardamos ese HTML en estado para no re-renderizar
+  // toda la pantalla en cada tecleo — eso era lo que rompía la edición).
+  const editorWordRef = useRef<EditorWordHandle | null>(null);
 
   // Al escoger un apoderado, se copian sus datos a `valores` (auto-llenado).
   // Al quitarlo, se borran esas mismas llaves.
@@ -501,27 +501,26 @@ function EditorContratos() {
     return html;
   }
   // Lo que hay que usar AHORA MISMO para descargar/enviar: si ya se entró al
-  // editor, lo que de verdad está en pantalla (htmlEditado, con ediciones a
-  // mano); si no, se arma fresco desde los datos (incluida la ficha).
+  // editor, se le pide al editor su contenido REAL en este instante (con
+  // ediciones a mano); si no, se arma fresco desde los datos (con la ficha).
   function contenidoActualHtml(): string {
-    if (modo === "word" && htmlEditado) return htmlEditado;
+    if (modo === "word") {
+      const h = editorWordRef.current?.obtenerHtml();
+      if (h) return h;
+    }
     return construirSemillaWord();
   }
   // Entrar al editor: registra folio y congela el contrato actual.
   async function entrarWord() {
     await obtenerFolio();
-    const semilla = construirSemillaWord();
-    setSemillaWord(semilla);
-    setHtmlEditado(semilla);
+    setSemillaWord(construirSemillaWord());
     setClaveWord((k) => k + 1);
     setModo("word");
   }
   // Regenerar: vuelve a cargar desde los datos (descarta cambios manuales).
   function regenerarWord() {
     if (!window.confirm("Esto vuelve a armar el documento desde los datos y se perderán los cambios que hiciste a mano. ¿Continuar?")) return;
-    const semilla = construirSemillaWord();
-    setSemillaWord(semilla);
-    setHtmlEditado(semilla);
+    setSemillaWord(construirSemillaWord());
     setClaveWord((k) => k + 1);
   }
 
@@ -846,7 +845,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
                 </div>
               </>
             ) : (
-              <EditorWord key={claveWord} initialHtml={semillaWord} titulo={plantilla.nombre} folio={folioGuardado} onCambio={setHtmlEditado} />
+              <EditorWord ref={editorWordRef} key={claveWord} initialHtml={semillaWord} titulo={plantilla.nombre} folio={folioGuardado} />
             )}
           </CardContent>
         </Card>
