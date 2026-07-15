@@ -1,3 +1,11 @@
 [build]
   command = "npm run build"
   publish = "dist/client"
+
+# Las funciones que leen documentos con IA (varios PDFs + Gemini) tardan más
+# que el límite por defecto de 10s — se les da más tiempo específicamente.
+[functions."analizar-documentos"]
+  timeout = 60
+
+[functions."resumir-documentos"]
+  timeout = 60
