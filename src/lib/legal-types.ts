@@ -169,7 +169,8 @@ export type ContratoTipo =
   | "solicitud_cotizacion_diipa"
   | "oficio_servicios_diipa"
   | "cotizacion_marco_diipa"
-  | "acta_entrega_posesion";
+  | "acta_entrega_posesion"
+  | "promesa_invasores";
 
 export interface DictamenIA {
   id: string;
