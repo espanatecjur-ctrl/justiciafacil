@@ -49,13 +49,22 @@ export default async (req) => {
     const instruccion = `Aquí van ${nombresEnOrden.length} documentos de un expediente legal, EN ESTE ORDEN:
 ${nombresEnOrden.map((n, i) => `${i + 1}. ${n}`).join("\n")}
 
-Para CADA documento (en el mismo orden), da un resumen de 1-2 renglones (máximo 30 palabras) de qué es y qué dice — y su tipo (Contrato, Demanda, Acuerdo, Notificación, Emplazamiento, Dictamen, Estado de cuenta, Comprobante, Otro).
+1) Para CADA documento (en el mismo orden), da un resumen de 1-2 renglones (máximo 30 palabras) de qué es y qué dice — y su tipo (Contrato, Demanda, Acuerdo, Auto Judicial, Emplazamiento, Contestación de Demanda, Solicitud, Notificación, Comprobante, Verificación, Dictamen, Otro).
+
+2) Además, busca en TODOS los documentos juntos estos datos generales del caso (si aparecen en más de uno, usa el más completo/confiable):
+   - administradora o banco que cede los derechos
+   - número de crédito
+   - dirección completa del inmueble/garantía
+   - nombre del deudor / acreditado
+   - juzgado
+   - número de expediente
 
 Responde ÚNICAMENTE con un JSON válido (sin texto extra, sin \`\`\`), con esta forma EXACTA:
-[
-  { "nombre": "string — el mismo nombre que te di", "tipo": "string", "resumen": "string, máximo 30 palabras" }
-]
-No inventes contenido que no esté en el documento — si no se puede leer, di "No se pudo leer el contenido".`;
+{
+  "resumenes": [ { "nombre": "string — el mismo nombre que te di", "tipo": "string", "resumen": "string, máximo 30 palabras" } ],
+  "datos_generales": { "administradora": "string o null", "numero_credito": "string o null", "direccion": "string o null", "deudor": "string o null", "juzgado": "string o null", "expediente": "string o null" }
+}
+No inventes contenido que no esté en el documento — si no se puede leer, di "No se pudo leer el contenido". Si un dato general no aparece, usa null.`;
 
     parts.push({ text: instruccion });
 
@@ -79,20 +88,23 @@ No inventes contenido que no esté en el documento — si no se puede leer, di "
       const razon = cand?.finishReason || "desconocida";
       return new Response(JSON.stringify({ ok: false, error: `La IA no regresó texto (motivo: ${razon}). Prueba con menos documentos.` }), { status: 502 });
     }
-    // Extractor tolerante: por si Google agrega ```json o texto alrededor del arreglo.
-    let resumenes;
-    try { resumenes = JSON.parse(texto); }
+    // Extractor tolerante: por si Google agrega ```json o texto alrededor del objeto.
+    let salida;
+    try { salida = JSON.parse(texto); }
     catch {
-      const m = texto.match(/\[[\s\S]*\]/);
-      if (m) { try { resumenes = JSON.parse(m[0]); } catch { /* sigue null */ } }
+      const m = texto.match(/\{[\s\S]*\}/);
+      if (m) { try { salida = JSON.parse(m[0]); } catch { /* sigue null */ } }
     }
-    if (!resumenes) {
+    if (!salida) {
       return new Response(JSON.stringify({ ok: false, error: "La IA no regresó un JSON válido.", crudo: texto.slice(0, 800) }), { status: 502 });
     }
 
-    return new Response(JSON.stringify({ ok: true, resumenes, modelo: MODELO }), {
-      status: 200, headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({
+      ok: true,
+      resumenes: salida.resumenes || [],
+      datos_generales: salida.datos_generales || null,
+      modelo: MODELO,
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: String((e && e.message) || e) }), { status: 500 });
   }
