@@ -69,6 +69,19 @@ export function textoPlanoAHtml(texto: string) {
       out.push(`<p style="margin:6px 0 4px;text-align:justify"><b>${esc(mr[1])}</b>${esc(linea.slice(mr[1].length))}</p>`);
       continue;
     }
+    // Líneas de firma / testigos: en el machote se separan con VARIOS espacios
+    // ("C. {{nombreA}}          C. {{nombreB}}", "Testigo: ___     Testigo: ___").
+    // En HTML los espacios se colapsan a uno solo y se ven pegados/cruzados —
+    // aquí se convierten en casillas de tabla de verdad, una por columna.
+    const columnas = linea.split(/ {3,}/).map((s) => s.trim()).filter(Boolean);
+    if (columnas.length >= 2 && columnas.length <= 4 && linea.length < 160) {
+      const ancho = Math.floor(100 / columnas.length);
+      const celdas = columnas.map((c) =>
+        `<td style="padding:6px 14px;vertical-align:top;width:${ancho}%;text-align:center">${esc(c)}</td>`
+      ).join("");
+      out.push(`<table style="width:100%;border-collapse:collapse;margin:10px 0"><tr>${celdas}</tr></table>`);
+      continue;
+    }
     out.push(`<p style="margin:0 0 6px;text-align:justify">${t}</p>`);
   }
   return out.join("");
