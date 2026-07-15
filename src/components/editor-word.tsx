@@ -204,10 +204,22 @@ export function EditorWord({ initialHtml, titulo, folio, onCambio }: { initialHt
       : "";
     const wmDiv = marca.trim() ? `<div class="wm">${esc(marca)}</div>` : "";
     const pieDiv = pie.trim() ? `<div class="pie">${esc(pie)}</div>` : "";
+    // Barra "Volver" fija arriba: no sale en el PDF/impresión (@media print la
+    // esconde), solo sirve en pantalla para cerrar esta pestaña y regresar
+    // a donde se estaba editando.
+    const barraVolverCss =
+      `.barra-volver{position:sticky;top:0;z-index:99;display:flex;align-items:center;gap:8px;` +
+      `background:#0B1E3A;color:#fff;padding:8px 14px;font-family:Arial,sans-serif;font-size:13px}` +
+      `.barra-volver button{background:#fff;color:#0B1E3A;border:none;border-radius:6px;padding:6px 12px;` +
+      `font-size:13px;font-weight:600;cursor:pointer}` +
+      `@media print{.barra-volver{display:none}}`;
+    const barraVolverHtml =
+      `<div class="barra-volver"><button onclick="window.close()">← Volver a editar</button>` +
+      `<span>Si el navegador no deja cerrar la pestaña, ciérrala a mano o regresa a la otra pestaña.</span></div>`;
     w.document.write(
       `<!doctype html><html><head><meta charset='utf-8'><title>${titulo}</title>` +
-        `<style>@page{margin:2.5cm}${estilosDoc}body{max-width:800px;margin:0 auto}${marcaCss}${pieCss}</style></head>` +
-        `<body>${wmDiv}${folioHtml}${contenido}${pieDiv}<script>window.onload=()=>window.print()<\/script></body></html>`,
+        `<style>@page{margin:2.5cm}${estilosDoc}body{max-width:800px;margin:0 auto}${marcaCss}${pieCss}${barraVolverCss}</style></head>` +
+        `<body>${barraVolverHtml}${wmDiv}${folioHtml}${contenido}${pieDiv}<script>window.onload=()=>window.print()<\/script></body></html>`,
     );
     w.document.close();
   }
