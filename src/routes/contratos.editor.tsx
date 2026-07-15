@@ -169,6 +169,48 @@ function EditorContratos() {
     if (tipo === "contrato_cambio") listarCartasCambio().then(setCartas);
   }, [tipo]);
 
+  // ── Catálogo Tlajomulco (Fraccionamiento San Antonio) ──────────────────────
+  // Solo aplica a los machotes del "apartado Tlajomulco". Se carga aparte
+  // (import perezoso) porque trae las fotos de las 50 fichas y pesa varios MB;
+  // así no se descarga en los demás contratos.
+  const TIPOS_TLAJOMULCO: ContratoTipo[] = ["acta_entrega_posesion", "instruccion_notarial_diipa", "promesa_invasores", "cesion_adjudicataria"];
+  const esTlajomulco = TIPOS_TLAJOMULCO.includes(tipo);
+  const RECOMENDADA_ID = "las-primaveras-28-21";
+  const [catalogo, setCatalogo] = useState<import("@/lib/catalogo-tlajomulco").PropiedadCatalogo[]>([]);
+  const [catalogoId, setCatalogoId] = useState("");
+  useEffect(() => {
+    if (esTlajomulco && catalogo.length === 0) {
+      import("@/lib/catalogo-tlajomulco").then((m) => setCatalogo(m.catalogoTlajomulco));
+    }
+  }, [esTlajomulco, catalogo.length]);
+
+  // Al elegir una ficha del catálogo, llena los campos que reconozca el machote
+  // activo (cada uno usa nombres de campo un poco distintos) y la ficha
+  // fotográfica — por eso escribe TODAS las llaves posibles; las que el
+  // machote no usa simplemente no se imprimen.
+  function elegirDelCatalogo(id: string) {
+    setCatalogoId(id);
+    const p = catalogo.find((x) => x.id === id);
+    if (!p) return;
+    const partes = p.calle.split(" ");
+    const numero = partes[partes.length - 1];
+    const nombreCalle = partes.slice(0, -1).join(" ");
+    setValores((v) => ({
+      ...v,
+      nombreGarantia: p.calle,
+      manzana: p.manzana,
+      lote: p.lote,
+      calleInmueble: nombreCalle,
+      numeroInmueble: numero,
+      domicilioGarantia: `${p.calle}, Manzana ${p.manzana}, Lote ${p.lote}, ${p.fraccionamiento}, C.P. ${p.cp}, ${p.municipio}`,
+      estatusInmueble: `${p.estatusOcupacion} · ${p.estatusObra}`,
+      superficieConstruccion: p.construccion,
+      superficieTerreno: p.terreno,
+      fraccionamiento: `${p.fraccionamiento}, ${p.municipio}`,
+      fichaFotografica: p.ficha,
+    }));
+  }
+
   // Copia los datos de una Carta registrada al Contrato (mismo mapeo que el Paquete).
   function autollenarDesdeCarta(v: Record<string, unknown>) {
     setValores((cur) => {
@@ -683,6 +725,32 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px}</style></head>
         value={apoderadoId}
         onSelect={seleccionarApoderado}
       />
+
+      {esTlajomulco && (
+        <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-4 py-3">
+          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--teal)]">
+            Catálogo Tlajomulco (Fraccionamiento San Antonio)
+          </label>
+          <select
+            value={catalogoId}
+            onChange={(e) => elegirDelCatalogo(e.target.value)}
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">
+              {catalogo.length ? `— Elige una de las ${catalogo.length} fichas —` : "Cargando catálogo…"}
+            </option>
+            {catalogo.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === RECOMENDADA_ID ? "★ " : ""}{p.calle} — Manzana {p.manzana}, Lote {p.lote} · {p.estatusOcupacion} / {p.estatusObra}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-[color:var(--teal)]/80">
+            Llena garantía, manzana, lote, domicilio, superficie, estatus y la ficha fotográfica de una sola vez.
+            {" "}★ = recomendada (Las Primaveras 28: terminada, con la información más completa de las 50).
+          </p>
+        </div>
+      )}
 
       {tipo === "contrato_cambio" && (
         <div className="rounded-lg border border-[color:var(--gold,#C2A24C)]/40 bg-amber-50/60 px-4 py-3">
