@@ -228,22 +228,34 @@ export const EditorWord = forwardRef<EditorWordHandle, { initialHtml: string; ti
   // de contenido, y la mueve junto con el scroll interno del editor, para que
   // se vea dónde corta cada hoja al imprimir/exportar (aprox.: el navegador
   // puede variar unos px según fuente instalada).
+  //
+  // IMPORTANTE: medir el ALTO del documento fuerza un re-render (setState).
+  // Si se hace en CADA tecla (como estaba antes), en documentos largos el
+  // editor se traba y parece que "no guarda" lo que escribes. Por eso el
+  // alto se mide con un pequeño retraso tras dejar de escribir (debounce),
+  // nunca de inmediato; el scroll sí se sigue en vivo porque no se dispara
+  // mientras tecleas.
   const [scrollTop, setScrollTop] = useState(0);
   const [altoContenido, setAltoContenido] = useState(0);
-  const medir = () => {
-    if (ref.current) {
-      setAltoContenido(ref.current.scrollHeight);
-      setScrollTop(ref.current.scrollTop);
-    }
+  const medirScroll = () => { if (ref.current) setScrollTop(ref.current.scrollTop); };
+  const medirAltoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const medirAltoAhora = () => { if (ref.current) setAltoContenido(ref.current.scrollHeight); };
+  const medirAltoConRetraso = () => {
+    if (medirAltoTimeoutRef.current) clearTimeout(medirAltoTimeoutRef.current);
+    medirAltoTimeoutRef.current = setTimeout(medirAltoAhora, 500);
   };
   useEffect(() => {
-    medir();
+    medirAltoAhora();
     const el = ref.current;
     if (!el) return;
-    const obs = new MutationObserver(medir);
+    const obs = new MutationObserver(medirAltoConRetraso);
     obs.observe(el, { childList: true, subtree: true, characterData: true });
-    window.addEventListener("resize", medir);
-    return () => { obs.disconnect(); window.removeEventListener("resize", medir); };
+    window.addEventListener("resize", medirAltoConRetraso);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener("resize", medirAltoConRetraso);
+      if (medirAltoTimeoutRef.current) clearTimeout(medirAltoTimeoutRef.current);
+    };
   }, []);
   const numSeparadores = Math.max(0, Math.floor(altoContenido / ALTO_CONTENIDO_HOJA_PX));
 
@@ -473,11 +485,10 @@ export const EditorWord = forwardRef<EditorWordHandle, { initialHtml: string; ti
           contentEditable
           suppressContentEditableWarning
           spellCheck={false}
-          onKeyUp={(e) => { guardarRango(); medir(); }}
+          onKeyUp={guardarRango}
           onMouseUp={guardarRango}
           onBlur={guardarRango}
-          onScroll={medir}
-          onInput={medir}
+          onScroll={medirScroll}
           className="doc-editable relative z-10 min-h-[58vh] max-h-[66vh] overflow-y-auto bg-transparent px-4 py-5 text-[14px] text-black sm:px-8 sm:py-6"
           style={{ fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1.7 }}
           dangerouslySetInnerHTML={{ __html: initialHtml }}
