@@ -132,3 +132,49 @@ export function descargarAnalisisTxt(a: AnalisisIA) {
   a2.click();
   URL.revokeObjectURL(url);
 }
+
+/** Arma un párrafo corto (3-6 renglones) resumiendo el cuestionario de estado
+ *  actual, para mostrarlo como introducción al empezar el recorrido. */
+export function introAnalisis(a: any): string {
+  if (!a) return "";
+  const ea = a.estado_actual || {};
+  const rr = a.resoluciones_y_recursos || {};
+  const pr = a.prescripcion || {};
+  const cv = a.convenios || {};
+  const demandas = Array.isArray(ea.demandas) ? ea.demandas : [];
+  const partes: string[] = [];
+
+  if (ea.es_jurisdiccion_voluntaria === "sí") {
+    partes.push(`Este caso se tramita bajo jurisdicción voluntaria (${ea.expediente_juzgado_jv || "expediente no identificado"}, presentada ${ea.fecha_presentacion_jv || "en fecha no determinada"}).`);
+  } else if (ea.es_jurisdiccion_voluntaria === "no") {
+    partes.push("No se identificó jurisdicción voluntaria en los documentos.");
+  }
+
+  if (demandas.length === 0) {
+    partes.push("No se detectaron demandas en los documentos revisados.");
+  } else if (demandas.length === 1) {
+    partes.push(`Hay 1 demanda: ${demandas[0].expediente_juzgado || "expediente no identificado"}, presentada ${demandas[0].fecha_presentacion || "en fecha no determinada"}${demandas[0].afecta_recuperacion_credito ? ` — afecta la recuperación: ${demandas[0].afecta_recuperacion_credito}` : ""}.`);
+  } else {
+    partes.push(`Se detectaron ${demandas.length} demandas distintas — revisa el aviso de abajo para elegir cuál usar como principal.`);
+  }
+
+  if (ea.ultima_actuacion?.fecha) {
+    partes.push(`La última actuación registrada es del ${ea.ultima_actuacion.fecha}: se pidió "${ea.ultima_actuacion.que_se_pidio || "no especificado"}" y se resolvió "${ea.ultima_actuacion.que_se_resolvio || "no especificado"}".`);
+  }
+  if (ea.fecha_ultimo_pago_acreditado) partes.push(`Último pago del acreditado: ${ea.fecha_ultimo_pago_acreditado}.`);
+
+  const recursos: string[] = [];
+  if (rr.sentencia) recursos.push(`sentencia (${rr.sentencia})`);
+  if (rr.apelacion) recursos.push(`apelación (${rr.apelacion})`);
+  if (rr.amparo) recursos.push(`amparo (${rr.amparo})`);
+  if (recursos.length) partes.push(`Recursos/resoluciones encontrados: ${recursos.join("; ")}.`);
+
+  if (pr.esta_prescrita && pr.esta_prescrita !== "no determinado") {
+    partes.push(`Prescripción: ${pr.esta_prescrita}${pr.motivo ? ` (${pr.motivo})` : ""}.`);
+  }
+  if (cv.notificados_firmados_ratificados && cv.notificados_firmados_ratificados !== "no aplica") {
+    partes.push(`Convenios notificados/firmados/ratificados: ${cv.notificados_firmados_ratificados}. Estado de cuenta con firma del perito: ${cv.estado_cuenta_firma_perito || "no determinado"}.`);
+  }
+
+  return partes.join(" ");
+}
