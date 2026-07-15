@@ -146,14 +146,24 @@ export default async (req) => {
 
     const parts = [];
     const analizados = [];
-    for (const d of tanda) {
+    // Se descargan TODOS al mismo tiempo (no uno por uno) — si no, con varios
+    // documentos se pasa del tiempo límite de la función y Netlify corta a
+    // la mitad (por eso a veces regresaba una página de error en vez de JSON).
+    const resultados = await Promise.all(tanda.map(async (d) => {
       try {
         const { base64, mime } = await descargarComoBase64(d.url);
-        parts.push({ inline_data: { mime_type: mime, data: base64 } });
-        analizados.push({ nombre: d.nombre, url: d.url });
+        return { ok: true, d, base64, mime };
       } catch (e) {
+        return { ok: false, d, error: String((e && e.message) || e) };
+      }
+    }));
+    for (const res of resultados) {
+      if (res.ok) {
+        parts.push({ inline_data: { mime_type: res.mime, data: res.base64 } });
+        analizados.push({ nombre: res.d.nombre, url: res.d.url });
+      } else {
         // documento que no se pudo leer: se omite, pero se avisa en la respuesta
-        analizados.push({ nombre: d.nombre, url: d.url, error: String((e && e.message) || e) });
+        analizados.push({ nombre: res.d.nombre, url: res.d.url, error: res.error });
       }
     }
     if (parts.length === 0) {
