@@ -72,18 +72,24 @@ function URRJ() {
     if (!solicitudActiva?.id || !solicitudActiva.documentos?.length) return;
     setCargandoResumen(true); setErrorResumen(null);
     const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
-    const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso);
-    if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); setCargandoResumen(false); return; }
-    setResumenDocs(r.cache!);
+    // Si ya existe el resumen por documento, no se vuelve a gastar IA en eso —
+    // solo se completa lo que falte (el cuestionario).
+    if (!resumenDocs) {
+      const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso);
+      if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); setCargandoResumen(false); return; }
+      setResumenDocs(r.cache!);
+    }
     // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
-    // — solo si hay con qué identificar el caso (crédito/expediente/caso_id).
-    if (claveCaso) {
+    // — solo si hace falta y hay con qué identificar el caso.
+    if (!analisisDocs && claveCaso) {
       const rA = await generarAnalisisIA(claveCaso, "Actor", solicitudActiva.documentos);
       if (rA.ok && rA.analisis) {
         setAnalisisDocs(rA.analisis);
         // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
         // la misma respuesta para Demandado SIN volver a gastar IA.
         await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+      } else if (!rA.ok) {
+        setErrorResumen(rA.error || "No se pudo generar el cuestionario.");
       }
     }
     setCargandoResumen(false);
@@ -216,13 +222,6 @@ function URRJ() {
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
-          {analisisDocs && introAnalisis(analisisDocs.respuestas) && (
-            <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4">
-              <p className="text-sm font-semibold text-purple-900">📋 Resumen del estado de la carpeta (según los documentos)</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-purple-800">{introAnalisis(analisisDocs.respuestas)}</p>
-              <p className="mt-2 text-[11px] italic text-purple-600">Esto es apoyo de IA — revisa contra los documentos originales. Verás el cuestionario completo dentro de cada fase al dictaminar.</p>
-            </div>
-          )}
           {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) > 0 && (
             <div className="rounded-xl border border-border bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -230,10 +229,10 @@ function URRJ() {
                   <p className="text-sm font-semibold">📎 Documentos de esta solicitud ({solicitudActiva.documentos!.length})</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">Revísalos antes de elegir la posición — de ahí sale el criterio para el pre-dictamen.</p>
                 </div>
-                {!resumenDocs && (
+                {(!resumenDocs || !analisisDocs) && (
                   <button onClick={generarResumen} disabled={cargandoResumen}
                     className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
-                    {cargandoResumen ? "✨ Leyendo…" : "✨ Leer documentos con IA (resumen + cuestionario)"}
+                    {cargandoResumen ? "✨ Leyendo…" : resumenDocs ? "✨ Generar cuestionario (falta)" : "✨ Leer documentos con IA (resumen + cuestionario)"}
                   </button>
                 )}
               </div>
@@ -254,6 +253,13 @@ function URRJ() {
                   );
                 })}
               </div>
+            </div>
+          )}
+          {analisisDocs && introAnalisis(analisisDocs.respuestas) && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+              <p className="text-sm font-semibold text-purple-900">📋 Resumen del estado de la carpeta (según los documentos)</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-purple-800">{introAnalisis(analisisDocs.respuestas)}</p>
+              <p className="mt-2 text-[11px] italic text-purple-600">Esto es apoyo de IA — revisa contra los documentos originales. Verás el cuestionario completo dentro de cada fase al dictaminar.</p>
             </div>
           )}
           {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) === 0 && (
