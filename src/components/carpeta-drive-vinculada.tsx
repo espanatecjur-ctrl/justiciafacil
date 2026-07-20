@@ -9,12 +9,12 @@ import { useEffect, useState } from "react";
 import {
   HardDrive, FolderCheck, FolderPlus, FileText, ExternalLink, Maximize2, Pin,
   Loader2, RefreshCw, X, Link2, CloudUpload, CheckCircle2,
-  Folder, ChevronRight, Home, Layers, AlertTriangle, CheckSquare, Square, Download, FolderOpen,
+  Folder, ChevronRight, Home, Layers, AlertTriangle, CheckSquare, Square, Download, FolderOpen, Trash2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { VisorDocumentoModal } from "@/components/visor-documento";
 import { ExploradorDrive } from "@/components/explorador-drive";
-import { listarCarpeta, listarTodo, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, ordenarCarpetaPorCliente, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
+import { listarCarpeta, listarTodo, tipoLegible, esCarpeta, sugerirCarpetas, textosDeCaso, sincronizarCarpeta, ordenarCarpetaPorCliente, normaliza, listarCopias, firmarCopias, traerCarpetaAArea, traerArchivo, enviarAPapelera, type ItemDrive, type Sugerencia, type Copia } from "@/lib/drive-explorar";
 import { Input } from "@/components/ui/input";
 import { crearCarpetaDrive, nombreGarantia } from "@/lib/drive";
 import { cargarPermisosModulo, puedeAccion, puedeAbrirDrive, puedeVerDriveAvanzado, type ModuloPerm } from "@/lib/permisos-acciones";
@@ -89,6 +89,21 @@ export function CarpetaDriveVinculada({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [docSel, setDocSel] = useState<ItemDrive | null>(null);
+  const [mandando, setMandando] = useState<string | null>(null);
+  const mandarAPapelera = async (driveId: string, nombre: string) => {
+    if (!confirm(`¿Mandar "${nombre}" a la papelera? No se borra, se puede recuperar.`)) return;
+    setMandando(driveId);
+    try {
+      const r = await enviarAPapelera(caso.id, driveId);
+      if (r.ok) {
+        setCopias((prev) => { const n = { ...prev }; delete n[driveId]; return n; });
+      } else {
+        alert("No se pudo mandar a la papelera: " + (r.error || ""));
+      }
+    } finally {
+      setMandando(null);
+    }
+  };
   const [guardando, setGuardando] = useState(false);
 
   // vista: "todos" = todos los docs (recursivo); "esta" = navegar carpeta por carpeta
@@ -646,8 +661,20 @@ export function CarpetaDriveVinculada({
                     </button>
                     <div className="flex items-center justify-between px-3 py-1.5">
                       <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                      {urlsCopia[a.id] && <a href={`${urlsCopia[a.id]}&download=${encodeURIComponent(copias[a.id]?.nombre || a.name)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
-                      {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
+                      <div className="flex items-center gap-3">
+                        {urlsCopia[a.id] && <a href={`${urlsCopia[a.id]}&download=${encodeURIComponent(copias[a.id]?.nombre || a.name)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                        {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
+                        {copias[a.id] && (
+                          <button
+                            onClick={() => mandarAPapelera(a.id, copias[a.id]?.nombre || a.name)}
+                            disabled={mandando === a.id}
+                            title="Mandar la copia del sistema a la papelera (no borra de Drive)"
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                          >
+                            {mandando === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Papelera
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
