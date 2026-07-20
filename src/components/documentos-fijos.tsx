@@ -9,11 +9,11 @@
 //    al almacén (descarga + carga real, con un clic).
 // ============================================================
 import { useEffect, useState } from "react";
-import { Pin, FileText, Loader2, Maximize2, ExternalLink, UploadCloud, AlertTriangle, CheckCircle2, Search } from "lucide-react";
+import { Pin, FileText, Loader2, Maximize2, ExternalLink, UploadCloud, AlertTriangle, CheckCircle2, Search, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { VisorDocumentoModal } from "@/components/visor-documento";
-import { listarCopias, firmarCopias, sincronizarCarpeta, revisarPendientesDrive, type Copia } from "@/lib/drive-explorar";
+import { listarCopias, firmarCopias, sincronizarCarpeta, revisarPendientesDrive, enviarAPapelera, type Copia } from "@/lib/drive-explorar";
 import { subirDocumento } from "@/lib/drive";
 import type { CasoJuridico } from "@/lib/supabase";
 
@@ -24,6 +24,19 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
   const [cargando, setCargando] = useState(true);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [docSel, setDocSel] = useState<{ id: string; nombre: string; url: string } | null>(null);
+  const [mandando, setMandando] = useState<string | null>(null);
+
+  const mandarAPapelera = async (driveId: string, nombre: string) => {
+    if (!confirm(`¿Mandar "${nombre}" a la papelera? No se borra, se puede recuperar.`)) return;
+    setMandando(driveId);
+    try {
+      const r = await enviarAPapelera(caso.id, driveId);
+      if (r.ok) cargar();
+      else setMsg("⚠️ " + (r.error || "No se pudo mandar a la papelera."));
+    } finally {
+      setMandando(null);
+    }
+  };
 
   const cargar = () => {
     setCargando(true);
@@ -174,7 +187,17 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
               </button>
               <div className="flex items-center justify-between px-3 py-2">
                 <button onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || "Documento", url: urls[c.storage_path] || "" })} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                <div className="flex items-center gap-3">
+                  {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                  <button
+                    onClick={() => mandarAPapelera(c.drive_id, c.nombre || "Documento")}
+                    disabled={mandando === c.drive_id}
+                    title="Mandar a la papelera"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                  >
+                    {mandando === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Papelera
+                  </button>
+                </div>
               </div>
             </div>
           ))}
