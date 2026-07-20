@@ -10,7 +10,8 @@ import crypto from "crypto";
 
 const MODELO = "gemini-2.5-flash"; // 2.5-flash-lite ya no está disponible para llaves nuevas de Google
 const MAX_DOCUMENTOS = 6; // bajado de 20 — el frontend manda varias tandas si hay más
-const LIMITE_BYTES_DOC = 15 * 1024 * 1024;
+const UMBRAL_INLINE = 15 * 1024 * 1024; // hasta este tamaño, se manda directo en el mensaje (más rápido)
+const LIMITE_BYTES_DOC = 45 * 1024 * 1024; // más grande que esto ya no se procesa (por tiempo/memoria de la función)
 
 function base64url(input) {
   return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -49,7 +50,7 @@ async function obtenerAccessTokenGoogle() {
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
 
-async function descargarComoBase64(url) {
+async function descargarComoBuffer(url) {
   // ¿Es un link de Google Drive (carpeta escogida en Dirección)? Esos no se
   // leen con la llave de Supabase — necesitan el token de Google y el
   // endpoint real de descarga (el link "/preview" es solo un visor HTML).
@@ -62,9 +63,9 @@ async function descargarComoBase64(url) {
     });
     if (!r.ok) throw new Error(`No se pudo descargar de Drive (HTTP ${r.status})`);
     const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
+    if (buf.length > LIMITE_BYTES_DOC) throw new Error(`Documento muy grande (>${Math.round(LIMITE_BYTES_DOC / (1024 * 1024))}MB), se omitió.`);
     const mime = r.headers.get("content-type") || "application/pdf";
-    return { base64: buf.toString("base64"), mime };
+    return { buffer: buf, mime };
   }
   // Si no, es de Supabase Storage.
   const intentar = async (key) => fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
@@ -72,9 +73,51 @@ async function descargarComoBase64(url) {
   if (!r || !r.ok) r = await intentar(SUPABASE_ANON_KEY);
   if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
   const buf = Buffer.from(await r.arrayBuffer());
-  if (buf.length > LIMITE_BYTES_DOC) throw new Error("Documento muy grande (>15MB), se omitió.");
+  if (buf.length > LIMITE_BYTES_DOC) throw new Error(`Documento muy grande (>${Math.round(LIMITE_BYTES_DOC / (1024 * 1024))}MB), se omitió.`);
   const mime = r.headers.get("content-type") || "application/pdf";
-  return { base64: buf.toString("base64"), mime };
+  return { buffer: buf, mime };
+}
+
+// Documentos grandes (>UMBRAL_INLINE) no se mandan en el mensaje directo —
+// se suben primero al "File API" de Gemini (soporta hasta 2GB) y solo se
+// referencia el archivo ya subido. Documentos chicos siguen yendo directo
+// (inline), que es más rápido y no necesita este paso extra.
+async function subirArchivoGemini(buffer, mime, nombre, apiKey) {
+  const inicio = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
+    method: "POST",
+    headers: {
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(buffer.length),
+      "X-Goog-Upload-Header-Content-Type": mime,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file: { display_name: nombre.slice(0, 100) } }),
+  });
+  const uploadUrl = inicio.headers.get("x-goog-upload-url");
+  if (!uploadUrl) throw new Error("No se pudo iniciar la subida del documento a Gemini.");
+  const subida = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Length": String(buffer.length),
+      "X-Goog-Upload-Offset": "0",
+      "X-Goog-Upload-Command": "upload, finalize",
+    },
+    body: buffer,
+  });
+  const data = await subida.json();
+  if (!data?.file?.uri) throw new Error("Gemini no regresó el archivo subido.");
+  // Espera a que quede listo (documentos normalmente quedan ACTIVE de inmediato; solo video/audio tardan).
+  let archivo = data.file;
+  let intentos = 0;
+  while (archivo.state === "PROCESSING" && intentos < 10) {
+    await new Promise((res) => setTimeout(res, 1000));
+    const chk = await fetch(`https://generativelanguage.googleapis.com/v1beta/${archivo.name}?key=${apiKey}`);
+    archivo = await chk.json();
+    intentos++;
+  }
+  if (archivo.state !== "ACTIVE") throw new Error("El documento no quedó listo en Gemini a tiempo — intenta de nuevo.");
+  return { uri: archivo.uri, mime: archivo.mimeType || mime };
 }
 
 export default async (req) => {
@@ -100,15 +143,20 @@ export default async (req) => {
     // ORDEN exacto de "tanda" porque la IA alinea su respuesta por posición.
     const resultados = await Promise.all(tanda.map(async (d) => {
       try {
-        const { base64, mime } = await descargarComoBase64(d.url);
-        return { ok: true, nombre: d.nombre, base64, mime };
+        const { buffer, mime } = await descargarComoBuffer(d.url);
+        if (buffer.length <= UMBRAL_INLINE) {
+          return { ok: true, nombre: d.nombre, modo: "inline", base64: buffer.toString("base64"), mime };
+        }
+        const subido = await subirArchivoGemini(buffer, mime, d.nombre, apiKey);
+        return { ok: true, nombre: d.nombre, modo: "file", uri: subido.uri, mime: subido.mime };
       } catch (e) {
         return { ok: false, nombre: d.nombre, error: String((e && e.message) || e) };
       }
     }));
     for (const res of resultados) {
       nombresEnOrden.push(res.nombre); // se incluye igual, para que el índice no se desalinee
-      if (res.ok) parts.push({ inline_data: { mime_type: res.mime, data: res.base64 } });
+      if (res.ok && res.modo === "inline") parts.push({ inline_data: { mime_type: res.mime, data: res.base64 } });
+      else if (res.ok && res.modo === "file") parts.push({ file_data: { mime_type: res.mime, file_uri: res.uri } });
       else erroresDescarga.push(`${res.nombre}: ${res.error}`);
     }
     if (parts.length === 0) {
