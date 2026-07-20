@@ -59,7 +59,7 @@ function SiNo({ v, on }: { v: string; on: (x: string) => void }) {
   );
 }
 
-export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, administradoraInicial, numeroCreditoInicial, direccionInicial, borradorId }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; administradoraInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string; borradorId?: string | null }) {
+export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial, ultimaActuacionInicial, ultimaActuacionTextoInicial, administradoraInicial, numeroCreditoInicial, direccionInicial, borradorId }: { casos: any[]; onVolver: () => void; precargar?: Precarga | null; puedeFirmarElabora?: boolean; puedeValidar?: boolean; puedeAdmin?: boolean; puedePrecioPiso?: boolean; hallazgosIniciales?: string[]; expedienteInicial?: string; deudorInicial?: string; juzgadoInicial?: string; ultimaActuacionInicial?: string; ultimaActuacionTextoInicial?: string; administradoraInicial?: string; numeroCreditoInicial?: string; direccionInicial?: string; borradorId?: string | null }) {
   const [paso, setPaso] = useState(0);
   const [guardado, setGuardado] = useState<string | null>(null);
   const [verBanner, setVerBanner] = useState(false);
@@ -164,8 +164,19 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
       setX((p) => {
         const prev = p.anotaciones || "";
         const notas = (hallazgosIniciales || []).filter((h) => !prev.includes(h.split("\n")[0]));
-        const sep = prev.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, deudor: p.deudor || deudorInicial || p.deudor, anotaciones: prev + (notas.length ? sep + notas.join("\n\n") : "") };
+        const notaActuacion = ultimaActuacionTextoInicial && !prev.includes(ultimaActuacionTextoInicial)
+          ? [`Última actuación del boletín (${ultimaActuacionInicial || "s/f"}): ${ultimaActuacionTextoInicial}`]
+          : [];
+        const todasNotas = [...notas, ...notaActuacion];
+        const sep = prev.trim() && todasNotas.length ? "\n\n" : "";
+        return {
+          ...p,
+          expediente: p.expediente || expedienteInicial || p.expediente,
+          juzgado: p.juzgado || juzgadoInicial || p.juzgado,
+          deudor: p.deudor || deudorInicial || p.deudor,
+          fechaUltimoAuto: p.fechaUltimoAuto || ultimaActuacionInicial || p.fechaUltimoAuto,
+          anotaciones: prev + (todasNotas.length ? sep + todasNotas.join("\n\n") : ""),
+        };
       });
     }
   }, []);
