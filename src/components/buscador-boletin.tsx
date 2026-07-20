@@ -36,7 +36,7 @@ const fmt = (s?: string) => {
 
 const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
 
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string }) => void } = {}) {
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string; ultimaActuacionFecha?: string; ultimaActuacionTexto?: string }) => void } = {}) {
   const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
@@ -255,7 +255,7 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
                   <p className="break-words text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
                 )}
                 {onGuardarHallazgos && acuerdos.length > 0 && (
-                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined }); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? "Hallazgos guardados ✓" : "Guardar hallazgos del boletín"}</button>
+                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined }); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? "Hallazgos guardados ✓" : "Guardar hallazgos del boletín"}</button>
                 )}
               </div>
               {resaltarAmparo && acuerdosAmparo.length > 0 && (
