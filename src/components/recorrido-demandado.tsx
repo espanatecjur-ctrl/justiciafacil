@@ -98,6 +98,20 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     obtenerAnalisisCacheado(claveCasoIA, "Demandado").then((a) => setAnalisisParaPDF(a?.respuestas || null));
   }, [claveCasoIA]);
   const [mostrarSugerenciasIA, setMostrarSugerenciasIA] = useState(true);
+  // Si el cuestionario de la IA detectó algo de sentencia y "Etapa del
+  // juicio" sigue vacío, se llena solo (a texto — el Sí/No de si es firme a
+  // favor lo decide la persona revisando el texto detectado).
+  useEffect(() => {
+    const texto = analisisParaPDF?.resoluciones_y_recursos?.sentencia;
+    if (!texto) return;
+    setX((p) => {
+      const prev = p.anotaciones || "";
+      if (prev.includes(texto)) return p;
+      const nota = `Sentencia detectada por la IA en los documentos: ${texto}`;
+      const sep = prev.trim() ? "\n\n" : "";
+      return { ...p, etapa: p.etapa || "Sentencia", anotaciones: prev + sep + nota };
+    });
+  }, [analisisParaPDF]);
   const demandasDetectadas = useMemo(() => {
     const arr = analisisParaPDF?.estado_actual?.demandas;
     return Array.isArray(arr) ? arr : [];
@@ -363,6 +377,15 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
               )}
               {analisisParaPDF?.estado_actual?.ultima_actuacion?.fecha && (
                 <p><b>Última actuación:</b> {analisisParaPDF.estado_actual.ultima_actuacion.fecha} — pidió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_pidio || "—"} — resolvió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_resolvio || "—"}</p>
+              )}
+              {analisisParaPDF?.resoluciones_y_recursos?.sentencia && (
+                <p><b>Sentencia (auto-llenó "Etapa del juicio"):</b> {analisisParaPDF.resoluciones_y_recursos.sentencia}</p>
+              )}
+              {analisisParaPDF?.resoluciones_y_recursos?.apelacion && (
+                <p><b>Apelación:</b> {analisisParaPDF.resoluciones_y_recursos.apelacion}</p>
+              )}
+              {analisisParaPDF?.resoluciones_y_recursos?.amparo && (
+                <p><b>Amparo:</b> {analisisParaPDF.resoluciones_y_recursos.amparo}</p>
               )}
               {analisisParaPDF?.prescripcion?.esta_prescrita && (
                 <p><b>Prescripción:</b> {analisisParaPDF.prescripcion.esta_prescrita} — {analisisParaPDF.prescripcion.motivo || ""}</p>
