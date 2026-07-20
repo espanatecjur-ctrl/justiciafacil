@@ -233,6 +233,24 @@ export function RecorridoActor({
     obtenerAnalisisCacheado(claveCasoIA, "Actor").then((a) => setAnalisisParaPDF(a?.respuestas || null));
   }, [claveCasoIA]);
   const [mostrarSugerenciasIA, setMostrarSugerenciasIA] = useState(true);
+  // Si el cuestionario de la IA (que ya leyó RPPC, sentencias, etc.) detectó
+  // algo de sentencia y el campo de "Etapa del juicio" sigue vacío, se llena
+  // solo (a texto — nunca se adivina el Sí/No de "sentencia firme a favor",
+  // eso lo decide la persona revisando el texto detectado).
+  useEffect(() => {
+    const texto = analisisParaPDF?.resoluciones_y_recursos?.sentencia;
+    if (!texto) return;
+    setD((p) => {
+      if (p.anotacionesHumanas.includes(texto)) return p; // ya se agregó
+      const nota = `Sentencia detectada por la IA en los documentos: ${texto}`;
+      const sep = p.anotacionesHumanas.trim() ? "\n\n" : "";
+      return {
+        ...p,
+        etapa: p.etapa || "Sentencia",
+        anotacionesHumanas: p.anotacionesHumanas + sep + nota,
+      };
+    });
+  }, [analisisParaPDF]);
   const demandasDetectadas = useMemo(() => {
     const arr = analisisParaPDF?.estado_actual?.demandas;
     return Array.isArray(arr) ? arr : [];
@@ -342,7 +360,7 @@ export function RecorridoActor({
   const anotacionesRiesgo = d.anotaciones.trim() !== "";
   const enAmparo = d.situacion === "En amparo";
   const suspendido = d.situacion === "Suspendido";
-  const etapaAvanzada = ["Sentencia", "Ejecución", "Remate"].includes(d.etapa);
+  const etapaAvanzada = ["Sentencia interlocutoria", "Sentencia", "Sentencia firme (ejecutoriada)", "Ejecución", "Remate"].includes(d.etapa);
   const etapaTemprana = ["Admisión", "Emplazamiento"].includes(d.etapa);
   const estadoRobot: "sinaloa" | "bcs" | "jalisco" =
     d.estado === "Jalisco" ? "jalisco" : d.estado === "Baja California Sur" ? "bcs" : "sinaloa";
@@ -626,6 +644,15 @@ export function RecorridoActor({
               {analisisParaPDF?.estado_actual?.ultima_actuacion?.fecha && (
                 <p><b>Última actuación:</b> {analisisParaPDF.estado_actual.ultima_actuacion.fecha} — pidió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_pidio || "—"} — resolvió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_resolvio || "—"}</p>
               )}
+              {analisisParaPDF?.resoluciones_y_recursos?.sentencia && (
+                <p><b>Sentencia (auto-llenó "Etapa del juicio"):</b> {analisisParaPDF.resoluciones_y_recursos.sentencia} — revisa y marca "¿Sentencia firme a favor?" a mano.</p>
+              )}
+              {analisisParaPDF?.resoluciones_y_recursos?.apelacion && (
+                <p><b>Apelación:</b> {analisisParaPDF.resoluciones_y_recursos.apelacion}</p>
+              )}
+              {analisisParaPDF?.resoluciones_y_recursos?.amparo && (
+                <p><b>Amparo:</b> {analisisParaPDF.resoluciones_y_recursos.amparo}</p>
+              )}
               {analisisParaPDF?.prescripcion?.esta_prescrita && (
                 <p><b>Prescripción:</b> {analisisParaPDF.prescripcion.esta_prescrita} — {analisisParaPDF.prescripcion.motivo || ""}</p>
               )}
@@ -715,7 +742,7 @@ export function RecorridoActor({
           <div className="space-y-4">
             <H titulo="2 · Estado procesal real" sub="Lo que dice el expediente, no lo que dicen." />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Campo label="Etapa del juicio"><select className={inp} value={d.etapa} onChange={(e) => set("etapa", e.target.value)}><option value="">—</option><option>Admisión</option><option>Emplazamiento</option><option>Contestación</option><option>Pruebas</option><option>Sentencia</option><option>Ejecución</option><option>Remate</option></select></Campo>
+              <Campo label="Etapa del juicio"><select className={inp} value={d.etapa} onChange={(e) => set("etapa", e.target.value)}><option value="">—</option><option>Admisión</option><option>Emplazamiento</option><option>Contestación</option><option>Pruebas</option><option>Sentencia interlocutoria</option><option>Sentencia</option><option>En apelación</option><option>Sentencia firme (ejecutoriada)</option><option>Ejecución</option><option>Remate</option></select></Campo>
               <Campo label="¿Sentencia firme a favor?"><SiNo v={d.sentenciaFirme} on={(x) => set("sentenciaFirme", x)} /></Campo>
               <Campo label="Situación"><select className={inp} value={d.situacion} onChange={(e) => set("situacion", e.target.value)}><option value="">—</option><option>En trámite</option><option>En ejecución</option><option>En amparo</option><option>Suspendido</option></select></Campo>
               <Campo label="Fecha de última actuación procesal"><input type="date" className={inp} value={d.ultimaActuacion} onChange={(e) => set("ultimaActuacion", e.target.value)} /></Campo>
