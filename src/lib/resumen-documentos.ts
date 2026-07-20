@@ -118,3 +118,33 @@ export async function guardarResumenEnCache(fila: ResumenDocumentosCache): Promi
     });
   } catch { /* si falla, se queda solo con la clave temporal — no es grave */ }
 }
+
+/** Analiza UN SOLO documento (no todos) y lo agrega/actualiza en el caché de
+ *  inmediato. Así, con expedientes de muchos documentos, cada uno se puede
+ *  analizar por separado — sin depender de que los demás también funcionen. */
+export async function generarResumenUnDocumento(
+  clave: string,
+  documento: { nombre: string; url: string },
+  cacheActual: ResumenDocumentosCache | null,
+  claveCaso?: string,
+): Promise<{ ok: boolean; error?: string; cache?: ResumenDocumentosCache }> {
+  if (!clave) return { ok: false, error: "Falta el identificador de la solicitud." };
+  const r = await llamarResumirDocumentos([documento]);
+  if (!r.ok) return { ok: false, error: r.error };
+  const nuevoResumen = (r.resumenes || [])[0];
+  if (!nuevoResumen) return { ok: false, error: "La IA no devolvió resultado para este documento." };
+  // Reemplaza el resumen previo de este mismo documento si ya existía (por si se re-intenta).
+  const resumenesPrevios = (cacheActual?.resumenes || []).filter((x) => x.nombre !== documento.nombre);
+  const resumenesJuntos = [...resumenesPrevios, nuevoResumen];
+  let datosGenerales = cacheActual?.datos_generales || null;
+  if (r.datos_generales && Object.values(r.datos_generales).some((v) => v)) {
+    datosGenerales = { ...(datosGenerales || {}), ...Object.fromEntries(Object.entries(r.datos_generales).filter(([, v]) => v)) };
+  }
+  const fila: ResumenDocumentosCache = {
+    clave, clave_caso: claveCaso || cacheActual?.clave_caso || null,
+    resumenes: resumenesJuntos, datos_generales: datosGenerales,
+    modelo: r.modelo || cacheActual?.modelo || null,
+  };
+  await guardarResumenEnCache(fila);
+  return { ok: true, cache: fila };
+}
