@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { type Precarga, buscarPredictamenVigenteCompleto, buscarPredictamenPorCredito } from "@/lib/predictamen-guardar";
-import { obtenerResumenCacheado, generarResumenIA, type ResumenDocumentosCache } from "@/lib/resumen-documentos";
+import { obtenerResumenCacheado, generarResumenUnDocumento, type ResumenDocumentosCache } from "@/lib/resumen-documentos";
 import { obtenerAnalisisCacheado, generarAnalisisIA, guardarAnalisisEnCache, introAnalisis, type AnalisisIA } from "@/lib/analisis-ia";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
@@ -47,6 +47,7 @@ function URRJ() {
   const [cargandoResumen, setCargandoResumen] = useState(false);
   const [progresoIA, setProgresoIA] = useState<{ hecho: number; total: number; nombre: string } | null>(null);
   const [errorResumen, setErrorResumen] = useState<string | null>(null);
+  const [analizandoDoc, setAnalizandoDoc] = useState<string | null>(null);
   const [analisisDocs, setAnalisisDocs] = useState<AnalisisIA | null>(null);
   const claveCasoSolicitud = solicitudActiva?.numero_credito || solicitudActiva?.expediente || solicitudActiva?.caso_id
     || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
@@ -79,39 +80,39 @@ function URRJ() {
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
   }, [solicitudActiva?.documentos, resumenDocs]);
-  const generarResumen = async () => {
-    if (!solicitudActiva?.id || !solicitudActiva.documentos?.length) return;
-    setCargandoResumen(true); setErrorResumen(null);
-    let claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id
+  // Analiza UN documento a la vez (botón por documento) — cada uno se guarda
+  // de inmediato en caché, sin depender de que los demás también funcionen.
+  // Solo se puede una vez por documento: si ya tiene resumen, no se vuelve a mandar.
+  const analizarUnDocumento = async (doc: { nombre: string; url: string }) => {
+    if (!solicitudActiva?.id || resumenDe(doc.nombre)) return;
+    setAnalizandoDoc(doc.nombre); setErrorResumen(null);
+    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id
       || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
-    // Si ya existe el resumen por documento, no se vuelve a gastar IA en eso —
-    // solo se completa lo que falte (el cuestionario).
-    if (!resumenDocs) {
-      const r = await generarResumenIA(solicitudActiva.id, solicitudActiva.documentos, claveCaso, (hecho, total, msg) => setProgresoIA({ hecho, total, nombre: msg || "" }));
-      setProgresoIA(null);
-      if (!r.ok) { setErrorResumen(r.error || "No se pudo generar el resumen."); setCargandoResumen(false); return; }
-      setResumenDocs(r.cache!);
-      // Usa de inmediato lo que se acaba de detectar (sin esperar al re-render).
-      claveCaso = claveCaso || r.cache?.datos_generales?.numero_credito || r.cache?.datos_generales?.expediente || "";
-    }
-    // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
-    // — si no hay crédito/expediente, se usa el id de la solicitud como
-    // respaldo para que SÍ se genere y se vea aquí (no se bloquea).
-    if (!analisisDocs) {
-      const claveParaAnalisis = claveCaso || solicitudActiva.id;
-      const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos, (hecho, total, nombre) => setProgresoIA({ hecho, total, nombre }));
-      setProgresoIA(null);
-      if (rA.ok && rA.analisis) {
-        setAnalisisDocs(rA.analisis);
-        // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
-        // la misma respuesta para Demandado SIN volver a gastar IA.
-        await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
-        if (!claveCaso) {
-          setErrorResumen("⚠️ Esta solicitud no tenía crédito ni expediente capturado — el cuestionario sí se generó y se ve abajo, pero solo aquí. Si luego capturas el crédito/expediente en la garantía, en Actor/Demandado no lo va a encontrar automático; tendrías que regenerarlo ahí.");
-        }
-      } else if (!rA.ok) {
-        setErrorResumen(rA.error || "No se pudo generar el cuestionario.");
+    const r = await generarResumenUnDocumento(solicitudActiva.id, doc, resumenDocs, claveCaso);
+    setAnalizandoDoc(null);
+    if (!r.ok) { setErrorResumen(`"${doc.nombre}": ${r.error || "No se pudo analizar."}`); return; }
+    setResumenDocs(r.cache!);
+  };
+  // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
+  // — es un paso aparte, junta TODOS los documentos en una sola pasada.
+  const generarCuestionario = async () => {
+    if (!solicitudActiva?.id || !solicitudActiva.documentos?.length || analisisDocs) return;
+    setCargandoResumen(true); setErrorResumen(null);
+    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id
+      || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
+    const claveParaAnalisis = claveCaso || solicitudActiva.id;
+    const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos, (hecho, total, nombre) => setProgresoIA({ hecho, total, nombre }));
+    setProgresoIA(null);
+    if (rA.ok && rA.analisis) {
+      setAnalisisDocs(rA.analisis);
+      // Actor y Demandado comparten hoy el mismo cuestionario — se reaprovecha
+      // la misma respuesta para Demandado SIN volver a gastar IA.
+      await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+      if (!claveCaso) {
+        setErrorResumen("⚠️ Esta solicitud no tenía crédito ni expediente capturado — el cuestionario sí se generó y se ve abajo, pero solo aquí. Si luego capturas el crédito/expediente en la garantía, en Actor/Demandado no lo va a encontrar automático; tendrías que regenerarlo ahí.");
       }
+    } else if (!rA.ok) {
+      setErrorResumen(rA.error || "No se pudo generar el cuestionario.");
     }
     setCargandoResumen(false);
   };
@@ -250,13 +251,14 @@ function URRJ() {
                   <p className="text-sm font-semibold">📎 Documentos de esta solicitud ({solicitudActiva.documentos!.length})</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">Revísalos antes de elegir la posición — de ahí sale el criterio para el pre-dictamen.</p>
                 </div>
-                {(!resumenDocs || !analisisDocs) && (
-                  <button onClick={generarResumen} disabled={cargandoResumen}
+                {!analisisDocs && (
+                  <button onClick={generarCuestionario} disabled={cargandoResumen}
                     className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
-                    {cargandoResumen ? "✨ Leyendo…" : resumenDocs ? "✨ Generar cuestionario (falta)" : "✨ Leer documentos con IA (resumen + cuestionario)"}
+                    {cargandoResumen ? "✨ Leyendo…" : "✨ Generar cuestionario completo"}
                   </button>
                 )}
               </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Analiza documento por documento con el botón «Analizar» de cada uno — así no depende de leerlos todos juntos. Solo se analiza una vez por documento.</p>
               {progresoIA && progresoIA.hecho < progresoIA.total && (
                 <p className="mt-1 text-xs font-medium text-purple-700">✨ Leyendo documento {progresoIA.hecho + 1} de {progresoIA.total}{progresoIA.nombre ? `: ${progresoIA.nombre}` : ""}…</p>
               )}
@@ -265,15 +267,25 @@ function URRJ() {
                 {documentosOrdenados.map((d, i) => {
                   const r = resumenDe(d.nombre);
                   return (
-                    <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
-                      className="rounded-md border border-border bg-muted/20 px-2 py-1.5 text-xs text-[color:var(--teal)] hover:bg-muted">
-                      <span className="block truncate font-medium">📄 {d.nombre}</span>
+                    <div key={i} className="rounded-md border border-border bg-muted/20 px-2 py-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="block min-w-0 flex-1 truncate font-medium text-[color:var(--teal)] hover:underline">📄 {d.nombre}</a>
+                        {!r && (
+                          <button
+                            onClick={() => analizarUnDocumento(d)}
+                            disabled={analizandoDoc === d.nombre}
+                            className="inline-flex shrink-0 items-center gap-1 rounded bg-purple-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-purple-800 disabled:opacity-60"
+                          >
+                            {analizandoDoc === d.nombre ? "✨ Leyendo…" : "✨ Analizar"}
+                          </button>
+                        )}
+                      </div>
                       {r && (
-                        <span className="mt-0.5 block truncate whitespace-normal text-[11px] font-normal text-muted-foreground">
+                        <span className="mt-0.5 block whitespace-normal text-[11px] font-normal text-muted-foreground">
                           <span className="rounded bg-purple-100 px-1 py-0.5 font-medium text-purple-800">{r.tipo}</span> · {r.resumen}
                         </span>
                       )}
-                    </a>
+                    </div>
                   );
                 })}
               </div>
