@@ -118,7 +118,7 @@ export default async (req) => {
     const instruccion = `Aquí van ${nombresEnOrden.length} documentos de un expediente legal, EN ESTE ORDEN:
 ${nombresEnOrden.map((n, i) => `${i + 1}. ${n}`).join("\n")}
 
-1) Para CADA documento (en el mismo orden), da un resumen de 1-2 renglones (máximo 30 palabras) de qué es y qué dice — y su tipo (Contrato, Demanda, Acuerdo, Auto Judicial, Emplazamiento, Contestación de Demanda, Solicitud, Notificación, Comprobante, Verificación, Dictamen, Otro).
+1) Para CADA documento (en el mismo orden), da un resumen de 1-2 renglones (máximo 30 palabras) de qué es y, sobre todo, QUÉ RESUELVE o QUÉ ORDENA (ej. "resuelve tener por contestada la demanda", "acuerda admitir la promoción", "resuelve declarar la prescripción") — y su tipo (Promoción, Acuerdo, Contrato, Demanda, Auto Judicial, Emplazamiento, Contestación de Demanda, Solicitud, Notificación, Comprobante, Verificación, Dictamen, Sentencia, Otro). Usa "Promoción" cuando el documento es un escrito que una parte presenta pidiendo algo, y "Acuerdo" cuando es la respuesta/resolución del juzgado a esa promoción.
 
 2) Además, busca en TODOS los documentos juntos estos datos generales del caso (si aparecen en más de uno, usa el más completo/confiable):
    - administradora o banco que cede los derechos
