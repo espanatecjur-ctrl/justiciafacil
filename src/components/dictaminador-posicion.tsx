@@ -87,16 +87,20 @@ export function DictaminadorPosicion({
   const [expedienteIni, setExpedienteIni] = useState("");
   const [deudorIni, setDeudorIni] = useState("");
   const [juzgadoIni, setJuzgadoIni] = useState("");
+  const [ultimaActuacionIni, setUltimaActuacionIni] = useState("");
+  const [ultimaActuacionTextoIni, setUltimaActuacionTextoIni] = useState("");
   const [hallazgosIni, setHallazgosIni] = useState<string[]>([]);
   const [mostrarRobotIni, setMostrarRobotIni] = useState(false);
   const agregarHallazgoIni = (nota: string) => {
     const marca = nota.split("\n")[0];
     setHallazgosIni((prev) => prev.some((h) => h.includes(marca)) ? prev : [...prev, nota]);
   };
-  const capturarBoletin = (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string }) => {
+  const capturarBoletin = (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; ultimaActuacionFecha?: string; ultimaActuacionTexto?: string }) => {
     if (d.expediente) setExpedienteIni(d.expediente);
     if (d.demandado) setDeudorIni(d.demandado); // en Actor, el deudor es el demandado del boletín
     if (d.juzgado) setJuzgadoIni(d.juzgado);
+    if (d.ultimaActuacionFecha) setUltimaActuacionIni(d.ultimaActuacionFecha);
+    if (d.ultimaActuacionTexto) setUltimaActuacionTextoIni(d.ultimaActuacionTexto);
   };
 
   // Autollenado con lo que la IA detectó al leer los documentos — solo
@@ -167,9 +171,9 @@ export function DictaminadorPosicion({
           {hallazgosIni.length > 0 && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{hallazgosIni.length} hallazgo(s) guardado(s) — se llevarán al pre-dictamen</span>}
           {mostrarRobotIni && (
             <div className="mt-3 space-y-3">
-              <p className="text-[11px] text-muted-foreground">Busca el expediente en el boletín (elige estado, jurisdicción y juzgado abajo). Al <b>guardar los hallazgos</b>, se toma ese expediente y sus partes para el pre-dictamen.</p>
+              <p className="text-[11px] text-muted-foreground">Busca el expediente en el boletín (elige estado, jurisdicción y juzgado abajo). Al <b>guardar los hallazgos</b>, se toma ese expediente, sus partes y la <b>fecha de última actuación</b> para el pre-dictamen.</p>
               <BuscadorBoletin resaltarAmparo onHallazgoAmparo={agregarHallazgoIni} onGuardarHallazgos={agregarHallazgoIni} onDatosBoletin={capturarBoletin} />
-              {expedienteIni && <p className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-3 py-1.5 text-[11px] text-[color:var(--teal)]">Se usará del boletín → Exp. <b>{expedienteIni}</b>{juzgadoIni ? ` · ${juzgadoIni}` : ""}{deudorIni ? ` · Deudor: ${deudorIni}` : ""}. Luego elige la posición.</p>}
+              {expedienteIni && <p className="rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-3 py-1.5 text-[11px] text-[color:var(--teal)]">Se usará del boletín → Exp. <b>{expedienteIni}</b>{juzgadoIni ? ` · ${juzgadoIni}` : ""}{deudorIni ? ` · Deudor: ${deudorIni}` : ""}{ultimaActuacionIni ? ` · Última actuación: ${ultimaActuacionIni}` : ""}. Luego elige la posición.</p>}
             </div>
           )}
         </div>
@@ -210,8 +214,8 @@ export function DictaminadorPosicion({
   }
 
   // ---- despliegue del recorrido según la posición ----
-  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
-  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
+  if (vista === "Actor") return <RecorridoActor casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} onResultados={onResultados} modoFicha={modoFicha} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} ultimaActuacionInicial={ultimaActuacionIni} ultimaActuacionTextoInicial={ultimaActuacionTextoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
+  if (vista === "Demandado") return <RecorridoDemandado casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedeAdmin={puedeAdmin} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} ultimaActuacionInicial={ultimaActuacionIni} ultimaActuacionTextoInicial={ultimaActuacionTextoIni} administradoraInicial={administradoraIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
   if (vista === "Sucesorio") return <RecorridoSucesorio casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} hallazgosIniciales={hallazgosIni} expedienteInicial={expedienteIni} deudorInicial={deudorIni} juzgadoInicial={juzgadoIni} numeroCreditoInicial={numeroCreditoIni} direccionInicial={direccionIni} borradorId={borradorId} />;
   if (vista === "Contingencia") return <RecorridoContingencia casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
   if (vista === "Tramites") return <RecorridoTramites casos={casos} onVolver={onVolver} precargar={precargar} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} />;
