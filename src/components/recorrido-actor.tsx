@@ -130,6 +130,7 @@ export function RecorridoActor({
   casos, onVolver, precargar,
   puedeFirmarElabora = true, puedeValidar = true, puedeAdmin = false, puedePrecioPiso = false,
   onResultados, modoFicha = false, hallazgosIniciales, expedienteInicial, deudorInicial, juzgadoInicial,
+  ultimaActuacionInicial, ultimaActuacionTextoInicial,
   administradoraInicial, numeroCreditoInicial, direccionInicial, borradorId,
 }: {
   casos: any[];
@@ -151,6 +152,10 @@ export function RecorridoActor({
   expedienteInicial?: string;
   deudorInicial?: string;
   juzgadoInicial?: string;
+  /** Fecha (y texto) de la última actuación que trajo el boletín — llena
+   *  sola el campo del paso 2 "Estado procesal real". */
+  ultimaActuacionInicial?: string;
+  ultimaActuacionTextoInicial?: string;
   /** Datos básicos capturados ANTES de elegir posición (pantalla "elegir"). */
   administradoraInicial?: string;
   numeroCreditoInicial?: string;
@@ -187,8 +192,19 @@ export function RecorridoActor({
     if ((hallazgosIniciales?.length || expedienteInicial)) {
       setD((p) => {
         const notas = (hallazgosIniciales || []).filter((h) => !p.anotacionesHumanas.includes(h.split("\n")[0]));
-        const sep = p.anotacionesHumanas.trim() && notas.length ? "\n\n" : "";
-        return { ...p, expediente: p.expediente || expedienteInicial || p.expediente, juzgado: p.juzgado || juzgadoInicial || p.juzgado, deudor: p.deudor || deudorInicial || p.deudor, anotacionesHumanas: p.anotacionesHumanas + (notas.length ? sep + notas.join("\n\n") : "") };
+        const notaActuacion = ultimaActuacionTextoInicial && !p.anotacionesHumanas.includes(ultimaActuacionTextoInicial)
+          ? [`Última actuación del boletín (${ultimaActuacionInicial || "s/f"}): ${ultimaActuacionTextoInicial}`]
+          : [];
+        const todasNotas = [...notas, ...notaActuacion];
+        const sep = p.anotacionesHumanas.trim() && todasNotas.length ? "\n\n" : "";
+        return {
+          ...p,
+          expediente: p.expediente || expedienteInicial || p.expediente,
+          juzgado: p.juzgado || juzgadoInicial || p.juzgado,
+          deudor: p.deudor || deudorInicial || p.deudor,
+          ultimaActuacion: p.ultimaActuacion || ultimaActuacionInicial || p.ultimaActuacion,
+          anotacionesHumanas: p.anotacionesHumanas + (todasNotas.length ? sep + todasNotas.join("\n\n") : ""),
+        };
       });
     }
   }, []);
