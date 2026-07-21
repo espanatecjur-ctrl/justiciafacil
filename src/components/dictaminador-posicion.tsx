@@ -11,7 +11,7 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, actualizarBorrador, descartarBorrador } from "@/lib/predictamen-guardar";
+import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, actualizarBorrador, descartarBorrador, sincronizarSolicitud, guardarDatosBasicos } from "@/lib/predictamen-guardar";
 import { Scale, Bot } from "lucide-react";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
@@ -68,24 +68,35 @@ export function DictaminadorPosicion({
   const [revisandoCredito, setRevisandoCredito] = useState(false);
   const [borradorId, setBorradorId] = useState<string | null>(null);
   const [borradorGuardado, setBorradorGuardado] = useState(false);
+  const [guardandoDatos, setGuardandoDatos] = useState(false);
+  const [datosGuardadosEn, setDatosGuardadosEn] = useState<number | null>(null);
+
+  // Guarda (o corrige) los 3 campos de "Datos básicos" — se puede llamar las
+  // veces que haga falta (al perder el foco de cualquier campo, cuando la IA
+  // autollena, o con el botón manual). Nunca depende de que sea "la primera
+  // vez": si ya hay borrador, lo actualiza; si no, lo crea.
+  const guardarDatos = async () => {
+    if (!numeroCreditoIni.trim() && !administradoraIni.trim() && !direccionIni.trim()) return;
+    setGuardandoDatos(true);
+    const r = await guardarDatosBasicos(borradorId, {
+      numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
+      expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
+      ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
+    }, precargar?.solicitudId);
+    if (r.borradorId) { setBorradorId(r.borradorId); setBorradorGuardado(true); }
+    setGuardandoDatos(false);
+    if (r.ok) setDatosGuardadosEn(Date.now());
+  };
+
   const revisarCredito = async () => {
     if (!numeroCreditoIni.trim()) { setYaExisteCredito(null); return; }
     setRevisandoCredito(true);
     const ex = await buscarPredictamenPorCredito(numeroCreditoIni);
     setYaExisteCredito(ex);
     setRevisandoCredito(false);
-    // Checkpoint: en cuanto el crédito quede validado como único, se guarda un
-    // borrador "Pendiente" en el historial — así no se pierde nada si no se
-    // termina el dictamen ahorita. Se manda TODO lo ya capturado hasta este
-    // punto (incluido lo del boletín, si ya se buscó antes de llegar aquí).
-    if (!ex && !borradorId) {
-      const id = await guardarBorrador({
-        numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
-        expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
-        ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
-      });
-      if (id) { setBorradorId(id); setBorradorGuardado(true); }
-    }
+    // Si el crédito no está repetido, se guarda (crea o corrige) de una vez —
+    // así no se pierde nada aunque no se termine el dictamen ahorita.
+    if (!ex) await guardarDatos();
   };
 
   // robot al inicio: expediente + partes + hallazgos que se llevarán al recorrido
@@ -117,6 +128,7 @@ export function DictaminadorPosicion({
     if (!borradorId) return;
     if (!expedienteIni && !hallazgosIni.length) return;
     actualizarBorrador(borradorId, { expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni });
+    if (expedienteIni) sincronizarSolicitud(precargar?.solicitudId, { numero_credito: numeroCreditoIni, expediente: expedienteIni });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hallazgosIni, expedienteIni, deudorIni, juzgadoIni, ultimaActuacionIni, borradorId]);
 
@@ -150,6 +162,7 @@ export function DictaminadorPosicion({
       ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
     });
     if (id) { setBorradorId(id); setBorradorGuardado(true); }
+    await sincronizarSolicitud(precargar?.solicitudId, { numero_credito: numeroCreditoIni, expediente: expedienteIni });
     setYaExisteCredito(null);
   };
 
@@ -157,12 +170,38 @@ export function DictaminadorPosicion({
   // rellena los campos que sigan VACÍOS (nunca pisa lo que ya se escribió).
   useEffect(() => {
     if (!datosDetectadosIA) return;
-    if (!administradoraIni && datosDetectadosIA.administradora) setAdministradoraIni(datosDetectadosIA.administradora);
-    if (!numeroCreditoIni && datosDetectadosIA.numero_credito) setNumeroCreditoIni(datosDetectadosIA.numero_credito);
-    if (!direccionIni && datosDetectadosIA.direccion) setDireccionIni(datosDetectadosIA.direccion);
-    if (!expedienteIni && datosDetectadosIA.expediente) setExpedienteIni(datosDetectadosIA.expediente);
+    // Valores finales que van a quedar (lo ya escrito manda; si está vacío,
+    // se usa lo que detectó la IA) — se calculan aparte del estado porque
+    // React no aplica los setState de abajo sino hasta el siguiente render,
+    // y el guardado necesita los valores YA correctos, no los viejos.
+    const admFinal = administradoraIni || datosDetectadosIA.administradora || "";
+    const credFinal = numeroCreditoIni || datosDetectadosIA.numero_credito || "";
+    const dirFinal = direccionIni || datosDetectadosIA.direccion || "";
+    const expFinal = expedienteIni || datosDetectadosIA.expediente || "";
+    const huboCambio = admFinal !== administradoraIni || credFinal !== numeroCreditoIni || dirFinal !== direccionIni || expFinal !== expedienteIni;
+    if (admFinal !== administradoraIni) setAdministradoraIni(admFinal);
+    if (credFinal !== numeroCreditoIni) setNumeroCreditoIni(credFinal);
+    if (dirFinal !== direccionIni) setDireccionIni(dirFinal);
+    if (expFinal !== expedienteIni) setExpedienteIni(expFinal);
     if (!deudorIni && datosDetectadosIA.deudor) setDeudorIni(datosDetectadosIA.deudor);
     if (!juzgadoIni && datosDetectadosIA.juzgado) setJuzgadoIni(datosDetectadosIA.juzgado);
+    // El autollenado de la IA no dispara onBlur (no lo escribió una persona) —
+    // por eso aquí se guarda solo, con los valores correctos, para no
+    // depender de que alguien le dé clic manualmente al campo.
+    if (huboCambio) {
+      (async () => {
+        setGuardandoDatos(true);
+        const r = await guardarDatosBasicos(borradorId, {
+          numeroCredito: credFinal, administradora: admFinal, direccion: dirFinal, expediente: expFinal,
+          deudor: deudorIni || datosDetectadosIA.deudor || "", juzgado: juzgadoIni || datosDetectadosIA.juzgado || "",
+          hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
+        }, precargar?.solicitudId);
+        if (r.borradorId) { setBorradorId(r.borradorId); setBorradorGuardado(true); }
+        setGuardandoDatos(false);
+        if (r.ok) setDatosGuardadosEn(Date.now());
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datosDetectadosIA]);
 
   // intento de abrir una posición (respeta el candado de elaborar y el crédito duplicado)
@@ -186,18 +225,26 @@ export function DictaminadorPosicion({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium">Administradora / banco</label>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={administradoraIni} onChange={(e) => setAdministradoraIni(e.target.value)} placeholder="Ej. Pendulum, Zendere…" />
+              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={administradoraIni} onChange={(e) => setAdministradoraIni(e.target.value)} onBlur={guardarDatos} placeholder="Ej. Pendulum, Zendere…" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Número de crédito</label>
               <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={numeroCreditoIni} onChange={(e) => setNumeroCreditoIni(e.target.value)} onBlur={revisarCredito} placeholder="No es el expediente" />
               {revisandoCredito && <p className="mt-1 text-[11px] text-muted-foreground">Revisando si ya existe…</p>}
-              {borradorGuardado && !yaExisteCredito && <p className="mt-1 text-[11px] font-medium text-amber-700">● Guardado como <b>Pendiente</b> en el historial.</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Dirección de la garantía</label>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={direccionIni} onChange={(e) => setDireccionIni(e.target.value)} />
+              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={direccionIni} onChange={(e) => setDireccionIni(e.target.value)} onBlur={guardarDatos} />
             </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button type="button" onClick={guardarDatos} disabled={guardandoDatos}
+              className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+              {guardandoDatos ? "Guardando…" : "💾 Guardar datos básicos"}
+            </button>
+            {!guardandoDatos && datosGuardadosEn && (
+              <span className="text-[11px] font-medium text-emerald-700">✓ Guardado {borradorGuardado ? "como Pendiente en el historial" : ""}</span>
+            )}
           </div>
           {yaExisteCredito && (
             <div className="mt-3 space-y-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
