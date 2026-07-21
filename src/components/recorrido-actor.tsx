@@ -275,6 +275,42 @@ export function RecorridoActor({
       };
     });
   }, [analisisParaPDF]);
+
+  // Autollenado de "1 · Verificación registral (RPP)" con lo que la IA leyó
+  // en Certificados de Gravamen / boletas del RPPC / escrituras. Solo llena
+  // lo que siga VACÍO (nunca pisa lo que ya se escribió a mano). El detalle
+  // de gravámenes/embargos se arma desglosado, uno por uno, dentro de
+  // "Anotaciones / embargos / fideicomisos".
+  useEffect(() => {
+    const rr = analisisParaPDF?.registral_rppc;
+    if (!rr) return;
+    setD((p) => {
+      const cambios: Partial<Datos> = {};
+      if (!p.propietario && rr.propietario_titular) cambios.propietario = rr.propietario_titular;
+      if (!p.hipotecaInscrita && (rr.hipoteca_inscrita === "sí" || rr.hipoteca_inscrita === "si" || rr.hipoteca_inscrita === "no")) {
+        cambios.hipotecaInscrita = /^s/i.test(rr.hipoteca_inscrita) ? "si" : "no";
+      }
+      if (!p.prelacion && rr.prelacion) cambios.prelacion = rr.prelacion;
+      if (!p.anotaciones) {
+        const lineas: string[] = [];
+        if (rr.folio_real) lineas.push(`Folio real: ${rr.folio_real}`);
+        if (rr.antecedente_registral) lineas.push(`Antecedente registral: ${rr.antecedente_registral}`);
+        if (rr.superficie_registral) lineas.push(`Superficie (RPP): ${rr.superficie_registral}`);
+        if (rr.acreedor_hipotecario) lineas.push(`Acreedor hipotecario: ${rr.acreedor_hipotecario}${rr.monto_garantizado ? ` · Monto garantizado: ${rr.monto_garantizado}` : ""}${rr.fecha_inscripcion_hipoteca ? ` · Inscrita: ${rr.fecha_inscripcion_hipoteca}` : ""}`);
+        const gravs: any[] = Array.isArray(rr.gravamenes) ? rr.gravamenes : [];
+        if (gravs.length) {
+          lineas.push(`Gravámenes/embargos detectados (${gravs.length}):`);
+          gravs.forEach((g: any, i: number) => {
+            lineas.push(`  ${i + 1}. ${g.tipo || "Gravamen"} — ${g.acreedor_o_beneficiario || "acreedor no identificado"}${g.monto ? ` · ${g.monto}` : ""}${g.fecha_inscripcion ? ` · inscrito ${g.fecha_inscripcion}` : ""}${g.vigente ? ` · vigente: ${g.vigente}` : ""}${g.detalle ? ` — ${g.detalle}` : ""}`);
+          });
+        }
+        if (rr.litigios_inscritos) lineas.push(`Litigios inscritos: ${rr.litigios_inscritos}`);
+        if (rr.anotaciones_marginales) lineas.push(`Anotaciones marginales: ${rr.anotaciones_marginales}`);
+        if (lineas.length) cambios.anotaciones = `✨ Detectado por la IA en los documentos:\n${lineas.join("\n")}`;
+      }
+      return Object.keys(cambios).length ? { ...p, ...cambios } : p;
+    });
+  }, [analisisParaPDF]);
   const demandasDetectadas = useMemo(() => {
     const arr = analisisParaPDF?.estado_actual?.demandas;
     return Array.isArray(arr) ? arr : [];
@@ -753,11 +789,12 @@ export function RecorridoActor({
         {paso === 1 && (
           <div className="space-y-4">
             <H titulo="1 · Verificación registral (RPP)" sub="Folio real y gravámenes. Lo primero y más importante." />
+            {!!analisisParaPDF?.registral_rppc && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos (Certificados de Gravamen, RPPC, escrituras) — revisa y corrige si hace falta.</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Hipoteca inscrita y vigente?"><SiNo v={d.hipotecaInscrita} on={(x) => set("hipotecaInscrita", x)} /></Campo>
               <Campo label="Prelación"><select className={inp} value={d.prelacion} onChange={(e) => set("prelacion", e.target.value)}><option value="">—</option><option>Primer lugar</option><option>Hay acreedores anteriores</option></select></Campo>
               <Campo label="Propietario actual (según RPP)"><input className={inp} value={d.propietario} onChange={(e) => set("propietario", e.target.value)} /></Campo>
-              <Campo label="Anotaciones / embargos / fideicomisos"><input className={inp} value={d.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} /></Campo>
+              <Campo label="Anotaciones / embargos / fideicomisos"><textarea className={inp} rows={5} value={d.anotaciones} onChange={(e) => set("anotaciones", e.target.value)} placeholder="Folio real, gravámenes, embargos, litigios inscritos, anotaciones marginales…" /></Campo>
             </div>
             {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Riesgo grave", detalle: "La hipoteca no está inscrita/vigente. Sin inscripción, la cesión es muy riesgosa (normalmente sería PARO)." }} />}
             {prelacionRiesgo && <Aviso r={{ semaforo: "naranja", etiqueta: "Prelación", detalle: "Hay acreedores anteriores: la hipoteca no está en primer lugar. Riesgo alto sobre la recuperación de la garantía." }} />}
