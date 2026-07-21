@@ -226,6 +226,41 @@ export async function guardarDatosBasicos(
   }
 }
 
+/** Autoguardado EN VIVO del recorrido completo (las 8 fases de Actor/Demandado/
+ *  Sucesorio, con TODOS sus campos, no solo los 3 de "Datos básicos"). Se llama
+ *  cada vez que cambia algo en el formulario (con un pequeño retraso, para no
+ *  mandar una petición por cada tecla). A diferencia de actualizarBorrador,
+ *  aquí `datosCompletos` YA es el objeto completo acumulado en memoria — se
+ *  guarda tal cual, sin necesidad de traer lo anterior y mezclarlo. */
+export async function guardarProgreso(
+  idActual: string | null,
+  expediente: string | null | undefined,
+  juzgado: string | null | undefined,
+  datosCompletos: any,
+): Promise<string | null> {
+  try {
+    if (!idActual) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
+        method: "POST",
+        headers: { ...headers, Prefer: "return=representation" },
+        body: JSON.stringify({
+          posicion: null, tipo_juicio: null, expediente: expediente || null, juzgado: juzgado || null,
+          estado: null, dictamen_sugerido: null, dictamen_final: null,
+          datos: { ...datosCompletos, borrador: true }, resultados: null, vigente: true, en_papelera: false, version: 1,
+        }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data?.[0]?.id ?? null;
+    }
+    const patch: any = { datos: { ...datosCompletos, borrador: true } };
+    if (expediente) patch.expediente = expediente;
+    if (juzgado) patch.juzgado = juzgado;
+    await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${idActual}`, { method: "PATCH", headers, body: JSON.stringify(patch) });
+    return idActual;
+  } catch { return idActual; }
+}
+
 /** Descarta el borrador (lo manda a la papelera) porque ya se guardó el
  *  pre-dictamen real — para no dejar un registro "Pendiente" duplicado. */
 export async function descartarBorrador(id?: string | null): Promise<void> {
