@@ -204,6 +204,26 @@ export function DictaminadorPosicion({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datosDetectadosIA]);
 
+  // Trae lo que YA se guardó antes (desde la Solicitud, o de un pre-dictamen
+  // anterior) para que la ficha no se vea vacía cuando en realidad ya hay
+  // datos capturados en otro lado. Nunca pisa lo que la persona ya escribió
+  // aquí, y NO vuelve a guardar solo (ya está guardado) — solo lo muestra.
+  // Si viene con antecedenteId, se usa ese id como borradorId para que, si
+  // luego se corrige algo, se actualice el mismo registro y no se cree uno
+  // nuevo "Pendiente" duplicado.
+  useEffect(() => {
+    const dp = precargar?.datos;
+    if (!dp) return;
+    if (!administradoraIni && dp.quienCede) setAdministradoraIni(dp.quienCede);
+    if (!numeroCreditoIni && dp.numeroCredito) setNumeroCreditoIni(dp.numeroCredito);
+    if (!direccionIni && dp.ubicacion) setDireccionIni(dp.ubicacion);
+    if (!expedienteIni && dp.expediente) setExpedienteIni(dp.expediente);
+    if (!deudorIni && dp.deudor) setDeudorIni(dp.deudor);
+    if (!juzgadoIni && dp.juzgado) setJuzgadoIni(dp.juzgado);
+    if (!borradorId && precargar?.antecedenteId) { setBorradorId(precargar.antecedenteId); setBorradorGuardado(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [precargar?.datos, precargar?.antecedenteId]);
+
   // intento de abrir una posición (respeta el candado de elaborar y el crédito duplicado)
   const abrir = (v: VistaPosicion) => {
     if (!puedeElaborar) { alert("Tu rol no puede elaborar pre-dictámenes nuevos. Solo puedes ver el historial."); return; }
@@ -222,6 +242,9 @@ export function DictaminadorPosicion({
         <div className="mb-4 rounded-xl border border-border bg-muted/20 p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">1) Datos básicos de la garantía</p>
           {datosDetectadosIA && <p className="mb-2 text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos — revisa y corrige si hace falta.</p>}
+          {!datosDetectadosIA && !!precargar?.datos && (precargar.datos.numeroCredito || precargar.datos.quienCede || precargar.datos.ubicacion) && (
+            <p className="mb-2 text-[11px] font-medium text-[color:var(--teal)]">🔄 Recuperado de lo que ya se había guardado antes — revisa y valida.</p>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium">Administradora / banco</label>
@@ -240,7 +263,7 @@ export function DictaminadorPosicion({
           <div className="mt-3 flex items-center gap-2">
             <button type="button" onClick={guardarDatos} disabled={guardandoDatos}
               className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
-              {guardandoDatos ? "Guardando…" : "💾 Guardar datos básicos"}
+              {guardandoDatos ? "Guardando…" : borradorGuardado ? "✏️ Editar y validar datos" : "💾 Guardar datos básicos"}
             </button>
             {!guardandoDatos && datosGuardadosEn && (
               <span className="text-[11px] font-medium text-emerald-700">✓ Guardado {borradorGuardado ? "como Pendiente en el historial" : ""}</span>
