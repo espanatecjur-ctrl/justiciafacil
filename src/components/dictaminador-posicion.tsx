@@ -76,9 +76,14 @@ export function DictaminadorPosicion({
     setRevisandoCredito(false);
     // Checkpoint: en cuanto el crédito quede validado como único, se guarda un
     // borrador "Pendiente" en el historial — así no se pierde nada si no se
-    // termina el dictamen ahorita. Solo se crea una vez por sesión.
+    // termina el dictamen ahorita. Se manda TODO lo ya capturado hasta este
+    // punto (incluido lo del boletín, si ya se buscó antes de llegar aquí).
     if (!ex && !borradorId) {
-      const id = await guardarBorrador({ numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni, expediente: expedienteIni });
+      const id = await guardarBorrador({
+        numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
+        expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
+        ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
+      });
       if (id) { setBorradorId(id); setBorradorGuardado(true); }
     }
   };
@@ -103,36 +108,48 @@ export function DictaminadorPosicion({
     if (d.ultimaActuacionTexto) setUltimaActuacionTextoIni(d.ultimaActuacionTexto);
   };
 
-  // En cuanto se guardan hallazgos del boletín, se guarda de una vez en
-  // Supabase (no solo en memoria) — así, si se sale de la pantalla o se
-  // recarga, no hay que volver a buscarlo. Si todavía no había borrador
-  // (no se había capturado número de crédito), se crea uno aquí mismo.
+  // En cuanto se guardan hallazgos del boletín, se actualiza el borrador que
+  // YA EXISTE (si se capturó el crédito primero). Ojo: aquí NUNCA se crea un
+  // borrador nuevo — eso solo lo hace revisarCredito(), que sí checa
+  // duplicados antes de crear. Si esto creara uno por su cuenta, se corre el
+  // riesgo de dejar dos borradores del mismo crédito (repetidos).
   useEffect(() => {
+    if (!borradorId) return;
     if (!expedienteIni && !hallazgosIni.length) return;
-    const cambios = { expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni };
-    if (borradorId) {
-      actualizarBorrador(borradorId, cambios);
-    } else {
-      guardarBorrador({ numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni, ...cambios })
-        .then((id) => { if (id) { setBorradorId(id); setBorradorGuardado(true); } });
-    }
+    actualizarBorrador(borradorId, { expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hallazgosIni, expedienteIni, deudorIni, juzgadoIni, ultimaActuacionIni]);
+  }, [hallazgosIni, expedienteIni, deudorIni, juzgadoIni, ultimaActuacionIni, borradorId]);
 
-  // Retoma un borrador que ya traía datos del boletín capturados antes
-  // (en vez de solo bloquear con "ya está registrado" y perder ese avance).
-  const continuarBorrador = () => {
+  // El crédito ya tiene un borrador "Pendiente" guardado de antes (esto es lo
+  // más común: la misma persona, otra sesión). Se elige cuál es el bueno:
+  //  - "Usar el guardado" → trae ESE al formulario (pisa lo de esta pantalla).
+  //  - "Usar lo de aquí" → manda el guardado a la papelera y guarda esto.
+  const usarGuardadoYDescartarActual = async () => {
     if (!yaExisteCredito) return;
+    // por si ya se alcanzó a crear un borrador para esta sesión antes de
+    // toparse con el duplicado, para no dejar dos.
+    if (borradorId && borradorId !== yaExisteCredito.id) await descartarBorrador(borradorId);
     const dg = yaExisteCredito.datos || {};
     setBorradorId(yaExisteCredito.id);
     setBorradorGuardado(true);
-    if (dg.quienCede) setAdministradoraIni((p) => p || dg.quienCede);
-    if (dg.ubicacion) setDireccionIni((p) => p || dg.ubicacion);
-    if (yaExisteCredito.expediente) setExpedienteIni((p) => p || yaExisteCredito.expediente || "");
-    if (dg.deudor) setDeudorIni((p) => p || dg.deudor);
-    if (dg.ultimaActuacion) setUltimaActuacionIni((p) => p || dg.ultimaActuacion);
-    if (dg.ultimaActuacionTexto) setUltimaActuacionTextoIni((p) => p || dg.ultimaActuacionTexto);
-    if (Array.isArray(dg.hallazgos) && dg.hallazgos.length) setHallazgosIni(dg.hallazgos);
+    setAdministradoraIni(dg.quienCede || "");
+    setDireccionIni(dg.ubicacion || "");
+    setExpedienteIni(yaExisteCredito.expediente || "");
+    setDeudorIni(dg.deudor || "");
+    setUltimaActuacionIni(dg.ultimaActuacion || "");
+    setUltimaActuacionTextoIni(dg.ultimaActuacionTexto || "");
+    setHallazgosIni(Array.isArray(dg.hallazgos) ? dg.hallazgos : []);
+    setYaExisteCredito(null);
+  };
+  const usarActualYDescartarGuardado = async () => {
+    if (!yaExisteCredito) return;
+    await descartarBorrador(yaExisteCredito.id); // a papelera — recuperable, no se pierde
+    const id = await guardarBorrador({
+      numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
+      expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
+      ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
+    });
+    if (id) { setBorradorId(id); setBorradorGuardado(true); }
     setYaExisteCredito(null);
   };
 
@@ -186,13 +203,29 @@ export function DictaminadorPosicion({
             <div className="mt-3 space-y-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
               <p className="font-semibold">
                 {yaExisteCredito.esBorrador
-                  ? "Ese número de crédito ya tiene un borrador \"Pendiente\" guardado — probablemente eres tú misma, de una sesión anterior."
+                  ? "Ese número de crédito ya tiene un borrador \"Pendiente\" guardado — probablemente eres tú misma, de otra sesión. Elige cuál es el bueno para no dejar dos:"
                   : `Ese número de crédito ya está registrado${yaExisteCredito.folio ? ` (folio ${yaExisteCredito.folio})` : ""}.`}
               </p>
-              <p className="text-[13px]">{yaExisteCredito.esBorrador ? "Puedes seguir donde te quedaste (se recupera el expediente, deudor y hallazgos del boletín ya capturados) o borrarlo y empezar de cero." : "No se puede agregar de nuevo. Mejor revisa o continúa ese dictamen."}</p>
+              {yaExisteCredito.esBorrador && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-md border border-red-200 bg-white p-2 text-[12px]">
+                    <p className="font-semibold text-red-900">Lo guardado antes:</p>
+                    <p>Exp. {yaExisteCredito.expediente || "—"}{yaExisteCredito.datos?.deudor ? ` · Deudor: ${yaExisteCredito.datos.deudor}` : ""}</p>
+                    <p>Hallazgos del boletín: {Array.isArray(yaExisteCredito.datos?.hallazgos) ? yaExisteCredito.datos.hallazgos.length : 0}{yaExisteCredito.datos?.ultimaActuacion ? ` · Última actuación: ${yaExisteCredito.datos.ultimaActuacion}` : ""}</p>
+                  </div>
+                  <div className="rounded-md border border-red-200 bg-white p-2 text-[12px]">
+                    <p className="font-semibold text-red-900">Lo que tienes aquí ahorita:</p>
+                    <p>Exp. {expedienteIni || "—"}{deudorIni ? ` · Deudor: ${deudorIni}` : ""}</p>
+                    <p>Hallazgos del boletín: {hallazgosIni.length}{ultimaActuacionIni ? ` · Última actuación: ${ultimaActuacionIni}` : ""}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 {yaExisteCredito.esBorrador && (
-                  <button onClick={continuarBorrador} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Continuar donde me quedé</button>
+                  <>
+                    <button onClick={usarGuardadoYDescartarActual} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">✓ El guardado es el real — usar ese</button>
+                    <button onClick={usarActualYDescartarGuardado} className="rounded-md border border-red-400 bg-white px-3 py-1.5 text-xs font-semibold text-red-700">✓ Lo de aquí es el real — mandar el guardado a la papelera</button>
+                  </>
                 )}
                 {yaExisteCredito.caso_id && (
                   <Link to="/expediente" search={{ id: yaExisteCredito.caso_id, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
