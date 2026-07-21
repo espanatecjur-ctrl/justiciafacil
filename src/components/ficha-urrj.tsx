@@ -7,12 +7,14 @@
 //  Reusa DictaminadorPosicion + DictamenRegistral + LineaVidaAreas +
 //  DocumentosGarantia + BotonCarpetaDrive (sin motores nuevos).
 // ============================================================
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
+import { trasladarDocumentosSolicitud, type ResultadoTraslado } from "@/lib/drive";
+import { obtenerResumenPorClaveCaso, type ResumenDoc } from "@/lib/resumen-documentos";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
 import { SubJuicios } from "@/components/sub-juicios";
@@ -100,6 +102,11 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [permisos, setPermisos] = useState<string[]>([]);
   const [rolUsuario, setRolUsuario] = useState<string | null>(null);
   const [docsSolicitudes, setDocsSolicitudes] = useState<{ nombre: string; url: string }[]>([]);
+  const [resumenesIA, setResumenesIA] = useState<ResumenDoc[]>([]);
+  const [trasladando, setTrasladando] = useState(false);
+  const [resultadoTraslado, setResultadoTraslado] = useState<ResultadoTraslado | null>(null);
+  const [refrescoDocs, setRefrescoDocs] = useState(0);
+  const yaAutoTrasladado = useRef<string | null>(null); // guarda el garantia.id ya intentado, para no repetir solo
   const [jur, setJur] = useState<Dictamen>(null);
   const [reg, setReg] = useState<Dictamen>(null);
   const [folio, setFolio] = useState<string>("");
@@ -205,6 +212,42 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     }
     return combinados;
   }, [docsSolicitudes, predJur]);
+
+  // Número de crédito de este caso (para nombrar los documentos al trasladarlos).
+  const numeroCreditoCaso = predJur?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || garantia.numeroCredito || "";
+  // Clave para encontrar el análisis de IA ya hecho en Solicitudes (crédito → expediente → id del caso).
+  const claveResumenIA = numeroCreditoCaso || garantia.expediente || garantia.id || "";
+
+  useEffect(() => {
+    if (!claveResumenIA) { setResumenesIA([]); return; }
+    obtenerResumenPorClaveCaso(claveResumenIA).then((cache) => setResumenesIA(cache?.resumenes || [])).catch(() => setResumenesIA([]));
+  }, [claveResumenIA]);
+
+  // Traslada los documentos de la solicitud a Drive real + a la ficha de
+  // Documentos, con el análisis de IA ya hecho copiado como nota. No repite
+  // los que ya estén trasladados.
+  const trasladarDocs = async () => {
+    if (!garantia.id || !docs.length || trasladando) return;
+    setTrasladando(true);
+    const r = await trasladarDocumentosSolicitud("URRJ", casoLV, numeroCreditoCaso, docs, resumenesIA);
+    setResultadoTraslado(r);
+    setTrasladando(false);
+    if (r.trasladados > 0) setRefrescoDocs((n) => n + 1); // fuerza recargar la pestaña "Documentos" (Drive)
+  };
+
+  // Automático: en cuanto haya caso formal (garantia.id) con documentos de
+  // solicitud, se trasladan solos — una sola vez por caso, sin bloquear la
+  // pantalla. El botón manual sigue disponible como respaldo.
+  useEffect(() => {
+    if (!garantia.id || !docs.length) return;
+    if (yaAutoTrasladado.current === garantia.id) return;
+    yaAutoTrasladado.current = garantia.id;
+    trasladarDocumentosSolicitud("URRJ", casoLV, numeroCreditoCaso, docs, resumenesIA).then((r) => {
+      setResultadoTraslado(r);
+      if (r.trasladados > 0) setRefrescoDocs((n) => n + 1);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [garantia.id, docs.length, resumenesIA.length]);
 
   const precargaJuridico: Precarga = {
     datos: {
@@ -338,17 +381,42 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
 
           <TabsContent value="documentos" className="mt-4">
             <div className="rounded-xl border border-border p-5">
-              <p className="mb-3 text-sm font-semibold">Documentos que envió la Dirección para dictaminar</p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold">Documentos que envió la Dirección para dictaminar</p>
+                {docs.length > 0 && garantia.id && (
+                  <button onClick={trasladarDocs} disabled={trasladando}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                    {trasladando ? "Trasladando…" : "🔄 Trasladar documentos a Drive"}
+                  </button>
+                )}
+              </div>
+              {resultadoTraslado && (
+                <p className={`mb-3 rounded-md p-2 text-xs ${resultadoTraslado.errores.length ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}>
+                  {resultadoTraslado.trasladados > 0 && `${resultadoTraslado.trasladados} documento(s) trasladado(s) a Drive. `}
+                  {resultadoTraslado.saltados > 0 && `${resultadoTraslado.saltados} ya estaban trasladados. `}
+                  {resultadoTraslado.errores.length > 0 && `Con errores: ${resultadoTraslado.errores.join(" · ")}`}
+                </p>
+              )}
               {docs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Aún no hay documentos para esta garantía. La Dirección los envía desde “Documentos → pre-dictamen”.</p>
               ) : (
                 <div className="divide-y divide-border">
-                  {docs.map((d, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 py-2.5 text-sm hover:bg-muted/40">
-                      <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
-                      <BotonVerDoc url={d.url} nombre={d.nombre} label="ver" />
-                    </div>
-                  ))}
+                  {docs.map((d, i) => {
+                    const r = resumenesIA.find((x) => x.nombre === d.nombre);
+                    return (
+                      <div key={i} className="py-2.5 text-sm hover:bg-muted/40">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
+                          <BotonVerDoc url={d.url} nombre={d.nombre} label="ver" />
+                        </div>
+                        {r && (
+                          <p className="mt-1 pl-6 text-[11px] text-purple-700">
+                            <span className="rounded bg-purple-100 px-1 py-0.5 font-medium">{r.tipo}</span> · {r.resumen}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -622,7 +690,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             onGuardar={(campos) => guardarDatos(campos as Partial<RefGarantia>, () => {})}
           />
           <DocumentosFijos caso={casoLV} area="URRJ" />
-          <DocumentosGarantia area="URRJ" caso={casoLV} />
+          <DocumentosGarantia key={refrescoDocs} area="URRJ" caso={casoLV} />
         </div>
       )}
 
