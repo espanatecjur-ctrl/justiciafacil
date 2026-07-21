@@ -148,7 +148,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     }).catch(() => {});
     const filtro = garantia.predictamenId ? `id=eq.${garantia.predictamenId}`
       : garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
       .catch(() => {});
@@ -259,6 +259,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       numeroCredito: predJur?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || "",
       quienCede: predJur?.datos?.quienCede || (garantia as any).administradora || "",
     },
+    // Id real del pre-dictamen ya guardado (si existe) — así "Editar y validar"
+    // corrige ESE mismo registro en vez de crear uno "Pendiente" duplicado.
+    antecedenteId: predJur?.id || garantia.predictamenId || undefined,
   };
 
   const casoLV: CasoJuridico = {
