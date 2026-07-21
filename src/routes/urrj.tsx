@@ -144,6 +144,7 @@ function URRJ() {
         antecedenteId: previo.id,
         version: previo.version || 1,
         cambios: "Re-dictaminado desde Solicitudes URRJ",
+        solicitudId: sol.id,
       });
     } else {
       setPrecargar({
@@ -154,6 +155,7 @@ function URRJ() {
           deudor: sol.cliente || "",
           numeroCredito: sol.numero_credito || "",
         },
+        solicitudId: sol.id,
       });
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
