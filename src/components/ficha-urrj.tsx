@@ -356,7 +356,15 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
 
           <TabsContent value="registral" className="mt-4">
             <DictamenRegistral
-              precarga={{ acreditado: garantia.cliente_nombre || garantia.deudor || "", numeroCredito: garantia.expediente || "", direccion: garantia.direccion_garantia || "" }}
+              precarga={{
+                acreditado: garantia.cliente_nombre || garantia.deudor || "",
+                // Antes se mandaba garantia.expediente aquí por error — con eso el
+                // número de crédito de esta pestaña NUNCA coincidía con el que se
+                // capturó del lado Jurídico, y el autollenado de IA no encontraba
+                // el mismo caso (busca por número de crédito).
+                numeroCredito: predJur?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || garantia.numeroCredito || "",
+                direccion: garantia.direccion_garantia || "",
+              }}
               casoId={garantia.id || ""}
               onVolver={recargarEstado}
               puedeFirmarElabora={puede("firmar_elabora")}
