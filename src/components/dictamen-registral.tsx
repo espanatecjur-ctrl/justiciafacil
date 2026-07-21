@@ -7,7 +7,7 @@
 //  Guarda en Supabase, imprime y refleja el resultado en la
 //  línea de vida (bolita registral de URRJ).
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
@@ -89,6 +89,42 @@ export function DictamenRegistral({
 
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
+  // Autoguardado EN VIVO del avance (borrador con resultado=null, terminado=false)
+  // — independiente del guardado final (que exige elegir RESULTADO). Así no se
+  // pierde nada si se cierra a medias, y el guardado final de más abajo, si ya
+  // hay un draft, lo actualiza en vez de crear una fila repetida.
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [guardandoProgreso, setGuardandoProgreso] = useState(false);
+  const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
+  const primerRenderProgreso = useRef(true);
+  useEffect(() => {
+    if (primerRenderProgreso.current) { primerRenderProgreso.current = false; return; }
+    const t = setTimeout(() => {
+      setGuardandoProgreso(true);
+      (async () => {
+        try {
+          if (!draftId) {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral`, {
+              method: "POST",
+              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+              body: JSON.stringify({ expediente: d.numeroCredito || null, acreditado: d.acreditado || null, resultado: null, hay_adicional: hayAdicional, datos: d, terminado: false }),
+            });
+            if (res.ok) { const rows = await res.json(); if (rows?.[0]?.id) setDraftId(rows[0].id); }
+          } else {
+            await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?id=eq.${draftId}`, {
+              method: "PATCH",
+              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ expediente: d.numeroCredito || null, acreditado: d.acreditado || null, hay_adicional: hayAdicional, datos: d }),
+            });
+          }
+        } catch { /* se reintenta solo en el siguiente cambio */ }
+        setGuardandoProgreso(false);
+        setProgresoGuardadoEn(Date.now());
+      })();
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, hayAdicional]);
   const [verBanner, setVerBanner] = useState(false);
   const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
   const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
@@ -184,19 +220,27 @@ export function DictamenRegistral({
     if (!d.resultado) { setGuardado("Falta elegir el RESULTADO (POSITIVO/NEGATIVO)."); return; }
     setGuardando(true); setGuardado(null);
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral`, {
-        method: "POST",
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-        body: JSON.stringify({
-          expediente: d.numeroCredito || null,
-          acreditado: d.acreditado || null,
-          resultado: d.resultado,
-          hay_adicional: hayAdicional,
-          datos: d,
-          firma_elabora: firmaElabora,
-          firma_valida: firmaValida,
-        }),
-      });
+      const cuerpo = {
+        expediente: d.numeroCredito || null,
+        acreditado: d.acreditado || null,
+        resultado: d.resultado,
+        hay_adicional: hayAdicional,
+        datos: d,
+        firma_elabora: firmaElabora,
+        firma_valida: firmaValida,
+        terminado: true,
+      };
+      const res = draftId
+        ? await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?id=eq.${draftId}`, {
+            method: "PATCH",
+            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+            body: JSON.stringify(cuerpo),
+          })
+        : await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral`, {
+            method: "POST",
+            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+            body: JSON.stringify(cuerpo),
+          });
       if (res.ok) {
         setGuardado("Dictamen registral guardado ✓");
         registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "dictamen_registral", resultado: d.resultado, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: hayAdicional ? "Con gravamen adicional" : "Sin gravamen adicional" });
@@ -237,6 +281,9 @@ export function DictamenRegistral({
           <ScrollText className="h-5 w-5 text-[color:var(--teal)]" />
           <h2 className="font-display text-lg font-bold">Dictamen Registral (RPPC)</h2>
         </div>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {guardandoProgreso ? "Guardando en vivo…" : progresoGuardadoEn ? "✓ Guardado en vivo" : ""}
+        </span>
       </div>
       <div className="hidden text-center print:block">
         <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
