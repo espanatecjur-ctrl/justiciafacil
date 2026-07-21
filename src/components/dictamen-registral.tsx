@@ -15,6 +15,7 @@ import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, Shield
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { reflejarDictamen } from "@/lib/recorrido";
+import { obtenerAnalisisCacheado, claveAnalisis } from "@/lib/analisis-ia";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -142,6 +143,80 @@ export function DictamenRegistral({
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=datos,resultados,dictamen_final,folio&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
       .then((r) => (r.ok ? r.json() : [])).then((j) => setJuridico(j?.[0] || null)).catch(() => setJuridico(null));
   }, [casoId, d.numeroCredito]);
+
+  // Autollenado del Dictamen Registral completo con lo que la IA leyó en los
+  // documentos (Certificados de Gravamen, RPPC, escrituras) — usa el mismo
+  // cuestionario ("Actor") que ya se generó en el pre-dictamen jurídico. Solo
+  // llena lo que siga VACÍO, nunca pisa lo que ya se haya escrito a mano.
+  const [analisisRegistral, setAnalisisRegistral] = useState<any>(null);
+  const claveIA = claveAnalisis({ numeroCredito: d.numeroCredito, caso_id: casoId });
+  useEffect(() => {
+    if (!claveIA) { setAnalisisRegistral(null); return; }
+    obtenerAnalisisCacheado(claveIA, "Actor").then((a) => setAnalisisRegistral(a?.respuestas?.registral_rppc || null)).catch(() => setAnalisisRegistral(null));
+  }, [claveIA]);
+
+  useEffect(() => {
+    if (!analisisRegistral) return;
+    const prop = analisisRegistral.propiedad || {};
+    const grav = analisisRegistral.gravamen || {};
+    const gravAd = analisisRegistral.gravamen_adicional || {};
+    setD((p) => {
+      const c: Partial<typeof VACIO> = {};
+      if (!p.distritoRegistral && analisisRegistral.distrito_registral) c.distritoRegistral = analisisRegistral.distrito_registral;
+      if (!p.p_direccion && prop.direccion) c.p_direccion = prop.direccion;
+      if (!p.p_fechaInscripcion && prop.fecha_inscripcion) c.p_fechaInscripcion = prop.fecha_inscripcion;
+      if (!p.p_noEscritura && prop.no_escritura) c.p_noEscritura = prop.no_escritura;
+      if (!p.p_fechaEscritura && prop.fecha_escritura) c.p_fechaEscritura = prop.fecha_escritura;
+      if (!p.p_acto && prop.acto) c.p_acto = prop.acto;
+      if (!p.p_titularRegistral && prop.titular_registral) c.p_titularRegistral = prop.titular_registral;
+      if (!p.p_enajenante && prop.enajenante) c.p_enajenante = prop.enajenante;
+      if (!p.p_notario && prop.notario) c.p_notario = prop.notario;
+      if (!p.p_montoOperacion && prop.monto_operacion) c.p_montoOperacion = prop.monto_operacion;
+      if (!p.p_superficie && prop.superficie) c.p_superficie = prop.superficie;
+      if (!p.p_liberacion && (prop.existe_liberacion_gravamen === "sí" || prop.existe_liberacion_gravamen === "si" || prop.existe_liberacion_gravamen === "no")) {
+        c.p_liberacion = /^s/i.test(prop.existe_liberacion_gravamen) ? "si" : "no";
+      }
+      if (!p.g_direccion && grav.direccion) c.g_direccion = grav.direccion;
+      if (!p.g_fechaInscripcion && grav.fecha_inscripcion) c.g_fechaInscripcion = grav.fecha_inscripcion;
+      if (!p.g_noEscritura && grav.no_escritura) c.g_noEscritura = grav.no_escritura;
+      if (!p.g_fechaEscritura && grav.fecha_escritura) c.g_fechaEscritura = grav.fecha_escritura;
+      if (!p.g_acto && grav.acto) c.g_acto = grav.acto;
+      if (!p.g_acreedor && grav.acreedor) c.g_acreedor = grav.acreedor;
+      if (!p.g_deudor && grav.deudor) c.g_deudor = grav.deudor;
+      if (!p.g_notario && grav.notario) c.g_notario = grav.notario;
+      if (!p.g_montoOperacion && grav.monto_operacion) c.g_montoOperacion = grav.monto_operacion;
+      if (!p.g_equivalente && grav.equivalente) c.g_equivalente = grav.equivalente;
+      const aplicaAdicional = gravAd.aplica === "sí" || gravAd.aplica === "si";
+      if (aplicaAdicional) {
+        if (!hayAdicional) setHayAdicional(true);
+        if (!p.ga_direccion && gravAd.direccion) c.ga_direccion = gravAd.direccion;
+        if (!p.ga_fechaInscripcion && gravAd.fecha_inscripcion) c.ga_fechaInscripcion = gravAd.fecha_inscripcion;
+        if (!p.ga_noEscritura && gravAd.no_escritura) c.ga_noEscritura = gravAd.no_escritura;
+        if (!p.ga_fechaEscritura && gravAd.fecha_escritura) c.ga_fechaEscritura = gravAd.fecha_escritura;
+        if (!p.ga_acto && gravAd.acto) c.ga_acto = gravAd.acto;
+        if (!p.ga_acreedor && gravAd.acreedor) c.ga_acreedor = gravAd.acreedor;
+        if (!p.ga_deudor && gravAd.deudor) c.ga_deudor = gravAd.deudor;
+        if (!p.ga_notario && gravAd.notario) c.ga_notario = gravAd.notario;
+        if (!p.ga_montoOperacion && gravAd.monto_operacion) c.ga_montoOperacion = gravAd.monto_operacion;
+        if (!p.ga_equivalente && gravAd.equivalente) c.ga_equivalente = gravAd.equivalente;
+      }
+      if (!p.anotaciones) {
+        const lineas: string[] = [];
+        const otros: any[] = Array.isArray(analisisRegistral.otros_gravamenes) ? analisisRegistral.otros_gravamenes : [];
+        if (otros.length) {
+          lineas.push(`Otros gravámenes/embargos detectados (${otros.length}):`);
+          otros.forEach((g: any, i: number) => {
+            lineas.push(`  ${i + 1}. ${g.tipo || "Gravamen"} — ${g.acreedor_o_beneficiario || "no identificado"}${g.monto ? ` · ${g.monto}` : ""}${g.fecha_inscripcion ? ` · inscrito ${g.fecha_inscripcion}` : ""}${g.vigente ? ` · vigente: ${g.vigente}` : ""}`);
+          });
+        }
+        if (analisisRegistral.anotaciones_adicionales) lineas.push(analisisRegistral.anotaciones_adicionales);
+        if (lineas.length) c.anotaciones = `✨ Detectado por la IA:\n${lineas.join("\n")}`;
+      }
+      if (!p.conclusion && analisisRegistral.conclusion) c.conclusion = analisisRegistral.conclusion;
+      return Object.keys(c).length ? { ...p, ...c } : p;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analisisRegistral]);
 
   const norm = (s?: string) => (s || "").toString().trim().toLowerCase().replace(/\s+/g, " ");
   const coincideNombre = (a?: string, b?: string) => {
@@ -289,6 +364,8 @@ export function DictamenRegistral({
         <p className="text-base font-bold">DESARROLLOS INTELIGENTES DE INMUEBLES Y PROPIEDADES ACCESIBLES, S.A. DE C.V.</p>
         <p className="font-display text-lg font-bold">DICTAMEN REGISTRAL (RPPC)</p>
       </div>
+
+      {!!analisisRegistral && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos (Certificados de Gravamen, RPPC, escrituras) — revisa y corrige si hace falta.</p>}
 
       <Bloque titulo="Verificación registral">
         <Campo label="Fecha de verificación"><input type="date" className={inp} value={d.fechaVerificacion} onChange={(e) => set("fechaVerificacion", e.target.value)} /></Campo>
