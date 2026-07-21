@@ -99,20 +99,50 @@ const ESQUEMA_RESPUESTA = `
   "documentos_solicitados": { "detalle": "string" },
   "convenios": { "notificados_firmados_ratificados": "sí" | "no" | "parcial" | "no aplica", "estado_cuenta_firma_perito": "sí" | "no" | "no aplica" },
   "registral_rppc": {
-    "propietario_titular": "string o null — nombre completo del titular registral según el Registro Público de la Propiedad (RPP/RPPC)",
-    "folio_real": "string o null",
-    "antecedente_registral": "string o null — no. de escritura/inscripción anterior que da origen a la propiedad",
-    "superficie_registral": "string o null",
-    "hipoteca_inscrita": "sí" | "no" | "no determinado",
-    "prelacion": "string o null — ej. Primer lugar, Segundo lugar, Hay acreedores anteriores",
-    "acreedor_hipotecario": "string o null",
-    "monto_garantizado": "string o null",
-    "fecha_inscripcion_hipoteca": "string o null",
-    "gravamenes": [
-      { "tipo": "string — ej. Hipoteca, Embargo, Servidumbre, Anotación preventiva, Litigio inscrito, Fideicomiso", "acreedor_o_beneficiario": "string o null", "monto": "string o null", "fecha_inscripcion": "string o null", "vigente": "sí" | "no" | "no determinado", "detalle": "string" }
+    "distrito_registral": "string o null",
+    "propiedad": {
+      "direccion": "string o null",
+      "fecha_inscripcion": "string o null",
+      "no_escritura": "string o null",
+      "fecha_escritura": "string o null",
+      "acto": "string o null — ej. Compraventa, Donación, Adjudicación, Cesión",
+      "titular_registral": "string o null",
+      "enajenante": "string o null",
+      "notario": "string o null",
+      "monto_operacion": "string o null",
+      "superficie": "string o null",
+      "existe_liberacion_gravamen": "sí" | "no" | "no determinado"
+    },
+    "gravamen": {
+      "direccion": "string o null",
+      "fecha_inscripcion": "string o null",
+      "no_escritura": "string o null",
+      "fecha_escritura": "string o null",
+      "acto": "string o null — normalmente Hipoteca",
+      "acreedor": "string o null",
+      "deudor": "string o null",
+      "notario": "string o null",
+      "monto_operacion": "string o null",
+      "equivalente": "string o null — el monto en UDIS o veces salario si el documento lo da así"
+    },
+    "gravamen_adicional": {
+      "aplica": "sí" | "no",
+      "direccion": "string o null",
+      "fecha_inscripcion": "string o null",
+      "no_escritura": "string o null",
+      "fecha_escritura": "string o null",
+      "acto": "string o null",
+      "acreedor": "string o null",
+      "deudor": "string o null",
+      "notario": "string o null",
+      "monto_operacion": "string o null",
+      "equivalente": "string o null"
+    },
+    "otros_gravamenes": [
+      { "tipo": "string — ej. Embargo, Servidumbre, Anotación preventiva, Litigio inscrito, Fideicomiso", "acreedor_o_beneficiario": "string o null", "monto": "string o null", "fecha_inscripcion": "string o null", "vigente": "sí" | "no" | "no determinado", "detalle": "string" }
     ],
-    "litigios_inscritos": "string o null",
-    "anotaciones_marginales": "string o null"
+    "anotaciones_adicionales": "string o null — litigios inscritos, embargos, fideicomisos, anotaciones marginales que no encajen arriba",
+    "conclusion": "string o null — conclusión breve del estado registral"
   }
 }`.trim();
 
@@ -147,7 +177,7 @@ Ahora lee ESTE documento nuevo ("${documento.nombre}") y ACTUALIZA el JSON de ar
 - Si este documento confirma o completa algo que estaba en null/"no determinado", complétalo.
 - Si este documento trae una demanda que NO está en la lista "demandas", agrégala (no dupliques las que ya estén).
 - Si este documento es una actuación MÁS RECIENTE que la que ya tenías en "ultima_actuacion", reemplázala; si es más vieja, deja la que ya tenías.
-- "registral_rppc": esta información suele venir en Certificados de Gravamen, Certificados de Libertad de Gravamen, impresiones o boletas del RPP/RPPC, escrituras inscritas, o el propio contrato de crédito con hipoteca. Si este documento trae gravámenes que NO están en la lista "gravamenes" (por acreedor + tipo + fecha de inscripción), agrégalos; no dupliques los que ya estén.
+- "registral_rppc": esta información suele venir en Certificados de Gravamen, Certificados de Libertad de Gravamen, impresiones o boletas del RPP/RPPC, escrituras inscritas, o el propio contrato de crédito con hipoteca. "propiedad" es el dueño/antecedente del inmueble; "gravamen" es la hipoteca principal (normalmente la del crédito que se está dictaminando); "gravamen_adicional" SOLO se llena si hay un segundo gravamen distinto (ej. Cofinavit, Infonavit, otro acreedor) — si no hay, deja "aplica": "no" y el resto en null. Cualquier otro gravamen, embargo o anotación que no encaje en esas dos secciones va en la lista "otros_gravamenes" (no dupliques los que ya estén, compara por acreedor + tipo + fecha de inscripción).
 - NUNCA borres ni cambies a null algo que ya estaba bien contestado, a menos que este documento lo contradiga claramente.
 - "documento_principal" describe SIEMPRE el documento MÁS IMPORTANTE que hayas visto hasta ahora (contrato, sentencia o dictamen suelen ser más relevantes que un acuse o una compulsa) — cámbialo solo si este nuevo documento es más relevante que el que tenías.
 
