@@ -37,7 +37,13 @@ export function diffDatos(viejo: any, nuevo: any): { campo: string; antes: strin
   return out;
 }
 
-export interface PredictamenExistente { id: string; folio: string | null; posicion: string | null; caso_id: string | null; expediente: string | null; }
+export interface PredictamenExistente {
+  id: string; folio: string | null; posicion: string | null; caso_id: string | null; expediente: string | null;
+  /** true si es un borrador "Pendiente" (todavía sin posición elegida) — se
+   *  puede retomar en vez de solo bloquear. */
+  esBorrador?: boolean;
+  datos?: any;
+}
 
 /** Busca un pre-dictamen VIGENTE (no en papelera) por caso o por expediente.
  *  Sirve para no duplicar: si ya hay uno, se avisa y se ofrece ir a ese. */
@@ -98,12 +104,24 @@ export async function adjuntarDocumentosAPredictamen(id: string, documentos: { n
 /** Guarda un "borrador" en cuanto se captura el número de crédito (antes de elegir
  *  posición). Así el trabajo no se pierde aunque no se termine el dictamen en ese
  *  momento: queda en el historial marcado como "Pendiente". Se marca con
- *  datos.borrador = true para distinguirlo de un pre-dictamen real. */
-export async function guardarBorrador(datos: { numeroCredito?: string; administradora?: string; direccion?: string; expediente?: string }): Promise<string | null> {
+ *  datos.borrador = true para distinguirlo de un pre-dictamen real.
+ *  También guarda lo que ya se haya sacado del boletín (expediente, deudor,
+ *  juzgado, hallazgos, última actuación), para que si se sale y regresa
+ *  después, no haya que volver a buscarlo. */
+export async function guardarBorrador(datos: {
+  numeroCredito?: string; administradora?: string; direccion?: string; expediente?: string;
+  deudor?: string; juzgado?: string; hallazgos?: string[];
+  ultimaActuacion?: string; ultimaActuacionTexto?: string;
+}): Promise<string | null> {
   const body = {
     posicion: null, tipo_juicio: null, expediente: datos.expediente || null,
-    juzgado: null, estado: null, dictamen_sugerido: null, dictamen_final: null,
-    datos: { numeroCredito: datos.numeroCredito || "", quienCede: datos.administradora || "", ubicacion: datos.direccion || "", borrador: true },
+    juzgado: datos.juzgado || null, estado: null, dictamen_sugerido: null, dictamen_final: null,
+    datos: {
+      numeroCredito: datos.numeroCredito || "", quienCede: datos.administradora || "", ubicacion: datos.direccion || "",
+      deudor: datos.deudor || "", hallazgos: datos.hallazgos || [],
+      ultimaActuacion: datos.ultimaActuacion || "", ultimaActuacionTexto: datos.ultimaActuacionTexto || "",
+      borrador: true,
+    },
     resultados: null, vigente: true, en_papelera: false, version: 1,
   };
   try {
@@ -114,6 +132,26 @@ export async function guardarBorrador(datos: { numeroCredito?: string; administr
     const data = await res.json();
     return data?.[0]?.id ?? null;
   } catch { return null; }
+}
+
+/** Actualiza un borrador YA CREADO con lo nuevo que se haya capturado
+ *  (ej. se acaba de guardar los hallazgos del boletín). No pisa el número de
+ *  crédito ni la posición — solo agrega/actualiza los datos del boletín. */
+export async function actualizarBorrador(id: string, cambios: {
+  expediente?: string; deudor?: string; juzgado?: string; hallazgos?: string[];
+  ultimaActuacion?: string; ultimaActuacionTexto?: string;
+}): Promise<void> {
+  if (!id) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${id}&select=datos`, { headers });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const datosActuales = rows?.[0]?.datos || {};
+    const patch: any = { datos: { ...datosActuales, ...cambios } };
+    if (cambios.expediente) patch.expediente = cambios.expediente;
+    if (cambios.juzgado) patch.juzgado = cambios.juzgado;
+    await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${id}`, { method: "PATCH", headers, body: JSON.stringify(patch) });
+  } catch { /* si falla, se queda solo en memoria — no es grave */ }
 }
 
 /** Descarta el borrador (lo manda a la papelera) porque ya se guardó el
@@ -138,7 +176,7 @@ export async function buscarPredictamenPorCredito(numeroCredito?: string | null)
     if (!res.ok) return null;
     const rows: any[] = await res.json();
     const row = rows.find((x) => cred === normRO(x?.datos?.numeroCredito));
-    return row ? { id: row.id, folio: row.folio, posicion: row.posicion, caso_id: row.caso_id, expediente: row.expediente } : null;
+    return row ? { id: row.id, folio: row.folio, posicion: row.posicion, caso_id: row.caso_id, expediente: row.expediente, esBorrador: !!row?.datos?.borrador, datos: row?.datos } : null;
   } catch { return null; }
 }
 export async function motivoRepetidoURRJ(payload: any): Promise<string | null> {
