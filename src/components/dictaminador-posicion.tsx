@@ -124,13 +124,22 @@ export function DictaminadorPosicion({
   // borrador nuevo — eso solo lo hace revisarCredito(), que sí checa
   // duplicados antes de crear. Si esto creara uno por su cuenta, se corre el
   // riesgo de dejar dos borradores del mismo crédito (repetidos).
+  // En cuanto se copian actuaciones del boletín, se guardan YA — si el
+  // borrador todavía no existe (ej. se buscó el boletín antes de capturar el
+  // crédito), se crea aquí mismo para no perder el hallazgo. Si ya existe, se
+  // actualiza ese mismo registro.
   useEffect(() => {
-    if (!borradorId) return;
     if (!expedienteIni && !hallazgosIni.length) return;
-    actualizarBorrador(borradorId, { expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni });
-    if (expedienteIni) sincronizarSolicitud(precargar?.solicitudId, { numero_credito: numeroCreditoIni, expediente: expedienteIni });
+    (async () => {
+      const r = await guardarDatosBasicos(borradorId, {
+        numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
+        expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
+        ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
+      }, precargar?.solicitudId);
+      if (r.borradorId && r.borradorId !== borradorId) { setBorradorId(r.borradorId); setBorradorGuardado(true); }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hallazgosIni, expedienteIni, deudorIni, juzgadoIni, ultimaActuacionIni, borradorId]);
+  }, [hallazgosIni, expedienteIni, deudorIni, juzgadoIni, ultimaActuacionIni]);
 
   // El crédito ya tiene un borrador "Pendiente" guardado de antes (esto es lo
   // más común: la misma persona, otra sesión). Se elige cuál es el bueno:
