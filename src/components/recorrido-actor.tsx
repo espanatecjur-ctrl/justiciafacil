@@ -284,28 +284,33 @@ export function RecorridoActor({
   useEffect(() => {
     const rr = analisisParaPDF?.registral_rppc;
     if (!rr) return;
+    const prop = rr.propiedad || {};
+    const grav = rr.gravamen || {};
+    const gravAd = rr.gravamen_adicional || {};
     setD((p) => {
       const cambios: Partial<Datos> = {};
-      if (!p.propietario && rr.propietario_titular) cambios.propietario = rr.propietario_titular;
-      if (!p.hipotecaInscrita && (rr.hipoteca_inscrita === "sí" || rr.hipoteca_inscrita === "si" || rr.hipoteca_inscrita === "no")) {
-        cambios.hipotecaInscrita = /^s/i.test(rr.hipoteca_inscrita) ? "si" : "no";
+      if (!p.propietario && prop.titular_registral) cambios.propietario = prop.titular_registral;
+      if (!p.hipotecaInscrita && (prop.existe_liberacion_gravamen === "sí" || prop.existe_liberacion_gravamen === "si" || prop.existe_liberacion_gravamen === "no")) {
+        // "existe liberación de gravamen" = SÍ significa que YA se liberó (no hay hipoteca vigente) — es lo contrario a "hipoteca inscrita y vigente".
+        cambios.hipotecaInscrita = /^s/i.test(prop.existe_liberacion_gravamen) ? "no" : "si";
       }
-      if (!p.prelacion && rr.prelacion) cambios.prelacion = rr.prelacion;
+      if (!p.prelacion && (gravAd.aplica === "sí" || gravAd.aplica === "si")) cambios.prelacion = "Hay acreedores anteriores";
+      else if (!p.prelacion && grav.acreedor) cambios.prelacion = "Primer lugar";
       if (!p.anotaciones) {
         const lineas: string[] = [];
-        if (rr.folio_real) lineas.push(`Folio real: ${rr.folio_real}`);
-        if (rr.antecedente_registral) lineas.push(`Antecedente registral: ${rr.antecedente_registral}`);
-        if (rr.superficie_registral) lineas.push(`Superficie (RPP): ${rr.superficie_registral}`);
-        if (rr.acreedor_hipotecario) lineas.push(`Acreedor hipotecario: ${rr.acreedor_hipotecario}${rr.monto_garantizado ? ` · Monto garantizado: ${rr.monto_garantizado}` : ""}${rr.fecha_inscripcion_hipoteca ? ` · Inscrita: ${rr.fecha_inscripcion_hipoteca}` : ""}`);
-        const gravs: any[] = Array.isArray(rr.gravamenes) ? rr.gravamenes : [];
-        if (gravs.length) {
-          lineas.push(`Gravámenes/embargos detectados (${gravs.length}):`);
-          gravs.forEach((g: any, i: number) => {
-            lineas.push(`  ${i + 1}. ${g.tipo || "Gravamen"} — ${g.acreedor_o_beneficiario || "acreedor no identificado"}${g.monto ? ` · ${g.monto}` : ""}${g.fecha_inscripcion ? ` · inscrito ${g.fecha_inscripcion}` : ""}${g.vigente ? ` · vigente: ${g.vigente}` : ""}${g.detalle ? ` — ${g.detalle}` : ""}`);
+        if (prop.direccion) lineas.push(`Dirección (RPP): ${prop.direccion}`);
+        if (prop.no_escritura) lineas.push(`Antecedente: escritura ${prop.no_escritura}${prop.fecha_escritura ? ` (${prop.fecha_escritura})` : ""}${prop.notario ? ` ante ${prop.notario}` : ""}`);
+        if (prop.superficie) lineas.push(`Superficie: ${prop.superficie}`);
+        if (grav.acreedor) lineas.push(`Gravamen (hipoteca): ${grav.acreedor}${grav.monto_operacion ? ` · Monto: ${grav.monto_operacion}` : ""}${grav.fecha_inscripcion ? ` · Inscrito: ${grav.fecha_inscripcion}` : ""}`);
+        if (gravAd.aplica === "sí" || gravAd.aplica === "si") lineas.push(`Gravamen adicional: ${gravAd.acreedor || "acreedor no identificado"}${gravAd.monto_operacion ? ` · ${gravAd.monto_operacion}` : ""}`);
+        const otros: any[] = Array.isArray(rr.otros_gravamenes) ? rr.otros_gravamenes : [];
+        if (otros.length) {
+          lineas.push(`Otros gravámenes/embargos (${otros.length}):`);
+          otros.forEach((g: any, i: number) => {
+            lineas.push(`  ${i + 1}. ${g.tipo || "Gravamen"} — ${g.acreedor_o_beneficiario || "no identificado"}${g.monto ? ` · ${g.monto}` : ""}${g.fecha_inscripcion ? ` · inscrito ${g.fecha_inscripcion}` : ""}${g.vigente ? ` · vigente: ${g.vigente}` : ""}`);
           });
         }
-        if (rr.litigios_inscritos) lineas.push(`Litigios inscritos: ${rr.litigios_inscritos}`);
-        if (rr.anotaciones_marginales) lineas.push(`Anotaciones marginales: ${rr.anotaciones_marginales}`);
+        if (rr.anotaciones_adicionales) lineas.push(`Anotaciones adicionales: ${rr.anotaciones_adicionales}`);
         if (lineas.length) cambios.anotaciones = `✨ Detectado por la IA en los documentos:\n${lineas.join("\n")}`;
       }
       return Object.keys(cambios).length ? { ...p, ...cambios } : p;
