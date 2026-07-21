@@ -274,3 +274,111 @@ export async function moverPapelera(id: string, aPapelera: boolean): Promise<boo
     return false;
   }
 }
+
+// ===== Traslado: de la Solicitud (bucket temporal) → Drive real + ficha =====
+
+// Descarga un archivo desde una URL pública (ej. bucket temporal de la
+// solicitud) y lo convierte a base64, listo para mandarlo a la función que
+// sube a Drive (misma que usa subirDocumento).
+async function urlABase64(url: string): Promise<{ base64: string; mime: string }> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`No se pudo descargar el documento (${r.status}).`);
+  const blob = await r.blob();
+  const mime = blob.type || "application/octet-stream";
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const s = String(fr.result || "");
+      const coma = s.indexOf(",");
+      resolve(coma >= 0 ? s.slice(coma + 1) : s);
+    };
+    fr.onerror = () => reject(new Error("No se pudo leer el documento descargado."));
+    fr.readAsDataURL(blob);
+  });
+  return { base64, mime };
+}
+
+export type DocResumenIA = { nombre: string; tipo?: string; resumen?: string };
+
+export type ResultadoTraslado = {
+  ok: boolean;
+  trasladados: number;
+  saltados: number;
+  errores: string[];
+};
+
+/**
+ * Traslada documentos que llegaron por la Solicitud (bucket temporal
+ * `predictamen-docs`) a la carpeta REAL de Drive de la garantía, y los
+ * registra en `documento_garantia` (la misma tabla que alimenta la pestaña
+ * "Documentos" de la ficha formal). Se nombran "{numeroCredito}-{area}-{nombre
+ * original}". Si el documento ya tenía análisis de IA hecho en Solicitudes,
+ * se copia como nota — así no se pierde el trabajo ya hecho. No repite
+ * documentos que ya se hayan trasladado antes (se detecta por nombre final).
+ */
+export async function trasladarDocumentosSolicitud(
+  area: string,
+  caso: CasoJuridico,
+  numeroCredito: string,
+  documentos: { nombre: string; url: string }[],
+  resumenes: DocResumenIA[] = [],
+): Promise<ResultadoTraslado> {
+  const resultado: ResultadoTraslado = { ok: true, trasladados: 0, saltados: 0, errores: [] };
+  if (!documentos.length) return resultado;
+  if (!caso.id && !caso.expediente) {
+    resultado.ok = false;
+    resultado.errores.push("Este caso todavía no tiene expediente ni id — falta formalizarlo antes de trasladar documentos.");
+    return resultado;
+  }
+
+  // 1) qué ya existe en la ficha, para no duplicar si se corre dos veces.
+  const existentes = await listarDocumentos(caso);
+  const nombresExistentes = new Set(existentes.map((d) => (d.nombre || "").trim().toLowerCase()));
+
+  const solicita = await quienSolicita();
+  const garantia = nombreGarantia(caso);
+  const prefijo = (numeroCredito || garantia || "SIN-CREDITO").toString().trim();
+
+  for (const doc of documentos) {
+    const nombreFinal = `${prefijo}-${area}-${doc.nombre}`.replace(/\s+/g, " ").trim();
+    if (nombresExistentes.has(nombreFinal.toLowerCase())) { resultado.saltados++; continue; }
+    try {
+      const { base64, mime } = await urlABase64(doc.url);
+      const r = await fetch("/.netlify/functions/subir-documento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area, solicita, garantia, archivo: base64, nombre: nombreFinal, mime, carpetaId: caso.drive_carpeta_id || undefined }),
+      });
+      const data = await r.json();
+      if (!data.ok) { resultado.errores.push(`${doc.nombre}: ${data.error || "no se pudo subir a Drive."}`); continue; }
+
+      const resumen = resumenes.find((x) => x.nombre === doc.nombre);
+      const nota = resumen?.resumen
+        ? `IA: ${resumen.tipo ? resumen.tipo + " — " : ""}${resumen.resumen}`
+        : "Trasladado desde la solicitud de pre-dictamen.";
+
+      const fila = {
+        caso_id: caso.id || null,
+        expediente: caso.expediente || null,
+        nombre: data.nombre || nombreFinal,
+        link: data.link,
+        drive_id: data.id || null,
+        mime,
+        tipo: "otro",
+        subido_por: solicita,
+        nota,
+      };
+      const ins = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(fila),
+      });
+      if (!ins.ok) { resultado.errores.push(`${doc.nombre}: se subió a Drive pero no se pudo registrar en la ficha.`); continue; }
+      resultado.trasladados++;
+    } catch (e: any) {
+      resultado.errores.push(`${doc.nombre}: ${String(e?.message || e)}`);
+    }
+  }
+  resultado.ok = resultado.errores.length === 0;
+  return resultado;
+}
