@@ -14,6 +14,12 @@ export interface Precarga {
   antecedenteId?: string;  // id del pre-dictamen anterior
   version?: number;        // versión del anterior
   cambios?: string;        // nota del abogado (qué cambió)
+  /** id de la solicitud_predictamen de origen (Dirección) — cuando se dictamina
+   *  desde "Solicitudes URRJ". Sirve para ir sincronizando el expediente/crédito/
+   *  caso_id que se van capturando aquí de vuelta a esa solicitud, así los
+   *  documentos que trajo (que viven en solicitud_predictamen) se puedan
+   *  encontrar después y trasladar a la ficha formal. */
+  solicitudId?: string;
 }
 
 const ETIQUETAS: Record<string, string> = {
@@ -82,6 +88,30 @@ export async function buscarPredictamenVigenteCompleto(expediente?: string | nul
 // garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
 const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
+/** Refleja de vuelta en la solicitud_predictamen (Dirección) el expediente /
+ *  número de crédito / caso_id que se van capturando al dictaminar. Nunca
+ *  borra un valor que ya estaba: solo llena lo que venga con dato. Así, más
+ *  adelante, el traslado de documentos a Drive (trasladarDocumentosSolicitud)
+ *  puede encontrar esta solicitud por caso_id/expediente/crédito. Si falla
+ *  (ej. sin internet), no rompe el guardado del pre-dictamen — se puede volver
+ *  a intentar la próxima vez que se capture algo. */
+export async function sincronizarSolicitud(
+  solicitudId: string | undefined | null,
+  campos: { numero_credito?: string; expediente?: string; caso_id?: string },
+): Promise<void> {
+  if (!solicitudId) return;
+  const patch: Record<string, string> = {};
+  if (campos.numero_credito?.trim()) patch.numero_credito = campos.numero_credito.trim();
+  if (campos.expediente?.trim()) patch.expediente = campos.expediente.trim();
+  if (campos.caso_id?.trim()) patch.caso_id = campos.caso_id.trim();
+  if (Object.keys(patch).length === 0) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?id=eq.${solicitudId}`, {
+      method: "PATCH", headers, body: JSON.stringify(patch),
+    });
+  } catch { /* se reintenta solo en la siguiente captura */ }
+}
+
 /** Adjunta referencias de documentos a la ficha de un pre-dictamen (borrador o
  *  normal), para que "tenga espacio" aunque todavía no exista un caso_juridico
  *  formal. Se guardan dentro de datos.documentos (lectura + escritura, porque
@@ -140,6 +170,7 @@ export async function guardarBorrador(datos: {
 export async function actualizarBorrador(id: string, cambios: {
   expediente?: string; deudor?: string; juzgado?: string; hallazgos?: string[];
   ultimaActuacion?: string; ultimaActuacionTexto?: string;
+  numeroCredito?: string; administradora?: string; direccion?: string;
 }): Promise<void> {
   if (!id) return;
   try {
@@ -147,11 +178,52 @@ export async function actualizarBorrador(id: string, cambios: {
     if (!res.ok) return;
     const rows = await res.json();
     const datosActuales = rows?.[0]?.datos || {};
-    const patch: any = { datos: { ...datosActuales, ...cambios } };
+    // numeroCredito/administradora/direccion se guardan dentro de `datos` con
+    // los mismos nombres que usa guardarBorrador (numeroCredito/quienCede/ubicacion),
+    // no con los nombres del formulario — para que ambas funciones lean/escriban
+    // siempre el mismo lugar.
+    const datosNuevos: any = { ...datosActuales, ...cambios };
+    if (cambios.numeroCredito !== undefined) datosNuevos.numeroCredito = cambios.numeroCredito;
+    if (cambios.administradora !== undefined) datosNuevos.quienCede = cambios.administradora;
+    if (cambios.direccion !== undefined) datosNuevos.ubicacion = cambios.direccion;
+    delete datosNuevos.administradora;
+    delete datosNuevos.direccion;
+    const patch: any = { datos: datosNuevos };
     if (cambios.expediente) patch.expediente = cambios.expediente;
     if (cambios.juzgado) patch.juzgado = cambios.juzgado;
     await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${id}`, { method: "PATCH", headers, body: JSON.stringify(patch) });
   } catch { /* si falla, se queda solo en memoria — no es grave */ }
+}
+
+/** Guarda (o corrige) los "Datos básicos de la garantía" — administradora,
+ *  número de crédito, dirección — sin importar si es la primera vez o una
+ *  corrección después. A diferencia de revisarCredito() (que solo crea el
+ *  borrador UNA vez), esta función se puede llamar las veces que haga falta:
+ *  crea el borrador si todavía no existe, o lo actualiza si ya existe. Y
+ *  SIEMPRE intenta reflejar crédito/expediente de vuelta en la solicitud de
+ *  Dirección (sincronizarSolicitud), para que los documentos que trajo se
+ *  puedan encontrar y trasladar después a la ficha formal. */
+export async function guardarDatosBasicos(
+  borradorIdActual: string | null,
+  datos: {
+    numeroCredito?: string; administradora?: string; direccion?: string; expediente?: string;
+    deudor?: string; juzgado?: string; hallazgos?: string[];
+    ultimaActuacion?: string; ultimaActuacionTexto?: string;
+  },
+  solicitudId?: string | null,
+): Promise<{ ok: boolean; borradorId: string | null }> {
+  let id = borradorIdActual;
+  try {
+    if (!id) {
+      id = await guardarBorrador(datos);
+    } else {
+      await actualizarBorrador(id, datos);
+    }
+    await sincronizarSolicitud(solicitudId, { numero_credito: datos.numeroCredito, expediente: datos.expediente });
+    return { ok: !!id, borradorId: id };
+  } catch {
+    return { ok: false, borradorId: id };
+  }
 }
 
 /** Descarta el borrador (lo manda a la papelera) porque ya se guardó el
@@ -327,6 +399,15 @@ export async function guardarPredictamen(payload: any, precargar?: Precarga | nu
       await reflejarDictamen({ id: payload.caso_id, expediente: payload.expediente } as any, "URRJ", "juridico", decisionADictamen(payload.dictamen_final), payload.solicitado_por || null);
     }
   } catch { /* la línea de vida no debe romper el guardado */ }
+
+  // Sincroniza expediente/crédito/caso_id de vuelta a la solicitud de origen
+  // (si se dictaminó desde "Solicitudes URRJ"), para que sus documentos se
+  // puedan encontrar y trasladar a la ficha formal más adelante.
+  await sincronizarSolicitud(precargar?.solicitudId, {
+    numero_credito: payload?.datos?.numeroCredito,
+    expediente: payload?.expediente,
+    caso_id: payload?.caso_id,
+  });
 
   // Archivar el PDF por fase (Camino 1): genera el PDF una vez, lo sube a Storage
   // y guarda su URL en pdf_url. Import dinámico para no crear ciclos. Si algo
