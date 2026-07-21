@@ -97,7 +97,23 @@ const ESQUEMA_RESPUESTA = `
   "resoluciones_y_recursos": { "sentencia": "string o null", "apelacion": "string o null", "amparo": "string o null" },
   "prescripcion": { "esta_prescrita": "sí" | "no" | "no determinado", "motivo": "string" },
   "documentos_solicitados": { "detalle": "string" },
-  "convenios": { "notificados_firmados_ratificados": "sí" | "no" | "parcial" | "no aplica", "estado_cuenta_firma_perito": "sí" | "no" | "no aplica" }
+  "convenios": { "notificados_firmados_ratificados": "sí" | "no" | "parcial" | "no aplica", "estado_cuenta_firma_perito": "sí" | "no" | "no aplica" },
+  "registral_rppc": {
+    "propietario_titular": "string o null — nombre completo del titular registral según el Registro Público de la Propiedad (RPP/RPPC)",
+    "folio_real": "string o null",
+    "antecedente_registral": "string o null — no. de escritura/inscripción anterior que da origen a la propiedad",
+    "superficie_registral": "string o null",
+    "hipoteca_inscrita": "sí" | "no" | "no determinado",
+    "prelacion": "string o null — ej. Primer lugar, Segundo lugar, Hay acreedores anteriores",
+    "acreedor_hipotecario": "string o null",
+    "monto_garantizado": "string o null",
+    "fecha_inscripcion_hipoteca": "string o null",
+    "gravamenes": [
+      { "tipo": "string — ej. Hipoteca, Embargo, Servidumbre, Anotación preventiva, Litigio inscrito, Fideicomiso", "acreedor_o_beneficiario": "string o null", "monto": "string o null", "fecha_inscripcion": "string o null", "vigente": "sí" | "no" | "no determinado", "detalle": "string" }
+    ],
+    "litigios_inscritos": "string o null",
+    "anotaciones_marginales": "string o null"
+  }
 }`.trim();
 
 export default async (req) => {
@@ -131,6 +147,7 @@ Ahora lee ESTE documento nuevo ("${documento.nombre}") y ACTUALIZA el JSON de ar
 - Si este documento confirma o completa algo que estaba en null/"no determinado", complétalo.
 - Si este documento trae una demanda que NO está en la lista "demandas", agrégala (no dupliques las que ya estén).
 - Si este documento es una actuación MÁS RECIENTE que la que ya tenías en "ultima_actuacion", reemplázala; si es más vieja, deja la que ya tenías.
+- "registral_rppc": esta información suele venir en Certificados de Gravamen, Certificados de Libertad de Gravamen, impresiones o boletas del RPP/RPPC, escrituras inscritas, o el propio contrato de crédito con hipoteca. Si este documento trae gravámenes que NO están en la lista "gravamenes" (por acreedor + tipo + fecha de inscripción), agrégalos; no dupliques los que ya estén.
 - NUNCA borres ni cambies a null algo que ya estaba bien contestado, a menos que este documento lo contradiga claramente.
 - "documento_principal" describe SIEMPRE el documento MÁS IMPORTANTE que hayas visto hasta ahora (contrato, sentencia o dictamen suelen ser más relevantes que un acuse o una compulsa) — cámbialo solo si este nuevo documento es más relevante que el que tenías.
 
