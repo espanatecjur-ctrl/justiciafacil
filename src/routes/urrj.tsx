@@ -227,7 +227,7 @@ function URRJ() {
     <div className="space-y-5">
       {vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
         <DictamenRegistral
-          precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.expediente || "", direccion: "" }}
+          precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.numero_credito || "", direccion: "" }}
           casoId={solicitudActiva.caso_id || ""}
           onVolver={volver}
           puedeFirmarElabora={puede("firmar_elabora")}
