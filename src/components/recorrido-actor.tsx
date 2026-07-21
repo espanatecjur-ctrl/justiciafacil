@@ -9,7 +9,7 @@
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
+import { guardarPredictamen, buscarPredictamenVigente, diffDatos, descartarBorrador, guardarProgreso, type Precarga, type PredictamenExistente } from "@/lib/predictamen-guardar";
 import { AnalisisDocumentalIA } from "@/components/analisis-documental-ia";
 import { claveAnalisis, obtenerAnalisisCacheado, introAnalisis, generarAnalisisIA } from "@/lib/analisis-ia";
 import { subirDocPredictamen } from "@/lib/solicitud-predictamen";
@@ -170,6 +170,30 @@ export function RecorridoActor({
   const [d, setD] = useState<Datos>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
+  // Id del borrador donde se autoguarda EN VIVO todo el formulario (las 8
+  // fases completas, no solo Datos básicos). Arranca con el que ya venía del
+  // paso anterior (si lo hay); si no, se crea solo en el primer autoguardado.
+  const [borradorIdLocal, setBorradorIdLocal] = useState<string | null>(borradorId ?? null);
+  const [guardandoProgreso, setGuardandoProgreso] = useState(false);
+  const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
+  const primerRenderProgreso = useRef(true);
+  // Autoguardado EN VIVO: cada vez que cambia cualquier campo del formulario
+  // (cualquier fase), se guarda solo unos segundos después de dejar de
+  // escribir — así no se manda una petición por cada tecla, pero nada se
+  // pierde si se cierra la pestaña o se pierde la conexión a medio llenar.
+  useEffect(() => {
+    if (primerRenderProgreso.current) { primerRenderProgreso.current = false; return; }
+    const t = setTimeout(() => {
+      setGuardandoProgreso(true);
+      guardarProgreso(borradorIdLocal, d.expediente, d.juzgado, d).then((id) => {
+        if (id) setBorradorIdLocal(id);
+        setGuardandoProgreso(false);
+        setProgresoGuardadoEn(Date.now());
+      });
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
   const [verBanner, setVerBanner] = useState(false);
   const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
   const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
@@ -431,7 +455,7 @@ export function RecorridoActor({
     };
     try {
       await guardarPredictamen(payload, precargar, construirDatosPDF(decision), { reglaOroURRJ: true });
-      if (borradorId) descartarBorrador(borradorId);
+      if (borradorIdLocal) descartarBorrador(borradorIdLocal);
       registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: `Decisión: ${decision}` });
       setGuardado(`Pre-dictamen guardado: ${decision}`);
     } catch (e: any) {
@@ -579,6 +603,9 @@ export function RecorridoActor({
             <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: i < paso ? "#0C5C46" : i === paso ? NAVY : "var(--border, #e5e7eb)" }} />
           ))}
         </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {guardandoProgreso ? "Guardando en vivo…" : progresoGuardadoEn ? "✓ Guardado en vivo — no se pierde aunque cierres la pestaña." : "El progreso se guarda solo mientras escribes."}
+        </p>
       </div>
 
       {yaExiste && (
