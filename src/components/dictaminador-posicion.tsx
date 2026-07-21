@@ -11,7 +11,7 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, descartarBorrador } from "@/lib/predictamen-guardar";
+import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, actualizarBorrador, descartarBorrador } from "@/lib/predictamen-guardar";
 import { Scale, Bot } from "lucide-react";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
@@ -103,6 +103,39 @@ export function DictaminadorPosicion({
     if (d.ultimaActuacionTexto) setUltimaActuacionTextoIni(d.ultimaActuacionTexto);
   };
 
+  // En cuanto se guardan hallazgos del boletín, se guarda de una vez en
+  // Supabase (no solo en memoria) — así, si se sale de la pantalla o se
+  // recarga, no hay que volver a buscarlo. Si todavía no había borrador
+  // (no se había capturado número de crédito), se crea uno aquí mismo.
+  useEffect(() => {
+    if (!expedienteIni && !hallazgosIni.length) return;
+    const cambios = { expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni };
+    if (borradorId) {
+      actualizarBorrador(borradorId, cambios);
+    } else {
+      guardarBorrador({ numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni, ...cambios })
+        .then((id) => { if (id) { setBorradorId(id); setBorradorGuardado(true); } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hallazgosIni, expedienteIni, deudorIni, juzgadoIni, ultimaActuacionIni]);
+
+  // Retoma un borrador que ya traía datos del boletín capturados antes
+  // (en vez de solo bloquear con "ya está registrado" y perder ese avance).
+  const continuarBorrador = () => {
+    if (!yaExisteCredito) return;
+    const dg = yaExisteCredito.datos || {};
+    setBorradorId(yaExisteCredito.id);
+    setBorradorGuardado(true);
+    if (dg.quienCede) setAdministradoraIni((p) => p || dg.quienCede);
+    if (dg.ubicacion) setDireccionIni((p) => p || dg.ubicacion);
+    if (yaExisteCredito.expediente) setExpedienteIni((p) => p || yaExisteCredito.expediente || "");
+    if (dg.deudor) setDeudorIni((p) => p || dg.deudor);
+    if (dg.ultimaActuacion) setUltimaActuacionIni((p) => p || dg.ultimaActuacion);
+    if (dg.ultimaActuacionTexto) setUltimaActuacionTextoIni((p) => p || dg.ultimaActuacionTexto);
+    if (Array.isArray(dg.hallazgos) && dg.hallazgos.length) setHallazgosIni(dg.hallazgos);
+    setYaExisteCredito(null);
+  };
+
   // Autollenado con lo que la IA detectó al leer los documentos — solo
   // rellena los campos que sigan VACÍOS (nunca pisa lo que ya se escribió).
   useEffect(() => {
@@ -151,9 +184,16 @@ export function DictaminadorPosicion({
           </div>
           {yaExisteCredito && (
             <div className="mt-3 space-y-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
-              <p className="font-semibold">Ese número de crédito ya está registrado{yaExisteCredito.folio ? ` (folio ${yaExisteCredito.folio})` : ""}.</p>
-              <p className="text-[13px]">No se puede agregar de nuevo. Mejor revisa o continúa ese dictamen.</p>
+              <p className="font-semibold">
+                {yaExisteCredito.esBorrador
+                  ? "Ese número de crédito ya tiene un borrador \"Pendiente\" guardado — probablemente eres tú misma, de una sesión anterior."
+                  : `Ese número de crédito ya está registrado${yaExisteCredito.folio ? ` (folio ${yaExisteCredito.folio})` : ""}.`}
+              </p>
+              <p className="text-[13px]">{yaExisteCredito.esBorrador ? "Puedes seguir donde te quedaste (se recupera el expediente, deudor y hallazgos del boletín ya capturados) o borrarlo y empezar de cero." : "No se puede agregar de nuevo. Mejor revisa o continúa ese dictamen."}</p>
               <div className="flex flex-wrap gap-2">
+                {yaExisteCredito.esBorrador && (
+                  <button onClick={continuarBorrador} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Continuar donde me quedé</button>
+                )}
                 {yaExisteCredito.caso_id && (
                   <Link to="/expediente" search={{ id: yaExisteCredito.caso_id, origen: "urrj" } as any} className="rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white">Ver ficha (cronología / cambios)</Link>
                 )}
