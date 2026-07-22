@@ -159,48 +159,42 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
         <p className="py-6 text-center text-sm text-muted-foreground">Ningún documento coincide con “{q}”.</p>
       ) : (
         <>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {listaPagina.map((c) => (
-            <div key={c.drive_id} className="overflow-hidden rounded-lg border border-border bg-white">
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-                <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-                <p className="min-w-0 flex-1 truncate text-xs font-medium" title={c.nombre || ""}>{c.nombre || "Documento"}</p>
-              </div>
-              <button
-                onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || "Documento", url: urls[c.storage_path] || "" })}
-                className="group relative block h-56 w-full bg-muted"
-                title="Ampliar vista previa"
-              >
-                {(c.mime || "").startsWith("image/") && urls[c.storage_path] ? (
-                  <img src={urls[c.storage_path]} alt={c.nombre || ""} loading="lazy" className="h-full w-full object-contain bg-white" />
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center">
-                    {(c.mime || "").includes("pdf") ? <FileText className="h-12 w-12 text-red-500/60" />
-                      : /\.(docx?|xlsx?|pptx?)$/i.test(c.nombre || "") ? <FileText className="h-12 w-12 text-emerald-600/60" />
-                      : <FileText className="h-12 w-12 text-[color:var(--teal)]/50" />}
-                    <span className="text-xs font-medium text-muted-foreground">{(c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(c.nombre || "") ? "Word" : /\.(xlsx?)$/i.test(c.nombre || "") ? "Excel" : /\.(pptx?)$/i.test(c.nombre || "") ? "PowerPoint" : "Documento copiado"}</span>
-                  </div>
-                )}
-                <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2.5 py-1.5 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
-                </span>
-              </button>
-              <div className="flex items-center justify-between px-3 py-2">
-                <button onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || "Documento", url: urls[c.storage_path] || "" })} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                <div className="flex items-center gap-3">
-                  {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(c.nombre || "documento")}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
-                  <button
-                    onClick={() => mandarAPapelera(c.drive_id, c.nombre || "Documento")}
-                    disabled={mandando === c.drive_id}
-                    title="Mandar a la papelera"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
-                  >
-                    {mandando === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Papelera
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full border-collapse text-sm">
+            <thead className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              <tr className="bg-muted/50">
+                <th className="border border-border px-3 py-2 text-left font-semibold">Documento</th>
+                <th className="border border-border px-3 py-2 text-left font-semibold">Tipo</th>
+                <th className="border border-border px-2 py-2 text-right font-semibold">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white">
+              {listaPagina.map((c, i) => {
+                const nombre = c.nombre || "Documento";
+                const tipoTxt = (c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(nombre) ? "Word" : /\.(xlsx?)$/i.test(nombre) ? "Excel" : /\.(pptx?)$/i.test(nombre) ? "PowerPoint" : (c.mime || "").startsWith("image/") ? "Imagen" : "Documento";
+                return (
+                  <tr key={c.drive_id} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
+                    <td className="border border-border px-3 py-2.5">
+                      <button onClick={() => setDocSel({ id: c.drive_id, nombre, url: urls[c.storage_path] || "" })} className="flex items-center gap-2 text-left hover:underline" title="Ampliar vista previa">
+                        <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
+                        <span className="max-w-[380px] truncate" title={nombre}>{nombre}</span>
+                      </button>
+                    </td>
+                    <td className="whitespace-nowrap border border-border px-3 py-2.5 text-muted-foreground">{tipoTxt}</td>
+                    <td className="whitespace-nowrap border border-border px-2 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <button onClick={() => setDocSel({ id: c.drive_id, nombre, url: urls[c.storage_path] || "" })} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Ver</button>
+                        {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(nombre)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                        <button onClick={() => mandarAPapelera(c.drive_id, nombre)} disabled={mandando === c.drive_id} title="Mandar a la papelera" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50">
+                          {mandando === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
