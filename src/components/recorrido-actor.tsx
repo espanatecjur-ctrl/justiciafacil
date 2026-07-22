@@ -730,16 +730,50 @@ export function RecorridoActor({
                   {docsDeEstaFase.length === 0 ? (
                     <p className="text-purple-600">Ninguno de los documentos leídos parece corresponder a esta fase — revisa "otros documentos" abajo por si aplica alguno.</p>
                   ) : (
-                    <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-                      {docsDeEstaFase.map((r, i) => <li key={i}><b>{r.tipo}</b> — {r.nombre}: {r.resumen}</li>)}
-                    </ul>
+                    <div className="mt-1 overflow-x-auto rounded-md border border-border">
+                      <table className="w-full border-collapse text-[11px]">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="border border-border px-2 py-1 text-left font-semibold">Tipo</th>
+                            <th className="border border-border px-2 py-1 text-left font-semibold">Documento</th>
+                            <th className="border border-border px-2 py-1 text-left font-semibold">Resumen</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {docsDeEstaFase.map((r, i) => (
+                            <tr key={i} className={i % 2 ? "bg-white" : "bg-muted/10"}>
+                              <td className="whitespace-nowrap border border-border px-2 py-1 font-semibold text-purple-800">{r.tipo}</td>
+                              <td className="border border-border px-2 py-1">{r.nombre}</td>
+                              <td className="border border-border px-2 py-1">{r.resumen}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                   {docsOtrasFases.length > 0 && (
                     <details className="mt-1.5">
                       <summary className="cursor-pointer text-[11px] text-purple-600 hover:underline">Otros documentos disponibles ({docsOtrasFases.length}) — de otras fases</summary>
-                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-purple-700">
-                        {docsOtrasFases.map((r, i) => <li key={i}><b>{r.tipo}</b> — {r.nombre}: {r.resumen}</li>)}
-                      </ul>
+                      <div className="mt-1 overflow-x-auto rounded-md border border-border">
+                        <table className="w-full border-collapse text-[11px]">
+                          <thead>
+                            <tr className="bg-muted/50">
+                              <th className="border border-border px-2 py-1 text-left font-semibold">Tipo</th>
+                              <th className="border border-border px-2 py-1 text-left font-semibold">Documento</th>
+                              <th className="border border-border px-2 py-1 text-left font-semibold">Resumen</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {docsOtrasFases.map((r, i) => (
+                              <tr key={i} className={i % 2 ? "bg-white" : "bg-purple-50/40"}>
+                                <td className="whitespace-nowrap border border-border px-2 py-1 font-semibold text-purple-700">{r.tipo}</td>
+                                <td className="border border-border px-2 py-1 text-purple-800">{r.nombre}</td>
+                                <td className="border border-border px-2 py-1 text-purple-800">{r.resumen}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </details>
                   )}
                 </div>
