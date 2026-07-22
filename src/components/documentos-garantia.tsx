@@ -183,36 +183,36 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">Fecha</th>
-                <th className="px-3 py-2 text-left font-medium">Tipo</th>
-                <th className="px-3 py-2 text-left font-medium">Detalle</th>
-                <th className="px-3 py-2 text-left font-medium">Quién</th>
-                <th className="px-2 py-2 text-center font-medium w-10"></th>
+          <table className="w-full border-collapse text-sm">
+            <thead className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              <tr className="bg-muted/50">
+                <th className="border border-border px-3 py-2 text-left font-semibold">Fecha</th>
+                <th className="border border-border px-3 py-2 text-left font-semibold">Tipo</th>
+                <th className="border border-border px-3 py-2 text-left font-semibold">Detalle</th>
+                <th className="border border-border px-3 py-2 text-left font-semibold">Quién</th>
+                <th className="border border-border px-2 py-2 text-center font-semibold w-10"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {lista.map((d) => {
+            <tbody>
+              {lista.map((d, i) => {
                 const td = tipoDe(d.tipo);
                 const Icono = td.icon;
                 return (
-                  <tr key={d.id} className="hover:bg-muted/20">
-                    <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">{fmt(d.fecha_mov || d.created_at)}</td>
-                    <td className="px-3 py-2.5">
+                  <tr key={d.id} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
+                    <td className="whitespace-nowrap border border-border px-3 py-2.5 text-muted-foreground">{fmt(d.fecha_mov || d.created_at)}</td>
+                    <td className="border border-border px-3 py-2.5">
                       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: td.bg, color: td.fg }}>
                         <Icono className="h-3 w-3" /> {td.t}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="border border-border px-3 py-2.5">
                       <div className="flex items-center gap-1.5">
                         {d.link && iconoArchivo(d.mime, d.nombre)}
                         <span className="max-w-[260px] truncate" title={detalleDe(d)}>{detalleDe(d)}</span>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">{d.subido_por || "—"}</td>
-                    <td className="px-2 py-2.5 text-center">
+                    <td className="whitespace-nowrap border border-border px-3 py-2.5 text-muted-foreground">{d.subido_por || "—"}</td>
+                    <td className="border border-border px-2 py-2.5 text-center">
                       <MenuFila doc={d} onVer={() => setVer(d)} onEditar={() => setEditar(d)} onPapelera={() => papelera(d)} />
                     </td>
                   </tr>
