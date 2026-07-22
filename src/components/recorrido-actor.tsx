@@ -1119,6 +1119,18 @@ export function RecorridoActor({
         )}
       </div>
 
+      {/* Sugerencias / notas de este pre-dictamen — visibles y editables en
+          CUALQUIER fase (no solo en la última), justo junto a la cronología.
+          Se guardan solas con el mismo autoguardado en vivo de todo el
+          formulario (reusa anotacionesHumanas, que ya se manda al PDF final). */}
+      <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+        <p className="mb-1 text-xs font-semibold text-purple-900">✨ Sugerencias / notas de este pre-dictamen</p>
+        <p className="mb-2 text-[11px] text-purple-700">Escribe aquí cualquier sugerencia, observación o pendiente — se guarda en vivo y queda disponible en cualquier fase (y en el dictamen final).</p>
+        <textarea value={d.anotacionesHumanas} onChange={(e) => set("anotacionesHumanas", e.target.value)} rows={4}
+          placeholder="Ej. Revisar amparo antes de continuar; falta certificado de gravamen actualizado; confirmar con el cliente el domicilio…"
+          className="w-full rounded-md border border-purple-200 bg-white px-3 py-2 text-sm" />
+      </div>
+
       {/* Cronología del expediente (mismo componente que la ficha) */}
       {(d.caso_id || d.expediente) && (
         <div className="rounded-xl border border-border bg-card p-5">
