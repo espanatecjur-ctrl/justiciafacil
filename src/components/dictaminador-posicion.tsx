@@ -9,7 +9,7 @@
 // actual (`vista`) y recibe los cambios (`onVista`), para no duplicar la
 // lógica de soloRegistro / re-dictaminar.
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, actualizarBorrador, descartarBorrador, sincronizarSolicitud, guardarDatosBasicos } from "@/lib/predictamen-guardar";
 import { Scale, Bot } from "lucide-react";
@@ -70,6 +70,27 @@ export function DictaminadorPosicion({
   const [borradorGuardado, setBorradorGuardado] = useState(false);
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [datosGuardadosEn, setDatosGuardadosEn] = useState<number | null>(null);
+  // Candado anti-carrera: si dos guardados "en vivo" se disparan casi al mismo
+  // tiempo (ej. la IA autollena Y se copian actuaciones del boletín en el
+  // mismo instante) y ninguno tiene borradorId todavía, cada uno creaba SU
+  // PROPIO registro "Pendiente" — dejando duplicados del mismo caso. Ahora,
+  // si ya hay una creación en curso, los demás esperan ESA MISMA promesa en
+  // vez de crear la suya.
+  const creandoRef = useRef<Promise<{ ok: boolean; borradorId: string | null }> | null>(null);
+  const guardarComoSea = async (datos: Parameters<typeof guardarDatosBasicos>[1]) => {
+    if (borradorId) return guardarDatosBasicos(borradorId, datos, precargar?.solicitudId);
+    if (creandoRef.current) {
+      const r = await creandoRef.current;
+      // Ya se creó por otro lado mientras esperábamos: esto es una corrección,
+      // no una creación — usa ESE id.
+      return r.borradorId ? guardarDatosBasicos(r.borradorId, datos, precargar?.solicitudId) : r;
+    }
+    const promesa = guardarDatosBasicos(null, datos, precargar?.solicitudId);
+    creandoRef.current = promesa;
+    const r = await promesa;
+    creandoRef.current = null;
+    return r;
+  };
 
   // Guarda (o corrige) los 3 campos de "Datos básicos" — se puede llamar las
   // veces que haga falta (al perder el foco de cualquier campo, cuando la IA
@@ -78,11 +99,11 @@ export function DictaminadorPosicion({
   const guardarDatos = async () => {
     if (!numeroCreditoIni.trim() && !administradoraIni.trim() && !direccionIni.trim()) return;
     setGuardandoDatos(true);
-    const r = await guardarDatosBasicos(borradorId, {
+    const r = await guardarComoSea({
       numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
       expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
       ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
-    }, precargar?.solicitudId);
+    });
     if (r.borradorId) { setBorradorId(r.borradorId); setBorradorGuardado(true); }
     setGuardandoDatos(false);
     if (r.ok) setDatosGuardadosEn(Date.now());
@@ -119,23 +140,19 @@ export function DictaminadorPosicion({
     if (d.ultimaActuacionTexto) setUltimaActuacionTextoIni(d.ultimaActuacionTexto);
   };
 
-  // En cuanto se guardan hallazgos del boletín, se actualiza el borrador que
-  // YA EXISTE (si se capturó el crédito primero). Ojo: aquí NUNCA se crea un
-  // borrador nuevo — eso solo lo hace revisarCredito(), que sí checa
-  // duplicados antes de crear. Si esto creara uno por su cuenta, se corre el
-  // riesgo de dejar dos borradores del mismo crédito (repetidos).
   // En cuanto se copian actuaciones del boletín, se guardan YA — si el
   // borrador todavía no existe (ej. se buscó el boletín antes de capturar el
-  // crédito), se crea aquí mismo para no perder el hallazgo. Si ya existe, se
-  // actualiza ese mismo registro.
+  // crédito), se crea aquí mismo para no perder el hallazgo (con candado
+  // anti-carrera: si al mismo tiempo el autollenado de IA también está
+  // creando el borrador, este espera ESE resultado en vez de duplicar).
   useEffect(() => {
     if (!expedienteIni && !hallazgosIni.length) return;
     (async () => {
-      const r = await guardarDatosBasicos(borradorId, {
+      const r = await guardarComoSea({
         numeroCredito: numeroCreditoIni, administradora: administradoraIni, direccion: direccionIni,
         expediente: expedienteIni, deudor: deudorIni, juzgado: juzgadoIni, hallazgos: hallazgosIni,
         ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
-      }, precargar?.solicitudId);
+      });
       if (r.borradorId && r.borradorId !== borradorId) { setBorradorId(r.borradorId); setBorradorGuardado(true); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,11 +217,11 @@ export function DictaminadorPosicion({
     if (huboCambio) {
       (async () => {
         setGuardandoDatos(true);
-        const r = await guardarDatosBasicos(borradorId, {
+        const r = await guardarComoSea({
           numeroCredito: credFinal, administradora: admFinal, direccion: dirFinal, expediente: expFinal,
           deudor: deudorIni || datosDetectadosIA.deudor || "", juzgado: juzgadoIni || datosDetectadosIA.juzgado || "",
           hallazgos: hallazgosIni, ultimaActuacion: ultimaActuacionIni, ultimaActuacionTexto: ultimaActuacionTextoIni,
-        }, precargar?.solicitudId);
+        });
         if (r.borradorId) { setBorradorId(r.borradorId); setBorradorGuardado(true); }
         setGuardandoDatos(false);
         if (r.ok) setDatosGuardadosEn(Date.now());
@@ -229,6 +246,19 @@ export function DictaminadorPosicion({
     if (!expedienteIni && dp.expediente) setExpedienteIni(dp.expediente);
     if (!deudorIni && dp.deudor) setDeudorIni(dp.deudor);
     if (!juzgadoIni && dp.juzgado) setJuzgadoIni(dp.juzgado);
+    // Las actuaciones ya copiadas del boletín (guardadas en datos.hallazgos)
+    // no se estaban restaurando al reabrir el caso — se quedaban guardadas
+    // pero invisibles. Se restauran aquí, sin perder las que ya se hayan
+    // agregado en esta misma sesión.
+    if (Array.isArray(dp.hallazgos) && dp.hallazgos.length) {
+      setHallazgosIni((prev) => {
+        const combinadas = [...prev];
+        for (const h of dp.hallazgos) if (!combinadas.includes(h)) combinadas.push(h);
+        return combinadas;
+      });
+    }
+    if (!ultimaActuacionIni && dp.ultimaActuacion) setUltimaActuacionIni(dp.ultimaActuacion);
+    if (!ultimaActuacionTextoIni && dp.ultimaActuacionTexto) setUltimaActuacionTextoIni(dp.ultimaActuacionTexto);
     if (!borradorId && precargar?.antecedenteId) { setBorradorId(precargar.antecedenteId); setBorradorGuardado(true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [precargar?.datos, precargar?.antecedenteId]);
