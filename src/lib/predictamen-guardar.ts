@@ -138,6 +138,23 @@ export async function adjuntarDocumentosAPredictamen(id: string, documentos: { n
  *  También guarda lo que ya se haya sacado del boletín (expediente, deudor,
  *  juzgado, hallazgos, última actuación), para que si se sale y regresa
  *  después, no haya que volver a buscarlo. */
+/** Si el candado de la base (índice único) rechaza una creación por
+ *  duplicado, esto busca el borrador que YA existe para ese mismo crédito o
+ *  expediente, para no dejar a la persona sin nada guardado. */
+async function buscarBorradorExistentePorClave(numeroCredito?: string, expediente?: string): Promise<string | null> {
+  const clave = (numeroCredito || "").trim() || (expediente || "").trim();
+  if (!clave) return null;
+  try {
+    const filtro = numeroCredito
+      ? `datos->>numeroCredito.eq.${encodeURIComponent(clave)}`
+      : `expediente.eq.${encodeURIComponent(clave)}`;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id&${filtro}&posicion=is.null&vigente=eq.true&en_papelera=eq.false&order=created_at.desc&limit=1`, { headers });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return rows?.[0]?.id ?? null;
+  } catch { return null; }
+}
+
 export async function guardarBorrador(datos: {
   numeroCredito?: string; administradora?: string; direccion?: string; expediente?: string;
   deudor?: string; juzgado?: string; hallazgos?: string[];
@@ -158,7 +175,12 @@ export async function guardarBorrador(datos: {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
       method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // 409 = el candado de la base ya detectó que esto se estaba creando dos
+      // veces al mismo tiempo — en vez de perder el guardado, usa el que ganó.
+      if (res.status === 409) return buscarBorradorExistentePorClave(datos.numeroCredito, datos.expediente);
+      return null;
+    }
     const data = await res.json();
     return data?.[0]?.id ?? null;
   } catch { return null; }
@@ -249,7 +271,10 @@ export async function guardarProgreso(
           datos: { ...datosCompletos, borrador: true }, resultados: null, vigente: true, en_papelera: false, version: 1,
         }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        if (res.status === 409) return buscarBorradorExistentePorClave(datosCompletos?.numeroCredito, expediente || undefined);
+        return null;
+      }
       const data = await res.json();
       return data?.[0]?.id ?? null;
     }
