@@ -9,7 +9,7 @@
 // actual (`vista`) y recibe los cambios (`onVista`), para no duplicar la
 // lógica de soloRegistro / re-dictaminar.
 // ============================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, actualizarBorrador, descartarBorrador, sincronizarSolicitud, guardarDatosBasicos } from "@/lib/predictamen-guardar";
 import { Scale, Bot } from "lucide-react";
@@ -21,6 +21,16 @@ import { RecorridoContingencia } from "@/components/recorrido-contingencia";
 import { RecorridoTramites } from "@/components/recorrido-tramites";
 
 export type VistaPosicion = "elegir" | "Actor" | "Demandado" | "Sucesorio" | "Contingencia" | "Tramites";
+
+// Candado COMPARTIDO por toda la pestaña/página (no por instancia del
+// componente). El candado anterior (useRef) solo protegía dentro de UN
+// mismo montaje de DictaminadorPosicion — si por lo que sea el mismo caso
+// se estaba dictaminando en dos lugares a la vez (dos pestañas del
+// navegador, o un remontaje), cada instancia tenía su propio candado y
+// terminaban creando cada una su borrador. Este vive a nivel de módulo
+// (se carga una sola vez por página) y se comparte entre TODAS las
+// instancias, usando el crédito/expediente/solicitud como clave.
+const creacionesEnCurso = new Map<string, Promise<{ ok: boolean; borradorId: string | null }>>();
 
 interface Props {
   casos: any[];
@@ -70,25 +80,25 @@ export function DictaminadorPosicion({
   const [borradorGuardado, setBorradorGuardado] = useState(false);
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [datosGuardadosEn, setDatosGuardadosEn] = useState<number | null>(null);
-  // Candado anti-carrera: si dos guardados "en vivo" se disparan casi al mismo
-  // tiempo (ej. la IA autollena Y se copian actuaciones del boletín en el
-  // mismo instante) y ninguno tiene borradorId todavía, cada uno creaba SU
-  // PROPIO registro "Pendiente" — dejando duplicados del mismo caso. Ahora,
-  // si ya hay una creación en curso, los demás esperan ESA MISMA promesa en
-  // vez de crear la suya.
-  const creandoRef = useRef<Promise<{ ok: boolean; borradorId: string | null }> | null>(null);
+  // Clave para el candado compartido: usa lo primero que haya disponible
+  // (crédito, expediente, o el id de la solicitud) — así dos instancias
+  // trabajando el MISMO caso comparten la misma espera, sin importar si
+  // capturaron el crédito en momentos distintos.
+  const claveCandado = () => numeroCreditoIni.trim() || expedienteIni.trim() || precargar?.solicitudId || "sin-clave";
   const guardarComoSea = async (datos: Parameters<typeof guardarDatosBasicos>[1]) => {
     if (borradorId) return guardarDatosBasicos(borradorId, datos, precargar?.solicitudId);
-    if (creandoRef.current) {
-      const r = await creandoRef.current;
+    const clave = claveCandado();
+    const enCurso = creacionesEnCurso.get(clave);
+    if (enCurso) {
+      const r = await enCurso;
       // Ya se creó por otro lado mientras esperábamos: esto es una corrección,
       // no una creación — usa ESE id.
       return r.borradorId ? guardarDatosBasicos(r.borradorId, datos, precargar?.solicitudId) : r;
     }
     const promesa = guardarDatosBasicos(null, datos, precargar?.solicitudId);
-    creandoRef.current = promesa;
+    creacionesEnCurso.set(clave, promesa);
     const r = await promesa;
-    creandoRef.current = null;
+    creacionesEnCurso.delete(clave);
     return r;
   };
 
