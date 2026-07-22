@@ -265,31 +265,48 @@ function URRJ() {
                 <p className="mt-1 text-xs font-medium text-purple-700">✨ Leyendo documento {progresoIA.hecho + 1} de {progresoIA.total}{progresoIA.nombre ? `: ${progresoIA.nombre}` : ""}…</p>
               )}
               {errorResumen && <p className="mt-1 text-xs text-red-600">{errorResumen}</p>}
-              <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                {documentosOrdenados.map((d, i) => {
-                  const r = resumenDe(d.nombre);
-                  return (
-                    <div key={i} className="rounded-md border border-border bg-muted/20 px-2 py-1.5 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="block min-w-0 flex-1 truncate font-medium text-[color:var(--teal)] hover:underline">📄 {d.nombre}</a>
-                        {!r && (
-                          <button
-                            onClick={() => analizarUnDocumento(d)}
-                            disabled={analizandoDoc === d.nombre}
-                            className="inline-flex shrink-0 items-center gap-1 rounded bg-purple-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-purple-800 disabled:opacity-60"
-                          >
-                            {analizandoDoc === d.nombre ? "✨ Leyendo…" : "✨ Analizar"}
-                          </button>
-                        )}
-                      </div>
-                      {r && (
-                        <span className="mt-0.5 block whitespace-normal text-[11px] font-normal text-muted-foreground">
-                          <span className="rounded bg-purple-100 px-1 py-0.5 font-medium text-purple-800">{r.tipo}</span> · {r.resumen}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="mt-2 overflow-x-auto rounded-lg border border-border">
+                <table className="w-full border-collapse text-xs">
+                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <tr className="bg-muted/50">
+                      <th className="border border-border px-2.5 py-2 text-left font-semibold">Documento</th>
+                      <th className="border border-border px-2.5 py-2 text-left font-semibold">Análisis IA</th>
+                      <th className="border border-border px-2 py-2 text-right font-semibold w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {documentosOrdenados.map((d, i) => {
+                      const r = resumenDe(d.nombre);
+                      return (
+                        <tr key={i} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
+                          <td className="border border-border px-2.5 py-2">
+                            <a href={d.url} target="_blank" rel="noopener noreferrer" className="block max-w-[260px] truncate font-medium text-[color:var(--teal)] hover:underline">📄 {d.nombre}</a>
+                          </td>
+                          <td className="border border-border px-2.5 py-2">
+                            {r ? (
+                              <span className="whitespace-normal text-muted-foreground">
+                                <span className="rounded bg-purple-100 px-1 py-0.5 font-medium text-purple-800">{r.tipo}</span> · {r.resumen}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap border border-border px-2 py-2 text-right">
+                            {!r && (
+                              <button
+                                onClick={() => analizarUnDocumento(d)}
+                                disabled={analizandoDoc === d.nombre}
+                                className="inline-flex items-center gap-1 rounded bg-purple-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-purple-800 disabled:opacity-60"
+                              >
+                                {analizandoDoc === d.nombre ? "✨ Leyendo…" : "✨ Analizar"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
