@@ -20,18 +20,32 @@ export interface ItemMonto { id: string; concepto: string; monto: string }
 /** % de honorarios sugerido según en qué etapa procesal va el juicio.
  *  Es solo SUGERENCIA — el usuario lo puede editar a mano. */
 export const CP_HONORARIOS_ETAPA: { etapa: string; pct: number }[] = [
-  { etapa: "Sin demanda / Extrajudicial", pct: 60 },
+  { etapa: "Sin demanda", pct: 60 },
+  { etapa: "Extrajudicial", pct: 60 },
   { etapa: "Demanda", pct: 50 },
-  { etapa: "Emplazamiento / Contestación", pct: 40 },
+  { etapa: "Emplazamiento", pct: 40 },
+  { etapa: "Contestación", pct: 40 },
   { etapa: "Pruebas", pct: 30 },
   { etapa: "Sentencia", pct: 20 },
-  { etapa: "Apelación / Remate / Adjudicación", pct: 18 },
+  { etapa: "Sentencia Primera", pct: 20 },
+  { etapa: "Sentencia 1ra", pct: 20 },
+  { etapa: "Apelación", pct: 18 },
+  { etapa: "Remate", pct: 18 },
+  { etapa: "Adjudicación", pct: 18 },
 ];
 
-/** $/m² para el cálculo automático de remodelación (hasta 200 m² —
- *  arriba de eso se captura a mano). TODO: confirmar la tarifa real
- *  con Paola; por ahora es un valor de referencia editable. */
-export const COSTO_REMODELACION_POR_M2 = 0;
+/** Tramos de remodelación automática por m² de construcción — igual
+ *  que la fórmula del Excel SIGA (Calculadora Precio, celda B33):
+ *    45–60 m²   → $60,000
+ *    61–120 m²  → $85,000
+ *    121–200 m² → $130,000
+ *    fuera de ese rango (menos de 45 o más de 200) → se cotiza a mano. */
+export function remodelacionSugerida(m2: number): number {
+  if (m2 >= 45 && m2 <= 60) return 60000;
+  if (m2 >= 61 && m2 <= 120) return 85000;
+  if (m2 >= 121 && m2 <= 200) return 130000;
+  return 0;
+}
 
 export interface PrecioURRJ {
   // ---- reflejo (ya existían) ----
@@ -79,8 +93,9 @@ export function calcularPrecio(v: PrecioURRJ) {
   const totalAdeudos = sumaLista(v.adeudos);
   const totalGastos = sumaLista(v.gastosJuridicos);
   const m2 = n(v.m2Construccion);
-  const remodelacionAuto = m2 > 0 && m2 <= 200 ? m2 * COSTO_REMODELACION_POR_M2 : 0;
-  const remodelacion = !v.incluirRemodelacion ? 0 : m2 > 200 ? n(v.remodelacionManual) : remodelacionAuto;
+  const dentroDeRango = m2 >= 45 && m2 <= 200;
+  const remodelacionAuto = dentroDeRango ? remodelacionSugerida(m2) : 0;
+  const remodelacion = !v.incluirRemodelacion ? 0 : dentroDeRango ? remodelacionAuto : n(v.remodelacionManual);
   const subtotal = n(v.precioPiso) + totalAdeudos + totalGastos + remodelacion;
   const honorarios = subtotal * (n(v.honorariosPct) / 100);
   const antesDescuento = subtotal + honorarios;
@@ -88,7 +103,7 @@ export function calcularPrecio(v: PrecioURRJ) {
   const precioFinal = antesDescuento - descuento;
   // Utilidad esperada: solo informativa, referencia 45% — no se ajusta el precio para alcanzarla.
   const utilidadEsperada = precioFinal * 0.45;
-  return { totalAdeudos, totalGastos, remodelacion, remodelacionAuto, subtotal, honorarios, descuento, precioFinal, utilidadEsperada, requiereM2Manual: m2 > 200 };
+  return { totalAdeudos, totalGastos, remodelacion, remodelacionAuto, subtotal, honorarios, descuento, precioFinal, utilidadEsperada, requiereM2Manual: m2 > 0 && !dentroDeRango };
 }
 
 function ListaMontos({ titulo, items, onChange, placeholder }: {
@@ -202,7 +217,7 @@ export function BloquePrecioURRJ({ valor, onChange, puedePrecioPiso = true }: {
             </div>
             {calc.requiereM2Manual ? (
               <div>
-                <label className="text-[11px] font-medium text-muted-foreground">Remodelación (captura manual — supera 200 m²)</label>
+                <label className="text-[11px] font-medium text-muted-foreground">Remodelación (captura manual — fuera de 45–200 m²)</label>
                 <input type="number" value={valor.remodelacionManual} onChange={(e) => set("remodelacionManual", e.target.value)} placeholder="$ 0" className={inp} />
               </div>
             ) : (
