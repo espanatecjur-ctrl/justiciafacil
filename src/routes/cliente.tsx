@@ -101,13 +101,13 @@ function ClientePage() {
           const g = norm((caso as any).gar_id || "");
           const dir = norm(caso.direccion_garantia || "");
           const exp = norm(caso.expediente || "");
-          const cli = caso.cliente_id ? "id:" + caso.cliente_id : norm(caso.cliente_nombre || "");
+          const cli = caso.cliente_jc_id ? "id:" + caso.cliente_jc_id : norm(caso.cliente_nombre || "");
           const match = todos.find((o) => {
             if (!o.id || o.id === caso.id) return false;
             if (g.length >= 3 && norm((o as any).gar_id || "") === g) return true;
             if (dir.length >= 6 && norm(o.direccion_garantia || "") === dir) return true;
             if (exp.length >= 3 && norm(o.expediente || "") === exp) return true;
-            const ocli = o.cliente_id ? "id:" + o.cliente_id : norm(o.cliente_nombre || "");
+            const ocli = o.cliente_jc_id ? "id:" + o.cliente_jc_id : norm(o.cliente_nombre || "");
             if (cli.length >= 3 && ocli === cli) return true;
             return false;
           });
