@@ -258,6 +258,11 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       ubicacion: garantia.direccion_garantia || predJur?.datos?.ubicacion || "",
       numeroCredito: predJur?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || "",
       quienCede: predJur?.datos?.quienCede || (garantia as any).administradora || "",
+      // Actuaciones del boletín ya copiadas antes (si las hay) — para que se
+      // sigan viendo al reabrir la ficha, no solo quedar guardadas sin mostrarse.
+      hallazgos: Array.isArray(predJur?.datos?.hallazgos) ? predJur.datos.hallazgos : [],
+      ultimaActuacion: predJur?.datos?.ultimaActuacion || "",
+      ultimaActuacionTexto: predJur?.datos?.ultimaActuacionTexto || "",
     },
     // Id real del pre-dictamen ya guardado (si existe) — así "Editar y validar"
     // corrige ESE mismo registro en vez de crear uno "Pendiente" duplicado.
@@ -458,6 +463,12 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       </div>
 
       {/* Encabezado */}
+      {(garantia as any).incoherencia_cliente && (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+          <p className="font-semibold">⚠️ Incoherencia detectada: dirección repetida con otro cliente</p>
+          <p className="mt-0.5 text-[13px]">{(garantia as any).incoherencia_detalle} — revisa cuál domicilio está mal capturado antes de continuar.</p>
+        </div>
+      )}
       <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${PURPLE})` }}>
         <p className="text-xs uppercase tracking-wider text-white/60">Ficha del expediente · URRJ</p>
         <h1 className="mt-0.5 text-2xl font-bold">{garantia.expediente || garantia.direccion_garantia || "Garantía"}</h1>
