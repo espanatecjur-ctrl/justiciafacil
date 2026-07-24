@@ -258,20 +258,51 @@ export function RecorridoActor({
   }, [claveCasoIA]);
   const [mostrarSugerenciasIA, setMostrarSugerenciasIA] = useState(true);
   // Si el cuestionario de la IA (que ya leyó RPPC, sentencias, etc.) detectó
-  // algo de sentencia y el campo de "Etapa del juicio" sigue vacío, se llena
-  // solo (a texto — nunca se adivina el Sí/No de "sentencia firme a favor",
-  // eso lo decide la persona revisando el texto detectado).
+  // algo de sentencia/apelación/amparo/prescripción/última actuación, se
+  // transcribe solo — antes SOLO "sentencia" se escribía en algún lado; lo
+  // demás se mostraba en la cajita morada pero nunca llegaba a ningún campo
+  // real, así que se perdía en cuanto cambiabas de fase.
   useEffect(() => {
-    const texto = analisisParaPDF?.resoluciones_y_recursos?.sentencia;
-    if (!texto) return;
+    const rr = analisisParaPDF?.resoluciones_y_recursos;
+    const ua = analisisParaPDF?.estado_actual?.ultima_actuacion;
+    const presc = analisisParaPDF?.prescripcion;
+    if (!rr?.sentencia && !rr?.apelacion && !rr?.amparo && !ua?.fecha && !presc?.esta_prescrita) return;
     setD((p) => {
-      if (p.anotacionesHumanas.includes(texto)) return p; // ya se agregó
-      const nota = `Sentencia detectada por la IA en los documentos: ${texto}`;
+      const notasNuevas: string[] = [];
+      const yaTiene = (t: string) => p.anotacionesHumanas.includes(t);
+      let etapaNueva = p.etapa;
+      let ultimaActuacionNueva = p.ultimaActuacion;
+
+      if (rr?.sentencia) {
+        const nota = `Sentencia detectada por la IA en los documentos: ${rr.sentencia}`;
+        if (!yaTiene(nota)) notasNuevas.push(nota);
+        if (!etapaNueva) etapaNueva = "Sentencia";
+      }
+      if (rr?.apelacion) {
+        const nota = `Apelación detectada por la IA: ${rr.apelacion}`;
+        if (!yaTiene(nota)) notasNuevas.push(nota);
+        if (!etapaNueva) etapaNueva = "En apelación";
+      }
+      if (rr?.amparo) {
+        const nota = `Amparo detectado por la IA: ${rr.amparo}`;
+        if (!yaTiene(nota)) notasNuevas.push(nota);
+      }
+      if (presc?.esta_prescrita) {
+        const nota = `Prescripción/caducidad detectada por la IA: ${presc.esta_prescrita}${presc.motivo ? ` — ${presc.motivo}` : ""}`;
+        if (!yaTiene(nota)) notasNuevas.push(nota);
+      }
+      if (ua?.fecha && !ultimaActuacionNueva) {
+        ultimaActuacionNueva = ua.fecha;
+        const nota = `Última actuación detectada por la IA: ${ua.fecha} — pidió: ${ua.que_se_pidio || "—"} — resolvió: ${ua.que_se_resolvio || "—"}`;
+        if (!yaTiene(nota)) notasNuevas.push(nota);
+      }
+      if (!notasNuevas.length) return p;
       const sep = p.anotacionesHumanas.trim() ? "\n\n" : "";
       return {
         ...p,
-        etapa: p.etapa || "Sentencia",
-        anotacionesHumanas: p.anotacionesHumanas + sep + nota,
+        etapa: etapaNueva,
+        ultimaActuacion: ultimaActuacionNueva,
+        anotacionesHumanas: p.anotacionesHumanas + sep + notasNuevas.join("\n\n"),
       };
     });
   }, [analisisParaPDF]);
@@ -710,19 +741,19 @@ export function RecorridoActor({
                 </div>
               )}
               {analisisParaPDF?.estado_actual?.ultima_actuacion?.fecha && (
-                <p><b>Última actuación:</b> {analisisParaPDF.estado_actual.ultima_actuacion.fecha} — pidió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_pidio || "—"} — resolvió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_resolvio || "—"}</p>
+                <p><b>Última actuación</b> (ya en "Anotaciones" y en el campo de última actuación): {analisisParaPDF.estado_actual.ultima_actuacion.fecha} — pidió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_pidio || "—"} — resolvió: {analisisParaPDF.estado_actual.ultima_actuacion.que_se_resolvio || "—"}</p>
               )}
               {analisisParaPDF?.resoluciones_y_recursos?.sentencia && (
-                <p><b>Sentencia (auto-llenó "Etapa del juicio"):</b> {analisisParaPDF.resoluciones_y_recursos.sentencia} — revisa y marca "¿Sentencia firme a favor?" a mano.</p>
+                <p><b>Sentencia</b> (ya en "Anotaciones" y auto-llenó "Etapa del juicio"): {analisisParaPDF.resoluciones_y_recursos.sentencia} — revisa y marca "¿Sentencia firme a favor?" a mano.</p>
               )}
               {analisisParaPDF?.resoluciones_y_recursos?.apelacion && (
-                <p><b>Apelación:</b> {analisisParaPDF.resoluciones_y_recursos.apelacion}</p>
+                <p><b>Apelación</b> (ya en "Anotaciones"): {analisisParaPDF.resoluciones_y_recursos.apelacion}</p>
               )}
               {analisisParaPDF?.resoluciones_y_recursos?.amparo && (
-                <p><b>Amparo:</b> {analisisParaPDF.resoluciones_y_recursos.amparo}</p>
+                <p><b>Amparo</b> (ya en "Anotaciones"): {analisisParaPDF.resoluciones_y_recursos.amparo}</p>
               )}
               {analisisParaPDF?.prescripcion?.esta_prescrita && (
-                <p><b>Prescripción:</b> {analisisParaPDF.prescripcion.esta_prescrita} — {analisisParaPDF.prescripcion.motivo || ""}</p>
+                <p><b>Prescripción</b> (ya en "Anotaciones"): {analisisParaPDF.prescripcion.esta_prescrita} — {analisisParaPDF.prescripcion.motivo || ""}</p>
               )}
               {resumenParaPDF && resumenParaPDF.length > 0 && (
                 <div>
