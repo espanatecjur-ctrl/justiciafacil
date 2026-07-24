@@ -6,9 +6,10 @@ import { rolActual } from "@/lib/auth";
 import { DireccionDocumentos } from "@/components/direccion-documentos";
 import { DireccionAbogados } from "@/components/direccion-abogados";
 import { DireccionValidaciones } from "@/components/direccion-validaciones";
+import { DireccionMisValidaciones } from "@/components/direccion-mis-validaciones";
 import { DireccionFaseB } from "@/components/direccion-faseb";
 import type { Validacion } from "@/lib/direccion-validaciones";
-import { Briefcase, Upload, Users, BadgeCheck, Wallet, Lock, Loader2 } from "lucide-react";
+import { Briefcase, Upload, Users, BadgeCheck, Wallet, Lock, Loader2, ClipboardList } from "lucide-react";
 
 export const Route = createFileRoute("/direccion")({
   head: () => ({ meta: [{ title: "Dirección — SIGA-DIIPA" }] }),
@@ -18,12 +19,13 @@ export const Route = createFileRoute("/direccion")({
 // Solo la Directora (DGE) entra al módulo de Dirección. Nadie más, ni Tecnología.
 const ROLES_DIRECCION = ["DGE"];
 
-type TabKey = "documentos" | "abogados" | "validaciones" | "faseb";
+type TabKey = "documentos" | "abogados" | "validaciones" | "misValidaciones" | "faseb";
 
 const TABS: { key: TabKey; label: string; icon: typeof Upload }[] = [
   { key: "documentos", label: "Documentos", icon: Upload },
   { key: "abogados", label: "Abogados", icon: Users },
   { key: "validaciones", label: "Validaciones +", icon: BadgeCheck },
+  { key: "misValidaciones", label: "Mis validaciones", icon: ClipboardList },
   { key: "faseb", label: "Fase B", icon: Wallet },
 ];
 
@@ -85,6 +87,7 @@ function Direccion() {
       {tab === "documentos" && <DireccionDocumentos />}
       {tab === "abogados" && <DireccionAbogados />}
       {tab === "validaciones" && <DireccionValidaciones onPasarFaseB={(v) => { setSelFaseB(v); setTab("faseb"); }} />}
+      {tab === "misValidaciones" && <DireccionMisValidaciones />}
       {tab === "faseb" && <DireccionFaseB sel={selFaseB} />}
     </div>
   );
