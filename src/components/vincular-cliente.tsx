@@ -61,13 +61,13 @@ export function VincularClienteModal({ caso, onClose, onVinculado }: {
       const body: any = {
         cliente_nombre: elegido.nombre,
         cliente_codigo: elegido.codigo,
-        cliente_id: elegido.id,           // guarda el id de JurisConecta
+        cliente_jc_id: elegido.id,         // guarda el id de JurisConecta (columna real, bigint)
       };
       const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, { method: "PATCH", headers, body: JSON.stringify(body) });
       if (!r.ok) throw new Error();
       onVinculado(elegido);
     } catch {
-      setError("No se pudo guardar el vínculo. (Revisa que el caso tenga la columna cliente_id.)");
+      setError("No se pudo guardar el vínculo. (Revisa que el caso tenga la columna cliente_jc_id.)");
       setGuardando(false);
     }
   };
