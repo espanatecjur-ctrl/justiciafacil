@@ -177,8 +177,17 @@ export async function guardarBorrador(datos: {
     });
     if (!res.ok) {
       // 409 = el candado de la base ya detectó que esto se estaba creando dos
-      // veces al mismo tiempo — en vez de perder el guardado, usa el que ganó.
-      if (res.status === 409) return buscarBorradorExistentePorClave(datos.numeroCredito, datos.expediente);
+      // veces al mismo tiempo — en vez de perder el guardado, se usa el
+      // registro que ya ganó la carrera... PERO hay que escribirle ENCIMA lo
+      // que se estaba intentando guardar (hallazgos, crédito, etc.), porque
+      // ese registro existente puede no tener esta información todavía. Sin
+      // este paso, la información se pierde silenciosamente aunque la app
+      // diga "guardado en vivo".
+      if (res.status === 409) {
+        const idExistente = await buscarBorradorExistentePorClave(datos.numeroCredito, datos.expediente);
+        if (idExistente) await actualizarBorrador(idExistente, datos);
+        return idExistente;
+      }
       return null;
     }
     const data = await res.json();
@@ -272,7 +281,15 @@ export async function guardarProgreso(
         }),
       });
       if (!res.ok) {
-        if (res.status === 409) return buscarBorradorExistentePorClave(datosCompletos?.numeroCredito, expediente || undefined);
+        if (res.status === 409) {
+          const idExistente = await buscarBorradorExistentePorClave(datosCompletos?.numeroCredito, expediente || undefined);
+          if (idExistente) {
+            await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${idExistente}`, {
+              method: "PATCH", headers, body: JSON.stringify({ datos: { ...datosCompletos, borrador: true } }),
+            });
+          }
+          return idExistente;
+        }
         return null;
       }
       const data = await res.json();
