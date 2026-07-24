@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getAuth } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
+import { BloquePrecioURRJ, PRECIO_VACIO, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { rechazarSolicitud } from "@/lib/firma-solicitud";
 import { avanzarCadena, rechazarYRetroceder, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
 import { Loader2, Lock, CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
@@ -41,6 +42,8 @@ function Firmar() {
   const [modoRechazo, setModoRechazo] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [siguienteInfo, setSiguienteInfo] = useState<{ ok: boolean; siguiente: EtapaFirma; correo?: string; link?: string; error?: string } | null>(null);
+  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
+  const [guardandoPrecio, setGuardandoPrecio] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -66,6 +69,7 @@ function Firmar() {
         const [cres, dres] = await Promise.all(proms);
         setCaso(cres?.[0] || null);
         setDict(dres?.[0] || null);
+        if (dres?.[0]?.datos?.precio) setPrecio((p) => ({ ...p, ...dres[0].datos.precio }));
       } catch (e: any) {
         setErr("No se pudo cargar: " + (e?.message || ""));
       } finally {
@@ -113,6 +117,32 @@ function Firmar() {
       setErr("No se pudo firmar: " + (e?.message || ""));
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const guardarPrecio = async () => {
+    if (!sol || !dict || !token) return;
+    setGuardandoPrecio(true); setErr(null);
+    try {
+      const nuevosDatos = { ...(dict.datos || {}), precio };
+      const r1 = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${dict.id}`, {
+        method: "PATCH", headers, body: JSON.stringify({ datos: nuevosDatos }),
+      });
+      if (!r1.ok) throw new Error(`predictamen ${r1.status}`);
+      setDict({ ...dict, datos: nuevosDatos });
+      const av = await avanzarCadena({
+        predictamenId: dict.id, casoId: caso?.id || "", expedienteTexto: caso?.expediente || dict?.expediente || "el expediente",
+        etapaQueAcabaDeFirmar: "precio", dictamenFinal: dict.dictamen_final || null,
+      });
+      setSiguienteInfo(av);
+      await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud?token=eq.${encodeURIComponent(token)}`, {
+        method: "PATCH", headers, body: JSON.stringify({ firmado: true, firmado_por: correo, firmado_at: new Date().toISOString() }),
+      });
+      setOk(true);
+    } catch (e: any) {
+      setErr("No se pudo guardar el precio: " + (e?.message || ""));
+    } finally {
+      setGuardandoPrecio(false);
     }
   };
 
@@ -229,6 +259,16 @@ function Firmar() {
               {rechazando ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Confirmar rechazo
             </button>
           </div>
+        </div>
+      ) : sol?.slot === "precio" ? (
+        <div className="rounded-xl border-2 border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 p-4">
+          <p className="mb-2 text-sm font-semibold" style={{ color: "#0C5C46" }}>Llena el precio · {titulo}</p>
+          <BloquePrecioURRJ valor={precio} onChange={setPrecio} puedePrecioPiso />
+          {guardandoPrecio && <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Guardando…</p>}
+          <button onClick={guardarPrecio} disabled={guardandoPrecio || !precio.precioPiso.trim()} className="mt-3 flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "#0C5C46" }}>
+            {guardandoPrecio ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Guardar precio y avisar a DGE
+          </button>
+          {!precio.precioPiso.trim() && <p className="mt-1 text-[11px] text-amber-700">Falta capturar el precio piso para poder guardar.</p>}
         </div>
       ) : (
         <div className="rounded-xl border-2 border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 p-4">
