@@ -30,7 +30,8 @@ import { DictamenRegistral, type PrecargaRegistral } from "@/components/dictamen
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { BannerCorreo } from "@/components/banner-correo";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
-import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
+import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, resumenPrecioCorto, type PrecioURRJ } from "@/components/bloque-precio-urrj";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Mail } from "lucide-react";
 import { crearYEnviarSolicitudFirma, correoDeRol, rechazarSolicitud } from "@/lib/firma-solicitud";
 import { avanzarCadena, rechazarYRetroceder, siguienteEtapa, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
@@ -181,15 +182,18 @@ export function RecorridoActor({
   const [guardandoProgreso, setGuardandoProgreso] = useState(false);
   const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
   const primerRenderProgreso = useRef(true);
+  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
   // Autoguardado EN VIVO: cada vez que cambia cualquier campo del formulario
   // (cualquier fase), se guarda solo unos segundos después de dejar de
   // escribir — así no se manda una petición por cada tecla, pero nada se
   // pierde si se cierra la pestaña o se pierde la conexión a medio llenar.
+  // Incluye el precio (adeudos, gastos, remodelación, honorarios, descuento)
+  // para que Contabilidad no pierda su avance al recargar.
   useEffect(() => {
     if (primerRenderProgreso.current) { primerRenderProgreso.current = false; return; }
     const t = setTimeout(() => {
       setGuardandoProgreso(true);
-      guardarProgreso(borradorIdLocal, d.expediente, d.juzgado, d).then((id) => {
+      guardarProgreso(borradorIdLocal, d.expediente, d.juzgado, { ...d, precio }).then((id) => {
         if (id) setBorradorIdLocal(id);
         setGuardandoProgreso(false);
         setProgresoGuardadoEn(Date.now());
@@ -197,13 +201,25 @@ export function RecorridoActor({
     }, 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [d]);
+  }, [d, precio]);
   const [verBanner, setVerBanner] = useState(false);
   const [destino, setDestino] = useState<"contabilidad" | "comercial">("contabilidad");
-  const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
   const [seed, setSeed] = useState(0);
   const abrirDestino = (dst: "contabilidad" | "comercial") => { setDestino(dst); setSeed((x) => x + 1); setVerBanner(true); };
   const [verRegistral, setVerRegistral] = useState(false);
+  // Paso 2 del flujo (Elabora -> Registral -> DIL -> UCM -> Precio -> DGE):
+  // no se puede "Mandar a validar (DIL)" hasta que el dictamen registral de
+  // este expediente esté COMPLETO (terminado=true). Se checa por expediente
+  // (numeroCredito), porque muchos pre-dictámenes de URRJ todavía no tienen
+  // caso_id/garantia_id asignado.
+  const [registralListo, setRegistralListo] = useState(false);
+  useEffect(() => {
+    const clave = (d.numeroCredito || d.expediente || "").trim();
+    if (!clave) { setRegistralListo(false); return; }
+    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=terminado&expediente=eq.${encodeURIComponent(clave)}&order=created_at.desc&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    }).then((r) => (r.ok ? r.json() : [])).then((rows) => setRegistralListo(!!rows?.[0]?.terminado)).catch(() => setRegistralListo(false));
+  }, [d.numeroCredito, d.expediente]);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [yaExiste, setYaExiste] = useState<PredictamenExistente | null>(null);
   const [ignorarBoletin, setIgnorarBoletin] = useState(false);
@@ -222,13 +238,15 @@ export function RecorridoActor({
   const [validacionMsg, setValidacionMsg] = useState<string | null>(null);
   const [rechazoInfo, setRechazoInfo] = useState<{ motivo: string; fecha: string; etapa?: string } | null>(null);
   const mandarAValidar = async () => {
-    if (!firmaElabora || !d.caso_id) return;
+    if (!firmaElabora) return;
+    if (!borradorIdLocal) { setValidacionMsg("⚠️ Espera a que se guarde el borrador (unos segundos) e intenta de nuevo."); return; }
+    if (!registralListo) { setValidacionMsg("⚠️ Falta completar el dictamen registral antes de mandar a validar."); return; }
     setEnviandoValidacion(true); setValidacionMsg(null);
     const correo = await correoDeRol("DIL");
     const destino = correo || window.prompt("¿A qué correo mando el link de validación (DIL)?") || "";
     if (!destino) { setEnviandoValidacion(false); return; }
     const r = await crearYEnviarSolicitudFirma({
-      area: "URRJ", predictamenId: borradorIdLocal || undefined, casoId: d.caso_id, slot: "dil",
+      area: "URRJ", predictamenId: borradorIdLocal, casoId: d.caso_id || "", slot: "dil",
       correoEsperado: destino, tituloSlot: TITULO_ETAPA.dil,
       expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
     });
@@ -243,9 +261,9 @@ export function RecorridoActor({
     if (etapa === "dil") setFirmaValida(f.fecha ? f : null);
     if (etapa === "ucm") setFirmaUCM(f.fecha ? f : null);
     if (etapa === "dge") setFirmaDGE(f.fecha ? f : null);
-    if (!f.fecha || !borradorIdLocal || !d.caso_id) return;
+    if (!f.fecha || !borradorIdLocal) return;
     const av = await avanzarCadena({
-      predictamenId: borradorIdLocal, casoId: d.caso_id, expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+      predictamenId: borradorIdLocal, casoId: d.caso_id || "", expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
       etapaQueAcabaDeFirmar: etapa, dictamenFinal: dictamen?.txt || null,
     });
     setEtapaFirma(av.siguiente);
@@ -256,9 +274,9 @@ export function RecorridoActor({
     if (etapa === "ucm") setFirmaUCM(null);
     if (etapa === "dge") setFirmaDGE(null);
     setRechazoInfo({ motivo, fecha: new Date().toISOString(), etapa });
-    if (!borradorIdLocal || !d.caso_id) { setEtapaFirma("elabora"); setFirmaElabora(null); return; }
+    if (!borradorIdLocal) { setEtapaFirma("elabora"); setFirmaElabora(null); return; }
     const rb = await rechazarYRetroceder({
-      predictamenId: borradorIdLocal, casoId: d.caso_id, expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+      predictamenId: borradorIdLocal, casoId: d.caso_id || "", expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
       etapaQueRechaza: etapa, motivo,
     });
     setEtapaFirma(rb.anterior);
@@ -270,6 +288,7 @@ export function RecorridoActor({
 
   // precarga (re-dictaminar desde el historial)
   useEffect(() => { if (precargar?.datos) setD((p) => ({ ...p, ...precargar.datos })); }, [precargar]);
+  useEffect(() => { if (precargar?.datos?.precio) setPrecio((p) => ({ ...p, ...precargar.datos.precio })); }, [precargar]);
 
   // Robot al inicio: sembrar expediente + hallazgos (una sola vez).
   useEffect(() => {
@@ -1241,22 +1260,47 @@ export function RecorridoActor({
               <label className="mb-1 block text-sm font-medium">Anotaciones del abogado (observaciones a mano)</label>
               <textarea value={d.anotacionesHumanas} onChange={(e) => set("anotacionesHumanas", e.target.value)} rows={4} placeholder="Escribe aquí cualquier observación, contexto o recomendación que el sistema no calcula…" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             </div>
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2 text-xs">
+              <span className="font-semibold">2 · Dictamen registral:</span>
+              {registralListo ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">✓ Completo</span>
+              ) : (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">⚠️ Falta completarlo</span>
+                  <button type="button" onClick={() => setVerRegistral(true)} className="ml-auto rounded-md border border-input px-2 py-1 font-medium hover:bg-muted">Completar registral</button>
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa ? undefined : rechazoInfo} />
               <FirmaParte titulo={TITULO_ETAPA.dil} valor={firmaValida} onFirmar={(f) => firmarEtapa("dil", f)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar || etapaFirma !== "dil"} onRechazar={puedeValidar && etapaFirma === "dil" ? (m) => rechazarEtapa("dil", m) : undefined} rechazado={rechazoInfo?.etapa === "dil" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.ucm} valor={firmaUCM} onFirmar={(f) => firmarEtapa("ucm", f)} cargoSugerido="UCM" bloqueado={etapaFirma !== "ucm"} onRechazar={etapaFirma === "ucm" ? (m) => rechazarEtapa("ucm", m) : undefined} rechazado={rechazoInfo?.etapa === "ucm" ? rechazoInfo : undefined} />
               {(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") && (
+                <div className="rounded-lg border border-border p-3 text-xs">
+                  <p className="font-semibold">Calcula precio · Contabilidad</p>
+                  {etapaFirma === "precio" ? (
+                    <p className="mt-1 text-amber-700">⏳ Esperando a que Contabilidad llene el precio (se le mandó correo).</p>
+                  ) : ["dge", "completo"].includes(etapaFirma) ? (
+                    <p className="mt-1 text-emerald-700">✓ Precio calculado — {resumenPrecioCorto(precio)}</p>
+                  ) : (
+                    <p className="mt-1 text-muted-foreground">Se activa cuando el dictamen quede Positivo y pase DIL + UCM.</p>
+                  )}
+                </div>
+              )}
+              {(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") && (
                 <FirmaParte titulo={TITULO_ETAPA.dge} valor={firmaDGE} onFirmar={(f) => firmarEtapa("dge", f)} cargoSugerido="DGE" bloqueado={etapaFirma !== "dge"} onRechazar={etapaFirma === "dge" ? (m) => rechazarEtapa("dge", m) : undefined} rechazado={rechazoInfo?.etapa === "dge" ? rechazoInfo : undefined} />
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground">Orden: {TITULO_ETAPA.elabora} → {TITULO_ETAPA.dil} → {TITULO_ETAPA.ucm}{(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") ? ` → ${TITULO_ETAPA.dge} (solo si Positivo)` : " (DGE no aplica — el dictamen no quedó Positivo)"}. Si alguien rechaza, se regresa un solo paso, no hasta el inicio.</p>
+            <p className="text-[11px] text-muted-foreground">Orden: 1 Elabora → 2 Registral → 3 {TITULO_ETAPA.dil} → 4 {TITULO_ETAPA.ucm}{(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") ? ` → 5 Precio (Contabilidad) → 6 ${TITULO_ETAPA.dge} (solo si Positivo)` : " (Precio y DGE no aplican — el dictamen no quedó Positivo)"}. Si alguien rechaza, se regresa un solo paso, no hasta el inicio.</p>
             {validacionMsg && <p className="rounded-md bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">{validacionMsg}</p>}
             {firmaElabora && etapaFirma === "elabora" && (
               <div className="flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-3 py-2">
-                <button onClick={mandarAValidar} disabled={enviandoValidacion} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                <button onClick={mandarAValidar} disabled={enviandoValidacion || !registralListo} title={!registralListo ? "Completa el dictamen registral primero" : undefined} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40" style={{ background: "#0C5C46" }}>
                   {enviandoValidacion ? "Enviando…" : <><Mail className="h-3.5 w-3.5" /> 📧 Mandar a validar (DIL)</>}
                 </button>
-                <span className="text-[11px] text-muted-foreground">Le llega un correo con el link para revisar y firmar/rechazar — y si tiene usuario, también le aparece en "Mis validaciones".</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {registralListo ? "Le llega un correo con el link para revisar y firmar/rechazar — y si tiene usuario, también le aparece en \"Mis validaciones\"." : "Se habilita al completar el dictamen registral (paso 2 de arriba)."}
+                </span>
               </div>
             )}
             {validacionMsg && <p className="text-xs text-[color:var(--teal)]">{validacionMsg}</p>}
