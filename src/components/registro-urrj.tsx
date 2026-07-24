@@ -32,6 +32,7 @@ interface Garantia extends RefGarantia {
   posicion?: string;
   pasaUcp?: boolean;
   credito?: string;
+  etapaFirma?: string;
 }
 
 interface FilaDic {
@@ -88,8 +89,10 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
 
   // Pasar a UCP: marca el pre-dictamen como pasa_a_ucp = true (reversible). Pide confirmación.
   const [pasando, setPasando] = useState<string | null>(null);
+  const cadenaCompleta = (g: Garantia) => (g.etapaFirma || "elabora") === "completo";
   const pasarAUCP = async (g: Garantia) => {
     if (!g.predId) { alert("Esta garantía no tiene pre-dictamen para pasar."); return; }
+    if (!cadenaCompleta(g)) { alert("Todavía falta completar la cadena de firmas (Elabora → Registral → DIL → UCM → Precio → DGE) antes de pasar a UCP."); return; }
     if (!confirm(`¿Pasar a UCP el expediente ${g.expediente || "s/e"}? Aparecerá en la lista de UCP. (Se puede revertir.)`)) return;
     setPasando(g.clave); setMenu(null);
     try {
@@ -109,7 +112,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
     setCargando(true);
     try {
       const [preds, regs] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,expediente,posicion,dictamen_final,dictamen_sugerido,pasa_a_ucp,datos,created_at&en_papelera=eq.false&terminado=eq.false&order=created_at.desc&limit=500`, { headers }).then((x) => x.ok ? x.json() : []),
+        fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,caso_id,expediente,posicion,dictamen_final,dictamen_sugerido,pasa_a_ucp,datos,etapa_firma,created_at&en_papelera=eq.false&terminado=eq.false&order=created_at.desc&limit=500`, { headers }).then((x) => x.ok ? x.json() : []),
         fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=id,expediente,acreditado,resultado,datos,created_at&en_papelera=eq.false&terminado=eq.false&order=created_at.desc&limit=500`, { headers }).then((x) => x.ok ? x.json() : []),
       ]);
       const mapa = new Map<string, Garantia>();
@@ -119,7 +122,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
         const g: Garantia = mapa.get(k) || { clave: k, id: p.caso_id || undefined, expediente: p.expediente || "", direccion_garantia: p.datos?.ubicacion || "", juzgado: p.datos?.juzgado || "", deudor: p.datos?.deudor || "", entidad: p.datos?.estado || "", cliente_nombre: p.datos?.deudor || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
         g.nJur++;
         if (!g.ultimaFecha || String(p.created_at) > g.ultimaFecha) { g.ultimaFecha = p.created_at; g.ultimoResultado = p.dictamen_final || p.dictamen_sugerido || ""; }
-        if (!g.predId) { g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; (g as any).credito = p.datos?.numeroCredito || ""; }
+        if (!g.predId) { g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; (g as any).credito = p.datos?.numeroCredito || ""; g.etapaFirma = p.etapa_firma || "elabora"; }
         if (!g.id && p.caso_id) g.id = p.caso_id;
         mapa.set(k, g);
       }
@@ -229,7 +232,11 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
                       {menu === g.clave && (
                         <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-border bg-white py-1 shadow-lg">
                           <button onClick={() => { setMenu(null); setFichaSel(g); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"><FileText className="h-4 w-4" /> Ver ficha</button>
-                          {!g.pasaUcp && <button onClick={() => pasarAUCP(g)} disabled={pasando === g.clave} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[color:var(--teal)] hover:bg-muted disabled:opacity-50">{pasando === g.clave ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightCircle className="h-4 w-4" />} Pasar a UCP</button>}
+                          {!g.pasaUcp && (
+                            <button onClick={() => pasarAUCP(g)} disabled={pasando === g.clave || !cadenaCompleta(g)} title={!cadenaCompleta(g) ? "Falta completar la cadena de firmas (Elabora → Registral → DIL → UCM → Precio → DGE)" : undefined} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[color:var(--teal)] hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">
+                              {pasando === g.clave ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightCircle className="h-4 w-4" />} Pasar a UCP{!cadenaCompleta(g) ? " (falta cadena de firmas)" : ""}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
