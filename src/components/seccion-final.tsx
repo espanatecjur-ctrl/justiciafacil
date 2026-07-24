@@ -131,7 +131,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
       // crea la solicitud (token único)
       const res = await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud`, {
         method: "POST", headers: { ...headers, Prefer: "return=representation" },
-        body: JSON.stringify({ dictamen_id: dictamen.id, caso_id: caso.id, slot: s.clave, correo_esperado: correo }),
+        body: JSON.stringify({ dictamen_id: dictamen.id, caso_id: caso.id, slot: s.clave, correo_esperado: correo, area: "UCP" }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status} — ¿corriste el SQL de firma_solicitud?`);
       const row = (await res.json())?.[0];
@@ -172,7 +172,7 @@ export function SeccionFinal({ caso, dictamen, pred, onGuardado }: Props) {
         const correo = await correoDeRol(s.clave);
         const res = await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud`, {
           method: "POST", headers: { ...headers, Prefer: "return=representation" },
-          body: JSON.stringify({ dictamen_id: dictamen.id, caso_id: caso.id, slot: s.clave, correo_esperado: correo }),
+          body: JSON.stringify({ dictamen_id: dictamen.id, caso_id: caso.id, slot: s.clave, correo_esperado: correo, area: "UCP" }),
         });
         if (!res.ok) throw new Error(`Supabase ${res.status} — ¿corriste el SQL de firma_solicitud?`);
         const row = (await res.json())?.[0];
