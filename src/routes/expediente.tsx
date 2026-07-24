@@ -498,7 +498,7 @@ function FichaExpedientePage() {
       )}
 
       {verSeguimiento && <SeguimientoJuicioModal area={areaFicha} caso={c} onClose={() => setVerSeguimiento(false)} />}
-      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setCaso({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_id: cl.id }); setVerVincular(false); }} />}
+      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setCaso({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_jc_id: cl.id }); setVerVincular(false); }} />}
     </div>
   );
 }
