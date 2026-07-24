@@ -57,6 +57,7 @@ interface Datos {
   hipotecaInscrita: string; prelacion: string; propietario: string; anotaciones: string;
   // H2 procesal
   etapa: string; sentenciaFirme: string; situacion: string; ultimaActuacion: string;
+  declaradoRebeldia: string; hayAdjudicacionDirecta: string; adjudicacionFirme: string; hayIncidenteNulidad: string; sentenciaEjecutoria: string; detalleProcesal: string;
   // H3 prescripción/caducidad
   ultimoPago: string; emplazado: string; fechaEmplazamiento: string; tipoAccion: string;
   convenioRatificado: string; convenioFecha: string; plazoPrescManual: string; plazoCaducManual: string;
@@ -79,6 +80,7 @@ const VACIO: Datos = {
   quienCede: "", queCede: QUE_CEDE[0], tipoJuicio: "Hipotecario", posicion: "Actor", estado: "Sinaloa",
   hipotecaInscrita: "", prelacion: "", propietario: "", anotaciones: "",
   etapa: "", sentenciaFirme: "", situacion: "", ultimaActuacion: "",
+  declaradoRebeldia: "", hayAdjudicacionDirecta: "", adjudicacionFirme: "", hayIncidenteNulidad: "", sentenciaEjecutoria: "", detalleProcesal: "",
   ultimoPago: "", emplazado: "no", fechaEmplazamiento: "", tipoAccion: "hipotecaria",
   convenioRatificado: "no", convenioFecha: "", plazoPrescManual: "", plazoCaducManual: "",
   quienPosee: "", inicioPosesion: "", buenaFe: "no", demandaDespojo: "no",
@@ -514,7 +516,17 @@ export function RecorridoActorUCP({
               <Campo label="¿Sentencia firme a favor?"><SiNo v={d.sentenciaFirme} on={(x) => set("sentenciaFirme", x)} /></Campo>
               <Campo label="Situación"><select className={inp} value={d.situacion} onChange={(e) => set("situacion", e.target.value)}><option value="">—</option><option>En trámite</option><option>En ejecución</option><option>En amparo</option><option>Suspendido</option></select></Campo>
               <Campo label="Fecha de última actuación procesal"><input type="date" className={inp} value={d.ultimaActuacion} onChange={(e) => set("ultimaActuacion", e.target.value)} /></Campo>
+              <Campo label="¿Demandado declarado en rebeldía?"><SiNo v={d.declaradoRebeldia} on={(x) => set("declaradoRebeldia", x)} /></Campo>
+              <Campo label="¿Hay adjudicación directa (sin remate)?"><SiNo v={d.hayAdjudicacionDirecta} on={(x) => set("hayAdjudicacionDirecta", x)} /></Campo>
+              <Campo label="¿Adjudicación declarada firme (ya no se puede impugnar)?"><SiNo v={d.adjudicacionFirme} on={(x) => set("adjudicacionFirme", x)} /></Campo>
+              <Campo label="¿Hay incidente de nulidad de notificaciones?"><SiNo v={d.hayIncidenteNulidad} on={(x) => set("hayIncidenteNulidad", x)} /></Campo>
+              <Campo label="¿Sentencia declarada ejecutoria (ya no admite recurso)?"><SiNo v={d.sentenciaEjecutoria} on={(x) => set("sentenciaEjecutoria", x)} /></Campo>
             </div>
+            <Campo label="Detalle procesal (rebeldía, incidentes, adjudicación — lo que no cabe arriba)"><textarea className={inp} rows={3} value={d.detalleProcesal} onChange={(e) => set("detalleProcesal", e.target.value)} placeholder="Ej. Incidente de nulidad resuelto parcialmente procedente; se ordenó notificar de nuevo…" /></Campo>
+            {d.declaradoRebeldia === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Demandado en rebeldía", detalle: "No contestó la demanda — suele agilizar el juicio a favor de DIIPA." }} />}
+            {d.hayAdjudicacionDirecta === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Adjudicación directa", detalle: "Se evita el remate — recuperación más rápida." }} />}
+            {d.adjudicacionFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Adjudicación firme", detalle: "Ya no se puede impugnar — la propiedad quedó consolidada a favor del actor." }} />}
+            {d.hayIncidenteNulidad === "si" && <Aviso r={{ semaforo: "naranja", etiqueta: "Incidente de nulidad", detalle: "Puede atrasar el juicio o reabrir plazos — revisa cómo se resolvió." }} />}
             {d.sentenciaFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Sentencia firme a favor", detalle: "Sube mucho el valor de la cesión." }} />}
             {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede suspenderse o revertirse lo ganado. Riesgo alto para comprar la cesión." }} />}
             {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido; no avanza hasta que se levante la suspensión." }} />}
