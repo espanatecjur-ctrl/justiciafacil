@@ -5,7 +5,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-export interface ResumenDoc { nombre: string; tipo: string; resumen: string }
+export interface ResumenDoc { nombre: string; tipo: string; resumen: string; url?: string }
 export interface DatosGeneralesIA { administradora?: string | null; numero_credito?: string | null; direccion?: string | null; deudor?: string | null; juzgado?: string | null; expediente?: string | null }
 export interface ResumenDocumentosCache { clave: string; clave_caso?: string | null; resumenes: ResumenDoc[]; datos_generales?: DatosGeneralesIA | null; modelo?: string | null; created_at?: string }
 
@@ -89,7 +89,11 @@ export async function generarResumenIA(clave: string, documentos: { nombre: stri
     onProgreso?.(i, documentos.length, tanda[0]?.nombre);
     const r = await llamarResumirDocumentos(tanda, (msg) => onProgreso?.(i, documentos.length, msg));
     if (!r.ok) return { ok: false, error: r.error + (documentos.length > TAMANO_TANDA ? ` (fallo en el grupo ${Math.floor(i / TAMANO_TANDA) + 1} de ${Math.ceil(documentos.length / TAMANO_TANDA)})` : "") };
-    resumenesJuntos.push(...(r.resumenes || []));
+    // Le pega la URL real (la que se mandó a leer) a cada resumen que salga —
+    // antes no se guardaba, así que no se podía abrir el documento desde
+    // donde se muestra el resumen (ni en el recorrido ni en las sugerencias).
+    const conUrl = (r.resumenes || []).map((res, idx) => ({ ...res, url: tanda[idx]?.url || res.url }));
+    resumenesJuntos.push(...conUrl);
     // Se usan los primeros datos generales que salgan con algo (no todas las
     // tandas van a traer administradora/crédito, normalmente solo la que
     // tenga el contrato o carátula).
@@ -133,6 +137,7 @@ export async function generarResumenUnDocumento(
   if (!r.ok) return { ok: false, error: r.error };
   const nuevoResumen = (r.resumenes || [])[0];
   if (!nuevoResumen) return { ok: false, error: "La IA no devolvió resultado para este documento." };
+  nuevoResumen.url = documento.url; // para poder abrir el documento desde donde se muestre el resumen
   // Reemplaza el resumen previo de este mismo documento si ya existía (por si se re-intenta).
   const resumenesPrevios = (cacheActual?.resumenes || []).filter((x) => x.nombre !== documento.nombre);
   const resumenesJuntos = [...resumenesPrevios, nuevoResumen];
