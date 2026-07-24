@@ -311,9 +311,14 @@ export function RecorridoActor({
   // lo que ya se guardó en caché.
   const [resumenParaPDF, setResumenParaPDF] = useState<{ nombre: string; tipo: string; resumen: string; url?: string }[] | null>(null);
   const [analisisParaPDF, setAnalisisParaPDF] = useState<any>(null);
-  const claveCasoIA = claveAnalisis({ numeroCredito: d.numeroCredito, expediente: d.expediente, caso_id: d.caso_id });
+  const claveCasoIA = useMemo(() => claveAnalisis({ numeroCredito: d.numeroCredito, expediente: d.expediente, caso_id: d.caso_id }), [d.numeroCredito, d.expediente, d.caso_id]);
   useEffect(() => {
-    if (!claveCasoIA) { setResumenParaPDF(null); setAnalisisParaPDF(null); return; }
+    // Antes: si claveCasoIA se veía vacío (aunque fuera un instante, por una
+    // carrera con el autollenado del crédito), esto BORRABA de golpe los
+    // documentos y sugerencias ya cargados — el botón "Actualizar sugerencias"
+    // parpadeaba y desaparecía. Ahora simplemente no vuelve a buscar, pero
+    // NUNCA borra lo que ya estaba bien cargado.
+    if (!claveCasoIA) return;
     obtenerResumenPorClaveCaso(claveCasoIA).then((r) => setResumenParaPDF(r?.resumenes || null));
     obtenerAnalisisCacheado(claveCasoIA, "Actor").then((a) => setAnalisisParaPDF(a?.respuestas || null));
   }, [claveCasoIA]);
@@ -476,6 +481,26 @@ export function RecorridoActor({
     const arr = analisisParaPDF?.estado_actual?.demandas;
     return Array.isArray(arr) ? arr : [];
   }, [analisisParaPDF]);
+  // "Actualizar sugerencias de esta fase": en vez de mandar los 23 documentos
+  // de la solicitud (el cuestionario completo, que tarda mucho), manda SOLO
+  // los que ya se identificaron como relevantes para la fase donde estás
+  // parado — mucho más rápido, y se mezcla con lo que ya había (no lo pisa).
+  const [reanalizandoFase, setReanalizandoFase] = useState(false);
+  const [msgReanalizar, setMsgReanalizar] = useState<string | null>(null);
+  const reanalizarEstaFase = async () => {
+    const docsConUrl = docsDeEstaFase.filter((r) => r.url).map((r) => ({ nombre: r.nombre, url: r.url! }));
+    if (!docsConUrl.length) { setMsgReanalizar("Estos documentos no tienen link guardado — vuelve a analizarlos individualmente primero."); return; }
+    if (!claveCasoIA) { setMsgReanalizar("Falta el crédito/expediente para saber en qué caso guardar esto."); return; }
+    setReanalizandoFase(true); setMsgReanalizar(`Releyendo ${docsConUrl.length} documento(s) de esta fase…`);
+    const r = await generarAnalisisIA(claveCasoIA, "Actor", docsConUrl);
+    setReanalizandoFase(false);
+    if (r.ok && r.analisis) {
+      setAnalisisParaPDF(r.analisis.respuestas);
+      setMsgReanalizar(`✓ Actualizado con ${docsConUrl.length} documento(s) de esta fase.`);
+    } else {
+      setMsgReanalizar(`⚠️ ${r.error || "No se pudo actualizar."}`);
+    }
+  };
   // Qué tipos de documento son relevantes para cada una de las 8 fases —
   // así se resaltan solo los que aplican a donde vas, no todos siempre.
   const TIPOS_POR_FASE: string[][] = [
@@ -883,7 +908,16 @@ export function RecorridoActor({
               )}
               {resumenParaPDF && resumenParaPDF.length > 0 && (
                 <div>
-                  <p className="font-semibold">📄 Documentos de ESTA fase ({FASES[paso]}) · {docsDeEstaFase.length}:</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">📄 Documentos de ESTA fase ({FASES[paso]}) · {docsDeEstaFase.length}:</p>
+                    {docsDeEstaFase.length > 0 && (
+                      <button type="button" onClick={reanalizarEstaFase} disabled={reanalizandoFase}
+                        className="ml-auto inline-flex items-center gap-1 rounded-md border border-purple-400 bg-white px-2 py-1 text-[11px] font-semibold text-purple-800 hover:bg-purple-50 disabled:opacity-60">
+                        {reanalizandoFase ? "Actualizando…" : `🔄 Actualizar sugerencias de esta fase (${docsDeEstaFase.length} doc.)`}
+                      </button>
+                    )}
+                  </div>
+                  {msgReanalizar && <p className="mt-1 text-[11px] text-purple-700">{msgReanalizar}</p>}
                   {docsDeEstaFase.length === 0 ? (
                     <p className="text-purple-600">Ninguno de los documentos leídos parece corresponder a esta fase — revisa "otros documentos" abajo por si aplica alguno.</p>
                   ) : (
