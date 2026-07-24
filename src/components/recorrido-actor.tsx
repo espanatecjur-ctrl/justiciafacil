@@ -32,6 +32,8 @@ import { BannerCorreo } from "@/components/banner-correo";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { Mail } from "lucide-react";
+import { crearYEnviarSolicitudFirma, correoDeRol, rechazarSolicitud } from "@/lib/firma-solicitud";
+import { avanzarCadena, rechazarYRetroceder, siguienteEtapa, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
 
 const NAVY = "#0B1E3A";
 
@@ -206,6 +208,63 @@ export function RecorridoActor({
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
+  const [firmaUCM, setFirmaUCM] = useState<DatosFirma | null>(null);
+  const [firmaDGE, setFirmaDGE] = useState<DatosFirma | null>(null);
+  // Cadena completa: elabora -> DIL -> UCM -> DGE (DGE solo si el dictamen
+  // queda Positivo). Cada quien firma la SUYA; en cuanto el que elabora
+  // termina, "Mandar a validar" arranca la cadena — cada etapa, al firmar,
+  // avisa sola a la siguiente (por correo + "Mis validaciones" si tiene
+  // usuario). Si alguien rechaza, se regresa UN SOLO PASO, no hasta el inicio.
+  const [etapaFirma, setEtapaFirma] = useState<EtapaFirma>("elabora");
+  const [enviandoValidacion, setEnviandoValidacion] = useState(false);
+  const [validacionMsg, setValidacionMsg] = useState<string | null>(null);
+  const [rechazoInfo, setRechazoInfo] = useState<{ motivo: string; fecha: string; etapa?: string } | null>(null);
+  const mandarAValidar = async () => {
+    if (!firmaElabora || !d.caso_id) return;
+    setEnviandoValidacion(true); setValidacionMsg(null);
+    const correo = await correoDeRol("DIL");
+    const destino = correo || window.prompt("¿A qué correo mando el link de validación (DIL)?") || "";
+    if (!destino) { setEnviandoValidacion(false); return; }
+    const r = await crearYEnviarSolicitudFirma({
+      area: "URRJ", predictamenId: borradorIdLocal || undefined, casoId: d.caso_id, slot: "dil",
+      correoEsperado: destino, tituloSlot: TITULO_ETAPA.dil,
+      expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+    });
+    setEnviandoValidacion(false);
+    setEtapaFirma("dil");
+    setValidacionMsg(r.ok ? (r.enviado ? `✅ Enviado a ${destino} — y ya aparece en "Mis validaciones" si tiene usuario.` : `Link generado — se abrió tu correo para mandarlo a ${destino} a mano.`) : `⚠️ ${r.error || "No se pudo mandar a validar."}`);
+  };
+  // Simula (dentro de la misma pantalla, para quien ya tiene sesión y está
+  // viendo el caso) el firmar/rechazar de DIL/UCM/DGE — el mismo efecto que
+  // pasa cuando lo hacen desde el link del correo en /firmar.
+  const firmarEtapa = async (etapa: "dil" | "ucm" | "dge", f: DatosFirma) => {
+    if (etapa === "dil") setFirmaValida(f.fecha ? f : null);
+    if (etapa === "ucm") setFirmaUCM(f.fecha ? f : null);
+    if (etapa === "dge") setFirmaDGE(f.fecha ? f : null);
+    if (!f.fecha || !borradorIdLocal || !d.caso_id) return;
+    const av = await avanzarCadena({
+      predictamenId: borradorIdLocal, casoId: d.caso_id, expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+      etapaQueAcabaDeFirmar: etapa, dictamenFinal: dictamen?.txt || null,
+    });
+    setEtapaFirma(av.siguiente);
+    setValidacionMsg(av.siguiente === "completo" ? "✅ Cadena de firmas completa." : `Le toca ahora a ${TITULO_ETAPA[av.siguiente] || av.siguiente}${av.correo ? ` (${av.correo})` : ""}.`);
+  };
+  const rechazarEtapa = async (etapa: "dil" | "ucm" | "dge", motivo: string) => {
+    if (etapa === "dil") setFirmaValida(null);
+    if (etapa === "ucm") setFirmaUCM(null);
+    if (etapa === "dge") setFirmaDGE(null);
+    setRechazoInfo({ motivo, fecha: new Date().toISOString(), etapa });
+    if (!borradorIdLocal || !d.caso_id) { setEtapaFirma("elabora"); setFirmaElabora(null); return; }
+    const rb = await rechazarYRetroceder({
+      predictamenId: borradorIdLocal, casoId: d.caso_id, expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+      etapaQueRechaza: etapa, motivo,
+    });
+    setEtapaFirma(rb.anterior);
+    if (rb.anterior === "elabora") { setFirmaElabora(null); setFirmaValida(null); }
+    if (rb.anterior === "dil") setFirmaValida(null);
+    if (rb.anterior === "ucm") setFirmaUCM(null);
+  };
+  const rechazarValidacion = (motivo: string) => rechazarEtapa("dil", motivo);
 
   // precarga (re-dictaminar desde el historial)
   useEffect(() => { if (precargar?.datos) setD((p) => ({ ...p, ...precargar.datos })); }, [precargar]);
@@ -576,7 +635,8 @@ export function RecorridoActor({
     }
   };
 
-  const dosFirmas = !!(firmaElabora && firmaValida);
+  const dosFirmas = !!firmaElabora;
+  const cadenaCompleta = !!(firmaElabora && firmaValida && firmaUCM);
   const decidido = !!guardado && guardado.startsWith("Pre-dictamen guardado");
 
   const checarExiste = async (exp?: string | null, caso?: string | null) => {
@@ -1068,9 +1128,24 @@ export function RecorridoActor({
               <textarea value={d.anotacionesHumanas} onChange={(e) => set("anotacionesHumanas", e.target.value)} rows={4} placeholder="Escribe aquí cualquier observación, contexto o recomendación que el sistema no calcula…" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
-              <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
+              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa ? undefined : rechazoInfo} />
+              <FirmaParte titulo={TITULO_ETAPA.dil} valor={firmaValida} onFirmar={(f) => firmarEtapa("dil", f)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar || etapaFirma !== "dil"} onRechazar={puedeValidar && etapaFirma === "dil" ? (m) => rechazarEtapa("dil", m) : undefined} rechazado={rechazoInfo?.etapa === "dil" ? rechazoInfo : undefined} />
+              <FirmaParte titulo={TITULO_ETAPA.ucm} valor={firmaUCM} onFirmar={(f) => firmarEtapa("ucm", f)} cargoSugerido="UCM" bloqueado={etapaFirma !== "ucm"} onRechazar={etapaFirma === "ucm" ? (m) => rechazarEtapa("ucm", m) : undefined} rechazado={rechazoInfo?.etapa === "ucm" ? rechazoInfo : undefined} />
+              {(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") && (
+                <FirmaParte titulo={TITULO_ETAPA.dge} valor={firmaDGE} onFirmar={(f) => firmarEtapa("dge", f)} cargoSugerido="DGE" bloqueado={etapaFirma !== "dge"} onRechazar={etapaFirma === "dge" ? (m) => rechazarEtapa("dge", m) : undefined} rechazado={rechazoInfo?.etapa === "dge" ? rechazoInfo : undefined} />
+              )}
             </div>
+            <p className="text-[11px] text-muted-foreground">Orden: {TITULO_ETAPA.elabora} → {TITULO_ETAPA.dil} → {TITULO_ETAPA.ucm}{(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") ? ` → ${TITULO_ETAPA.dge} (solo si Positivo)` : " (DGE no aplica — el dictamen no quedó Positivo)"}. Si alguien rechaza, se regresa un solo paso, no hasta el inicio.</p>
+            {validacionMsg && <p className="rounded-md bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">{validacionMsg}</p>}
+            {firmaElabora && etapaFirma === "elabora" && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-3 py-2">
+                <button onClick={mandarAValidar} disabled={enviandoValidacion} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                  {enviandoValidacion ? "Enviando…" : <><Mail className="h-3.5 w-3.5" /> 📧 Mandar a validar (DIL)</>}
+                </button>
+                <span className="text-[11px] text-muted-foreground">Le llega un correo con el link para revisar y firmar/rechazar — y si tiene usuario, también le aparece en "Mis validaciones".</span>
+              </div>
+            )}
+            {validacionMsg && <p className="text-xs text-[color:var(--teal)]">{validacionMsg}</p>}
             <p className="text-sm font-medium">Decisión humana · ¿pasa para la compra de la cesión de la garantía?</p>
             {!dosFirmas && !decidido && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Faltan las dos firmas (Elabora + Valida) para poder decidir y para el PDF.</p>
@@ -1092,10 +1167,10 @@ export function RecorridoActor({
               </Link>
             )}
             <div className="flex flex-wrap gap-2 pt-1">
-              <button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
+              <button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible en cuanto firmes como elabora" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
                 <Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF
               </button>
-              <button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
+              <button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible en cuanto firmes como elabora" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
                 <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF del pre-dictamen
               </button>
             </div>
