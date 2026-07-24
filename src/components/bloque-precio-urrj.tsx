@@ -275,6 +275,13 @@ export function BloquePrecioURRJ({ valor, onChange, puedePrecioPiso = true }: {
   );
 }
 
+/** Resumen corto (una línea) para mostrar el estatus del precio en la cadena de firmas. */
+export function resumenPrecioCorto(v: PrecioURRJ): string {
+  if (!v.precioPiso) return "sin precio piso capturado todavía";
+  const calc = calcularPrecio(v);
+  return `precio final ${fmt(calc.precioFinal)}`;
+}
+
 /** Arma un resumen de precio para pegarlo en el cuerpo del correo. */
 export function resumenPrecio(v: PrecioURRJ): string {
   const l = (etq: string, x: string) => `${etq}: ${x ? `$${x}` : "—"}`;
