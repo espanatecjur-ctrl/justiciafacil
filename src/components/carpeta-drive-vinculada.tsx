@@ -626,58 +626,70 @@ export function CarpetaDriveVinculada({
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {docsPag.map((a) => (
-                  <div key={a.id} className="overflow-hidden rounded-lg border border-border bg-white">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                      {selModo
-                        ? <button onClick={() => toggleSelDoc(a)} className="shrink-0 text-[color:var(--teal)]" title={estaSelDoc(a.id) ? "Quitar" : "Elegir"}>{estaSelDoc(a.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}</button>
-                        : <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium" title={a.name}>{a.name}</p>
-                        {modoVista === "todos" && a.ruta ? <p className="truncate text-[10px] text-muted-foreground" title={a.ruta}>📁 {a.ruta}</p> : null}
-                      </div>
-                      <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tipoLegible(a.mimeType)}</span>
-                      {copias[a.id] && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title="Se ve y descarga desde el sistema">del sistema</span>}
-                    </div>
-                    <button onClick={() => setDocSel(a)} className="group relative block h-56 w-full bg-muted" title="Ampliar vista previa">
-                      {(copias[a.id]?.mime || a.mimeType || "").startsWith("image/") && urlsCopia[a.id] ? (
-                        <img src={urlsCopia[a.id]} alt={a.name} loading="lazy" className="h-full w-full object-contain bg-white" />
-                      ) : urlsCopia[a.id] ? (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
-                          <FileText className={`h-8 w-8 ${(copias[a.id]?.mime || a.mimeType || "").includes("pdf") ? "text-red-500/60" : "text-[color:var(--teal)]/50"}`} />
-                          <span className="text-[11px] font-medium text-muted-foreground">{(copias[a.id]?.mime || a.mimeType || "").includes("pdf") ? "PDF · del sistema" : "Documento copiado"}</span>
-                        </div>
-                      ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-3 text-center">
-                          <FileText className="h-8 w-8 text-muted-foreground/40" />
-                          <span className="text-[11px] font-medium text-muted-foreground">Aún no copiado al sistema</span>
-                          <span className="text-[10px] text-muted-foreground">Dale «Sincronizar documentos» para que lo vea todo el equipo (y en el celular).</span>
-                        </div>
-                      )}
-                      <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-foreground"><Maximize2 className="h-3.5 w-3.5" /> Ampliar</span>
-                      </span>
-                    </button>
-                    <div className="flex items-center justify-between px-3 py-1.5">
-                      <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Vista previa</button>
-                      <div className="flex items-center gap-3">
-                        {urlsCopia[a.id] && <a href={`${urlsCopia[a.id]}&download=${encodeURIComponent(copias[a.id]?.nombre || a.name)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
-                        {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
-                        {copias[a.id] && (
-                          <button
-                            onClick={() => mandarAPapelera(a.id, copias[a.id]?.nombre || a.name)}
-                            disabled={mandando === a.id}
-                            title="Mandar la copia del sistema a la papelera (no borra de Drive)"
-                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
-                          >
-                            {mandando === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Papelera
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full border-collapse text-sm">
+                  <thead className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <tr className="bg-muted/50">
+                      {selModo && <th className="border border-border px-2 py-2 w-8"></th>}
+                      <th className="border border-border px-3 py-2 text-left font-semibold">Documento</th>
+                      <th className="border border-border px-3 py-2 text-left font-semibold">Tipo</th>
+                      <th className="border border-border px-3 py-2 text-left font-semibold">Estado</th>
+                      <th className="border border-border px-2 py-2 text-right font-semibold">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {docsPag.map((a, i) => {
+                      const esImagen = (copias[a.id]?.mime || a.mimeType || "").startsWith("image/");
+                      return (
+                        <tr key={a.id} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
+                          {selModo && (
+                            <td className="border border-border px-2 py-2 text-center">
+                              <button onClick={() => toggleSelDoc(a)} className="text-[color:var(--teal)]" title={estaSelDoc(a.id) ? "Quitar" : "Elegir"}>{estaSelDoc(a.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}</button>
+                            </td>
+                          )}
+                          <td className="border border-border px-3 py-2">
+                            <button onClick={() => setDocSel(a)} className="flex items-center gap-2 text-left hover:underline" title="Ampliar vista previa">
+                              {esImagen && urlsCopia[a.id] ? (
+                                <img src={urlsCopia[a.id]} alt={a.name} loading="lazy" className="h-8 w-8 shrink-0 rounded border border-border object-cover bg-white" />
+                              ) : (
+                                <FileText className={`h-4 w-4 shrink-0 ${(copias[a.id]?.mime || a.mimeType || "").includes("pdf") ? "text-red-500/70" : "text-[color:var(--teal)]"}`} />
+                              )}
+                              <span className="min-w-0">
+                                <span className="block max-w-[280px] truncate font-medium" title={a.name}>{a.name}</span>
+                                {modoVista === "todos" && a.ruta ? <span className="block truncate text-[10px] text-muted-foreground" title={a.ruta}>📁 {a.ruta}</span> : null}
+                              </span>
+                            </button>
+                          </td>
+                          <td className="whitespace-nowrap border border-border px-3 py-2 text-muted-foreground">{tipoLegible(a.mimeType)}</td>
+                          <td className="whitespace-nowrap border border-border px-3 py-2">
+                            {copias[a.id] ? (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">del sistema</span>
+                            ) : (
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground" title="Dale «Sincronizar documentos» para que lo vea todo el equipo (y en el celular).">Aún no copiado</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap border border-border px-2 py-2 text-right">
+                            <div className="flex items-center justify-end gap-3">
+                              <button onClick={() => setDocSel(a)} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Ver</button>
+                              {urlsCopia[a.id] && <a href={`${urlsCopia[a.id]}&download=${encodeURIComponent(copias[a.id]?.nombre || a.name)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                              {puedeDrive && a.webViewLink && <a href={a.webViewLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Drive</a>}
+                              {copias[a.id] && (
+                                <button
+                                  onClick={() => mandarAPapelera(a.id, copias[a.id]?.nombre || a.name)}
+                                  disabled={mandando === a.id}
+                                  title="Mandar la copia del sistema a la papelera (no borra de Drive)"
+                                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                                >
+                                  {mandando === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
               {docs.length > PAGE && (
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
