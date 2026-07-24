@@ -64,6 +64,7 @@ interface Datos {
   hipotecaInscrita: string; prelacion: string; propietario: string; anotaciones: string;
   // H2 procesal
   etapa: string; sentenciaFirme: string; situacion: string; ultimaActuacion: string;
+  declaradoRebeldia: string; hayAdjudicacionDirecta: string; adjudicacionFirme: string; hayIncidenteNulidad: string; sentenciaEjecutoria: string; detalleProcesal: string;
   // H3 prescripción/caducidad
   ultimoPago: string; emplazado: string; fechaEmplazamiento: string; tipoAccion: string;
   convenioRatificado: string; convenioFecha: string; plazoPrescManual: string; plazoCaducManual: string;
@@ -86,6 +87,7 @@ const VACIO: Datos = {
   quienCede: "", queCede: QUE_CEDE[0], tipoJuicio: "Hipotecario", posicion: "Actor", estado: "Sinaloa",
   hipotecaInscrita: "", prelacion: "", propietario: "", anotaciones: "",
   etapa: "", sentenciaFirme: "", situacion: "", ultimaActuacion: "",
+  declaradoRebeldia: "", hayAdjudicacionDirecta: "", adjudicacionFirme: "", hayIncidenteNulidad: "", sentenciaEjecutoria: "", detalleProcesal: "",
   ultimoPago: "", emplazado: "no", fechaEmplazamiento: "", tipoAccion: "hipotecaria",
   convenioRatificado: "no", convenioFecha: "", plazoPrescManual: "", plazoCaducManual: "",
   quienPosee: "", inicioPosesion: "", buenaFe: "no", demandaDespojo: "no",
@@ -450,6 +452,26 @@ export function RecorridoActor({
       return Object.keys(c).length ? { ...p, ...c } : p;
     });
   }, [analisisParaPDF]);
+  // Autollenado de "2 · Estado procesal real" (rebeldía, adjudicación
+  // directa, incidente de nulidad, ejecutoria) con lo que la IA leyó en
+  // autos judiciales y notificaciones — igual criterio: solo si está vacío.
+  useEffect(() => {
+    const ep = analisisParaPDF?.estado_procesal_detalle;
+    if (!ep) return;
+    setD((p) => {
+      const c: Partial<Datos> = {};
+      const siNo = (v: any) => (v === "sí" || v === "si" ? "si" : v === "no" ? "no" : null);
+      if (!p.declaradoRebeldia && siNo(ep.declarado_rebeldia)) c.declaradoRebeldia = siNo(ep.declarado_rebeldia)!;
+      if (!p.hayAdjudicacionDirecta && siNo(ep.hay_adjudicacion_directa)) c.hayAdjudicacionDirecta = siNo(ep.hay_adjudicacion_directa)!;
+      if (!p.adjudicacionFirme && siNo(ep.adjudicacion_firme)) c.adjudicacionFirme = siNo(ep.adjudicacion_firme)!;
+      if (!p.valorComercial && ep.monto_adjudicacion_o_avaluo) c.valorComercial = String(ep.monto_adjudicacion_o_avaluo).replace(/[^0-9.]/g, "");
+      if (!p.hayIncidenteNulidad && siNo(ep.hay_incidente_nulidad)) c.hayIncidenteNulidad = siNo(ep.hay_incidente_nulidad)!;
+      if (!p.sentenciaEjecutoria && siNo(ep.sentencia_ejecutoria)) c.sentenciaEjecutoria = siNo(ep.sentencia_ejecutoria)!;
+      if (!p.detalleProcesal && ep.resumen_detalle) c.detalleProcesal = ep.resumen_detalle;
+      return Object.keys(c).length ? { ...p, ...c } : p;
+    });
+  }, [analisisParaPDF]);
+
   const demandasDetectadas = useMemo(() => {
     const arr = analisisParaPDF?.estado_actual?.demandas;
     return Array.isArray(arr) ? arr : [];
@@ -979,12 +1001,23 @@ export function RecorridoActor({
         {paso === 2 && (
           <div className="space-y-4">
             <H titulo="2 · Estado procesal real" sub="Lo que dice el expediente, no lo que dicen." />
+            {!!analisisParaPDF?.estado_procesal_detalle && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en las actuaciones (rebeldía, adjudicación, nulidad, ejecutoria) — revisa y corrige si hace falta.</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Etapa del juicio"><select className={inp} value={d.etapa} onChange={(e) => set("etapa", e.target.value)}><option value="">—</option><option>Admisión</option><option>Emplazamiento</option><option>Contestación</option><option>Pruebas</option><option>Sentencia interlocutoria</option><option>Sentencia</option><option>En apelación</option><option>Sentencia firme (ejecutoriada)</option><option>Ejecución</option><option>Remate</option></select></Campo>
               <Campo label="¿Sentencia firme a favor?"><SiNo v={d.sentenciaFirme} on={(x) => set("sentenciaFirme", x)} /></Campo>
               <Campo label="Situación"><select className={inp} value={d.situacion} onChange={(e) => set("situacion", e.target.value)}><option value="">—</option><option>En trámite</option><option>En ejecución</option><option>En amparo</option><option>Suspendido</option></select></Campo>
               <Campo label="Fecha de última actuación procesal"><input type="date" className={inp} value={d.ultimaActuacion} onChange={(e) => set("ultimaActuacion", e.target.value)} /></Campo>
+              <Campo label="¿Demandado declarado en rebeldía?"><SiNo v={d.declaradoRebeldia} on={(x) => set("declaradoRebeldia", x)} /></Campo>
+              <Campo label="¿Hay adjudicación directa (sin remate)?"><SiNo v={d.hayAdjudicacionDirecta} on={(x) => set("hayAdjudicacionDirecta", x)} /></Campo>
+              <Campo label="¿Adjudicación declarada firme (ya no se puede impugnar)?"><SiNo v={d.adjudicacionFirme} on={(x) => set("adjudicacionFirme", x)} /></Campo>
+              <Campo label="¿Hay incidente de nulidad de notificaciones?"><SiNo v={d.hayIncidenteNulidad} on={(x) => set("hayIncidenteNulidad", x)} /></Campo>
+              <Campo label="¿Sentencia declarada ejecutoria (ya no admite recurso)?"><SiNo v={d.sentenciaEjecutoria} on={(x) => set("sentenciaEjecutoria", x)} /></Campo>
             </div>
+            <Campo label="Detalle procesal (rebeldía, incidentes, adjudicación — lo que no cabe arriba)"><textarea className={inp} rows={3} value={d.detalleProcesal} onChange={(e) => set("detalleProcesal", e.target.value)} placeholder="Ej. Incidente de nulidad resuelto parcialmente procedente; se ordenó notificar de nuevo…" /></Campo>
+            {d.declaradoRebeldia === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Demandado en rebeldía", detalle: "No contestó la demanda — suele agilizar el juicio a favor de DIIPA." }} />}
+            {d.hayAdjudicacionDirecta === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Adjudicación directa", detalle: "Se evita el remate — recuperación más rápida." }} />}
+            {d.adjudicacionFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Adjudicación firme", detalle: "Ya no se puede impugnar — la propiedad quedó consolidada a favor del actor." }} />}
+            {d.hayIncidenteNulidad === "si" && <Aviso r={{ semaforo: "naranja", etiqueta: "Incidente de nulidad", detalle: "Puede atrasar el juicio o reabrir plazos — revisa cómo se resolvió." }} />}
             {d.sentenciaFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Sentencia firme a favor", detalle: "Sube mucho el valor de la cesión." }} />}
             {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede suspenderse o revertirse lo ganado. Riesgo alto para comprar la cesión." }} />}
             {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido; no avanza hasta que se levante la suspensión." }} />}
@@ -1258,6 +1291,7 @@ export function RecorridoActor({
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {!!analisisParaPDF?.estado_procesal_detalle?.monto_adjudicacion_o_avaluo && <p className="text-[11px] font-medium text-purple-700">✨ "Valor comercial" autollenado con el monto de adjudicación/avalúo que la IA encontró en los documentos — revísalo, puede no ser el valor comercial real de mercado.</p>}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={d.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
                     <Campo label="Costos (litigio/desalojo/regularización)"><input type="number" className={inp} value={d.costosOperativos} onChange={(e) => set("costosOperativos", e.target.value)} /></Campo>
