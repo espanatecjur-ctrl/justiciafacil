@@ -83,6 +83,12 @@ function URRJ() {
   // Analiza UN documento a la vez (botón por documento) — cada uno se guarda
   // de inmediato en caché, sin depender de que los demás también funcionen.
   // Solo se puede una vez por documento: si ya tiene resumen, no se vuelve a mandar.
+  // Además de el resumen rápido, TAMBIÉN alimenta el cuestionario completo
+  // (registral_rppc, prescripción, etc. — lo que autollena las fases del
+  // dictamen) con ESE documento — antes esto solo pasaba si alguien le daba
+  // aparte a "Generar cuestionario completo", y casi nadie se acordaba de
+  // hacerlo, así que los campos se quedaban vacíos aunque ya se hubiera
+  // "analizado" el documento.
   const analizarUnDocumento = async (doc: { nombre: string; url: string }) => {
     if (!solicitudActiva?.id || resumenDe(doc.nombre)) return;
     setAnalizandoDoc(doc.nombre); setErrorResumen(null);
@@ -92,6 +98,17 @@ function URRJ() {
     setAnalizandoDoc(null);
     if (!r.ok) { setErrorResumen(`"${doc.nombre}": ${r.error || "No se pudo analizar."}`); return; }
     setResumenDocs(r.cache!);
+    // Cuestionario completo, incremental: se manda SOLO este documento (no
+    // todos), se mezcla con lo que ya había — no pisa lo que otro documento
+    // ya contestó bien. Si falla, no truena el resumen rápido (ya se guardó).
+    try {
+      const claveParaAnalisis = claveCaso || solicitudActiva.id;
+      const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", [doc]);
+      if (rA.ok && rA.analisis) {
+        setAnalisisDocs(rA.analisis);
+        await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+      }
+    } catch { /* el resumen rápido ya se guardó; esto es un plus, no bloquea */ }
   };
   // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
   // — es un paso aparte, junta TODOS los documentos en una sola pasada.
