@@ -309,7 +309,7 @@ export function RecorridoActor({
   // Resumen de documentos + análisis IA ya generados (si existen) — se
   // incluyen al final del PDF del dictamen. No gastan IA aquí, solo leen
   // lo que ya se guardó en caché.
-  const [resumenParaPDF, setResumenParaPDF] = useState<{ nombre: string; tipo: string; resumen: string }[] | null>(null);
+  const [resumenParaPDF, setResumenParaPDF] = useState<{ nombre: string; tipo: string; resumen: string; url?: string }[] | null>(null);
   const [analisisParaPDF, setAnalisisParaPDF] = useState<any>(null);
   const claveCasoIA = claveAnalisis({ numeroCredito: d.numeroCredito, expediente: d.expediente, caso_id: d.caso_id });
   useEffect(() => {
@@ -900,7 +900,7 @@ export function RecorridoActor({
                           {docsDeEstaFase.map((r, i) => (
                             <tr key={i} className={i % 2 ? "bg-white" : "bg-muted/10"}>
                               <td className="whitespace-nowrap border border-border px-2 py-1 font-semibold text-purple-800">{r.tipo}</td>
-                              <td className="border border-border px-2 py-1">{r.nombre}</td>
+                              <td className="border border-border px-2 py-1">{r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-[color:var(--teal)] hover:underline" title="Ver el documento">{r.nombre}</a> : r.nombre}</td>
                               <td className="border border-border px-2 py-1">{r.resumen}</td>
                             </tr>
                           ))}
@@ -924,7 +924,7 @@ export function RecorridoActor({
                             {docsOtrasFases.map((r, i) => (
                               <tr key={i} className={i % 2 ? "bg-white" : "bg-purple-50/40"}>
                                 <td className="whitespace-nowrap border border-border px-2 py-1 font-semibold text-purple-700">{r.tipo}</td>
-                                <td className="border border-border px-2 py-1 text-purple-800">{r.nombre}</td>
+                                <td className="border border-border px-2 py-1 text-purple-800">{r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-900" title="Ver el documento">{r.nombre}</a> : r.nombre}</td>
                                 <td className="border border-border px-2 py-1 text-purple-800">{r.resumen}</td>
                               </tr>
                             ))}
