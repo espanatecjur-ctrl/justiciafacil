@@ -78,7 +78,7 @@ export function ClienteDocumentos({ nombreCliente }: { nombreCliente: string }) 
   const casoCliente: CasoJuridico = {
     id: fila.id,
     estatus_revision: null, tipo_proceso: null, gar_id: null,
-    cliente_codigo: null, proveedor: null, no_credito: null,
+    cliente_codigo: null, proveedor: null, no_credito: null, cliente_jc_id: null,
     expediente: `Cliente - ${fila.nombre_cliente}`,
     drive_carpeta_id: fila.drive_carpeta_id,
     drive_carpeta_nombre: fila.drive_carpeta_nombre,
