@@ -49,6 +49,7 @@ export interface CasoJuridico {
   tiene_cliente: string | null;
   cliente_nombre: string | null;
   cliente_id: string | null;
+  cliente_jc_id: number | string | null; // id real del cliente en JurisConecta (columna correcta; cliente_id de arriba nunca se usó)
   direccion_garantia: string | null;
   unidad: string | null;
   encargado_unidad: string | null;
