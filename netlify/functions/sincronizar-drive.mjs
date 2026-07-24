@@ -205,13 +205,18 @@ export default async (req) => {
     const archivos = await listarArchivos(accessToken, carpetaId);
     const pendientes = archivos.filter((f) => !yaCopiados.has(f.id) && planDeDescarga(f.mimeType));
 
-    // Modo "solo contar": solo avisa cuántos faltan, no copia nada (para el panel "Documentos fijos").
+    // Modo "solo contar": avisa cuántos faltan Y sus nombres, no copia nada (para el panel "Documentos fijos").
     if (soloContar) {
       return new Response(JSON.stringify({
         ok: true,
         total: archivos.length,
         copiados: yaCopiados.size,
         pendientes: pendientes.length,
+        pendientesLista: pendientes.slice(0, 300).map((f) => ({
+          nombre: (f.rutaSub ? f.rutaSub + " / " : "") + f.name,
+          mime: f.mimeType,
+          tamano: Number(f.size || 0),
+        })),
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
 
