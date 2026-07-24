@@ -152,9 +152,12 @@ export async function sincronizarCarpeta(casoId: string, carpetaId: string, area
   }
 }
 
-/** Solo AVISA cuántos documentos de Drive todavía no están copiados (no copia nada, no navega Drive).
- *  Para el panel "Documentos fijos", que no debe exponer el explorador. */
-export async function revisarPendientesDrive(casoId: string, carpetaId: string): Promise<{ ok: boolean; total?: number; copiados?: number; pendientes?: number; error?: string }> {
+export interface PendienteDrive { nombre: string; mime: string; tamano: number }
+
+/** Solo AVISA cuántos documentos de Drive todavía no están copiados, Y SUS NOMBRES
+ *  (no copia nada, no navega Drive). Para el panel "Documentos fijos", que no debe
+ *  exponer el explorador pero sí debe poder mostrar QUÉ falta, en tabla. */
+export async function revisarPendientesDrive(casoId: string, carpetaId: string): Promise<{ ok: boolean; total?: number; copiados?: number; pendientes?: number; pendientesLista?: PendienteDrive[]; error?: string }> {
   try {
     const r = await fetch("/.netlify/functions/sincronizar-drive", {
       method: "POST",
