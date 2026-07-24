@@ -144,6 +144,18 @@ const ESQUEMA_RESPUESTA = `
     "anotaciones_adicionales": "string o null — litigios inscritos, embargos, fideicomisos, anotaciones marginales que no encajen arriba",
     "conclusion": "string o null — conclusión breve del estado registral"
   },
+  "estado_procesal_detalle": {
+    "declarado_rebeldia": "sí" | "no" | "no determinado",
+    "fecha_rebeldia": "string (fecha) o null",
+    "hay_adjudicacion_directa": "sí" | "no" | "no determinado",
+    "adjudicacion_directa_admitida": "sí" | "no" | "no determinado",
+    "adjudicacion_firme": "sí" | "no" | "no determinado — declarada firme, sin recurso pendiente, por no haberse impugnado a tiempo",
+    "monto_adjudicacion_o_avaluo": "string o null — el monto (mínimo de adjudicación, del avalúo, o de la adjudicación) que mencionen los documentos, tal cual venga",
+    "hay_incidente_nulidad": "sí" | "no" | "no determinado",
+    "incidente_nulidad_resultado": "string o null — cómo se resolvió (procedente, improcedente, parcialmente procedente)",
+    "sentencia_ejecutoria": "sí" | "no" | "no determinado",
+    "resumen_detalle": "string o null — 1-2 líneas juntando lo anterior en texto corrido, para la casilla de 'Detalle procesal'"
+  },
   "datos_juicio_adicionales": {
     "fecha_ultimo_pago": "string (fecha) o null — según el estado de cuenta, el contrato o la demanda: la fecha del último pago hecho por el acreditado/deudor antes de caer en mora",
     "tipo_accion": "hipotecaria" | "personal" | "ejecutiva mercantil" | "otra" | null,
@@ -197,6 +209,7 @@ Ahora lee ESTE documento nuevo ("${documento.nombre}") y ACTUALIZA el JSON de ar
 - Si este documento es una actuación MÁS RECIENTE que la que ya tenías en "ultima_actuacion", reemplázala; si es más vieja, deja la que ya tenías.
 - "registral_rppc": esta información suele venir en Certificados de Gravamen, Certificados de Libertad de Gravamen, impresiones o boletas del RPP/RPPC, escrituras inscritas, o el propio contrato de crédito con hipoteca. "propiedad" es el dueño/antecedente del inmueble; "gravamen" es la hipoteca principal (normalmente la del crédito que se está dictaminando); "gravamen_adicional" SOLO se llena si hay un segundo gravamen distinto (ej. Cofinavit, Infonavit, otro acreedor) — si no hay, deja "aplica": "no" y el resto en null. Cualquier otro gravamen, embargo o anotación que no encaje en esas dos secciones va en la lista "otros_gravamenes" (no dupliques los que ya estén, compara por acreedor + tipo + fecha de inscripción).
 - "datos_juicio_adicionales": "fecha_ultimo_pago" y "tipo_accion" suelen venir del contrato de crédito o del estado de cuenta; "esta_emplazado"/"fecha_emplazamiento" de las actuaciones o la razón de notificación; "convenio_ratificado" solo si hay un convenio judicial de por medio; "quien_posee_actualmente"/"inicio_posesion" de actas de entrega-posesión o visitas; "cargas" solo si el documento lo menciona explícitamente (si no dice nada, deja "no determinado", no adivines).
+- "estado_procesal_detalle": rebeldía/adjudicación directa/incidente de nulidad/ejecutoria suelen venir de autos judiciales, notificaciones y acuerdos del boletín — no del contrato ni del certificado de gravamen. Si un auto declara rebeldía, adjudica directamente, resuelve un incidente de nulidad, o declara firme/ejecutoria la sentencia, repórtalo aquí aunque también lo menciones en "resoluciones_y_recursos".
 - NUNCA borres ni cambies a null algo que ya estaba bien contestado, a menos que este documento lo contradiga claramente.
 - "documento_principal" describe SIEMPRE el documento MÁS IMPORTANTE que hayas visto hasta ahora (contrato, sentencia o dictamen suelen ser más relevantes que un acuse o una compulsa) — cámbialo solo si este nuevo documento es más relevante que el que tenías.
 
