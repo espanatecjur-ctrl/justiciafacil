@@ -11,27 +11,30 @@ import { crearYEnviarSolicitudFirma } from "@/lib/firma-solicitud";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-export type EtapaFirma = "elabora" | "dil" | "ucm" | "dge" | "completo";
+export type EtapaFirma = "elabora" | "dil" | "ucm" | "precio" | "dge" | "completo";
 
-export const ORDEN_ETAPAS: EtapaFirma[] = ["elabora", "dil", "ucm", "dge"];
+export const ORDEN_ETAPAS: EtapaFirma[] = ["elabora", "dil", "ucm", "precio", "dge"];
 
 export const TITULO_ETAPA: Record<string, string> = {
   elabora: "Elabora · Abogado URRJ",
   dil: "Valida jurídico · DIL",
   ucm: "Valida · UCM",
+  precio: "Calcula precio · Contabilidad",
   dge: "Autoriza · DGE",
 };
 
 // El rol en perfil_usuario que corresponde a cada etapa (para autocompletar el correo).
-export const ROL_ETAPA: Record<string, string> = { dil: "DIL", ucm: "UCM", dge: "DGE" };
+export const ROL_ETAPA: Record<string, string> = { dil: "DIL", ucm: "UCM", precio: "Contabilidad", dge: "DGE" };
 
-/** Etapa siguiente en la cadena. DGE se salta si el dictamen no quedó Positivo. */
+/** Etapa siguiente en la cadena. Precio y DGE se saltan si el dictamen no
+ *  quedó Positivo — la cadena termina en UCM para los casos que no pasan. */
 export function siguienteEtapa(actual: EtapaFirma, dictamenFinal: string | null | undefined): EtapaFirma {
+  const esPositivo = ["positivo", "sí pasa", "si pasa"].includes(String(dictamenFinal || "").toLowerCase());
   const i = ORDEN_ETAPAS.indexOf(actual as any);
   if (i === -1 || i >= ORDEN_ETAPAS.length - 1) return "completo";
   const sig = ORDEN_ETAPAS[i + 1];
-  if (sig === "dge" && String(dictamenFinal || "").toLowerCase() !== "positivo" && String(dictamenFinal || "").toLowerCase() !== "sí pasa" && String(dictamenFinal || "").toLowerCase() !== "si pasa") {
-    return "completo"; // no positivo -> no pasa por DGE, la cadena termina en UCM
+  if ((sig === "precio" || sig === "dge") && !esPositivo) {
+    return "completo"; // no positivo -> no pasa a precio ni a DGE, la cadena termina en UCM
   }
   return sig;
 }
@@ -43,9 +46,16 @@ export function etapaAnterior(actual: EtapaFirma): EtapaFirma {
   return ORDEN_ETAPAS[i - 1];
 }
 
-/** Busca el correo de la persona con ese rol (DIL/UCM/DGE) en perfil_usuario. */
+/** Busca el correo de la persona con ese rol (DIL/UCM/DGE) en perfil_usuario.
+ *  Para "precio" usa la tabla `correo_contabilidad` (tipo "para") — ya
+ *  existente y usada por Fase B, en vez de un rol en perfil_usuario. */
 export async function correoDelRol(rol: string): Promise<{ correo: string; nombre: string }> {
   try {
+    if (rol === "Contabilidad") {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/correo_contabilidad?select=correo&tipo=eq.para&order=created_at.asc&limit=1`, { headers });
+      const rows = r.ok ? await r.json() : [];
+      return { correo: rows?.[0]?.correo || "", nombre: "Contabilidad" };
+    }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/perfil_usuario?select=email,nombre&rol=eq.${encodeURIComponent(rol)}&activo=eq.true&limit=1`, { headers });
     const rows = r.ok ? await r.json() : [];
     return { correo: rows?.[0]?.email || "", nombre: rows?.[0]?.nombre || rol };
@@ -54,14 +64,17 @@ export async function correoDelRol(rol: string): Promise<{ correo: string; nombr
 
 /** Crea (y prepara el correo de) la solicitud de firma para una etapa del predictamen URRJ. */
 export async function mandarAEtapa(params: {
-  etapa: "dil" | "ucm" | "dge";
+  etapa: "dil" | "ucm" | "precio" | "dge";
   predictamenId: string;
   casoId: string;
   expedienteTexto: string;
   motivoRechazoPrevio?: string;
 }): Promise<{ ok: boolean; link?: string; enviado?: boolean; correo?: string; error?: string }> {
   const { correo, nombre } = await correoDelRol(ROL_ETAPA[params.etapa]);
-  if (!correo) return { ok: false, error: `No hay nadie con rol ${ROL_ETAPA[params.etapa]} activo en perfil_usuario.` };
+  if (!correo) {
+    const fuente = params.etapa === "precio" ? "correo_contabilidad (tipo 'para')" : "perfil_usuario";
+    return { ok: false, error: `No hay correo configurado para ${ROL_ETAPA[params.etapa]} en ${fuente}.` };
+  }
   const r = await crearYEnviarSolicitudFirma({
     area: "URRJ",
     predictamenId: params.predictamenId,
