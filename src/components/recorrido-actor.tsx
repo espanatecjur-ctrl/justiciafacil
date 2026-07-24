@@ -406,6 +406,50 @@ export function RecorridoActor({
       return Object.keys(cambios).length ? { ...p, ...cambios } : p;
     });
   }, [analisisParaPDF]);
+
+  // Autollenado de las fases 3 (Prescripción y caducidad), 4 (Posesión) y 5
+  // (Cargas ocultas) con lo que la IA detectó en contrato/estado de cuenta/
+  // actuaciones/actas. Mismo criterio que las otras fases: solo llena lo
+  // que está vacío, nunca pisa lo que ya se escribió a mano.
+  useEffect(() => {
+    const dj = analisisParaPDF?.datos_juicio_adicionales;
+    if (!dj) return;
+    setD((p) => {
+      const c: Partial<Datos> = {};
+      // Fase 3 · Prescripción y caducidad
+      if (!p.ultimoPago && dj.fecha_ultimo_pago) c.ultimoPago = dj.fecha_ultimo_pago;
+      if (dj.tipo_accion && (p.tipoAccion === "hipotecaria" || !p.tipoAccion)) {
+        const ta = String(dj.tipo_accion).toLowerCase();
+        if (ta.includes("hipot")) c.tipoAccion = "hipotecaria";
+        else if (ta.includes("personal")) c.tipoAccion = "personal";
+        else if (ta.includes("ejecutiva") || ta.includes("mercantil")) c.tipoAccion = "ejecutiva mercantil";
+      }
+      if (dj.esta_emplazado === "sí" || dj.esta_emplazado === "si" || dj.esta_emplazado === "no") {
+        c.emplazado = /^s/i.test(dj.esta_emplazado) ? "si" : "no";
+      }
+      if (!p.fechaEmplazamiento && dj.fecha_emplazamiento) c.fechaEmplazamiento = dj.fecha_emplazamiento;
+      if (dj.convenio_ratificado === "sí" || dj.convenio_ratificado === "si" || dj.convenio_ratificado === "no") {
+        c.convenioRatificado = /^s/i.test(dj.convenio_ratificado) ? "si" : "no";
+      }
+      if (!p.convenioFecha && dj.fecha_convenio) c.convenioFecha = dj.fecha_convenio;
+      // Fase 4 · Posesión física y ocupantes
+      if (!p.quienPosee && dj.quien_posee_actualmente) c.quienPosee = dj.quien_posee_actualmente;
+      if (!p.inicioPosesion && dj.inicio_posesion) c.inicioPosesion = dj.inicio_posesion;
+      if (dj.hay_demanda_despojo === "sí" || dj.hay_demanda_despojo === "si" || dj.hay_demanda_despojo === "no") {
+        c.demandaDespojo = /^s/i.test(dj.hay_demanda_despojo) ? "si" : "no";
+      }
+      // Fase 5 · Cargas ocultas (solo texto, si el documento lo menciona)
+      const cg = dj.cargas;
+      if (cg) {
+        if (!p.predial && cg.predial_al_corriente && cg.predial_al_corriente !== "no determinado") c.predial = cg.predial_al_corriente === "sí" || cg.predial_al_corriente === "si" ? "Al corriente (según documentos)" : "Con adeudo (según documentos)";
+        if (!p.agua && cg.agua_al_corriente && cg.agua_al_corriente !== "no determinado") c.agua = cg.agua_al_corriente === "sí" || cg.agua_al_corriente === "si" ? "Al corriente (según documentos)" : "Con adeudo (según documentos)";
+        if (!p.condominio && cg.condominio_al_corriente && cg.condominio_al_corriente !== "no determinado") c.condominio = cg.condominio_al_corriente === "sí" || cg.condominio_al_corriente === "si" ? "Al corriente (según documentos)" : "Con adeudo (según documentos)";
+        if (!p.fiscales && cg.adeudos_fiscales) c.fiscales = cg.adeudos_fiscales;
+        if (!p.laborales && cg.adeudos_laborales) c.laborales = cg.adeudos_laborales;
+      }
+      return Object.keys(c).length ? { ...p, ...c } : p;
+    });
+  }, [analisisParaPDF]);
   const demandasDetectadas = useMemo(() => {
     const arr = analisisParaPDF?.estado_actual?.demandas;
     return Array.isArray(arr) ? arr : [];
@@ -988,6 +1032,7 @@ export function RecorridoActor({
         {paso === 3 && (
           <div className="space-y-4">
             <H titulo="3 · Prescripción y caducidad" sub="El motor que más mata cesiones. Captura las fechas y el sistema calcula." />
+            {!!analisisParaPDF?.datos_juicio_adicionales && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos (contrato, estado de cuenta, actuaciones) — revisa y corrige si hace falta.</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Fecha del último pago del acreditado"><input type="date" className={inp} value={d.ultimoPago} onChange={(e) => set("ultimoPago", e.target.value)} /></Campo>
               <Campo label="Tipo de acción"><select className={inp} value={d.tipoAccion} onChange={(e) => set("tipoAccion", e.target.value)}>{TIPOS_ACCION.map((t) => <option key={t.clave} value={t.clave}>{t.nombre}</option>)}</select></Campo>
@@ -1048,6 +1093,7 @@ export function RecorridoActor({
         {paso === 4 && (
           <div className="space-y-4">
             <H titulo="4 · Posesión física y ocupantes" sub="Quién está en el inmueble y desde cuándo (alerta de usucapión)." />
+            {!!analisisParaPDF?.datos_juicio_adicionales && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos — revisa y corrige si hace falta.</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="¿Quién posee el inmueble?"><select className={inp} value={d.quienPosee} onChange={(e) => set("quienPosee", e.target.value)}><option value="">—</option><option>El deudor</option><option>Inquilino</option><option>Tercero / invasor</option><option>Nadie</option></select></Campo>
               <Campo label="Posesión desde (fecha)"><input type="date" className={inp} value={d.inicioPosesion} onChange={(e) => set("inicioPosesion", e.target.value)} /></Campo>
@@ -1061,6 +1107,7 @@ export function RecorridoActor({
         {paso === 5 && (
           <div className="space-y-4">
             <H titulo="5 · Cargas ocultas" sub="Todo esto se hereda con el inmueble y se come el margen. En pesos." />
+            {!!analisisParaPDF?.datos_juicio_adicionales?.cargas && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos — revisa y corrige si hace falta (solo llena lo que el documento sí menciona explícitamente).</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Campo label="Predial atrasado"><input type="number" className={inp} value={d.predial} onChange={(e) => set("predial", e.target.value)} /></Campo>
               <Campo label="Agua"><input type="number" className={inp} value={d.agua} onChange={(e) => set("agua", e.target.value)} /></Campo>
