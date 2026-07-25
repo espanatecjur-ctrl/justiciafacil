@@ -14,6 +14,8 @@ import { useNavigate } from "@tanstack/react-router";
 interface RefGarantia { id?: string; expediente?: string; direccion_garantia?: string; juzgado?: string; cliente_nombre?: string; deudor?: string; entidad?: string; }
 import { Building2, Archive, Trash2, MoreVertical, RotateCcw, FolderOpen, Loader2, RefreshCw, Gavel, FileText, AlertTriangle, ArrowRightCircle } from "lucide-react";
 import { FichaURRJ } from "@/components/ficha-urrj";
+import { calcularPrecio } from "@/components/bloque-precio-urrj";
+import { rolActual } from "@/lib/auth";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -33,6 +35,7 @@ interface Garantia extends RefGarantia {
   pasaUcp?: boolean;
   credito?: string;
   etapaFirma?: string;
+  precioFinal?: number;
 }
 
 interface FilaDic {
@@ -70,6 +73,9 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
 
   // expedientes que ya están en UCP (para el indicador "También en UCP")
   const [expsUCP, setExpsUCP] = useState<Set<string>>(new Set());
+  // El precio final es información sensible — solo DGE la ve reflejada aquí.
+  const [puedeVerPrecio, setPuedeVerPrecio] = useState(false);
+  useEffect(() => { rolActual().then((r) => setPuedeVerPrecio(["DGE", "GAD"].includes(r || ""))); }, []);
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=expediente,unidad&expediente=not.is.null`, { headers })
       .then((r) => r.ok ? r.json() : [])
@@ -122,7 +128,10 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
         const g: Garantia = mapa.get(k) || { clave: k, id: p.caso_id || undefined, expediente: p.expediente || "", direccion_garantia: p.datos?.ubicacion || "", juzgado: p.datos?.juzgado || "", deudor: p.datos?.deudor || "", entidad: p.datos?.estado || "", cliente_nombre: p.datos?.deudor || "", nJur: 0, nReg: 0, ultimoResultado: "", ultimaFecha: "" };
         g.nJur++;
         if (!g.ultimaFecha || String(p.created_at) > g.ultimaFecha) { g.ultimaFecha = p.created_at; g.ultimoResultado = p.dictamen_final || p.dictamen_sugerido || ""; }
-        if (!g.predId) { g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; (g as any).credito = p.datos?.numeroCredito || ""; g.etapaFirma = p.etapa_firma || "elabora"; }
+        if (!g.predId) {
+          g.predId = p.id; g.posicion = p.posicion || ""; g.pasaUcp = !!p.pasa_a_ucp; (g as any).credito = p.datos?.numeroCredito || ""; g.etapaFirma = p.etapa_firma || "elabora";
+          if (p.datos?.precio?.precioPiso) { try { g.precioFinal = calcularPrecio(p.datos.precio).precioFinal; } catch { /* no-op */ } }
+        }
         if (!g.id && p.caso_id) g.id = p.caso_id;
         mapa.set(k, g);
       }
@@ -226,6 +235,7 @@ export function RegistroURRJ({ onReDictaminar, dictaminar }: { onReDictaminar?: 
                   </button>
                   <div className="flex items-center gap-2">
                     <span className="shrink-0 rounded-full bg-[color:var(--teal)]/10 px-2 py-0.5 text-[10px] font-medium text-[color:var(--teal)]">{g.nJur} jur · {g.nReg} reg</span>
+                    {puedeVerPrecio && g.precioFinal != null && <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800" title="Precio final calculado por Contabilidad (solo DGE y GAD)">${g.precioFinal.toLocaleString("es-MX", { maximumFractionDigits: 0 })}</span>}
                     {g.ultimoResultado && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${colorRes(g.ultimoResultado)}`}>{g.ultimoResultado}</span>}
                     <div className="relative">
                       <button onClick={() => setMenu(menu === g.clave ? null : g.clave)} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
