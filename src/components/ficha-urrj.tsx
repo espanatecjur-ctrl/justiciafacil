@@ -26,6 +26,7 @@ import { DictamenRegistral } from "@/components/dictamen-registral";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { getAuth } from "@/lib/auth";
 import { obtenerRecorrido, textoDictamen, type Dictamen } from "@/lib/recorrido";
+import { calcularPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { TIPOS_TRAMITE } from "@/lib/urrj-tramites";
 import { diasHabiles } from "@/lib/urrj-motores";
 import { type Precarga } from "@/lib/predictamen-guardar";
@@ -392,6 +393,22 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
                   : "Para pasar a UCP se necesita que el jurídico y el registral queden positivos. Complétalos en sus pestañas."}
               </p>
               {folio && <p className="text-xs text-muted-foreground">Folio del pre-dictamen: <b>{folio}</b>. El PDF y las firmas se generan dentro de la pestaña Jurídico.</p>}
+              {["DGE", "GAD"].includes(rolUsuario || "") && (() => {
+                const precioGuardado: PrecioURRJ | null = predJur?.datos?.precio || null;
+                if (!precioGuardado?.precioPiso) return null;
+                const c = calcularPrecio(precioGuardado);
+                return (
+                  <div className="mt-3 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3 text-sm">
+                    <p className="mb-1 flex items-center gap-1.5 font-semibold text-[color:var(--teal)]">💰 Precio (Contabilidad) <span className="rounded-full bg-[color:var(--teal)]/20 px-1.5 py-0.5 text-[9px] font-medium">solo DGE y GAD</span></p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-4">
+                      <span className="text-muted-foreground">Precio piso</span><span className="text-right font-medium sm:text-left">${Number(precioGuardado.precioPiso).toLocaleString("es-MX")}</span>
+                      <span className="text-muted-foreground">Honorarios</span><span className="text-right font-medium sm:text-left">{precioGuardado.honorariosPct || 0}%</span>
+                      {Number(precioGuardado.descuentoPct) > 0 && <><span className="text-muted-foreground">Descuento</span><span className="text-right font-medium sm:text-left">{precioGuardado.descuentoPct}%</span></>}
+                      <span className="font-semibold text-[color:var(--teal)]">Precio final</span><span className="text-right font-semibold text-[color:var(--teal)] sm:text-left">${c.precioFinal.toLocaleString("es-MX", { maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </TabsContent>
 
