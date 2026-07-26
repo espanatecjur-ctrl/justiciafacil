@@ -734,6 +734,35 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       {/* ===== DOCUMENTOS (Drive + movimientos) ===== */}
       {modulo === "documentos" && (
         <div className="space-y-4">
+          {/* Documentos que ya envió la Dirección para dictaminar (los de la
+              solicitud URRJ) — estos SIEMPRE existen aunque el expediente
+              todavía no tenga garantía/caso_id ligado (por eso Carpeta de
+              Drive / Documentos fijos / Documentos y movimientos, que sí
+              necesitan ese enlace, pueden salir vacíos mientras tanto). */}
+          {docs.length > 0 && (
+            <div className="rounded-xl border border-border p-5">
+              <p className="mb-3 text-sm font-semibold">📎 Documentos de la solicitud URRJ ({docs.length})</p>
+              <div className="divide-y divide-border">
+                {docs.map((d, i) => {
+                  const r = resumenesIA.find((x) => x.nombre === d.nombre);
+                  return (
+                    <div key={i} className="py-2.5 text-sm hover:bg-muted/40">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 truncate"><Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" /> {d.nombre}</span>
+                        <BotonVerDoc url={d.url} nombre={d.nombre} label="ver" />
+                      </div>
+                      {r && <p className="mt-1 pl-6 text-[11px] text-purple-700"><span className="rounded bg-purple-100 px-1 py-0.5 font-medium">{r.tipo}</span> · {r.resumen}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+              {!garantia.id && (
+                <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                  Este expediente todavía no está ligado a una garantía formal — por eso las secciones de abajo (Carpeta de Drive, Documentos fijos, Documentos y movimientos) están vacías. Esos documentos aparecen aquí arriba mientras tanto.
+                </p>
+              )}
+            </div>
+          )}
           <CarpetaDriveVinculada
             caso={casoLV}
             area="URRJ"
