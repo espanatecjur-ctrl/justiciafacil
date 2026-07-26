@@ -74,12 +74,39 @@ function URRJ() {
   const documentosOrdenados = useMemo(() => {
     const docs = solicitudActiva?.documentos || [];
     if (!resumenDocs) return docs;
+    // Mientras falten documentos por analizar, se deja en el orden de subida
+    // — si se reordenara documento por documento, la fila que acabas de leer
+    // "salta" a otra posición y parece que se esconde. Solo se reordena por
+    // fase procesal cuando YA se analizaron todos.
+    const todosAnalizados = docs.every((d) => resumenDe(d.nombre));
+    if (!todosAnalizados) return docs;
     return [...docs].sort((a, b) => {
       const ia = ORDEN_TIPOS.indexOf(resumenDe(a.nombre)?.tipo || "Otro");
       const ib = ORDEN_TIPOS.indexOf(resumenDe(b.nombre)?.tipo || "Otro");
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
   }, [solicitudActiva?.documentos, resumenDocs]);
+  // Documentos que la IA marcó con el MISMO tipo + resumen — probable
+  // duplicado (ej. el mismo certificado subido dos veces con nombre distinto
+  // por llevar el timestamp de subida). Esto SOLO avisa, nunca borra ni
+  // oculta nada — la revisión y el borrado los hace una persona.
+  const duplicadosPorNombre = useMemo(() => {
+    const grupos = new Map<string, string[]>();
+    for (const d of documentosOrdenados) {
+      const r = resumenDe(d.nombre);
+      if (!r || !r.resumen) continue;
+      const clave = `${r.tipo}|${r.resumen}`.trim().toLowerCase();
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave)!.push(d.nombre);
+    }
+    const mapa = new Map<string, string[]>();
+    for (const nombres of grupos.values()) {
+      if (nombres.length > 1) {
+        for (const n of nombres) mapa.set(n, nombres.filter((x) => x !== n));
+      }
+    }
+    return mapa;
+  }, [documentosOrdenados, resumenDocs]);
   // Analiza UN documento a la vez (botón por documento) — cada uno se guarda
   // de inmediato en caché, sin depender de que los demás también funcionen.
   // Solo se puede una vez por documento: si ya tiene resumen, no se vuelve a mandar.
@@ -289,6 +316,11 @@ function URRJ() {
                 )}
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">Analiza documento por documento con el botón «Analizar» de cada uno — así no depende de leerlos todos juntos. Solo se analiza una vez por documento.</p>
+              {duplicadosPorNombre.size > 0 && (
+                <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">
+                  ⚠️ Hay {duplicadosPorNombre.size} documento(s) que parecen repetidos (mismo tipo y contenido detectado) — revísalos y elimina el que sobre si aplica. Esto no se borra solo.
+                </p>
+              )}
               {progresoIA && progresoIA.hecho < progresoIA.total && (
                 <p className="mt-1 text-xs font-medium text-purple-700">✨ Leyendo documento {progresoIA.hecho + 1} de {progresoIA.total}{progresoIA.nombre ? `: ${progresoIA.nombre}` : ""}…</p>
               )}
@@ -305,10 +337,14 @@ function URRJ() {
                   <tbody className="bg-white">
                     {documentosOrdenados.map((d, i) => {
                       const r = resumenDe(d.nombre);
+                      const dupsDe = duplicadosPorNombre.get(d.nombre);
                       return (
-                        <tr key={i} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
+                        <tr key={d.nombre} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
                           <td className="border border-border px-2.5 py-2">
                             <a href={d.url} target="_blank" rel="noopener noreferrer" className="block max-w-[260px] truncate font-medium text-[color:var(--teal)] hover:underline">📄 {d.nombre}</a>
+                            {dupsDe && dupsDe.length > 0 && (
+                              <p className="mt-0.5 text-[10px] font-medium text-amber-700">⚠️ Posible duplicado de: {dupsDe.join(", ")}</p>
+                            )}
                           </td>
                           <td className="border border-border px-2.5 py-2">
                             {r ? (
