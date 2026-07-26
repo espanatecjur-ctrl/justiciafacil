@@ -39,12 +39,11 @@ const headers = {
 // error 502 por intentar 56+ expedientes de un jalón). Con un lote chico
 // y girando el punto de inicio cada día (PRESUPUESTO_MS más abajo), en
 // unos días se cubren todos sin que ninguna corrida se pase de tiempo.
-const TOPE_POR_CORRIDA = 12;
+const TOPE_POR_CORRIDA = 6;
 // Presupuesto de tiempo total por corrida (además del tope de expedientes,
 // por si algún caso se tarda más de lo normal). Se corta antes de que
-// Netlify mate la función sola. (12s no tronó en la prueba real — se deja
-// margen amplio de todos modos, con corte a la mitad del camino también.)
-const PRESUPUESTO_MS = 20000;
+// Netlify mate la función sola. (25s no tronó en la prueba real.)
+const PRESUPUESTO_MS = 12000;
 
 const norm = (s) => String(s || "")
   .toLowerCase()
@@ -154,7 +153,7 @@ async function buscarAcuerdos(expediente, match) {
     url = `${ROBOT}/${match.endpoint}?exp=${encodeURIComponent(expediente)}&judged=${encodeURIComponent(match.judged)}`;
   }
   const ctrl = new AbortController();
-  const tope = setTimeout(() => ctrl.abort("timeout"), 6000);
+  const tope = setTimeout(() => ctrl.abort("timeout"), 12000);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
     if (!r.ok) return { ok: false };
@@ -195,7 +194,7 @@ export default async () => {
     const catalogos = await cargarCatalogos();
 
     let nuevos = 0, revisados = 0, conError = 0, cortadoPorTiempo = false;
-    const sinMatch = [];
+    const sinMatch = []; const conErrorLista = [];
 
     for (const c of casos) {
       if (Date.now() - inicio > PRESUPUESTO_MS) { cortadoPorTiempo = true; break; }
@@ -203,7 +202,7 @@ export default async () => {
       if (!match) { sinMatch.push(`${c.expediente} (${c.juzgado})`); continue; }
       revisados++;
       const res = await buscarAcuerdos(c.expediente, match);
-      if (!res.ok) { conError++; continue; }
+      if (!res.ok) { conError++; conErrorLista.push(c.expediente); continue; }
       if (!res.acuerdos.length) continue;
 
       const ent = entidadLabel(match); const juz = juzgadoLabel(match);
@@ -225,7 +224,8 @@ export default async () => {
 
     const procesados = revisados + sinMatch.length + conError;
     const detalle = `Catálogos: ${catalogos.sinaloa.length} juzgados Sinaloa, ${catalogos.jalisco.length} juzgados Jalisco cargados · Lote de hoy: ${procesados}/${casos.length} de este turno (empezando en la posición ${inicioLote} de ${conJuzgado.length} expedientes totales con juzgado) · ${revisados} identificados y revisados · ${sinMatch.length} sin poder identificar el juzgado · ${conError} con error de conexión · ${nuevos} actuación(es) nueva(s) guardada(s)${cortadoPorTiempo ? " · CORTADO por tiempo, se sigue mañana" : ""}. Tardó ${Math.round((Date.now() - inicio) / 1000)}s.`
-      + (sinMatch.length ? `\nSin identificar (revisar el campo "Juzgado" de estos expedientes): ${sinMatch.slice(0, 20).join(" · ")}${sinMatch.length > 20 ? "…" : ""}` : "");
+      + (sinMatch.length ? `\nSin identificar (revisar el campo "Juzgado" de estos expedientes): ${sinMatch.slice(0, 20).join(" · ")}${sinMatch.length > 20 ? "…" : ""}` : "")
+      + (conErrorLista.length ? `\nCon error de conexión: ${conErrorLista.join(" · ")}` : "");
 
     await fetch(`${SUPABASE_URL}/rest/v1/robot_log`, {
       method: "POST", headers,
