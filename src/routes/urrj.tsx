@@ -92,12 +92,21 @@ function URRJ() {
   const analizarUnDocumento = async (doc: { nombre: string; url: string }) => {
     if (!solicitudActiva?.id || resumenDe(doc.nombre)) return;
     setAnalizandoDoc(doc.nombre); setErrorResumen(null);
-    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id
-      || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
-    const r = await generarResumenUnDocumento(solicitudActiva.id, doc, resumenDocs, claveCaso);
+    // OJO: aquí NO se usa resumenDocs?.datos_generales?.numero_credito como
+    // respaldo — ese es un número que la IA "cree" haber leído en algún
+    // documento, no el número de crédito real capturado en la solicitud.
+    // Usarlo causó que análisis se guardaran con la clave equivocada (ej.
+    // guardado como "16647" cuando el crédito real era "1055") y luego no
+    // aparecieran en la ficha. Si el crédito real todavía no está
+    // capturado, mejor usar el id de la solicitud (estable) y avisar.
+    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
+    const r = await generarResumenUnDocumento(solicitudActiva.id, doc, resumenDocs, claveCaso || solicitudActiva.id);
     setAnalizandoDoc(null);
     if (!r.ok) { setErrorResumen(`"${doc.nombre}": ${r.error || "No se pudo analizar."}`); return; }
     setResumenDocs(r.cache!);
+    if (!claveCaso) {
+      setErrorResumen("⚠️ Esta solicitud todavía no tiene crédito ni expediente capturado — el análisis se guardó, pero solo lo vas a ver aquí hasta que captures el crédito/expediente y regeneres el análisis en Actor/Demandado.");
+    }
     // Cuestionario completo, incremental: se manda SOLO este documento (no
     // todos), se mezcla con lo que ya había — no pisa lo que otro documento
     // ya contestó bien. Si falla, no truena el resumen rápido (ya se guardó).
@@ -115,8 +124,10 @@ function URRJ() {
   const generarCuestionario = async () => {
     if (!solicitudActiva?.id || !solicitudActiva.documentos?.length || analisisDocs) return;
     setCargandoResumen(true); setErrorResumen(null);
-    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id
-      || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
+    // Mismo motivo que en analizarUnDocumento: no usar el número que la IA
+    // "cree" haber leído como respaldo — causa que se guarde con la clave
+    // equivocada y luego no aparezca en la ficha.
+    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
     const claveParaAnalisis = claveCaso || solicitudActiva.id;
     const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos, (hecho, total, nombre) => setProgresoIA({ hecho, total, nombre }));
     setProgresoIA(null);
