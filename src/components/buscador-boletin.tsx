@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { sbSelect } from "@/lib/supabase";
+import { sbSelect, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { type BoletinJuzgado } from "@/components/config-boletin";
 import { cargarJuzgadosJalisco, type JuzgadoJAL } from "@/lib/jalisco-juzgados";
 import { Search, Loader2 } from "lucide-react";
@@ -125,6 +125,37 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
     if (estado === "bcs") return orgBCS ? `${orgBCS}, La Paz` : "";
     if (estado === "jalisco") return jalJudges.find((j) => j.code === jalCode)?.name || "";
     return "";
+  };
+  const entidadLabel = () => (estado === "sinaloa" ? "Sinaloa" : estado === "bcs" ? "Baja California Sur" : "Jalisco");
+
+  // Antes esta búsqueda era "consulta en vivo, no guarda nada" — cada quien
+  // que buscaba lo mismo lo volvía a pedir, y no quedaba rastro en la ficha
+  // del expediente (pestaña "Boletín"). Ahora, al buscar desde CUALQUIER
+  // parte de la app (URRJ, UCP, UCM, sub-juicios…) y darle a "Copiar todas
+  // las actuaciones", también se guardan en acuerdo_judicial — la misma
+  // tabla que usa la pestaña "Boletín" de la ficha y que llena el robot
+  // diario — así queda guardado una sola vez y se ve en todos lados.
+  // El prefijo "manual:" en el hash evita chocar con lo que guarde el
+  // robot diario si más adelante encuentra la misma actuación.
+  const guardarEnFichaDelExpediente = async () => {
+    const ent = entidadLabel(); const juz = juzgadoLabel();
+    if (!ent || !juz || acuerdos.length === 0) return;
+    const filas = acuerdos.map((a) => {
+      const fecha = a.fecha ? String(a.fecha).slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const hash = `manual:${ent}|${juz}|${a.expediente || exp}|${fecha}|${a.acuerdo || ""}`.toLowerCase().replace(/\s+/g, " ").trim();
+      return {
+        entidad: ent, juzgado: juz, expediente: a.expediente || exp, fecha_acuerdo: fecha,
+        tipo_acuerdo: a.etapa || null, texto: a.acuerdo || null, fuente: "manual", origen: "manual_buscador",
+        hash_acuerdo: hash,
+      };
+    });
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=minimal" },
+        body: JSON.stringify(filas),
+      });
+    } catch { /* si falla el guardado en la ficha, no bloquea el resto del flujo */ }
   };
 
   return (
@@ -255,7 +286,7 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
                   <p className="break-words text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
                 )}
                 {onGuardarHallazgos && acuerdos.length > 0 && (
-                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined }); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? `✓ ${acuerdos.length} actuación(es) copiadas — guardado en vivo` : `📋 Copiar todas las actuaciones de este juicio (${acuerdos.length})`}</button>
+                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined }); guardarEnFichaDelExpediente(); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? `✓ ${acuerdos.length} actuación(es) copiadas — guardado en vivo y en la ficha del expediente` : `📋 Copiar todas las actuaciones de este juicio (${acuerdos.length})`}</button>
                 )}
               </div>
               {resaltarAmparo && acuerdosAmparo.length > 0 && (
