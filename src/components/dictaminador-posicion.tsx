@@ -76,6 +76,18 @@ export function DictaminadorPosicion({
   const [numeroCreditoIni, setNumeroCreditoIni] = useState("");
   const [direccionIni, setDireccionIni] = useState("");
   const [yaExisteCredito, setYaExisteCredito] = useState<PredictamenExistente | null>(null);
+  // Vista previa: precargar.datos a veces solo trae lo básico (lo que
+  // detectó el robot del boletín), no TODO lo que ya se llenó en el
+  // cuestionario completo. Aquí se trae el registro completo por
+  // número de crédito para que la vista previa muestre todo.
+  const [datosPreviewCompleto, setDatosPreviewCompleto] = useState<any>(null);
+  useEffect(() => {
+    const cred = numeroCreditoIni.trim();
+    if (!cred) { setDatosPreviewCompleto(null); return; }
+    let cancelado = false;
+    buscarPredictamenPorCredito(cred).then((r) => { if (!cancelado) setDatosPreviewCompleto(r?.datos || null); });
+    return () => { cancelado = true; };
+  }, [numeroCreditoIni]);
   const [revisandoCredito, setRevisandoCredito] = useState(false);
   const [borradorId, setBorradorId] = useState<string | null>(null);
   const [borradorGuardado, setBorradorGuardado] = useState(false);
@@ -285,12 +297,17 @@ export function DictaminadorPosicion({
     if (pantallaElegir) return <>{pantallaElegir}</>;
     return (
       <div className="rounded-xl border border-border bg-card p-6">
-        {!!precargar?.datos && (precargar.datos.numeroCredito || precargar.datos.quienCede || precargar.datos.ubicacion || precargar.datos.etapa) && (
-          <div className="mb-4 rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-            <p className="mb-2 text-sm font-semibold text-[color:var(--teal)]">🔄 Ya hay respuestas guardadas de antes para este crédito — esto es lo que se llenó:</p>
-            <VistaPreviaRespuestas datos={precargar.datos} />
-          </div>
-        )}
+        {(() => {
+          const datosVP = datosPreviewCompleto || precargar?.datos;
+          const tieneAlgo = datosVP && (datosVP.numeroCredito || datosVP.quienCede || datosVP.ubicacion || datosVP.etapa || datosVP.deudor);
+          if (!tieneAlgo) return null;
+          return (
+            <div className="mb-4 rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+              <p className="mb-2 text-sm font-semibold text-[color:var(--teal)]">🔄 Ya hay respuestas guardadas de antes para este crédito — esto es lo que se llenó:</p>
+              <VistaPreviaRespuestas datos={datosVP} />
+            </div>
+          );
+        })()}
         <p className="text-base font-semibold">{titulo}</p>
         <p className="mb-4 text-sm text-muted-foreground">{subtitulo}</p>
 
