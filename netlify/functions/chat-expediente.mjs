@@ -52,8 +52,53 @@ async function obtenerAccessTokenGoogle() {
   return data.access_token;
 }
 
+const SUPABASE_URL = "https://dquoysougxqknvgooiqg.supabase.co";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const SUPABASE_ANON_KEY = "sb_publishable__rEHm2hdrMkQfaBrRqqtOw_akusY-Em";
+const LLAVE_SB = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+
+// Memoria de preguntas ya hechas en ESTE expediente (tabla
+// chat_expediente_historial). Sirve para dos cosas: 1) si preguntan algo
+// muy parecido a lo ya preguntado, se regresa la misma respuesta sin
+// volver a gastar en Gemini; 2) el chat se recuerda aunque se cierre la
+// pestaña y se vuelva a entrar al expediente otro día.
+function normalizar(t) {
+  return (t || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function similitud(a, b) {
+  const wa = new Set(normalizar(a).split(" ").filter(Boolean));
+  const wb = new Set(normalizar(b).split(" ").filter(Boolean));
+  if (wa.size === 0 || wb.size === 0) return 0;
+  let interseccion = 0;
+  for (const w of wa) if (wb.has(w)) interseccion++;
+  const union = new Set([...wa, ...wb]).size;
+  return interseccion / union;
+}
+const UMBRAL_REPETIDA = 0.75; // qué tan parecidas tienen que ser dos preguntas para contar como "la misma"
+
+async function obtenerHistorialPrevio(clave) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/chat_expediente_historial?select=pregunta,respuesta&clave=eq.${encodeURIComponent(clave)}&order=created_at.desc&limit=100`, {
+      headers: { apikey: LLAVE_SB, Authorization: `Bearer ${LLAVE_SB}` },
+    });
+    if (!r.ok) return [];
+    return await r.json();
+  } catch { return []; }
+}
+async function guardarEnHistorial(clave, pregunta, respuesta) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/chat_expediente_historial`, {
+      method: "POST",
+      headers: { apikey: LLAVE_SB, Authorization: `Bearer ${LLAVE_SB}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ clave, pregunta, respuesta }),
+    });
+  } catch { /* si falla el guardado, no truena el chat — solo no queda memoria de esta */ }
+}
 
 async function descargarComoBuffer(url) {
   const mDrive = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
@@ -124,6 +169,26 @@ export default async (req) => {
     const { clave, documentos, pregunta, historial, archivosCache } = await req.json();
     if (!clave) return new Response(JSON.stringify({ ok: false, error: "Falta el identificador del expediente." }), { status: 400 });
     if (!pregunta || !pregunta.trim()) return new Response(JSON.stringify({ ok: false, error: "Falta la pregunta." }), { status: 400 });
+
+    // ¿Ya se preguntó algo muy parecido en ESTE expediente? Si sí, se
+    // regresa la misma respuesta de inmediato — no se gasta en Gemini ni
+    // se vuelven a leer los documentos.
+    const historialPrevio = await obtenerHistorialPrevio(clave);
+    let mejorCoincidencia = null, mejorScore = 0;
+    for (const h of historialPrevio) {
+      const s = similitud(pregunta, h.pregunta);
+      if (s > mejorScore) { mejorScore = s; mejorCoincidencia = h; }
+    }
+    if (mejorCoincidencia && mejorScore >= UMBRAL_REPETIDA) {
+      return new Response(JSON.stringify({
+        ok: true,
+        respuesta: `Ya me preguntaste eso — dijiste "${mejorCoincidencia.pregunta}". Mira, esto fue lo que respondí:\n\n${mejorCoincidencia.respuesta}\n\n¿Buscas otra cosa o quieres que profundice en esto?`,
+        repetida: true,
+        archivos: Array.isArray(archivosCache) ? archivosCache : [],
+        modelo: MODELO,
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
     const listaDocs = Array.isArray(documentos) ? documentos.slice(0, MAX_DOCUMENTOS) : [];
     if (listaDocs.length === 0 && (!Array.isArray(archivosCache) || archivosCache.length === 0)) {
       return new Response(JSON.stringify({ ok: false, error: "Este expediente no tiene documentos para consultar." }), { status: 400 });
@@ -200,9 +265,12 @@ Reglas:
       return new Response(JSON.stringify({ ok: false, error: `La IA no regresó respuesta (motivo: ${razon}).` }), { status: 502 });
     }
 
+    await guardarEnHistorial(clave, pregunta.trim(), texto.trim());
+
     return new Response(JSON.stringify({
       ok: true,
       respuesta: texto.trim(),
+      repetida: false,
       archivos: archivosListos.map((a) => ({ nombre: a.nombre, uri: a.uri, mime: a.mime, modo: a.modo, base64: a.base64 })),
       modelo: MODELO,
     }), { status: 200, headers: { "Content-Type": "application/json" } });
