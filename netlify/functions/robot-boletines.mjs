@@ -42,8 +42,9 @@ const headers = {
 const TOPE_POR_CORRIDA = 12;
 // Presupuesto de tiempo total por corrida (además del tope de expedientes,
 // por si algún caso se tarda más de lo normal). Se corta antes de que
-// Netlify mate la función sola.
-const PRESUPUESTO_MS = 8000;
+// Netlify mate la función sola. (12s no tronó en la prueba real — se deja
+// margen amplio de todos modos, con corte a la mitad del camino también.)
+const PRESUPUESTO_MS = 20000;
 
 const norm = (s) => String(s || "")
   .toLowerCase()
@@ -75,9 +76,9 @@ async function fetchConTope(url, ms, opts) {
 
 async function cargarCatalogos() {
   const [bj, zm, fo] = await Promise.all([
-    fetchConTope(`${SUPABASE_URL}/rest/v1/boletin_juzgado?select=nombre_distrito,nombre_juzgado`, 4000, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
-    fetchConTope(`${ROBOT}/jal-judges`, 4000).then((r) => r.json()).catch(() => ({ juzgados: [] })),
-    fetchConTope(`${ROBOT}/jalf-judges`, 4000).then((r) => r.json()).catch(() => ({ juzgados: [] })),
+    fetchConTope(`${SUPABASE_URL}/rest/v1/boletin_juzgado?select=nombre_distrito,nombre_juzgado`, 5000, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    fetchConTope(`${ROBOT}/jal-judges`, 8000).then((r) => r.json()).catch(() => ({ juzgados: [] })),
+    fetchConTope(`${ROBOT}/jalf-judges`, 8000).then((r) => r.json()).catch(() => ({ juzgados: [] })),
   ]);
   const jalisco = [
     ...(zm.juzgados || []).map((j) => ({ code: j.code, name: (j.name || "").trim(), foraneo: false })),
@@ -223,7 +224,7 @@ export default async () => {
     }
 
     const procesados = revisados + sinMatch.length + conError;
-    const detalle = `Lote de hoy: ${procesados}/${casos.length} de este turno (empezando en la posición ${inicioLote} de ${conJuzgado.length} expedientes totales con juzgado) · ${revisados} identificados y revisados · ${sinMatch.length} sin poder identificar el juzgado · ${conError} con error de conexión · ${nuevos} actuación(es) nueva(s) guardada(s)${cortadoPorTiempo ? " · CORTADO por tiempo, se sigue mañana" : ""}. Tardó ${Math.round((Date.now() - inicio) / 1000)}s.`
+    const detalle = `Catálogos: ${catalogos.sinaloa.length} juzgados Sinaloa, ${catalogos.jalisco.length} juzgados Jalisco cargados · Lote de hoy: ${procesados}/${casos.length} de este turno (empezando en la posición ${inicioLote} de ${conJuzgado.length} expedientes totales con juzgado) · ${revisados} identificados y revisados · ${sinMatch.length} sin poder identificar el juzgado · ${conError} con error de conexión · ${nuevos} actuación(es) nueva(s) guardada(s)${cortadoPorTiempo ? " · CORTADO por tiempo, se sigue mañana" : ""}. Tardó ${Math.round((Date.now() - inicio) / 1000)}s.`
       + (sinMatch.length ? `\nSin identificar (revisar el campo "Juzgado" de estos expedientes): ${sinMatch.slice(0, 20).join(" · ")}${sinMatch.length > 20 ? "…" : ""}` : "");
 
     await fetch(`${SUPABASE_URL}/rest/v1/robot_log`, {
@@ -231,7 +232,7 @@ export default async () => {
       body: JSON.stringify({ fuente: "robot", total_expedientes: conJuzgado.length, nuevos, estado: "ok", detalle }),
     });
 
-    return new Response(JSON.stringify({ ok: true, totalConJuzgado: conJuzgado.length, esteLote: casos.length, revisados, sinMatch: sinMatch.length, conError, nuevos, cortadoPorTiempo }), {
+    return new Response(JSON.stringify({ ok: true, totalConJuzgado: conJuzgado.length, esteLote: casos.length, revisados, sinMatch: sinMatch.length, conError, nuevos, cortadoPorTiempo, catalogoSinaloa: catalogos.sinaloa.length, catalogoJalisco: catalogos.jalisco.length }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
