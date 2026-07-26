@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "../components/app-shell";
 import { LoginGate } from "../components/login-gate";
+import { AsistenteIALateral } from "../components/asistente-ia-lateral";
 
 function NotFoundComponent() {
   return (
@@ -127,6 +128,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <LoginGate>
         <AppShell />
+        <AsistenteIALateral />
       </LoginGate>
     </QueryClientProvider>
   );
