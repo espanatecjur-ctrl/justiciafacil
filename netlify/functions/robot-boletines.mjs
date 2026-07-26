@@ -155,7 +155,7 @@ async function buscarAcuerdos(expediente, match) {
     url = `${ROBOT}/${match.endpoint}?exp=${encodeURIComponent(expediente)}&judged=${encodeURIComponent(match.judged)}`;
   }
   const ctrl = new AbortController();
-  const tope = setTimeout(() => ctrl.abort("timeout"), 12000);
+  const tope = setTimeout(() => ctrl.abort("timeout"), 9000);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
     if (!r.ok) return { ok: false, motivo: `código ${r.status}` };
