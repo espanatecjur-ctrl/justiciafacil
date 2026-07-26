@@ -1,0 +1,9 @@
+{
+  "name": "ingest-legislacion",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Ingesta de códigos y leyes a la base RAG de JusticiaFácil",
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  }
+}
