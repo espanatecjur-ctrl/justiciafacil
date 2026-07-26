@@ -20,6 +20,7 @@ import {
   generarResumenUnDocumento,
   type ResumenDocumentosCache,
 } from "@/lib/resumen-documentos";
+import { generarAnalisisIA, guardarAnalisisEnCache } from "@/lib/analisis-ia";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const ORDEN_TIPOS = ["Contrato", "Certificado", "Auto Judicial", "Dictamen", "Otro"];
@@ -123,6 +124,17 @@ export function DocumentosSolicitudVinculada({
     setAnalizandoDoc(null);
     if (!r.ok) { setErrorResumen(`"${doc.nombre}": ${r.error || "No se pudo analizar."}`); return; }
     setResumenDocs(r.cache!);
+    // Además del resumen rápido, alimenta el cuestionario profundo (Actor)
+    // — es el que usa el Dictamen Registral para autollenarse (Certificados
+    // de Gravamen, RPPC, escrituras). Si falla, no bloquea: el resumen
+    // rápido ya quedó guardado.
+    try {
+      const claveParaAnalisis = claveCaso || solicitud.id;
+      const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", [doc]);
+      if (rA.ok && rA.analisis) {
+        await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+      }
+    } catch { /* el resumen rápido ya se guardó; esto es un plus */ }
   };
 
   const agregarDocumento = async (file: File) => {
