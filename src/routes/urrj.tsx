@@ -5,7 +5,7 @@ import { obtenerResumenCacheado, generarResumenUnDocumento, type ResumenDocument
 import { obtenerAnalisisCacheado, generarAnalisisIA, guardarAnalisisEnCache, introAnalisis, type AnalisisIA } from "@/lib/analisis-ia";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { Scale, ScrollText, Plus, Upload } from "lucide-react";
+import { Scale, ScrollText, Plus, Upload, Trash2 } from "lucide-react";
 import { getAuth } from "@/lib/auth";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { SolicitudesURRJ } from "@/components/solicitudes-urrj";
@@ -228,6 +228,22 @@ function URRJ() {
       setSubiendoDoc(false);
     }
   };
+  // Quita un documento de la lista de esta solicitud (ej. un duplicado que
+  // ya identificaste). Esto NO borra el archivo de Drive — solo lo saca de
+  // la lista de esta solicitud, para que ya no aparezca ni se vuelva a
+  // analizar. Pide confirmación porque no tiene un "deshacer" fácil.
+  const eliminarDocumentoDeSolicitud = async (nombre: string) => {
+    if (!solicitudActiva?.id) return;
+    if (!confirm(`¿Quitar "${nombre}" de la lista de esta solicitud?\n\nEsto no borra el archivo de Drive, solo lo saca de esta lista.`)) return;
+    const documentosActualizados = (solicitudActiva.documentos || []).filter((d) => d.nombre !== nombre);
+    const patch = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?id=eq.${solicitudActiva.id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ documentos: documentosActualizados }),
+    });
+    if (!patch.ok) { setErrorSubidaDoc("No se pudo quitar el documento — intenta de nuevo."); return; }
+    setSolicitudActiva({ ...solicitudActiva, documentos: documentosActualizados });
+  };
   const generarCuestionario = async () => {
     if (!solicitudActiva?.id || !solicitudActiva.documentos?.length || analisisDocs) return;
     setCargandoResumen(true); setErrorResumen(null);
@@ -447,15 +463,24 @@ function URRJ() {
                             )}
                           </td>
                           <td className="whitespace-nowrap border border-border px-2 py-2 text-right">
-                            {!r && (
+                            <div className="flex items-center justify-end gap-1">
+                              {!r && (
+                                <button
+                                  onClick={() => analizarUnDocumento(d)}
+                                  disabled={analizandoDoc === d.nombre}
+                                  className="inline-flex items-center gap-1 rounded bg-purple-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-purple-800 disabled:opacity-60"
+                                >
+                                  {analizandoDoc === d.nombre ? "✨ Leyendo…" : "✨ Analizar"}
+                                </button>
+                              )}
                               <button
-                                onClick={() => analizarUnDocumento(d)}
-                                disabled={analizandoDoc === d.nombre}
-                                className="inline-flex items-center gap-1 rounded bg-purple-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-purple-800 disabled:opacity-60"
+                                onClick={() => eliminarDocumentoDeSolicitud(d.nombre)}
+                                title="Quitar de esta solicitud (no borra el archivo de Drive)"
+                                className="inline-flex items-center justify-center rounded p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
                               >
-                                {analizandoDoc === d.nombre ? "✨ Leyendo…" : "✨ Analizar"}
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
-                            )}
+                            </div>
                           </td>
                         </tr>
                       );
