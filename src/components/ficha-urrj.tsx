@@ -19,8 +19,9 @@ import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
+import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { IndicadorRepetido } from "@/components/indicador-repetido";
-import { LayoutGrid, GitBranch, FolderOpen, Megaphone } from "lucide-react";
+import { LayoutGrid, GitBranch, FolderOpen, Megaphone, Send } from "lucide-react";
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { VistaPreviaRespuestas } from "@/components/vista-previa-respuestas";
 import { DictamenRegistral } from "@/components/dictamen-registral";
@@ -47,6 +48,8 @@ export interface RefGarantia {
   cliente_nombre?: string;
   deudor?: string;
   entidad?: string;
+  actor?: string;
+  demandado?: string;
   /** Cuando se abre desde el Historial: el crédito y el id exacto del
    *  pre-dictamen, para enlazar documentos y datos sin depender de que
    *  haya expediente o caso_id (los borradores "Pendiente" no siempre los tienen). */
@@ -97,6 +100,18 @@ function Seccion({ icon, titulo, accion, children }: { icon: ReactNode; titulo: 
   );
 }
 
+// Compara nombres de documento tolerando variaciones que a veces trae el
+// nombre guardado en el análisis (con/sin el prefijo "soporte - ", espacios
+// extra, mayúsculas distintas) — sin esto, análisis reales se veían como
+// "no encontrados" solo por una diferencia de formato en el nombre.
+function normNombreDoc(s: string | null | undefined): string {
+  return (s || "").toLowerCase().replace(/^soporte\s*-\s*/i, "").trim();
+}
+function buscarResumenDoc(resumenes: ResumenDoc[], nombre: string): ResumenDoc | undefined {
+  const n = normNombreDoc(nombre);
+  return resumenes.find((x) => normNombreDoc(x.nombre) === n);
+}
+
 export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVolver: () => void }) {
   const [modo, setModo] = useState<"ficha" | "dictaminar">("ficha");
   const [tab, setTab] = useState("juridico");
@@ -118,6 +133,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [preview, setPreview] = useState<null | "juridico" | "registral">(null);
   const [editAnt, setEditAnt] = useState(false);
   const [editEst, setEditEst] = useState(false);
+  const [verBoletin, setVerBoletin] = useState(false);
   const [verVincular, setVerVincular] = useState(false);
   const [override, setOverride] = useState<Partial<RefGarantia>>({});
   const [form, setForm] = useState<Record<string, string>>({});
@@ -437,7 +453,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               ) : (
                 <div className="divide-y divide-border">
                   {docs.map((d, i) => {
-                    const r = resumenesIA.find((x) => x.nombre === d.nombre);
+                    const r = buscarResumenDoc(resumenesIA, d.nombre);
                     return (
                       <div key={i} className="py-2.5 text-sm hover:bg-muted/40">
                         <div className="flex items-center justify-between gap-2">
@@ -568,7 +584,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
           icon={<Scale className="h-4 w-4" style={{ color: TEAL }} />}
           titulo="Estatus actual"
           accion={
-            <button onClick={() => { setForm({ expediente: g.expediente || "", juzgado: g.juzgado || "" }); setErrorDatos(null); setEditEst(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+            <button onClick={() => { setForm({ expediente: g.expediente || "", juzgado: g.juzgado || "", actor: g.actor || "", demandado: g.demandado || "" }); setErrorDatos(null); setVerBoletin(false); setEditEst(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
               <PenLine className="h-3 w-3" /> Editar / validar
             </button>
           }
@@ -577,10 +593,35 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             <div className="space-y-2">
               <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1393/2017" /></Campo>
               <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Primero Civil…" /></Campo>
+              <Campo label="Actor"><input className={inp} value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="Quien demanda" /></Campo>
+              <Campo label="Demandado"><input className={inp} value={form.demandado} onChange={(e) => setForm({ ...form, demandado: e.target.value })} placeholder="Contra quién" /></Campo>
               <p className="text-[11px] text-muted-foreground">Con el expediente y el juzgado, el Boletín ya puede jalar las actuaciones.</p>
+
+              {/* Robotsito del boletín — igual que en UCP */}
+              <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
+                <button type="button" onClick={() => setVerBoletin((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold" style={{ color: TEAL }}>
+                  <Send className="h-3.5 w-3.5" /> {verBoletin ? "Ocultar buscador del boletín" : "Buscar en el boletín (jurisdicción, juzgado y expediente)"}
+                </button>
+                {verBoletin && (
+                  <div className="mt-2">
+                    <p className="mb-2 text-[11px] text-muted-foreground">Elige la jurisdicción y el juzgado, busca el expediente y dale <b>"Guardar las actuaciones en la ficha"</b> — se guardan directo, sin necesidad de llenar estos campos a mano.</p>
+                    <BuscadorBoletin
+                      expedienteInicial={form.expediente}
+                      onDatosBoletin={(d) => setForm((f) => ({
+                        ...f,
+                        expediente: d.expediente || f.expediente,
+                        juzgado: d.juzgado || f.juzgado,
+                        actor: d.actor || f.actor,
+                        demandado: d.demandado || f.demandado,
+                      }))}
+                      onGuardadoEnFicha={() => setRefrescoAc((x) => x + 1)}
+                    />
+                  </div>
+                )}
+              </div>
               {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
               <div className="flex gap-2 pt-1">
-                <button onClick={() => guardarDatos({ expediente: form.expediente, juzgado: form.juzgado }, () => setEditEst(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: TEAL }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                <button onClick={() => guardarDatos({ expediente: form.expediente, juzgado: form.juzgado, actor: form.actor, demandado: form.demandado }, () => setEditEst(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: TEAL }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
                 <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
               </div>
             </div>
@@ -590,6 +631,8 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <Dato label="Estatus general" valor={estatusGeneral} />
               <Dato label="No. de expediente / juicio" valor={g.expediente} />
               <Dato label="No. de juzgado" valor={g.juzgado} />
+              <Dato label="Actor" valor={g.actor} />
+              <Dato label="Demandado" valor={g.demandado} />
               <Dato label="Posición" valor={predJur?.posicion} />
               <Dato label="Unidad" valor="URRJ · Dictaminación" />
               <Dato label="Folio" valor={folio} />
@@ -745,7 +788,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <p className="mb-3 text-sm font-semibold">📎 Documentos de la solicitud URRJ ({docs.length})</p>
               <div className="divide-y divide-border">
                 {docs.map((d, i) => {
-                  const r = resumenesIA.find((x) => x.nombre === d.nombre);
+                  const r = buscarResumenDoc(resumenesIA, d.nombre);
                   return (
                     <div key={i} className="py-2.5 text-sm hover:bg-muted/40">
                       <div className="flex items-center justify-between gap-2">
