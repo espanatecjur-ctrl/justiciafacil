@@ -15,6 +15,7 @@ import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, 
 import { Scale, Bot } from "lucide-react";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
+import { VistaPreviaRespuestas } from "@/components/vista-previa-respuestas";
 import { RecorridoDemandado } from "@/components/recorrido-demandado";
 import { RecorridoSucesorio } from "@/components/recorrido-sucesorio";
 import { RecorridoContingencia } from "@/components/recorrido-contingencia";
@@ -284,6 +285,12 @@ export function DictaminadorPosicion({
     if (pantallaElegir) return <>{pantallaElegir}</>;
     return (
       <div className="rounded-xl border border-border bg-card p-6">
+        {!!precargar?.datos && (precargar.datos.numeroCredito || precargar.datos.quienCede || precargar.datos.ubicacion || precargar.datos.etapa) && (
+          <div className="mb-4 rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
+            <p className="mb-2 text-sm font-semibold text-[color:var(--teal)]">🔄 Ya hay respuestas guardadas de antes para este crédito — esto es lo que se llenó:</p>
+            <VistaPreviaRespuestas datos={precargar.datos} />
+          </div>
+        )}
         <p className="text-base font-semibold">{titulo}</p>
         <p className="mb-4 text-sm text-muted-foreground">{subtitulo}</p>
 
