@@ -191,7 +191,7 @@ No inventes contenido que no esté en el documento — si no se puede leer, di "
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 6000, responseMimeType: "application/json" },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 6000, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     const data = await resp.json();
