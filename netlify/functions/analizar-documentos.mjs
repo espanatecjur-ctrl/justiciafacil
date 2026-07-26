@@ -230,7 +230,7 @@ Si un dato no aparece en este documento, usa null o "no determinado" — NUNCA i
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 3000, responseMimeType: "application/json" },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 5000, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     const data = await resp.json();
