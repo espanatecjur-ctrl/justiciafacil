@@ -66,11 +66,14 @@ interface Datos {
   // H2 procesal
   etapa: string; sentenciaFirme: string; situacion: string; ultimaActuacion: string;
   declaradoRebeldia: string; hayAdjudicacionDirecta: string; adjudicacionFirme: string; hayIncidenteNulidad: string; sentenciaEjecutoria: string; detalleProcesal: string;
+  // Cascada · caducidad → prescripción/usucapión
+  hayCaducidadDeclarada: string; fechaCaducidadDeclarada: string; nuevoJuicioFecha: string; enEjecucionSentenciaFirme: string;
   // H3 prescripción/caducidad
   ultimoPago: string; emplazado: string; fechaEmplazamiento: string; tipoAccion: string;
   convenioRatificado: string; convenioFecha: string; plazoPrescManual: string; plazoCaducManual: string;
   // H4 posesión
   quienPosee: string; inicioPosesion: string; buenaFe: string; demandaDespojo: string;
+  actoDirigidoContraElPoseedor: string;
   interpelacionJV: string; interpelacionJVFecha: string;
   interpelacionTipo: string; interpelacionExpediente: string; interpelacionJuzgado: string;
   // H5 cargas
@@ -89,9 +92,11 @@ const VACIO: Datos = {
   hipotecaInscrita: "", prelacion: "", propietario: "", anotaciones: "",
   etapa: "", sentenciaFirme: "", situacion: "", ultimaActuacion: "",
   declaradoRebeldia: "", hayAdjudicacionDirecta: "", adjudicacionFirme: "", hayIncidenteNulidad: "", sentenciaEjecutoria: "", detalleProcesal: "",
+  hayCaducidadDeclarada: "no", fechaCaducidadDeclarada: "", nuevoJuicioFecha: "", enEjecucionSentenciaFirme: "no",
   ultimoPago: "", emplazado: "no", fechaEmplazamiento: "", tipoAccion: "hipotecaria",
   convenioRatificado: "no", convenioFecha: "", plazoPrescManual: "", plazoCaducManual: "",
   quienPosee: "", inicioPosesion: "", buenaFe: "no", demandaDespojo: "no",
+  actoDirigidoContraElPoseedor: "",
   interpelacionJV: "no", interpelacionJVFecha: "",
   interpelacionTipo: "", interpelacionExpediente: "", interpelacionJuzgado: "",
   predial: "", agua: "", condominio: "", fiscales: "", laborales: "", otrosGravamenes: "",
@@ -491,6 +496,9 @@ export function RecorridoActor({
       if (!p.valorComercial && ep.monto_adjudicacion_o_avaluo) c.valorComercial = String(ep.monto_adjudicacion_o_avaluo).replace(/[^0-9.]/g, "");
       if (!p.hayIncidenteNulidad && siNo(ep.hay_incidente_nulidad)) c.hayIncidenteNulidad = siNo(ep.hay_incidente_nulidad)!;
       if (!p.sentenciaEjecutoria && siNo(ep.sentencia_ejecutoria)) c.sentenciaEjecutoria = siNo(ep.sentencia_ejecutoria)!;
+      if (!p.hayCaducidadDeclarada && siNo(ep.hay_caducidad_declarada)) c.hayCaducidadDeclarada = siNo(ep.hay_caducidad_declarada)!;
+      if (!p.fechaCaducidadDeclarada && ep.fecha_caducidad_declarada) c.fechaCaducidadDeclarada = ep.fecha_caducidad_declarada;
+      if (!p.enEjecucionSentenciaFirme && siNo(ep.en_ejecucion_sentencia_firme)) c.enEjecucionSentenciaFirme = siNo(ep.en_ejecucion_sentencia_firme)!;
       if (!p.detalleProcesal && ep.resumen_detalle) c.detalleProcesal = ep.resumen_detalle;
       return Object.keys(c).length ? { ...p, ...c } : p;
     });
@@ -591,17 +599,22 @@ export function RecorridoActor({
     tipoAccion: d.tipoAccion, convenioRatificadoFecha: d.convenioRatificado === "si" ? d.convenioFecha : undefined,
     plazoManualAnios: d.plazoPrescManual ? n(d.plazoPrescManual) : undefined,
     interpelacionFecha: d.interpelacionJV === "si" ? (d.interpelacionJVFecha || undefined) : undefined,
-  }), [d.ultimoPago, d.emplazado, d.fechaEmplazamiento, d.tipoAccion, d.convenioRatificado, d.convenioFecha, d.plazoPrescManual, d.interpelacionJV, d.interpelacionJVFecha]);
+    hayCaducidadDeclarada: d.hayCaducidadDeclarada === "si",
+    nuevoJuicioFecha: d.nuevoJuicioFecha || undefined,
+  }), [d.ultimoPago, d.emplazado, d.fechaEmplazamiento, d.tipoAccion, d.convenioRatificado, d.convenioFecha, d.plazoPrescManual, d.interpelacionJV, d.interpelacionJVFecha, d.hayCaducidadDeclarada, d.nuevoJuicioFecha]);
 
   const rCaduc = useMemo(() => motorCaducidad({
     ultimaActuacion: d.ultimaActuacion, estado: d.estado,
     plazoManualDias: d.plazoCaducManual ? n(d.plazoCaducManual) : undefined,
-  }), [d.ultimaActuacion, d.estado, d.plazoCaducManual]);
+    enEjecucionSentenciaFirme: d.enEjecucionSentenciaFirme === "si",
+  }), [d.ultimaActuacion, d.estado, d.plazoCaducManual, d.enEjecucionSentenciaFirme]);
 
   const rUsuc = useMemo(() => motorUsucapion({
     inicioPosesion: d.inicioPosesion, buenaFe: d.buenaFe === "si", hayDemandaDespojo: d.demandaDespojo === "si",
     hayInterpelacion: d.interpelacionJV === "si",
-  }), [d.inicioPosesion, d.buenaFe, d.demandaDespojo, d.interpelacionJV]);
+    actoDirigidoContraElPoseedor: d.actoDirigidoContraElPoseedor ? d.actoDirigidoContraElPoseedor === "si" : undefined,
+    hayCaducidadDeclarada: d.hayCaducidadDeclarada === "si",
+  }), [d.inicioPosesion, d.buenaFe, d.demandaDespojo, d.interpelacionJV, d.actoDirigidoContraElPoseedor, d.hayCaducidadDeclarada]);
 
   const cargas = n(d.predial) + n(d.agua) + n(d.condominio) + n(d.fiscales) + n(d.laborales) + n(d.otrosGravamenes);
   const hayLaboral = n(d.laborales) > 0;
@@ -1065,6 +1078,10 @@ export function RecorridoActor({
               <Campo label="¿Adjudicación declarada firme (ya no se puede impugnar)?"><SiNo v={d.adjudicacionFirme} on={(x) => set("adjudicacionFirme", x)} /></Campo>
               <Campo label="¿Hay incidente de nulidad de notificaciones?"><SiNo v={d.hayIncidenteNulidad} on={(x) => set("hayIncidenteNulidad", x)} /></Campo>
               <Campo label="¿Sentencia declarada ejecutoria (ya no admite recurso)?"><SiNo v={d.sentenciaEjecutoria} on={(x) => set("sentenciaEjecutoria", x)} /></Campo>
+              <Campo label="¿Hay caducidad de la instancia declarada en este expediente?"><SiNo v={d.hayCaducidadDeclarada} on={(x) => set("hayCaducidadDeclarada", x)} /></Campo>
+              {d.hayCaducidadDeclarada === "si" && <Campo label="Fecha de la declaración de caducidad"><input type="date" className={inp} value={d.fechaCaducidadDeclarada} onChange={(e) => set("fechaCaducidadDeclarada", e.target.value)} /></Campo>}
+              {d.hayCaducidadDeclarada === "si" && <Campo label="¿Hubo demanda NUEVA después de la caducidad? (fecha, si aplica)"><input type="date" className={inp} value={d.nuevoJuicioFecha} onChange={(e) => set("nuevoJuicioFecha", e.target.value)} /></Campo>}
+              <Campo label="¿Ya está en ejecución de sentencia firme? (excepción a la caducidad)"><SiNo v={d.enEjecucionSentenciaFirme} on={(x) => set("enEjecucionSentenciaFirme", x)} /></Campo>
             </div>
             <Campo label="Detalle procesal (rebeldía, incidentes, adjudicación — lo que no cabe arriba)"><textarea className={inp} rows={3} value={d.detalleProcesal} onChange={(e) => set("detalleProcesal", e.target.value)} placeholder="Ej. Incidente de nulidad resuelto parcialmente procedente; se ordenó notificar de nuevo…" /></Campo>
             {d.declaradoRebeldia === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Demandado en rebeldía", detalle: "No contestó la demanda — suele agilizar el juicio a favor de DIIPA." }} />}
@@ -1072,6 +1089,8 @@ export function RecorridoActor({
             {d.adjudicacionFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Adjudicación firme", detalle: "Ya no se puede impugnar — la propiedad quedó consolidada a favor del actor." }} />}
             {d.hayIncidenteNulidad === "si" && <Aviso r={{ semaforo: "naranja", etiqueta: "Incidente de nulidad", detalle: "Puede atrasar el juicio o reabrir plazos — revisa cómo se resolvió." }} />}
             {d.sentenciaFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "Sentencia firme a favor", detalle: "Sube mucho el valor de la cesión." }} />}
+            {d.hayCaducidadDeclarada === "si" && !d.nuevoJuicioFecha && <Aviso r={{ semaforo: "rojo", etiqueta: "Caducidad declarada", detalle: "Esa instancia se equipara a desestimación de la demanda: el emplazamiento deja de interrumpir la prescripción, y si había demanda de despojo, tampoco interrumpe la usucapión. Revisa los semáforos de prescripción y usucapión más abajo." }} />}
+            {d.enEjecucionSentenciaFirme === "si" && <Aviso r={{ semaforo: "verde", etiqueta: "En ejecución de sentencia firme", detalle: "La caducidad de la instancia no opera en esta etapa (excepción)." }} />}
             {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede suspenderse o revertirse lo ganado. Riesgo alto para comprar la cesión." }} />}
             {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido; no avanza hasta que se levante la suspensión." }} />}
             {etapaAvanzada && <Aviso r={{ semaforo: "verde", etiqueta: "Etapa avanzada", detalle: `El juicio está en ${d.etapa}: cerca de la recuperación.` }} />}
@@ -1185,6 +1204,7 @@ export function RecorridoActor({
               <Campo label="Posesión desde (fecha)"><input type="date" className={inp} value={d.inicioPosesion} onChange={(e) => set("inicioPosesion", e.target.value)} /></Campo>
               <Campo label="¿Tiene título aparente (buena fe)?"><SiNo v={d.buenaFe} on={(x) => set("buenaFe", x)} /></Campo>
               <Campo label="¿Hay demanda de despojo?"><SiNo v={d.demandaDespojo} on={(x) => set("demandaDespojo", x)} /></Campo>
+              {d.demandaDespojo === "si" && <Campo label="¿Esa demanda de despojo fue dirigida contra el poseedor ACTUAL (no contra el deudor original)?"><SiNo v={d.actoDirigidoContraElPoseedor} on={(x) => set("actoDirigidoContraElPoseedor", x)} /></Campo>}
             </div>
             {usaUsucapion ? <Aviso r={rUsuc} /> : <p className="text-xs text-muted-foreground">El motor de usucapión se activa cuando hay un tercero poseyendo o la posición es Sucesorio.</p>}
           </div>
