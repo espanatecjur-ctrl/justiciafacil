@@ -36,6 +36,7 @@ const GRUPOS_RESPUESTAS: { titulo: string; campos: { clave: string; etiqueta: st
       { clave: "sentenciaFirme", etiqueta: "Sentencia firme" },
       { clave: "situacion", etiqueta: "Situación" },
       { clave: "ultimaActuacion", etiqueta: "Última actuación" },
+      { clave: "ultimaActuacionTexto", etiqueta: "Texto de la última actuación" },
       { clave: "declaradoRebeldia", etiqueta: "Declarado rebeldía" },
       { clave: "hayAdjudicacionDirecta", etiqueta: "Adjudicación directa" },
       { clave: "adjudicacionFirme", etiqueta: "Adjudicación firme" },
