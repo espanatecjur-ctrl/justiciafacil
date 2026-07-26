@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitBranch, ExternalLink, Trash2, Star } from "lucide-react";
+import { GitBranch, ExternalLink, Trash2, Star, GitMerge } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { registrarEvento } from "@/lib/cronologia-caso";
 
@@ -71,6 +71,41 @@ export function BannerCoincidencias({ caso, onNavegar }: { caso: CasoJuridico; o
     setCoincs((p) => p.filter((x) => x.id !== co.id));
     setAccion(null);
   };
+  const unir = async (co: Coincidencia) => {
+    if (!confirm(
+      `¿Unir "${co.expediente || co.id}" (${co.area}) a este expediente?\n\n` +
+      `NO se borra ni se pisa nada: todo lo que ya se trabajó en ese expediente ` +
+      `(pre-dictamen, dictamen, documentos, tareas, firmas — en cualquier área) ` +
+      `se mueve a este caso y queda visible por separado en "Línea de vida por áreas". ` +
+      `El expediente "${co.expediente || co.id}" queda archivado como repetido.\n\n` +
+      `Esta acción no se puede deshacer sola desde aquí — se necesitaría ayuda técnica para revertirla.`
+    )) return;
+    setAccion(co.id);
+    try {
+      let usuario: string | undefined;
+      try {
+        const { getAuth } = await import("@/lib/auth");
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        usuario = data?.session?.user?.email ?? undefined;
+      } catch { /* si falla, se une sin registrar quién */ }
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/unir_casos_duplicados`, {
+        method: "POST", headers,
+        body: JSON.stringify({ p_principal_id: caso.id, p_duplicado_id: co.id, p_usuario: usuario }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const res = await r.json();
+      await registrarEvento({
+        caso_id: caso.id, expediente: caso.expediente, area: areaDe(caso.unidad), tipo: "coincidencia",
+        texto: `Unido el expediente ${co.expediente || co.id} (${co.area}) — se movieron ${res?.total_movido ?? 0} registros. Queda archivado como repetido.`,
+      });
+      setCoincs((p) => p.filter((x) => x.id !== co.id));
+      alert(`Listo. Se movieron ${res?.total_movido ?? 0} registros de "${co.expediente || co.id}" a este expediente.`);
+    } catch (e: any) {
+      alert("No se pudo unir: " + (e?.message || "error desconocido"));
+    }
+    setAccion(null);
+  };
   const marcarEste = async () => {
     setAccion(caso.id);
     await patch(caso.id, { es_principal: true });
@@ -86,7 +121,7 @@ export function BannerCoincidencias({ caso, onNavegar }: { caso: CasoJuridico; o
         <p className="flex items-center gap-2 text-sm font-semibold text-amber-800"><GitBranch className="h-4 w-4" /> {coincs.length} coincidencia{coincs.length > 1 ? "s" : ""} — revisar</p>
         <button onClick={marcarEste} disabled={accion === caso.id} className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"><Star className="h-3 w-3" /> Este es el verdadero</button>
       </div>
-      <p className="mt-0.5 text-xs text-amber-700">Comparte garantía, dirección, expediente o cliente con otros. Escoge cuál es el verdadero (⭐), deja las dos si ambas valen, o manda a papelera las repetidas (🗑).</p>
+      <p className="mt-0.5 text-xs text-amber-700">Comparte garantía, dirección, expediente o cliente con otros. Escoge cuál es el verdadero (⭐), únelo aquí (🔀 mueve su información sin perder nada), o manda a papelera las repetidas (🗑) si no aportan nada.</p>
       <div className="mt-2 space-y-1.5">
         {coincs.map((co) => (
           <div key={co.id} className="flex flex-wrap items-center gap-1.5 rounded-md border border-amber-200 bg-white px-2.5 py-1.5 text-xs">
@@ -97,6 +132,7 @@ export function BannerCoincidencias({ caso, onNavegar }: { caso: CasoJuridico; o
             <span className="flex flex-wrap gap-1">{co.motivos.map((m) => <span key={m} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800">{m}</span>)}</span>
             <span className="ml-auto flex items-center gap-1">
               <button onClick={() => marcarPrincipal(co.id, co.expediente, co.area)} disabled={accion === co.id} title="Marcar como el verdadero" className="grid h-6 w-6 place-items-center rounded hover:bg-amber-100"><Star className="h-3.5 w-3.5 text-amber-600" /></button>
+              <button onClick={() => unir(co)} disabled={accion === co.id} title="Unir al caso — mueve su información aquí (no se pierde nada)" className="grid h-6 w-6 place-items-center rounded hover:bg-emerald-100"><GitMerge className="h-3.5 w-3.5 text-emerald-700" /></button>
               <button onClick={() => onNavegar(co.id)} title="Abrir para revisar" className="grid h-6 w-6 place-items-center rounded hover:bg-amber-100"><ExternalLink className="h-3.5 w-3.5 text-sky-700" /></button>
               <button onClick={() => aPapelera(co)} disabled={accion === co.id} title="Mandar a papelera (repetido)" className="grid h-6 w-6 place-items-center rounded hover:bg-red-50"><Trash2 className="h-3.5 w-3.5 text-red-600" /></button>
             </span>
