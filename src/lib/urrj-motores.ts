@@ -26,9 +26,12 @@ export interface PlazoEstado {
 
 export const PLAZOS_ESTADO: Record<string, PlazoEstado> = {
   Federal:   { estado: "Federal",   caducidadDias: 120, caducidadHabiles: true,  fundamento: "Art. 389 CNPCF (días hábiles)" },
-  Jalisco:   { estado: "Jalisco",   caducidadDias: 180, caducidadHabiles: false, fundamento: "CPC Jalisco (180 días naturales, mientras entra CNPCF)" },
-  Sinaloa:   { estado: "Sinaloa",   caducidadDias: 180, caducidadHabiles: false, fundamento: "Art. 137 BIS CPC Sinaloa (180 días naturales)" },
-  "Baja California Sur": { estado: "Baja California Sur", caducidadDias: 180, caducidadHabiles: false, fundamento: "Art. 124 CPC-BCS (180 días naturales)" },
+  Jalisco:   { estado: "Jalisco",   caducidadDias: 180, caducidadHabiles: false, fundamento: "Art. 29 bis CPC Jalisco (180 días naturales, mientras entra CNPCF)" },
+  // Corregido: el artículo correcto de Sinaloa es el 34 bis (no el 137 bis).
+  Sinaloa:   { estado: "Sinaloa",   caducidadDias: 180, caducidadHabiles: false, fundamento: "Art. 34 bis CPC Sinaloa (180 días naturales)" },
+  // Corregido: el artículo correcto de BCS es el 137 (no el 124); son 6 meses naturales, no 180 días fijos.
+  // Desde la reforma de 2014, el cómputo arranca desde la ADMISIÓN de la demanda, no desde el emplazamiento.
+  "Baja California Sur": { estado: "Baja California Sur", caducidadDias: 182, caducidadHabiles: false, fundamento: "Art. 137 CPC-BCS (6 meses naturales, ~182 días, desde la admisión de la demanda — reforma 2014)" },
   CDMX:      { estado: "CDMX",      caducidadDias: 120, caducidadHabiles: false, fundamento: "Art. 137 BIS CPC CDMX (120 días); CNPCF desde jun-2026" },
 };
 
@@ -98,6 +101,12 @@ export interface EntradaPrescripcion {
   convenioRatificadoFecha?: string; // si hay convenio ratificado
   plazoManualAnios?: number;     // opción: el abogado sobrescribe el plazo
   interpelacionFecha?: string;   // interpelación por jurisdicción voluntaria — interrumpe (Art. 1168 CCF)
+  // CASCADA · caducidad → prescripción: si esa instancia cayó en caducidad, la ley la
+  // equipara a la desestimación de la demanda (Jalisco/Sinaloa) — el emplazamiento de
+  // ESA instancia deja de contar como interrupción. Si después hubo una demanda NUEVA
+  // (nuevoJuicioFecha), esa sí interrumpe desde su propia fecha.
+  hayCaducidadDeclarada?: boolean;
+  nuevoJuicioFecha?: string;     // fecha de la demanda posterior a la caducidad, si la hay
 }
 
 export function motorPrescripcion(e: EntradaPrescripcion): ResultadoMotor {
@@ -110,9 +119,13 @@ export function motorPrescripcion(e: EntradaPrescripcion): ResultadoMotor {
 
   // Interrupciones (Art. 1168 CCF): el emplazamiento de la demanda y la interpelación
   // judicial por jurisdicción voluntaria. La prescripción se detiene en la MÁS TEMPRANA.
+  // Si esa instancia cayó en caducidad, la interrupción por emplazamiento se anula
+  // (se equipara a desestimación de la demanda — Jalisco art. 29 bis, Sinaloa art. 34 bis).
   const cortes: { fecha: string; label: string }[] = [];
-  if (e.emplazado && e.fechaEmplazamiento) cortes.push({ fecha: e.fechaEmplazamiento, label: "emplazamiento" });
+  const emplazamientoValido = e.emplazado && e.fechaEmplazamiento && !e.hayCaducidadDeclarada;
+  if (emplazamientoValido) cortes.push({ fecha: e.fechaEmplazamiento!, label: "emplazamiento" });
   if (e.interpelacionFecha) cortes.push({ fecha: e.interpelacionFecha, label: "interpelación (jurisdicción voluntaria)" });
+  if (e.hayCaducidadDeclarada && e.nuevoJuicioFecha) cortes.push({ fecha: e.nuevoJuicioFecha, label: "nueva demanda (tras la caducidad)" });
   cortes.sort((a, b) => a.fecha.localeCompare(b.fecha));
   const corteEvento = cortes[0];
 
@@ -125,12 +138,15 @@ export function motorPrescripcion(e: EntradaPrescripcion): ResultadoMotor {
   const base = e.convenioRatificadoFecha ? "convenio ratificado" : "último pago";
   const corte = corteEvento ? corteEvento.label : "hoy";
   const etiqueta = sem === "rojo" ? "Prescrita" : sem === "naranja" ? "Crítica" : sem === "amarillo" ? "Media" : "Vigente";
+  const avisoCaducidad = e.hayCaducidadDeclarada && e.emplazado && !e.nuevoJuicioFecha
+    ? " ⚠ Hubo caducidad declarada en esa instancia: el emplazamiento YA NO interrumpe (se equipara a desestimación de la demanda), por eso el conteo sigue corriendo desde el último pago."
+    : "";
 
   return {
     semaforo: sem,
     etiqueta,
     dato: `${anios.toFixed(1)} de ${plazo} años`,
-    detalle: `${tipo.nombre}: ${plazo} años (${tipo.fundamento}). Del ${base} al ${corte} van ${anios.toFixed(1)} años${corteEvento ? ` (interrumpida por ${corteEvento.label})` : ""}.${e.convenioRatificadoFecha ? " El convenio ratificado reinició el conteo." : ""}`,
+    detalle: `${tipo.nombre}: ${plazo} años (${tipo.fundamento}). Del ${base} al ${corte} van ${anios.toFixed(1)} años${corteEvento ? ` (interrumpida por ${corteEvento.label})` : ""}.${e.convenioRatificadoFecha ? " El convenio ratificado reinició el conteo." : ""}${avisoCaducidad}`,
   };
 }
 
@@ -144,10 +160,16 @@ export interface EntradaCaducidad {
   estado: string;            // clave de PLAZOS_ESTADO
   plazoManualDias?: number;  // opción: el abogado sobrescribe
   habilesManual?: boolean;
+  // Excepción: Sinaloa (y otros estados) exceptúan la caducidad cuando el juicio
+  // ya está en ejecución de sentencia firme — ahí no corre el plazo de caducidad.
+  enEjecucionSentenciaFirme?: boolean;
 }
 
 export function motorCaducidad(e: EntradaCaducidad): ResultadoMotor {
   if (!e.ultimaActuacion) return { semaforo: "gris", etiqueta: "Falta dato", detalle: "Captura la fecha de la última actuación procesal." };
+  if (e.enEjecucionSentenciaFirme) {
+    return { semaforo: "verde", etiqueta: "No aplica", detalle: "El juicio ya está en ejecución de sentencia firme: la caducidad de la instancia no opera en esta etapa." };
+  }
   const cfg = PLAZOS_ESTADO[e.estado] || PLAZOS_ESTADO.Sinaloa;
   const plazoDias = e.plazoManualDias && e.plazoManualDias > 0 ? e.plazoManualDias : cfg.caducidadDias;
   const habiles = e.habilesManual ?? cfg.caducidadHabiles;
@@ -180,8 +202,14 @@ export function motorCaducidad(e: EntradaCaducidad): ResultadoMotor {
 export interface EntradaUsucapion {
   inicioPosesion: string;     // desde cuándo posee
   buenaFe: boolean;           // con justo título = buena fe
-  hayDemandaDespojo: boolean; // interrumpe
+  hayDemandaDespojo: boolean; // interrumpe (SOLO si va dirigida contra el poseedor mismo)
   hayInterpelacion?: boolean; // interpelación por jurisdicción voluntaria — también interrumpe (Art. 1168 CCF)
+  // Si la demanda de despojo NO fue dirigida contra el poseedor actual (ej. fue contra
+  // el deudor original, y el poseedor es un tercero distinto), NO interrumpe su usucapión.
+  actoDirigidoContraElPoseedor?: boolean;
+  // CASCADA · caducidad → usucapión: si la demanda/interpelación que interrumpía cayó
+  // en caducidad, esa interrupción también se anula — el reloj de usucapión sigue corriendo.
+  hayCaducidadDeclarada?: boolean;
 }
 
 export function motorUsucapion(e: EntradaUsucapion): ResultadoMotor {
@@ -190,19 +218,29 @@ export function motorUsucapion(e: EntradaUsucapion): ResultadoMotor {
   const anios = diasNaturales(e.inicioPosesion, hoyISO()) / 365.25;
   const cumplePlazo = anios >= requeridos;
 
-  if (e.hayDemandaDespojo || e.hayInterpelacion) {
-    const via = e.hayDemandaDespojo && e.hayInterpelacion
+  // El despojo solo interrumpe si fue contra el poseedor mismo, y solo si esa instancia
+  // no cayó en caducidad (si cayó, se equipara a desestimación y deja de interrumpir).
+  const despojoValido = e.hayDemandaDespojo && (e.actoDirigidoContraElPoseedor ?? true) && !e.hayCaducidadDeclarada;
+  const interpelacionValida = e.hayInterpelacion && !e.hayCaducidadDeclarada;
+
+  if (despojoValido || interpelacionValida) {
+    const via = despojoValido && interpelacionValida
       ? "demanda de despojo e interpelación por jurisdicción voluntaria"
-      : e.hayDemandaDespojo ? "demanda de despojo" : "interpelación judicial por jurisdicción voluntaria";
+      : despojoValido ? "demanda de despojo" : "interpelación judicial por jurisdicción voluntaria";
     return { semaforo: "verde", etiqueta: "Interrumpida", dato: `${anios.toFixed(1)} años`,
       detalle: `La usucapión está interrumpida por ${via} (Art. 1168 CCF): no corre a favor del tercero. Buena señal para comprar la cesión.` };
   }
+  const avisoIneficaz: string[] = [];
+  if (e.hayDemandaDespojo && e.actoDirigidoContraElPoseedor === false) avisoIneficaz.push("la demanda de despojo NO fue contra el poseedor actual, así que no interrumpe su usucapión");
+  if ((e.hayDemandaDespojo || e.hayInterpelacion) && e.hayCaducidadDeclarada) avisoIneficaz.push("esa instancia cayó en caducidad, así que la interrupción se anuló");
+  const nota = avisoIneficaz.length ? ` ⚠ ${avisoIneficaz.join("; ")}.` : "";
+
   if (cumplePlazo) {
     return { semaforo: "rojo", etiqueta: "Riesgo de usucapión", dato: `${anios.toFixed(1)} de ${requeridos} años`,
-      detalle: `El poseedor lleva ${anios.toFixed(1)} años (${e.buenaFe ? "buena fe, 5 años, Art. 1152 CCF" : "mala fe, 10 años, Art. 1152 CCF"}). Ya podría alegar propiedad.` };
+      detalle: `El poseedor lleva ${anios.toFixed(1)} años (${e.buenaFe ? "buena fe, 5 años, Art. 1152 CCF" : "mala fe, 10 años, Art. 1152 CCF"}). Ya podría alegar propiedad.${nota}` };
   }
   return { semaforo: "verde", etiqueta: "Sin riesgo aún", dato: `${anios.toFixed(1)} de ${requeridos} años`,
-    detalle: `El poseedor lleva ${anios.toFixed(1)} años de ${requeridos} requeridos (${e.buenaFe ? "buena fe" : "mala fe"}). Todavía no alcanza para usucapir.` };
+    detalle: `El poseedor lleva ${anios.toFixed(1)} años de ${requeridos} requeridos (${e.buenaFe ? "buena fe" : "mala fe"}). Todavía no alcanza para usucapir.${nota}` };
 }
 
 // ============================================================
