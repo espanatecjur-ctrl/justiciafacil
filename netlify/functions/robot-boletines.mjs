@@ -33,9 +33,17 @@ const headers = {
   "Content-Type": "application/json",
 };
 
-// Tope de expedientes por corrida — si hay más, se van completando en
-// las siguientes corridas diarias (evita que una corrida se tarde horas).
-const TOPE_POR_CORRIDA = 150;
+// Tope de expedientes por corrida — deliberadamente chico: cada llamada al
+// robot de Google puede tardar unos segundos, y las funciones de Netlify
+// se matan solas si se pasan de tiempo (eso es justo lo que pasó antes:
+// error 502 por intentar 56+ expedientes de un jalón). Con un lote chico
+// y girando el punto de inicio cada día (PRESUPUESTO_MS más abajo), en
+// unos días se cubren todos sin que ninguna corrida se pase de tiempo.
+const TOPE_POR_CORRIDA = 12;
+// Presupuesto de tiempo total por corrida (además del tope de expedientes,
+// por si algún caso se tarda más de lo normal). Se corta antes de que
+// Netlify mate la función sola.
+const PRESUPUESTO_MS = 8000;
 
 const norm = (s) => String(s || "")
   .toLowerCase()
@@ -59,11 +67,17 @@ const BCS_ORGANOS = [
   "Tercera Sala Unitaria Civil y de Justicia Administrativa (Materia Civil)",
 ];
 
+async function fetchConTope(url, ms, opts) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort("timeout"), ms);
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }); } finally { clearTimeout(t); }
+}
+
 async function cargarCatalogos() {
   const [bj, zm, fo] = await Promise.all([
-    fetch(`${SUPABASE_URL}/rest/v1/boletin_juzgado?select=nombre_distrito,nombre_juzgado`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
-    fetch(`${ROBOT}/jal-judges`).then((r) => r.json()).catch(() => ({ juzgados: [] })),
-    fetch(`${ROBOT}/jalf-judges`).then((r) => r.json()).catch(() => ({ juzgados: [] })),
+    fetchConTope(`${SUPABASE_URL}/rest/v1/boletin_juzgado?select=nombre_distrito,nombre_juzgado`, 4000, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    fetchConTope(`${ROBOT}/jal-judges`, 4000).then((r) => r.json()).catch(() => ({ juzgados: [] })),
+    fetchConTope(`${ROBOT}/jalf-judges`, 4000).then((r) => r.json()).catch(() => ({ juzgados: [] })),
   ]);
   const jalisco = [
     ...(zm.juzgados || []).map((j) => ({ code: j.code, name: (j.name || "").trim(), foraneo: false })),
@@ -129,7 +143,7 @@ async function buscarAcuerdos(expediente, match) {
     url = `${ROBOT}/${match.endpoint}?exp=${encodeURIComponent(expediente)}&judged=${encodeURIComponent(match.judged)}`;
   }
   const ctrl = new AbortController();
-  const tope = setTimeout(() => ctrl.abort("timeout"), 45000);
+  const tope = setTimeout(() => ctrl.abort("timeout"), 6000);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
     if (!r.ok) return { ok: false };
@@ -156,15 +170,24 @@ function juzgadoLabel(match) {
 export default async () => {
   const inicio = Date.now();
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente,entidad,juzgado&archivado=eq.false&limit=2000`, { headers });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente,entidad,juzgado&archivado=eq.false&limit=2000&order=id.asc`, { headers });
     const todos = r.ok ? await r.json() : [];
-    const casos = todos.filter((c) => (c.expediente || "").trim() && (c.juzgado || "").trim()).slice(0, TOPE_POR_CORRIDA);
+    const conJuzgado = todos.filter((c) => (c.expediente || "").trim() && (c.juzgado || "").trim());
+    // Rotación diaria: cada día se arranca más adelante en la lista (y da la
+    // vuelta al llegar al final) — así, en varios días, se cubren TODOS los
+    // expedientes, no siempre los mismos primeros del lote.
+    const diaDelAno = Math.floor(Date.now() / 86400000);
+    const inicioLote = conJuzgado.length ? (diaDelAno * TOPE_POR_CORRIDA) % conJuzgado.length : 0;
+    const casos = conJuzgado.length
+      ? Array.from({ length: Math.min(TOPE_POR_CORRIDA, conJuzgado.length) }, (_, i) => conJuzgado[(inicioLote + i) % conJuzgado.length])
+      : [];
     const catalogos = await cargarCatalogos();
 
-    let nuevos = 0, revisados = 0, conError = 0;
+    let nuevos = 0, revisados = 0, conError = 0, cortadoPorTiempo = false;
     const sinMatch = [];
 
     for (const c of casos) {
+      if (Date.now() - inicio > PRESUPUESTO_MS) { cortadoPorTiempo = true; break; }
       const match = identificarJuzgado(c.juzgado, c.entidad, catalogos);
       if (!match) { sinMatch.push(`${c.expediente} (${c.juzgado})`); continue; }
       revisados++;
@@ -189,15 +212,16 @@ export default async () => {
       if (ins.ok) { const creados = await ins.json().catch(() => []); nuevos += Array.isArray(creados) ? creados.length : 0; }
     }
 
-    const detalle = `${casos.length} expedientes activos con juzgado capturado · ${revisados} identificados y revisados · ${sinMatch.length} sin poder identificar el juzgado · ${conError} con error de conexión · ${nuevos} actuación(es) nueva(s) guardada(s). Tardó ${Math.round((Date.now() - inicio) / 1000)}s.`
+    const procesados = revisados + sinMatch.length + conError;
+    const detalle = `Lote de hoy: ${procesados}/${casos.length} de este turno (empezando en la posición ${inicioLote} de ${conJuzgado.length} expedientes totales con juzgado) · ${revisados} identificados y revisados · ${sinMatch.length} sin poder identificar el juzgado · ${conError} con error de conexión · ${nuevos} actuación(es) nueva(s) guardada(s)${cortadoPorTiempo ? " · CORTADO por tiempo, se sigue mañana" : ""}. Tardó ${Math.round((Date.now() - inicio) / 1000)}s.`
       + (sinMatch.length ? `\nSin identificar (revisar el campo "Juzgado" de estos expedientes): ${sinMatch.slice(0, 20).join(" · ")}${sinMatch.length > 20 ? "…" : ""}` : "");
 
     await fetch(`${SUPABASE_URL}/rest/v1/robot_log`, {
       method: "POST", headers,
-      body: JSON.stringify({ fuente: "robot", total_expedientes: casos.length, nuevos, estado: "ok", detalle }),
+      body: JSON.stringify({ fuente: "robot", total_expedientes: conJuzgado.length, nuevos, estado: "ok", detalle }),
     });
 
-    return new Response(JSON.stringify({ ok: true, total: casos.length, revisados, sinMatch: sinMatch.length, nuevos }), {
+    return new Response(JSON.stringify({ ok: true, totalConJuzgado: conJuzgado.length, esteLote: casos.length, revisados, sinMatch: sinMatch.length, conError, nuevos, cortadoPorTiempo }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
