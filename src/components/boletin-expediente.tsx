@@ -3,7 +3,8 @@
 // pantalla, y deja consultar el boletín en vivo (mismo robotsito).
 import { useState } from "react";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
-import { Megaphone, Search, Loader2, AlertTriangle } from "lucide-react";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { Megaphone, Search, Loader2, AlertTriangle, CheckCheck } from "lucide-react";
 
 const TEAL = "#0C5C46";
 
@@ -14,6 +15,7 @@ interface Acuerdo {
   texto: string | null;
   tipo_acuerdo: string | null;
   urgente: boolean | null;
+  leido?: boolean | null;
 }
 
 // Fecha "YYYY-MM-DD" como local (sin brincar de día)
@@ -30,14 +32,35 @@ const TIPO_COLOR: Record<string, string> = {
   Edicto: "bg-orange-100 text-orange-700", Almoneda: "bg-rose-100 text-rose-700", RPP: "bg-teal-100 text-teal-700",
 };
 
-export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando }: {
+export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando, onGuardado }: {
   acuerdos: Acuerdo[];
   expediente: string | null;
   sinJuzgado: boolean;
   cargando?: boolean;
+  /** Se llama cuando el usuario guarda actuaciones desde la búsqueda en vivo,
+   *  para que la pantalla que la usa recargue la lista y ya se vean sin
+   *  tener que refrescar la página a mano. */
+  onGuardado?: () => void;
 }) {
   const [verBuscar, setVerBuscar] = useState(false);
+  const [marcando, setMarcando] = useState(false);
   const ultima = acuerdos[0] || null;
+  const hayNuevas = acuerdos.some((a) => a.leido === false);
+
+  const marcarLeidas = async () => {
+    if (!expediente) return;
+    setMarcando(true);
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?expediente=eq.${encodeURIComponent(expediente)}&leido=eq.false`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ leido: true }),
+      });
+      onGuardado?.();
+    } finally {
+      setMarcando(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -47,9 +70,16 @@ export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando }
           <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: TEAL }}>
             <Megaphone className="h-4 w-4" /> Actuaciones del boletín
           </p>
-          <button onClick={() => setVerBuscar((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold" style={{ color: TEAL }}>
-            <Search className="h-3.5 w-3.5" /> {verBuscar ? "Ocultar búsqueda" : "Buscar en el boletín ahora"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {hayNuevas && (
+              <button onClick={marcarLeidas} disabled={marcando} className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60">
+                <CheckCheck className="h-3.5 w-3.5" /> Marcar como leídas
+              </button>
+            )}
+            <button onClick={() => setVerBuscar((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold" style={{ color: TEAL }}>
+              <Search className="h-3.5 w-3.5" /> {verBuscar ? "Ocultar búsqueda" : "Buscar en el boletín ahora"}
+            </button>
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {cargando ? "Cargando…" : acuerdos.length > 0
@@ -59,8 +89,8 @@ export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando }
 
         {verBuscar && (
           <div className="mt-3 border-t border-border pt-3">
-            <p className="mb-2 text-[11px] text-muted-foreground">Consulta en vivo (no espera a la corrida de las 9 AM). Elige jurisdicción + juzgado y busca el expediente.</p>
-            <BuscadorBoletin expedienteInicial={expediente || ""} />
+            <p className="mb-2 text-[11px] text-muted-foreground">Consulta en vivo (no espera a la corrida de las 9 AM). Elige jurisdicción + juzgado, busca el expediente y dale "Guardar" — se queda aquí y en cualquier otra parte que use el boletín de este expediente. Si más adelante salen actuaciones nuevas (por el robot diario o por otra búsqueda), se agregan sin duplicar las que ya tienes.</p>
+            <BuscadorBoletin expedienteInicial={expediente || ""} onGuardadoEnFicha={onGuardado} />
           </div>
         )}
       </div>
@@ -82,6 +112,7 @@ export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando }
             <div key={a.id} className={`rounded-lg border p-3 ${a.urgente ? "border-red-300 bg-red-50" : "border-border bg-card"}`}>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
+                  {a.leido === false && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">● NUEVO</span>}
                   {a.tipo_acuerdo && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TIPO_COLOR[a.tipo_acuerdo] || "bg-muted text-muted-foreground"}`}>{a.tipo_acuerdo}</span>}
                   {a.urgente && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">URGENTE</span>}
                 </div>
