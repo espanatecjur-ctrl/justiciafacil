@@ -128,6 +128,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [modulo, setModulo] = useState<"general" | "subjuicios" | "documentos" | "boletin">("general");
   const [acuerdos, setAcuerdos] = useState<any[]>([]);
   const [cargandoAc, setCargandoAc] = useState(false);
+  const [refrescoAc, setRefrescoAc] = useState(0);
   useEffect(() => {
     if (!garantia.expediente) { setAcuerdos([]); return; }
     setCargandoAc(true);
@@ -136,7 +137,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       .then((rows: any[]) => setAcuerdos(rows || []))
       .catch(() => setAcuerdos([]))
       .finally(() => setCargandoAc(false));
-  }, [garantia.expediente]);
+  }, [garantia.expediente, refrescoAc]);
 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
 
@@ -780,6 +781,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
           expediente={garantia.expediente || ""}
           sinJuzgado={!garantia.juzgado}
           cargando={cargandoAc}
+          onGuardado={() => setRefrescoAc((x) => x + 1)}
         />
       )}
     </div>
