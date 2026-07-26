@@ -39,11 +39,13 @@ const headers = {
 // error 502 por intentar 56+ expedientes de un jalón). Con un lote chico
 // y girando el punto de inicio cada día (PRESUPUESTO_MS más abajo), en
 // unos días se cubren todos sin que ninguna corrida se pase de tiempo.
-const TOPE_POR_CORRIDA = 6;
+const TOPE_POR_CORRIDA = 8;
 // Presupuesto de tiempo total por corrida (además del tope de expedientes,
 // por si algún caso se tarda más de lo normal). Se corta antes de que
-// Netlify mate la función sola. (25s no tronó en la prueba real.)
-const PRESUPUESTO_MS = 12000;
+// Netlify mate la función sola. (25s ya funcionó sin tronar; los
+// catálogos por sí solos gastan ~8s, así que se deja margen para que
+// alcance para varios casos después de cargarlos.)
+const PRESUPUESTO_MS = 30000;
 
 const norm = (s) => String(s || "")
   .toLowerCase()
@@ -156,11 +158,11 @@ async function buscarAcuerdos(expediente, match) {
   const tope = setTimeout(() => ctrl.abort("timeout"), 12000);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
-    if (!r.ok) return { ok: false };
+    if (!r.ok) return { ok: false, motivo: `código ${r.status}` };
     const data = await r.json();
     return { ok: true, acuerdos: data.acuerdos || [] };
-  } catch {
-    return { ok: false };
+  } catch (e) {
+    return { ok: false, motivo: e?.name === "AbortError" || String(e).includes("timeout") ? "tiempo agotado" : String(e).slice(0, 80) };
   } finally {
     clearTimeout(tope);
   }
@@ -202,7 +204,7 @@ export default async () => {
       if (!match) { sinMatch.push(`${c.expediente} (${c.juzgado})`); continue; }
       revisados++;
       const res = await buscarAcuerdos(c.expediente, match);
-      if (!res.ok) { conError++; conErrorLista.push(c.expediente); continue; }
+      if (!res.ok) { conError++; conErrorLista.push(`${c.expediente} (${res.motivo || "sin detalle"})`); continue; }
       if (!res.acuerdos.length) continue;
 
       const ent = entidadLabel(match); const juz = juzgadoLabel(match);
