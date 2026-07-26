@@ -86,6 +86,24 @@ async function cargarCatalogos() {
   return { sinaloa: bj, jalisco };
 }
 
+// Palabras que aparecen en casi cualquier nombre de juzgado y no ayudan a
+// distinguir uno de otro — se ignoran al comparar.
+const RELLENO = new Set(["juzgado","de","del","en","el","la","los","las","primera","instancia","ramo","distrito","judicial","especializado","especializada","materia","estado"]);
+const palabrasClave = (s) => norm(s).split(" ").filter((w) => w && !RELLENO.has(w));
+
+// Compara por PALABRAS CLAVE en vez de frase exacta: "Juzgado Segundo Civil"
+// vs "JUZGADO SEGUNDO DE PRIMERA INSTANCIA DEL RAMO CIVIL..." antes no
+// coincidían (el texto real intercala palabras) — ahora sí, porque a los
+// dos les quedan las mismas palabras clave: ["segundo","civil"]. Exige que
+// TODAS las palabras clave del catálogo (el lado corto/limpio) estén
+// presentes en el texto del expediente (el lado largo/libre).
+function coincideJuzgado(nombreCatalogo, textoExpediente) {
+  const claves = palabrasClave(nombreCatalogo);
+  if (claves.length === 0) return false;
+  const enExp = new Set(palabrasClave(textoExpediente));
+  return claves.every((k) => enExp.has(k));
+}
+
 // Intenta identificar a qué juzgado del catálogo corresponde el texto
 // libre capturado en el expediente. Devuelve null si no hay coincidencia
 // razonable (no adivina a fuerza).
@@ -99,17 +117,13 @@ function identificarJuzgado(textoJuzgado, entidadTexto, catalogos) {
   // y varios casos capturan la ciudad en vez de "Jalisco" literal).
   const SENAL_JALISCO = /jalisco|guadalajara|zapopan|tlaquepaque|tonala|tlajomulco|partido judicial/;
   if (SENAL_JALISCO.test(nEnt) || SENAL_JALISCO.test(nJuz)) {
-    let mejor = null;
-    for (const j of catalogos.jalisco) {
-      const nj = norm(j.name);
-      if (nj && (nJuz.includes(nj) || nj.includes(nJuz))) { mejor = j; break; }
-    }
+    const mejor = catalogos.jalisco.find((j) => j.name && coincideJuzgado(j.name, textoJuzgado));
     if (mejor) return { estado: "jalisco", endpoint: mejor.foraneo ? "jalf-leer" : "jal-leer", judged: mejor.code };
     return null;
   }
   // ¿Suena a La Paz / BCS?
   if (nEnt.includes("paz") || nEnt.includes("bcs") || nEnt.includes("baja california sur") || nJuz.includes("la paz")) {
-    const mejor = BCS_ORGANOS.find((o) => { const no = norm(o); return nJuz.includes(no) || no.includes(nJuz); });
+    const mejor = BCS_ORGANOS.find((o) => coincideJuzgado(o, textoJuzgado));
     if (mejor) return { estado: "bcs", org: mejor };
     return null;
   }
@@ -124,12 +138,8 @@ function identificarJuzgado(textoJuzgado, entidadTexto, catalogos) {
     .filter((d) => { const nd = norm(d); return nEnt.includes(nd) || nd.includes(nEnt); });
   if (distritosCandidatos.length === 0) return null;
   const enDistrito = catalogos.sinaloa.filter((b) => distritosCandidatos.includes(b.nombre_distrito));
-  for (const b of enDistrito) {
-    const nb = norm(b.nombre_juzgado.split(",")[0]); // solo el nombre del juzgado, sin ", Ciudad"
-    if (nb && (nJuz.includes(nb) || nb.includes(nJuz))) {
-      return { estado: "sinaloa", distrito: b.nombre_distrito, juzgado: (b.nombre_juzgado || "").split(",")[0] };
-    }
-  }
+  const mejor = enDistrito.find((b) => coincideJuzgado(b.nombre_juzgado.split(",")[0], textoJuzgado));
+  if (mejor) return { estado: "sinaloa", distrito: mejor.nombre_distrito, juzgado: (mejor.nombre_juzgado || "").split(",")[0] };
   return null;
 }
 
