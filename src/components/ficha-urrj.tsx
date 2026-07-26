@@ -25,6 +25,7 @@ import { LayoutGrid, GitBranch, FolderOpen, Megaphone, Send } from "lucide-react
 import { DictaminadorPosicion, type VistaPosicion } from "@/components/dictaminador-posicion";
 import { VistaPreviaRespuestas } from "@/components/vista-previa-respuestas";
 import { DictamenRegistral } from "@/components/dictamen-registral";
+import { DocumentosSolicitudVinculada } from "@/components/documentos-solicitud-vinculada";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { getAuth } from "@/lib/auth";
 import { obtenerRecorrido, textoDictamen, type Dictamen } from "@/lib/recorrido";
@@ -394,7 +395,12 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             />
           </TabsContent>
 
-          <TabsContent value="registral" className="mt-4">
+          <TabsContent value="registral" className="mt-4 space-y-4">
+            <DocumentosSolicitudVinculada
+              casoId={garantia.id}
+              expediente={garantia.expediente}
+              numeroCredito={numeroCreditoCaso}
+            />
             <DictamenRegistral
               precarga={{
                 acreditado: garantia.cliente_nombre || garantia.deudor || "",
