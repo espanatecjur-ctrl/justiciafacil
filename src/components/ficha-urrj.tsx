@@ -299,13 +299,29 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   // garantía con las ediciones locales aplicadas (para reflejarlas sin recargar)
   const g = { ...garantia, ...override };
   const guardarDatos = async (campos: Partial<RefGarantia>, cerrar: () => void) => {
-    if (!garantia.id) { setErrorDatos("El caso no tiene id para guardar."); return; }
     setGuardandoDatos(true); setErrorDatos(null);
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${garantia.id}`, {
-        method: "PATCH", headers, body: JSON.stringify(campos),
-      });
-      if (!r.ok) throw new Error(String(r.status));
+      if (garantia.id) {
+        // Caso normal: ya existe caso_juridico, se guarda ahí.
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${garantia.id}`, {
+          method: "PATCH", headers, body: JSON.stringify(campos),
+        });
+        if (!r.ok) throw new Error(String(r.status));
+      } else if (garantia.predictamenId || predJur?.id) {
+        // Respaldo: todavía no hay caso_juridico (normal en URRJ antes de
+        // pasar a SVT) — se guarda dentro del pre-dictamen mismo, en vez
+        // de fallar con "no tiene id".
+        const predId = garantia.predictamenId || predJur?.id;
+        const datosActuales = predJur?.datos || {};
+        const body: any = { datos: { ...datosActuales, ...campos } };
+        if (campos.expediente) body.expediente = campos.expediente;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${predId}`, {
+          method: "PATCH", headers, body: JSON.stringify(body),
+        });
+        if (!r.ok) throw new Error(String(r.status));
+      } else {
+        throw new Error("sin id de caso ni de pre-dictamen");
+      }
       setOverride((p) => ({ ...p, ...campos }));
       cerrar();
     } catch {
@@ -550,7 +566,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
           icon={<Landmark className="h-4 w-4" style={{ color: TEAL }} />}
           titulo="Antecedente de la garantía"
           accion={
-            <button onClick={() => { setForm({ direccion_garantia: g.direccion_garantia || "", entidad: g.entidad || "" }); setErrorDatos(null); setEditAnt(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
+            <button onClick={() => { setForm({ direccion_garantia: g.direccion_garantia || "", entidad: g.entidad || "", esCliente: predJur?.datos?.esCliente || "no", deudorDeseaPagar: predJur?.datos?.deudorDeseaPagar || "" }); setErrorDatos(null); setEditAnt(true); }} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}>
               <PenLine className="h-3 w-3" /> Editar / validar
             </button>
           }
@@ -559,13 +575,40 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
             <div className="space-y-2">
               <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
               <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
-              <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
-                <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{g.cliente_nombre || "sin vincular"}</b></span>
-                <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}><Scale className="h-3 w-3" /> {g.cliente_nombre ? "Cambiar" : "Vincular"} cliente</button>
+
+              {/* Deudor o Cliente — en URRJ casi siempre es deudor todavía
+                  (recién se vuelve cliente cuando se decide pasar a SVT). */}
+              <div className="rounded-lg border border-border bg-muted/30 p-2.5">
+                <div className="mb-1.5 flex overflow-hidden rounded-md border border-input text-[11px] font-medium">
+                  <button type="button" onClick={() => setForm({ ...form, esCliente: "no" })} className={`flex-1 px-2 py-1 ${form.esCliente !== "si" ? "text-white" : "bg-background hover:bg-muted"}`} style={form.esCliente !== "si" ? { background: TEAL } : undefined}>Deudor</button>
+                  <button type="button" onClick={() => setForm({ ...form, esCliente: "si" })} className={`flex-1 px-2 py-1 ${form.esCliente === "si" ? "text-white" : "bg-background hover:bg-muted"}`} style={form.esCliente === "si" ? { background: TEAL } : undefined}>Cliente</button>
+                </div>
+                {form.esCliente !== "si" ? (
+                  <>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Deudor: <b className="text-foreground">{g.deudor || predJur?.datos?.deudor || "sin capturar"}</b></p>
+                    <Campo label="¿El deudor desea pagar?">
+                      <select className={inp} value={form.deudorDeseaPagar || ""} onChange={(e) => setForm({ ...form, deudorDeseaPagar: e.target.value })}>
+                        <option value="">— Sin definir —</option>
+                        <option value="si">Sí</option>
+                        <option value="no">No</option>
+                      </select>
+                    </Campo>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{g.cliente_nombre || "sin vincular"}</b></span>
+                    <div className="flex shrink-0 gap-1.5">
+                      <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: TEAL }}><Scale className="h-3 w-3" /> {g.cliente_nombre ? "Cambiar" : "Vincular"}</button>
+                      <button onClick={() => guardarDatos({ svtSolicitado: true } as any, () => {})} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-white" style={{ background: TEAL }}>Pasar a SVT</button>
+                    </div>
+                  </div>
+                )}
+                <p className="mt-1 text-[10px] text-muted-foreground/80">El paso real a SVT (mover el caso, avisar al área) todavía no está conectado — por ahora solo queda marcado aquí.</p>
               </div>
+
               {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
               <div className="flex gap-2 pt-1">
-                <button onClick={() => guardarDatos({ direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: TEAL }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
+                <button onClick={() => guardarDatos({ direccion_garantia: form.direccion_garantia, entidad: form.entidad, deudorDeseaPagar: form.deudorDeseaPagar, esCliente: form.esCliente } as any, () => setEditAnt(false))} disabled={guardandoDatos} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: TEAL }}>{guardandoDatos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar</button>
                 <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
               </div>
             </div>
@@ -574,7 +617,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <Dato label="ID garantía" valor={g.id} />
               <Dato label="No. de crédito" valor={predJur?.datos?.numeroCredito || (g as any).no_credito || (g as any).credito} importante />
               <Dato label="Dirección de la garantía" valor={g.direccion_garantia || predJur?.datos?.ubicacion} importante />
-              <Dato label="Cliente / deudor" valor={g.cliente_nombre || g.deudor || predJur?.datos?.deudor} importante />
+              <Dato label="Deudor" valor={g.deudor || predJur?.datos?.deudor} importante />
+              {predJur?.datos?.esCliente === "si" && <Dato label="Cliente" valor={g.cliente_nombre || "sin vincular"} />}
+              {predJur?.datos?.esCliente !== "si" && <Dato label="¿Desea pagar?" valor={predJur?.datos?.deudorDeseaPagar === "si" ? "Sí" : predJur?.datos?.deudorDeseaPagar === "no" ? "No" : "Sin definir"} />}
               <Dato label="Entidad" valor={g.entidad || predJur?.datos?.estado} />
             </>
           )}
