@@ -39,13 +39,15 @@ const headers = {
 // error 502 por intentar 56+ expedientes de un jalón). Con un lote chico
 // y girando el punto de inicio cada día (PRESUPUESTO_MS más abajo), en
 // unos días se cubren todos sin que ninguna corrida se pase de tiempo.
-const TOPE_POR_CORRIDA = 8;
-// Presupuesto de tiempo total por corrida (además del tope de expedientes,
-// por si algún caso se tarda más de lo normal). Se corta antes de que
-// Netlify mate la función sola. (25s ya funcionó sin tronar; los
-// catálogos por sí solos gastan ~8s, así que se deja margen para que
-// alcance para varios casos después de cargarlos.)
-const PRESUPUESTO_MS = 30000;
+const TOPE_POR_CORRIDA = 5;
+// Presupuesto de tiempo total por corrida. Sinaloa/BCS abren un navegador
+// real del lado del robot — un solo expediente puede tardar 10-30s. La
+// corrida automática de las 9 AM (sin navegador esperando la respuesta)
+// tiene mucho más margen que una prueba manual desde el navegador — así
+// que este número prioriza que la corrida automática rinda bien, no que
+// las pruebas manuales se vean rápidas (esas van a seguir mostrando 502
+// en pantalla aunque adentro sí termine bien — ya lo confirmamos).
+const PRESUPUESTO_MS = 100000;
 
 const norm = (s) => String(s || "")
   .toLowerCase()
@@ -154,8 +156,13 @@ async function buscarAcuerdos(expediente, match) {
   } else {
     url = `${ROBOT}/${match.endpoint}?exp=${encodeURIComponent(expediente)}&judged=${encodeURIComponent(match.judged)}`;
   }
+  // Sinaloa y BCS abren un navegador de verdad del lado del robot (Playwright),
+  // navegan el sitio del tribunal y esperan su respuesta — normalmente tarda
+  // 10-30s, a veces más si el sitio del tribunal está lento. Jalisco en cambio
+  // usa una API directa (mucho más rápida) — pero como esta función no sabe
+  // de antemano cuál será, se le da a todas el margen del caso lento.
   const ctrl = new AbortController();
-  const tope = setTimeout(() => ctrl.abort("timeout"), 9000);
+  const tope = setTimeout(() => ctrl.abort("timeout"), 28000);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
     if (!r.ok) return { ok: false, motivo: `código ${r.status}` };
@@ -224,7 +231,7 @@ export default async () => {
       if (ins.ok) { const creados = await ins.json().catch(() => []); nuevos += Array.isArray(creados) ? creados.length : 0; }
     }
 
-    const procesados = revisados + sinMatch.length + conError;
+    const procesados = revisados + sinMatch.length;
     const detalle = `Catálogos: ${catalogos.sinaloa.length} juzgados Sinaloa, ${catalogos.jalisco.length} juzgados Jalisco cargados · Lote de hoy: ${procesados}/${casos.length} de este turno (empezando en la posición ${inicioLote} de ${conJuzgado.length} expedientes totales con juzgado) · ${revisados} identificados y revisados · ${sinMatch.length} sin poder identificar el juzgado · ${conError} con error de conexión · ${nuevos} actuación(es) nueva(s) guardada(s)${cortadoPorTiempo ? " · CORTADO por tiempo, se sigue mañana" : ""}. Tardó ${Math.round((Date.now() - inicio) / 1000)}s.`
       + (sinMatch.length ? `\nSin identificar (revisar el campo "Juzgado" de estos expedientes): ${sinMatch.slice(0, 20).join(" · ")}${sinMatch.length > 20 ? "…" : ""}` : "")
       + (conErrorLista.length ? `\nCon error de conexión: ${conErrorLista.join(" · ")}` : "");
