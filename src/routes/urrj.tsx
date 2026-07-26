@@ -376,16 +376,7 @@ function URRJ() {
 
   const dictaminacion = (
     <div className="space-y-5">
-      {vista === "elegir" && solicitudActiva?.tipo_dictamen === "Registral" ? (
-        <DictamenRegistral
-          precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.numero_credito || "", direccion: "" }}
-          casoId={solicitudActiva.caso_id || ""}
-          onVolver={volver}
-          puedeFirmarElabora={puede("firmar_elabora")}
-          puedeValidar={puede("validar")}
-          puedePrecioPiso={puedePrecioPiso}
-        />
-      ) : vista === "elegir" ? (
+      {vista === "elegir" ? (
         <>
           {solicitudActiva && (
             <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-4">
@@ -393,7 +384,11 @@ function URRJ() {
                 Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "\u2014"}
                 {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">Ya cargué el expediente. Revisa primero los documentos y luego elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {solicitudActiva.tipo_dictamen === "Registral"
+                  ? "Revisa y analiza los documentos antes de llenar los datos del dictamen registral — lo que captures ahí se guarda en vivo en la ficha URRJ."
+                  : <>Ya cargué el expediente. Revisa primero los documentos y luego elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</>}
+              </p>
               <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
             </div>
           )}
@@ -512,6 +507,16 @@ function URRJ() {
               </label>
               {errorSubidaDoc && <p className="mt-1 text-red-600">⚠️ {errorSubidaDoc}</p>}
             </div>
+          )}
+          {solicitudActiva?.tipo_dictamen === "Registral" && (
+            <DictamenRegistral
+              precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.numero_credito || "", direccion: "" }}
+              casoId={solicitudActiva.caso_id || ""}
+              onVolver={volver}
+              puedeFirmarElabora={puede("firmar_elabora")}
+              puedeValidar={puede("validar")}
+              puedePrecioPiso={puedePrecioPiso}
+            />
           )}
           {!solicitudActiva && !crearNuevo && (
             <>
