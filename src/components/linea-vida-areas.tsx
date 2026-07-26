@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Check, X as XIcon, Clock, Circle } from "lucide-react";
-import { type CasoJuridico } from "@/lib/supabase";
+import { Check, X as XIcon, Clock, Circle, ArrowUpRight, ListChecks } from "lucide-react";
+import { type CasoJuridico, SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { getAuth } from "@/lib/auth";
 import { formalizacionDeCaso } from "@/lib/formalizacion";
 import { AREAS_LINEA, COLOR, colorDeArea, textoDictamen, obtenerRecorrido, marcarArea, preDictamenURRJ, dictamenUCP, type PasoRecorrido, type Dictamen } from "@/lib/recorrido";
 
 const NAVY = "#0B1E3A";
+const headersLV = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+
+// A qué ruta (módulo) lleva "abrir" cada área — mismo patrón que ya usa UFC.
+const RUTA_AREA: Record<string, { to: string; param: string }> = {
+  URRJ: { to: "/urrj", param: "caso" },
+  UCP: { to: "/ucp-ficha", param: "id" },
+  UCM: { to: "/ucm-ficha", param: "id" },
+};
 
 // Línea de Vida: por cuáles ÁREAS ha pasado el expediente.
 // Cada área tiene DOS dictámenes (registral + jurídico). El color de la bolita
@@ -24,6 +32,19 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
   // Formalización vinculada (para la bolita de UFC: estatus, no dictamen).
   const [form, setForm] = useState<{ id?: string; estado_tramite?: string | null } | null>(null);
   useEffect(() => { if (caso.id) formalizacionDeCaso(caso.id).then(setForm); }, [caso.id]);
+
+  // Seguimiento vinculado: cuántas tareas pendientes tiene este expediente en total
+  // (la tabla tarea no distingue por área, así que se muestra a nivel expediente).
+  const [tareasPendientes, setTareasPendientes] = useState<number | null>(null);
+  useEffect(() => {
+    if (!caso.id) { setTareasPendientes(null); return; }
+    let vivo = true;
+    fetch(`${SUPABASE_URL}/rest/v1/tarea?select=id&caso_id=eq.${caso.id}&estado=neq.hecha`, { headers: { ...headersLV, Prefer: "count=exact" } })
+      .then((r) => { const cr = r.headers.get("content-range"); const n = cr ? parseInt(cr.split("/")[1] || "0", 10) : NaN; return Number.isFinite(n) ? n : r.json().then((j) => (Array.isArray(j) ? j.length : 0)); })
+      .then((n) => { if (vivo) setTareasPendientes(n); })
+      .catch(() => { if (vivo) setTareasPendientes(null); });
+    return () => { vivo = false; };
+  }, [caso.id]);
 
   const cargar = () => {
     obtenerRecorrido(caso).then(async (mapa) => {
@@ -127,12 +148,15 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
           {form?.id ? (
             <>
               <p className="text-xs">Estatus: <b style={{ color: COLOR.verde.color }}>{form.estado_tramite || "En proceso"}</b></p>
-              <Link to="/ufc-ficha" search={{ id: form.id } as any} className="mt-2 inline-block text-[11px] font-medium" style={{ color: "#0C5C46" }}>
-                Abrir ficha de formalización →
+              <Link to="/ufc-ficha" search={{ id: form.id } as any} className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: "#0C5C46" }}>
+                Abrir ficha de formalización <ArrowUpRight className="h-3 w-3" />
               </Link>
             </>
           ) : (
             <p className="text-[11px] text-muted-foreground">Esta garantía aún no tiene formalización. Se crea en UFC vinculando el caso; al vincularla, esta bolita se pone verde y aquí verás su estatus.</p>
+          )}
+          {tareasPendientes !== null && tareasPendientes > 0 && (
+            <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground"><ListChecks className="h-3 w-3" /> {tareasPendientes} tarea{tareasPendientes === 1 ? "" : "s"} pendiente{tareasPendientes === 1 ? "" : "s"} de este expediente — pestaña "Seguimiento y actuaciones".</p>
           )}
           <div className="mt-2">
             <button onClick={() => setAbierta(null)} className="rounded-md border border-input px-3 py-1.5 text-xs">Cerrar</button>
@@ -200,6 +224,15 @@ export function LineaVidaAreas({ caso }: { caso: CasoJuridico }) {
           <p className="mb-2 text-[11px]">Quedará: <b style={{ color: COLOR[colorDeArea({ ...pasos[abierta], area: abierta, caso_id: caso.id, expediente: caso.expediente, dic_registral: reg, dic_juridico: jur, nota, marcado_por: null } as PasoRecorrido)].color }}>{COLOR[colorDeArea({ area: abierta, dic_registral: reg, dic_juridico: jur } as PasoRecorrido)].texto}</b> {abierta === "URRJ" ? (jur === "positivo" ? "(jurídico manda → verde)" : "") : (reg === "positivo" && jur === "positivo" ? "(ambos positivos → verde)" : "")}</p>
 
           {pasos[abierta]?.marcado_por && <p className="mb-2 text-[10px] text-muted-foreground">Última marca: {pasos[abierta].marcado_por} · {pasos[abierta].updated_at ? new Date(pasos[abierta].updated_at!).toLocaleDateString("es-MX") : ""}</p>}
+
+          {RUTA_AREA[abierta] && (
+            <Link to={RUTA_AREA[abierta].to} search={{ [RUTA_AREA[abierta].param]: caso.id } as any} className="mb-2 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: "#0C5C46" }}>
+              Ir al módulo {abierta} <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          )}
+          {tareasPendientes !== null && tareasPendientes > 0 && (
+            <p className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground"><ListChecks className="h-3 w-3" /> {tareasPendientes} tarea{tareasPendientes === 1 ? "" : "s"} pendiente{tareasPendientes === 1 ? "" : "s"} de este expediente — pestaña "Seguimiento y actuaciones".</p>
+          )}
 
           <div className="flex gap-2">
             {!soloLectura && <button onClick={guardar} disabled={guardando} className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>{guardando ? "Guardando…" : "Guardar dictamen"}</button>}
