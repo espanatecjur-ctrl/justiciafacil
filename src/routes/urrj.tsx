@@ -49,6 +49,8 @@ function URRJ() {
   const [errorResumen, setErrorResumen] = useState<string | null>(null);
   const [analizandoDoc, setAnalizandoDoc] = useState<string | null>(null);
   const [analisisDocs, setAnalisisDocs] = useState<AnalisisIA | null>(null);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
+  const [errorSubidaDoc, setErrorSubidaDoc] = useState<string | null>(null);
   const claveCasoSolicitud = solicitudActiva?.numero_credito || solicitudActiva?.expediente || solicitudActiva?.caso_id
     || resumenDocs?.datos_generales?.numero_credito || resumenDocs?.datos_generales?.expediente || "";
   useEffect(() => {
@@ -86,23 +88,40 @@ function URRJ() {
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
   }, [solicitudActiva?.documentos, resumenDocs]);
-  // Documentos que la IA marcó con el MISMO tipo + resumen — probable
-  // duplicado (ej. el mismo certificado subido dos veces con nombre distinto
-  // por llevar el timestamp de subida). Esto SOLO avisa, nunca borra ni
-  // oculta nada — la revisión y el borrado los hace una persona.
+  // Documentos que la IA describió con contenido muy parecido dentro del
+  // MISMO tipo — probable duplicado (ej. el mismo dictamen pericial subido
+  // dos veces, aunque la IA lo haya redactado con palabras distintas cada
+  // vez). Compara por similitud de palabras, no por texto idéntico — así
+  // detecta duplicados aunque el resumen no salga exactamente igual.
+  // Esto SOLO avisa, nunca borra ni oculta nada — la revisión y el borrado
+  // los hace una persona.
+  function normalizarTexto(t: string) {
+    return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function similitudTexto(a: string, b: string) {
+    const wa = new Set(normalizarTexto(a).split(" ").filter((w) => w.length > 2));
+    const wb = new Set(normalizarTexto(b).split(" ").filter((w) => w.length > 2));
+    if (wa.size === 0 || wb.size === 0) return 0;
+    let interseccion = 0;
+    for (const w of wa) if (wb.has(w)) interseccion++;
+    return interseccion / new Set([...wa, ...wb]).size;
+  }
+  const UMBRAL_DUPLICADO = 0.5;
   const duplicadosPorNombre = useMemo(() => {
-    const grupos = new Map<string, string[]>();
-    for (const d of documentosOrdenados) {
-      const r = resumenDe(d.nombre);
-      if (!r || !r.resumen) continue;
-      const clave = `${r.tipo}|${r.resumen}`.trim().toLowerCase();
-      if (!grupos.has(clave)) grupos.set(clave, []);
-      grupos.get(clave)!.push(d.nombre);
-    }
+    const docsConResumen = documentosOrdenados
+      .map((d) => ({ nombre: d.nombre, r: resumenDe(d.nombre) }))
+      .filter((x) => x.r?.resumen);
     const mapa = new Map<string, string[]>();
-    for (const nombres of grupos.values()) {
-      if (nombres.length > 1) {
-        for (const n of nombres) mapa.set(n, nombres.filter((x) => x !== n));
+    for (let i = 0; i < docsConResumen.length; i++) {
+      for (let j = i + 1; j < docsConResumen.length; j++) {
+        const a = docsConResumen[i], b = docsConResumen[j];
+        if (a.r!.tipo !== b.r!.tipo) continue; // solo compara documentos del mismo tipo
+        if (similitudTexto(a.r!.resumen, b.r!.resumen) >= UMBRAL_DUPLICADO) {
+          if (!mapa.has(a.nombre)) mapa.set(a.nombre, []);
+          if (!mapa.has(b.nombre)) mapa.set(b.nombre, []);
+          mapa.get(a.nombre)!.push(b.nombre);
+          mapa.get(b.nombre)!.push(a.nombre);
+        }
       }
     }
     return mapa;
@@ -146,8 +165,69 @@ function URRJ() {
       }
     } catch { /* el resumen rápido ya se guardó; esto es un plus, no bloquea */ }
   };
-  // Cuestionario completo (estado de la carpeta, demandas, prescripción, etc.)
-  // — es un paso aparte, junta TODOS los documentos en una sola pasada.
+  // Sube un documento nuevo (actuación, tarea, evidencia, lo que sea) a la
+  // MISMA carpeta de Drive de esta solicitud, y lo agrega a la lista para
+  // que aparezca en la tabla listo para «Analizar» — igual que los que
+  // llegaron con la solicitud original. Reutiliza subir-documento.mjs (la
+  // misma función que ya usa el resto del sistema para subir a Drive).
+  const agregarDocumentoASolicitud = async (file: File) => {
+    if (!solicitudActiva?.id) return;
+    setSubiendoDoc(true);
+    setErrorSubidaDoc(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => {
+          const s = String(fr.result || "");
+          const coma = s.indexOf(",");
+          resolve(coma >= 0 ? s.slice(coma + 1) : s);
+        };
+        fr.onerror = () => reject(new Error("No se pudo leer el archivo."));
+        fr.readAsDataURL(file);
+      });
+
+      let solicita = "SIN-SESION";
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        solicita = data?.session?.user?.email || "SIN-SESION";
+      } catch { /* sin sesión, se sube igual */ }
+
+      const garantia = (solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.id || "solicitud").toString().replace(/[\\/]/g, "-");
+
+      const r = await fetch("/.netlify/functions/subir-documento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          area: solicitudActiva.area || "URRJ",
+          solicita,
+          garantia,
+          archivo: base64,
+          nombre: file.name,
+          mime: file.type || "application/octet-stream",
+        }),
+      });
+      const data = await r.json();
+      if (!data.ok) { setErrorSubidaDoc(data.error || "No se pudo subir el documento a Drive."); return; }
+
+      const nuevoDoc = { nombre: data.nombre || file.name, url: data.link };
+      const documentosActualizados = [...(solicitudActiva.documentos || []), nuevoDoc];
+
+      const patch = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?id=eq.${solicitudActiva.id}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ documentos: documentosActualizados }),
+      });
+      if (!patch.ok) { setErrorSubidaDoc("El archivo se subió a Drive, pero no se pudo agregar a la lista de esta solicitud — avísale a Jhon."); return; }
+
+      // Refleja el cambio de inmediato en pantalla, sin recargar la página.
+      setSolicitudActiva({ ...solicitudActiva, documentos: documentosActualizados });
+    } catch (e) {
+      setErrorSubidaDoc(String((e as Error)?.message || e));
+    } finally {
+      setSubiendoDoc(false);
+    }
+  };
   const generarCuestionario = async () => {
     if (!solicitudActiva?.id || !solicitudActiva.documentos?.length || analisisDocs) return;
     setCargandoResumen(true); setErrorResumen(null);
@@ -314,7 +394,18 @@ function URRJ() {
                     {cargandoResumen ? "✨ Leyendo…" : "✨ Generar cuestionario completo"}
                   </button>
                 )}
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+                  <Upload className="h-3.5 w-3.5" />
+                  {subiendoDoc ? "Subiendo…" : "Agregar documento"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={subiendoDoc}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarDocumentoASolicitud(f); e.target.value = ""; }}
+                  />
+                </label>
               </div>
+              {errorSubidaDoc && <p className="mt-1 text-xs text-red-600">⚠️ {errorSubidaDoc}</p>}
               <p className="mt-1 text-[11px] text-muted-foreground">Analiza documento por documento con el botón «Analizar» de cada uno — así no depende de leerlos todos juntos. Solo se analiza una vez por documento.</p>
               {duplicadosPorNombre.size > 0 && (
                 <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">
@@ -383,7 +474,18 @@ function URRJ() {
           )}
           {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) === 0 && (
             <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-              Esta solicitud llegó sin documentos adjuntos. Verifica con la Dirección antes de dictaminar.
+              <p>Esta solicitud llegó sin documentos adjuntos. Verifica con la Dirección antes de dictaminar.</p>
+              <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-amber-600 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+                <Upload className="h-3.5 w-3.5" />
+                {subiendoDoc ? "Subiendo…" : "Agregar el primer documento"}
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={subiendoDoc}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarDocumentoASolicitud(f); e.target.value = ""; }}
+                />
+              </label>
+              {errorSubidaDoc && <p className="mt-1 text-red-600">⚠️ {errorSubidaDoc}</p>}
             </div>
           )}
           {!solicitudActiva && !crearNuevo && (
