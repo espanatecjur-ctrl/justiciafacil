@@ -47,7 +47,7 @@ const TOPE_POR_CORRIDA = 5;
 // que este número prioriza que la corrida automática rinda bien, no que
 // las pruebas manuales se vean rápidas (esas van a seguir mostrando 502
 // en pantalla aunque adentro sí termine bien — ya lo confirmamos).
-const PRESUPUESTO_MS = 100000;
+const PRESUPUESTO_MS = 50000;
 
 const norm = (s) => String(s || "")
   .toLowerCase()
