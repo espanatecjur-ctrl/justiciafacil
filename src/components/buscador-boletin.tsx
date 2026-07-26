@@ -36,7 +36,7 @@ const fmt = (s?: string) => {
 
 const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
 
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string; ultimaActuacionFecha?: string; ultimaActuacionTexto?: string }) => void } = {}) {
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin, onGuardadoEnFicha }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string; ultimaActuacionFecha?: string; ultimaActuacionTexto?: string }) => void; onGuardadoEnFicha?: () => void } = {}) {
   const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
@@ -150,11 +150,12 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
       };
     });
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, {
         method: "POST",
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=minimal" },
         body: JSON.stringify(filas),
       });
+      if (r.ok) onGuardadoEnFicha?.();
     } catch { /* si falla el guardado en la ficha, no bloquea el resto del flujo */ }
   };
 
@@ -285,8 +286,8 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
                 {(party?.actor || party?.demandado) && (
                   <p className="break-words text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
                 )}
-                {onGuardarHallazgos && acuerdos.length > 0 && (
-                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined }); guardarEnFichaDelExpediente(); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? `✓ ${acuerdos.length} actuación(es) copiadas — guardado en vivo y en la ficha del expediente` : `📋 Copiar todas las actuaciones de este juicio (${acuerdos.length})`}</button>
+                {acuerdos.length > 0 && (
+                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos?.(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined }); guardarEnFichaDelExpediente(); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? `✓ ${acuerdos.length} actuación(es) guardadas en la ficha del expediente` : `📋 Guardar las ${acuerdos.length} actuación(es) en la ficha`}</button>
                 )}
               </div>
               {resaltarAmparo && acuerdosAmparo.length > 0 && (
