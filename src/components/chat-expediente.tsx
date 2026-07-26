@@ -6,6 +6,7 @@
 //   <ChatExpediente clave={solicitudActiva.id} documentos={solicitudActiva.documentos} />
 // ============================================================
 import { useState, useRef, useEffect } from "react";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 export interface DocChat { nombre: string; url: string }
 interface Turno { rol: "user" | "model"; texto: string }
@@ -17,7 +18,28 @@ export function ChatExpediente({ clave, documentos }: { clave: string; documento
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [archivosCache, setArchivosCache] = useState<ArchivoCache[] | null>(null);
+  const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const finRef = useRef<HTMLDivElement>(null);
+
+  // Memoria persistente: cada pregunta/respuesta de este expediente se
+  // guarda en Supabase (chat_expediente_historial). Al volver a abrir el
+  // expediente — hoy, mañana, quien sea que lo abra — se recarga aquí, así
+  // no se pierde ni se vuelve a preguntar por accidente lo mismo.
+  useEffect(() => {
+    if (!clave) { setCargandoHistorial(false); return; }
+    setCargandoHistorial(true);
+    fetch(`${SUPABASE_URL}/rest/v1/chat_expediente_historial?select=pregunta,respuesta&clave=eq.${encodeURIComponent(clave)}&order=created_at.asc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((filas: { pregunta: string; respuesta: string }[]) => {
+        const turnos: Turno[] = [];
+        for (const f of filas) { turnos.push({ rol: "user", texto: f.pregunta }); turnos.push({ rol: "model", texto: f.respuesta }); }
+        setHistorial(turnos);
+      })
+      .catch(() => {})
+      .finally(() => setCargandoHistorial(false));
+  }, [clave]);
 
   useEffect(() => { finRef.current?.scrollIntoView({ behavior: "smooth" }); }, [historial, cargando]);
 
@@ -65,7 +87,8 @@ export function ChatExpediente({ clave, documentos }: { clave: string; documento
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
-        {historial.length === 0 && (
+        {cargandoHistorial && <p className="text-xs text-neutral-400">Cargando conversación de este expediente…</p>}
+        {!cargandoHistorial && historial.length === 0 && (
           <p className="text-xs text-neutral-400">Pregunta lo que necesites: "¿ya está emplazado?", "¿cuántos gravámenes tiene?", "¿cuál fue la última actuación?"…</p>
         )}
         {historial.map((t, i) => (
