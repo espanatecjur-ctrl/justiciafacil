@@ -41,14 +41,25 @@ const HERRAMIENTA = {
 
 async function buscarClienteOCaso(termino) {
   const q = encodeURIComponent(`%${termino}%`);
-  const campos = "cliente_nombre,cliente_codigo,gar_id,expediente,unidad,etapa_actual,estatus_general,juzgado,materia";
-  const filtro = `or=(cliente_nombre.ilike.${q},cliente_codigo.ilike.${q},gar_id.ilike.${q},expediente.ilike.${q})`;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=${campos}&${filtro}&limit=10`, {
+  const resultados = [];
+
+  // 1) Casos ya en litigio / consolidación
+  const campos1 = "cliente_nombre,cliente_codigo,gar_id,expediente,unidad,etapa_actual,estatus_general,juzgado,materia";
+  const filtro1 = `or=(cliente_nombre.ilike.${q},cliente_codigo.ilike.${q},gar_id.ilike.${q},expediente.ilike.${q})`;
+  const r1 = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=${campos1}&${filtro1}&limit=10`, {
     headers: { apikey: LLAVE_SB, Authorization: `Bearer ${LLAVE_SB}` },
   });
-  if (!r.ok) return { error: "No se pudo consultar la base de datos." };
-  const filas = await r.json();
-  return { resultados: filas, total: filas.length };
+  if (r1.ok) resultados.push(...(await r1.json()).map((f) => ({ ...f, fuente: "caso_juridico (litigio/consolidación)" })));
+
+  // 2) Solicitudes de pre-dictamen en URRJ (expedientes que aún no llegan a litigio formal)
+  const campos2 = "cliente,expediente,juzgado,area,estado,numero_credito,administradora_codigo";
+  const filtro2 = `or=(cliente.ilike.${q},expediente.ilike.${q},numero_credito.ilike.${q})`;
+  const r2 = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=${campos2}&${filtro2}&limit=10`, {
+    headers: { apikey: LLAVE_SB, Authorization: `Bearer ${LLAVE_SB}` },
+  });
+  if (r2.ok) resultados.push(...(await r2.json()).map((f) => ({ ...f, fuente: "solicitud_predictamen (URRJ, pre-dictamen)" })));
+
+  return { resultados, total: resultados.length };
 }
 
 export default async (req) => {
