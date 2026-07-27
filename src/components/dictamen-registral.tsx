@@ -133,16 +133,25 @@ export function DictamenRegistral({
   const abrirBanner = () => { setSeed((x) => x + 1); setVerBanner(true); };
 
   // ---- Cotejo con el pre-dictamen JURÍDICO (RPPC vs jurídico) ----
-  const [juridico, setJuridico] = useState<{ datos: any; resultados: any; dictamen_final: string | null; folio: string | null } | null>(null);
+  const [juridico, setJuridico] = useState<{ datos: any; resultados: any; dictamen_final: string | null; folio: string | null; etapa_firma: string | null; firma_elabora: any; firma_dil: any } | null>(null);
   useEffect(() => {
     const conds: string[] = [];
     if (casoId) conds.push(`caso_id.eq.${casoId}`);
     if (d.numeroCredito && d.numeroCredito.trim()) conds.push(`expediente.eq.${encodeURIComponent(d.numeroCredito.trim())}`);
     if (conds.length === 0) { setJuridico(null); return; }
     const filtro = conds.length === 1 ? conds[0].replace(".eq.", "=eq.") : `or=(${conds.join(",")})`;
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=datos,resultados,dictamen_final,folio&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=datos,resultados,dictamen_final,folio,etapa_firma,firma_elabora,firma_dil&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
       .then((r) => (r.ok ? r.json() : [])).then((j) => setJuridico(j?.[0] || null)).catch(() => setJuridico(null));
   }, [casoId, d.numeroCredito]);
+  // Texto claro de en dónde va el jurídico — para que no dependa de adivinar
+  // por el folio o el resultado. "completo" = ya firmaron y validaron todos.
+  const estadoJuridicoTexto = (() => {
+    if (!juridico) return { texto: "Todavía no hay pre-dictamen jurídico capturado para este crédito.", ok: false };
+    if (juridico.etapa_firma === "completo") return { texto: `Jurídico completo — dictamen ${juridico.dictamen_final || "sin resultado"}.`, ok: true };
+    if (!juridico.firma_elabora?.fecha) return { texto: "Jurídico: aún no lo firma Elabora.", ok: false };
+    if (!juridico.firma_dil?.fecha) return { texto: "Jurídico: firmado por Elabora, falta validar (DIL).", ok: false };
+    return { texto: `Jurídico en curso — etapa actual: ${juridico.etapa_firma || "—"}.`, ok: false };
+  })();
 
   // Autollenado del Dictamen Registral completo con lo que la IA leyó en los
   // documentos (Certificados de Gravamen, RPPC, escrituras) — usa el mismo
@@ -366,6 +375,9 @@ export function DictamenRegistral({
       </div>
 
       {!!analisisRegistral && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos (Certificados de Gravamen, RPPC, escrituras) — revisa y corrige si hace falta.</p>}
+      <p className={`text-[11px] font-medium ${estadoJuridicoTexto.ok ? "text-emerald-700" : "text-amber-700"}`}>
+        {estadoJuridicoTexto.ok ? "✅" : "⏳"} {estadoJuridicoTexto.texto}
+      </p>
 
       <Bloque titulo="Verificación registral">
         <Campo label="Fecha de verificación"><input type="date" className={inp} value={d.fechaVerificacion} onChange={(e) => set("fechaVerificacion", e.target.value)} /></Campo>
