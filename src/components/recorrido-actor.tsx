@@ -1295,7 +1295,7 @@ export function RecorridoActor({
               )}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa ? undefined : rechazoInfo} />
+              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa === "elabora" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.dil} valor={firmaValida} onFirmar={(f) => firmarEtapa("dil", f)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar || etapaFirma !== "dil"} onRechazar={puedeValidar && etapaFirma === "dil" ? (m) => rechazarEtapa("dil", m) : undefined} rechazado={rechazoInfo?.etapa === "dil" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.ucm} valor={firmaUCM} onFirmar={(f) => firmarEtapa("ucm", f)} cargoSugerido="UCM" bloqueado={etapaFirma !== "ucm"} onRechazar={etapaFirma === "ucm" ? (m) => rechazarEtapa("ucm", m) : undefined} rechazado={rechazoInfo?.etapa === "ucm" ? rechazoInfo : undefined} />
               {(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") && (
