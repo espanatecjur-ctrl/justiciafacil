@@ -16,13 +16,17 @@ interface Props {
   onFirmar: (f: DatosFirma) => void;
   cargoSugerido?: string;
   bloqueado?: boolean;   // true = tu rol no puede firmar esta parte
+  rechazado?: { motivo: string; fecha: string; etapa?: string } | null; // si esta etapa fue rechazada y regresada
+  onRechazar?: (motivo: string) => void; // si se puede rechazar y regresar esta firma a la etapa anterior
 }
 
-export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado }: Props) {
+export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado, rechazado, onRechazar }: Props) {
   const [nombre, setNombre] = useState(valor?.nombre || "");
   const [cargo, setCargo] = useState(valor?.cargo || cargoSugerido || "");
   const [modoDibujo, setModoDibujo] = useState(false);
   const [hayTrazo, setHayTrazo] = useState(!!valor?.dibujo);
+  const [modoRechazo, setModoRechazo] = useState(false);
+  const [motivoRechazo, setMotivoRechazo] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dibujando = useRef(false);
 
@@ -86,6 +90,12 @@ export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado }
       <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Signature className="h-3.5 w-3.5" /> {titulo}
       </p>
+      {rechazado && (
+        <div className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-700">
+          <p className="font-semibold">⚠️ Se rechazó y regresó esta etapa</p>
+          <p className="mt-0.5">Motivo: {rechazado.motivo || "(sin motivo especificado)"}</p>
+        </div>
+      )}
       <div className="rounded-md border border-dashed border-border bg-muted/40 p-3 text-center text-xs text-muted-foreground">
         🔒 Tu rol no puede firmar esta parte (solo lectura).
       </div>
@@ -98,6 +108,14 @@ export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado }
         <Signature className="h-3.5 w-3.5" /> {titulo}
       </p>
 
+      {rechazado && (
+        <div className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-700">
+          <p className="font-semibold">⚠️ Se rechazó y regresó esta etapa</p>
+          <p className="mt-0.5">Motivo: {rechazado.motivo || "(sin motivo especificado)"}</p>
+          <p className="mt-0.5 text-red-500">{new Date(rechazado.fecha).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</p>
+        </div>
+      )}
+
       {firmado ? (
         <div className="space-y-2">
           {valor?.dibujo && <img src={valor.dibujo} alt="firma" className="h-16 w-auto rounded border border-border bg-white" />}
@@ -106,7 +124,33 @@ export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado }
             {valor!.cargo && <p className="text-xs text-muted-foreground">{valor!.cargo}</p>}
             <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground"><Check className="h-3 w-3 text-emerald-600" /> Firmado · {fechaBonita}</p>
           </div>
-          <button onClick={() => onFirmar({ nombre: "", cargo: "", fecha: "", dibujo: null })} className="text-[11px] text-muted-foreground underline">Volver a firmar</button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => onFirmar({ nombre: "", cargo: "", fecha: "", dibujo: null })} className="text-[11px] text-muted-foreground underline">Volver a firmar</button>
+            {onRechazar && (
+              <button onClick={() => setModoRechazo(true)} className="text-[11px] text-red-600 underline">Rechazar y regresar</button>
+            )}
+          </div>
+          {modoRechazo && (
+            <div className="mt-2 space-y-1.5 rounded-md border border-red-200 bg-red-50/50 p-2">
+              <textarea
+                value={motivoRechazo}
+                onChange={(e) => setMotivoRechazo(e.target.value)}
+                placeholder="¿Por qué se rechaza? (obligatorio)"
+                className="w-full rounded-md border border-red-200 bg-white px-2 py-1.5 text-xs"
+                rows={2}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { if (!motivoRechazo.trim()) return; onRechazar!(motivoRechazo.trim()); setModoRechazo(false); setMotivoRechazo(""); }}
+                  disabled={!motivoRechazo.trim()}
+                  className="rounded-md bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                >
+                  Confirmar rechazo
+                </button>
+                <button onClick={() => { setModoRechazo(false); setMotivoRechazo(""); }} className="text-[11px] text-muted-foreground underline">Cancelar</button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
