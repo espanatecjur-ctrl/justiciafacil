@@ -17,9 +17,9 @@ export interface SolicitudPredictamen {
   expediente?: string | null;
   cliente?: string | null;
   juzgado?: string | null;
-  area?: string | null;          // URRJ / UCP / UFC / UDP — a qué área van los documentos
-  tipo_dictamen?: string | null; // Registral / Jurídico — para qué dictamen son
-  administradora_codigo?: string | null; // código de la administradora (el nombre real solo lo ve DGE)
+  area?: string | null;
+  tipo_dictamen?: string | null;
+  administradora_codigo?: string | null;
   numero_credito?: string | null;
   nota?: string | null;
   documentos?: DocRef[] | null;
@@ -44,14 +44,12 @@ export interface CasoOpcion {
   drive_carpeta_nombre?: string | null;
 }
 
-/** Deriva el área (URRJ/UCP/UCM/UFC/UDP) de una garantía a partir de su unidad. */
 export function areaDeGarantia(unidad?: string | null): string {
   const s = (unidad || "").toUpperCase();
   for (const a of ["URRJ", "UCP", "UFC", "UDP", "UCM"]) if (s.includes(a)) return a;
   return "UCM";
 }
 
-/** Sube un archivo al almacén y devuelve su nombre y URL pública. */
 export async function subirDocPredictamen(file: File): Promise<DocRef> {
   const ext = (file.name.split(".").pop() || "bin").toLowerCase();
   const path = `dir-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -64,7 +62,6 @@ export async function subirDocPredictamen(file: File): Promise<DocRef> {
   return { url: `${SUPABASE_URL}/storage/v1/object/public/predictamen-docs/${path}`, nombre: file.name };
 }
 
-/** Lista de expedientes para el selector de garantía. */
 export async function casosParaSelector(): Promise<CasoOpcion[]> {
   try {
     return await sbSelect<CasoOpcion>(
@@ -91,7 +88,6 @@ export async function crearSolicitudPredictamen(
   }
 }
 
-/** Refleja una carpeta de Drive en la garantía (la vincula) para que aparezca en su ficha. */
 export async function vincularCarpetaAGarantia(
   casoId: string,
   carpetaId: string,
@@ -119,4 +115,16 @@ export async function listarSolicitudesPredictamen(estado?: string): Promise<Sol
   } catch {
     return [];
   }
+}
+
+/** Cambia el estado de la solicitud para que ya no se vea como "pendiente"
+ *  una vez que alguien ya empezó a dictaminarla o ya la terminó. */
+export async function actualizarEstadoSolicitud(id: string, estado: "en_proceso" | "terminado"): Promise<boolean> {
+  if (!id) return false;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?id=eq.${id}`, {
+      method: "PATCH", headers, body: JSON.stringify({ estado }),
+    });
+    return res.ok;
+  } catch { return false; }
 }
