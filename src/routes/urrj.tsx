@@ -148,3 +148,408 @@ function URRJ() {
         fr.onerror = () => reject(new Error("No se pudo leer el archivo."));
         fr.readAsDataURL(file);
       });
+
+      let solicita = "SIN-SESION";
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        solicita = data?.session?.user?.email || "SIN-SESION";
+      } catch { /* sin sesión, se sube igual */ }
+
+      const garantia = (solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.id || "solicitud").toString().replace(/[\\/]/g, "-");
+
+      const r = await fetch("/.netlify/functions/subir-documento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          area: solicitudActiva.area || "URRJ",
+          solicita,
+          garantia,
+          archivo: base64,
+          nombre: file.name,
+          mime: file.type || "application/octet-stream",
+        }),
+      });
+      const data = await r.json();
+      if (!data.ok) { setErrorSubidaDoc(data.error || "No se pudo subir el documento a Drive."); return; }
+
+      const nuevoDoc = { nombre: data.nombre || file.name, url: data.link };
+      const documentosActualizados = [...(solicitudActiva.documentos || []), nuevoDoc];
+
+      const patch = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?id=eq.${solicitudActiva.id}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ documentos: documentosActualizados }),
+      });
+      if (!patch.ok) { setErrorSubidaDoc("El archivo se subió a Drive, pero no se pudo agregar a la lista de esta solicitud — avísale a Jhon."); return; }
+
+      setSolicitudActiva({ ...solicitudActiva, documentos: documentosActualizados });
+    } catch (e) {
+      setErrorSubidaDoc(String((e as Error)?.message || e));
+    } finally {
+      setSubiendoDoc(false);
+    }
+  };
+  const eliminarDocumentoDeSolicitud = async (nombre: string) => {
+    if (!solicitudActiva?.id) return;
+    if (!confirm(`¿Quitar "${nombre}" de la lista de esta solicitud?\n\nEsto no borra el archivo de Drive, solo lo saca de esta lista.`)) return;
+    const documentosActualizados = (solicitudActiva.documentos || []).filter((d) => d.nombre !== nombre);
+    const patch = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?id=eq.${solicitudActiva.id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ documentos: documentosActualizados }),
+    });
+    if (!patch.ok) { setErrorSubidaDoc("No se pudo quitar el documento — intenta de nuevo."); return; }
+    setSolicitudActiva({ ...solicitudActiva, documentos: documentosActualizados });
+  };
+  const generarCuestionario = async () => {
+    if (!solicitudActiva?.id || !solicitudActiva.documentos?.length || analisisDocs) return;
+    setCargandoResumen(true); setErrorResumen(null);
+    const claveCaso = solicitudActiva.numero_credito || solicitudActiva.expediente || solicitudActiva.caso_id || "";
+    const claveParaAnalisis = claveCaso || solicitudActiva.id;
+    const rA = await generarAnalisisIA(claveParaAnalisis, "Actor", solicitudActiva.documentos, (hecho, total, nombre) => setProgresoIA({ hecho, total, nombre }));
+    setProgresoIA(null);
+    if (rA.ok && rA.analisis) {
+      setAnalisisDocs(rA.analisis);
+      await guardarAnalisisEnCache({ ...rA.analisis, posicion: "Demandado" });
+      if (!claveCaso) {
+        setErrorResumen("⚠️ Esta solicitud no tenía crédito ni expediente capturado — el cuestionario sí se generó y se ve abajo, pero solo aquí. Si luego capturas el crédito/expediente en la garantía, en Actor/Demandado no lo va a encontrar automático; tendrías que regenerarlo ahí.");
+      }
+    } else if (!rA.ok) {
+      setErrorResumen(rA.error || "No se pudo generar el cuestionario.");
+    }
+    setCargandoResumen(false);
+  };
+  useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
+  const puede = (a: string) => permisos.length === 0 || permisos.includes(a);
+  const volver = () => { setPrecargar(null); setSolicitudActiva(null); setCrearNuevo(false); setVista("elegir"); };
+
+  const dictaminarSolicitud = async (sol: SolicitudPredictamen) => {
+    setSolicitudActiva(sol);
+    let previo = await buscarPredictamenVigenteCompleto(sol.expediente, sol.caso_id);
+    if (!previo && sol.numero_credito) {
+      const porCredito = await buscarPredictamenPorCredito(sol.numero_credito);
+      if (porCredito) previo = await buscarPredictamenVigenteCompleto(porCredito.expediente, porCredito.caso_id);
+    }
+    if (previo) {
+      setPrecargar({
+        datos: {
+          ...(previo.datos || {}),
+          caso_id: sol.caso_id || previo.caso_id || "",
+          expediente: sol.expediente || previo.expediente || "",
+          juzgado: sol.juzgado || previo.datos?.juzgado || "",
+          deudor: sol.cliente || previo.datos?.deudor || "",
+          numeroCredito: sol.numero_credito || previo.datos?.numeroCredito || "",
+        },
+        antecedenteId: previo.id,
+        version: previo.version || 1,
+        cambios: "Re-dictaminado desde Solicitudes URRJ",
+        solicitudId: sol.id,
+        antecedenteTerminado: !!previo.terminado,
+      });
+    } else {
+      setPrecargar({
+        datos: {
+          caso_id: sol.caso_id || "",
+          expediente: sol.expediente || "",
+          juzgado: sol.juzgado || "",
+          deudor: sol.cliente || "",
+          numeroCredito: sol.numero_credito || "",
+        },
+        solicitudId: sol.id,
+      });
+    }
+    if (sol.id) actualizarEstadoSolicitud(sol.id, "en_proceso");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const reDictaminar = (fila: any) => {
+    const map: Record<string, VistaPosicion> = { Actor: "Actor", Demandado: "Demandado", Sucesorio: "Sucesorio", Contingencia: "Contingencia", "Trámite administrativo": "Tramites" };
+    const v = map[fila.posicion];
+    if (!v) { alert("No se pudo identificar la posición de este pre-dictamen."); return; }
+    const nota = prompt("Nota de cambios (opcional): ¿qué cambió o qué vas a agregar en esta nueva versión?") || "";
+    setPrecargar({ datos: fila.datos || {}, antecedenteId: fila.id, version: fila.version || 1, cambios: nota, antecedenteTerminado: !!fila.terminado });
+    setVista(v);
+  };
+  const puedeAdmin = ["GAD", "Super_Admin", "DGE"].includes(rolUsuario || "");
+  const puedePrecioPiso = ["DGE", "Super_Admin"].includes(rolUsuario || "");
+  const navigate = useNavigate();
+  const verFichaVieja = (f: any) => {
+    setFichaGar({
+      id: f.caso_id || undefined,
+      expediente: f.expediente || "",
+      direccion_garantia: f.datos?.ubicacion || "",
+      juzgado: f.datos?.juzgado || f.juzgado || "",
+      cliente_nombre: f.datos?.deudor || f.cliente || "",
+      deudor: f.datos?.deudor || "",
+      entidad: f.datos?.estado || "",
+      numeroCredito: f.datos?.numeroCredito || "",
+      predictamenId: f.id || undefined,
+    });
+  };
+  const reDictaminarRegistral = (f: any) => {
+    setSolicitudActiva({ tipo_dictamen: "Registral", cliente: f.datos?.deudor || "", expediente: f.expediente || "", caso_id: f.caso_id || "" } as any);
+    setPrecargar({ datos: { caso_id: f.caso_id || "", expediente: f.expediente || "" } });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const auth = await getAuth();
+        const { data } = await auth.auth.getSession();
+        const correo = data.session?.user?.email;
+        if (!correo) return;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=rol&correo=eq.${encodeURIComponent(correo)}`, { headers });
+        const j = r.ok ? await r.json() : [];
+        setRolUsuario(j?.[0]?.rol ?? null);
+      } catch { /* si falla, queda sin permiso de admin */ }
+    })();
+  }, []);
+
+  useEffect(() => {
+    fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,expediente,juzgado,entidad,cliente_nombre,direccion_garantia&order=expediente.asc&limit=300`, { headers })
+      .then((r) => (r.ok ? r.json() : [])).then(setCasos).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (ficha) verFichaVieja({ expediente: ficha });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ficha]);
+
+  useEffect(() => {
+    if (registral) {
+      setSolicitudActiva({ tipo_dictamen: "Registral", expediente: exp || "", cliente: cliente || "", caso_id: caso || "" } as any);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registral]);
+
+  const dictaminacion = (
+    <div className="space-y-5">
+      {vista === "elegir" ? (
+        <>
+          {solicitudActiva && (
+            <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-4">
+              <p className="text-sm font-semibold text-[color:var(--teal)]">
+                Dictaminando la solicitud · Exp. {solicitudActiva.expediente || "\u2014"}
+                {solicitudActiva.tipo_dictamen ? ` · Dictamen ${solicitudActiva.tipo_dictamen}` : ""}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {solicitudActiva.tipo_dictamen === "Registral"
+                  ? "Revisa y analiza los documentos antes de llenar los datos del dictamen registral — lo que captures ahí se guarda en vivo en la ficha URRJ."
+                  : <>Ya cargué el expediente. Revisa primero los documentos y luego elige la <b>posición</b> (Actor, Demandado, etc.) para abrir el recorrido.</>}
+              </p>
+              <button onClick={volver} className="mt-2 text-xs font-medium text-muted-foreground underline">Cancelar y elegir otra solicitud</button>
+            </div>
+          )}
+          {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-border bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">📎 Documentos de esta solicitud ({solicitudActiva.documentos!.length})</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Revísalos antes de elegir la posición — de ahí sale el criterio para el pre-dictamen.</p>
+                </div>
+                {!analisisDocs && (
+                  <button onClick={generarCuestionario} disabled={cargandoResumen}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-800 disabled:opacity-60">
+                    {cargandoResumen ? "✨ Leyendo…" : "✨ Generar cuestionario completo"}
+                  </button>
+                )}
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
+                  <Upload className="h-3.5 w-3.5" />
+                  {subiendoDoc ? "Subiendo…" : "Agregar documento"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={subiendoDoc}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarDocumentoASolicitud(f); e.target.value = ""; }}
+                  />
+                </label>
+              </div>
+              {errorSubidaDoc && <p className="mt-1 text-xs text-red-600">⚠️ {errorSubidaDoc}</p>}
+              <p className="mt-1 text-[11px] text-muted-foreground">Analiza documento por documento con el botón «Analizar» de cada uno — así no depende de leerlos todos juntos. Solo se analiza una vez por documento.</p>
+              {duplicadosPorNombre.size > 0 && (
+                <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">
+                  ⚠️ Hay {duplicadosPorNombre.size} documento(s) que parecen repetidos (mismo tipo y contenido detectado) — revísalos y elimina el que sobre si aplica. Esto no se borra solo.
+                </p>
+              )}
+              {progresoIA && progresoIA.hecho < progresoIA.total && (
+                <p className="mt-1 text-xs font-medium text-purple-700">✨ Leyendo documento {progresoIA.hecho + 1} de {progresoIA.total}{progresoIA.nombre ? `: ${progresoIA.nombre}` : ""}…</p>
+              )}
+              {errorResumen && <p className="mt-1 text-xs text-red-600">{errorResumen}</p>}
+              <div className="mt-2 overflow-x-auto rounded-lg border border-border">
+                <table className="w-full border-collapse text-xs">
+                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <tr className="bg-muted/50">
+                      <th className="border border-border px-2.5 py-2 text-left font-semibold">Documento</th>
+                      <th className="border border-border px-2.5 py-2 text-left font-semibold">Análisis IA</th>
+                      <th className="border border-border px-2 py-2 text-right font-semibold w-24"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {documentosOrdenados.map((d, i) => {
+                      const r = resumenDe(d.nombre);
+                      const dupsDe = duplicadosPorNombre.get(d.nombre);
+                      return (
+                        <tr key={d.nombre} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
+                          <td className="border border-border px-2.5 py-2">
+                            <a href={d.url} target="_blank" rel="noopener noreferrer" className="block max-w-[260px] truncate font-medium text-[color:var(--teal)] hover:underline">📄 {d.nombre}</a>
+                            {dupsDe && dupsDe.length > 0 && (
+                              <p className="mt-0.5 text-[10px] font-medium text-amber-700">⚠️ Posible duplicado de: {dupsDe.join(", ")}</p>
+                            )}
+                          </td>
+                          <td className="border border-border px-2.5 py-2">
+                            {r ? (
+                              <span className="whitespace-normal text-muted-foreground">
+                                <span className="rounded bg-purple-100 px-1 py-0.5 font-medium text-purple-800">{r.tipo}</span> · {r.resumen}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap border border-border px-2 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {!r && (
+                                <button
+                                  onClick={() => analizarUnDocumento(d)}
+                                  disabled={analizandoDoc === d.nombre}
+                                  className="inline-flex items-center gap-1 rounded bg-purple-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-purple-800 disabled:opacity-60"
+                                >
+                                  {analizandoDoc === d.nombre ? "✨ Leyendo…" : "✨ Analizar"}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => eliminarDocumentoDeSolicitud(d.nombre)}
+                                title="Quitar de esta solicitud (no borra el archivo de Drive)"
+                                className="inline-flex items-center justify-center rounded p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {analisisDocs && introAnalisis(analisisDocs.respuestas) && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+              <p className="text-sm font-semibold text-purple-900">📋 Resumen del estado de la carpeta (según los documentos)</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-purple-800">{introAnalisis(analisisDocs.respuestas)}</p>
+              <p className="mt-2 text-[11px] italic text-purple-600">Esto es apoyo de IA — revisa contra los documentos originales. Verás el cuestionario completo dentro de cada fase al dictaminar.</p>
+            </div>
+          )}
+          {solicitudActiva && (solicitudActiva.documentos?.length ?? 0) === 0 && (
+            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+              <p>Esta solicitud llegó sin documentos adjuntos. Verifica con la Dirección antes de dictaminar.</p>
+              <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-amber-600 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+                <Upload className="h-3.5 w-3.5" />
+                {subiendoDoc ? "Subiendo…" : "Agregar el primer documento"}
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={subiendoDoc}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) agregarDocumentoASolicitud(f); e.target.value = ""; }}
+                />
+              </label>
+              {errorSubidaDoc && <p className="mt-1 text-red-600">⚠️ {errorSubidaDoc}</p>}
+            </div>
+          )}
+          {solicitudActiva?.tipo_dictamen === "Registral" && (
+            <DictamenRegistral
+              precarga={{ acreditado: solicitudActiva.cliente || "", numeroCredito: solicitudActiva.numero_credito || "", direccion: "" }}
+              casoId={solicitudActiva.caso_id || ""}
+              onVolver={volver}
+              puedeFirmarElabora={puede("firmar_elabora")}
+              puedeValidar={puede("validar")}
+              puedePrecioPiso={puedePrecioPiso}
+            />
+          )}
+          {!solicitudActiva && !crearNuevo && (
+            <>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button onClick={() => setCrearNuevo(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                  <Plus className="h-3.5 w-3.5" /> Crear pre-dictamen (boletín → posición)
+                </button>
+                <button onClick={() => setSolicitudActiva({ tipo_dictamen: "Registral" } as any)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                  <ScrollText className="h-3.5 w-3.5" /> Dictamen Registral
+                </button>
+                <button onClick={() => setImportarAbierto(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
+                  <Upload className="h-3.5 w-3.5" /> Importar cartera (Excel)
+                </button>
+              </div>
+
+              {importarAbierto && (
+                <ImportarCarteraURRJ onCerrar={() => setImportarAbierto(false)} onImportado={() => setSubVista("historial")} />
+              )}
+
+              <div className="flex gap-2 border-b border-border pt-1">
+                <button onClick={() => setSubVista("solicitudes")}
+                  className={`rounded-t-md px-3 py-2 text-sm font-semibold ${subVista === "solicitudes" ? "border-b-2 border-[color:var(--teal)] text-[color:var(--teal)]" : "text-muted-foreground hover:text-foreground"}`}>
+                  Solicitudes por dictaminar
+                </button>
+                <button onClick={() => setSubVista("historial")}
+                  className={`rounded-t-md px-3 py-2 text-sm font-semibold ${subVista === "historial" ? "border-b-2 border-[color:var(--teal)] text-[color:var(--teal)]" : "text-muted-foreground hover:text-foreground"}`}>
+                  Historial de pre-dictámenes
+                </button>
+              </div>
+
+              {subVista === "solicitudes" ? (
+                <SolicitudesURRJ onDictaminar={dictaminarSolicitud} />
+              ) : (
+                <HistorialPredictamen onReDictaminar={reDictaminar} onReDictaminarRegistral={reDictaminarRegistral} onVerFichaVieja={verFichaVieja} />
+              )}
+            </>
+          )}
+          {crearNuevo && (
+            <div>
+              <button onClick={volver} className="text-xs font-medium text-muted-foreground underline">← Cancelar y volver a solicitudes</button>
+            </div>
+          )}
+        </>
+      ) : null}
+
+      {solicitudActiva?.tipo_dictamen !== "Registral" && (solicitudActiva || vista !== "elegir" || crearNuevo) && (
+        <DictaminadorPosicion
+          casos={casos}
+          vista={vista}
+          onVista={setVista}
+          precargar={precargar}
+          onVolver={volver}
+          puedeElaborar={puede("elaborar")}
+          puedeFirmarElabora={puede("firmar_elabora")}
+          puedeValidar={puede("validar")}
+          puedeAdmin={puedeAdmin}
+          puedePrecioPiso={puedePrecioPiso}
+          datosDetectadosIA={resumenDocs?.datos_generales || null}
+        />
+      )}
+    </div>
+  );
+
+  if (fichaGar) {
+    return <FichaURRJ garantia={fichaGar} onVolver={() => setFichaGar(null)} />;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, #0C5C46)` }}>
+        <div className="flex items-center gap-2">
+          <Scale className="h-6 w-6" style={{ color: "#C2A24C" }} />
+          <div>
+            <h1 className="text-xl font-bold">URRJ · Dictaminación</h1>
+            <p className="text-sm text-white/70">Unidad de Resolución Jurídica · dictaminación y registro de garantías</p>
+          </div>
+        </div>
+      </div>
+
+      <RegistroURRJ onReDictaminar={reDictaminar} dictaminar={dictaminacion} />
+    </div>
+  );
+}
