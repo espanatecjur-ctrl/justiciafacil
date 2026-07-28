@@ -392,6 +392,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               puedeFirmarElabora={puede("firmar_elabora")}
               puedeValidar={puede("validar")}
               puedeAdmin={puedeAdmin}
+              modoFicha
             />
           </TabsContent>
 
