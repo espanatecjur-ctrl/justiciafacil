@@ -4,6 +4,8 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Search, ArrowUpDown, FileText, MoreVertical, FolderOpen, Trash2, Upload, RefreshCw, ArrowLeft, Download, CheckCircle2, UserCheck, Scale, Landmark } from "lucide-react";
 import type { Semaforo } from "@/lib/urrj-motores";
 import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
+import { BotonVerDoc } from "@/components/visor-documento";
+import { obtenerResumenPorClaveCaso, type ResumenDoc } from "@/lib/resumen-documentos";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
 import { EscogerJuicioModal, type JuicioElegido } from "@/components/escoger-juicio";
 import { ReasignarModal } from "@/components/reasignar-abogado";
@@ -52,7 +54,6 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPuede(p.acciones)); }, []);
   const can = (a: string) => puede.length === 0 || puede.includes(a);
   const navigate = useNavigate();
-  // Abre la ficha del expediente: busca el caso por número de expediente y navega a /expediente?id=...
   const abrirFicha = async (f: Fila) => {
     if (!f.expediente) { alert("Este pre-dictamen no tiene número de expediente ligado."); return; }
     try {
@@ -65,7 +66,6 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
       alert("No se pudo abrir la ficha. Intenta de nuevo.");
     }
   };
-  // Ver el pre-dictamen (la vista de ficha de la garantía con el dictamen)
   const [verPre, setVerPre] = useState<Fila | null>(null);
   const [escogerJuicio, setEscogerJuicio] = useState<Fila | null>(null);
 
@@ -87,8 +87,6 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
     const t = q.trim().toLowerCase();
     let arr = filas;
     if (t) arr = filas.filter((f) => [f.folio, f.posicion, f.tipo_juicio, f.expediente, f.juzgado, f.estado, f.dictamen_sugerido, f.dictamen_final, f.datos?.ubicacion, f.datos?.deudor, f.datos?.deCujus, f.datos?.heredero, f.datos?.acreedor, f.datos?.numeroCredito, f.datos?.quienCede, f.datos?.cartera].filter(Boolean).join(" ").toLowerCase().includes(t));
-    // No repetir en el historial: solo el más reciente por garantía/expediente.
-    // (filas viene ordenado por created_at desc, así que el primero por clave es el último.)
     const vistos = new Set<string>();
     arr = arr.filter((f: any) => {
       const key = (f.caso_id || f.expediente || f.id || "").toString().trim().toLowerCase();
@@ -220,12 +218,81 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
   );
 }
 
-// ---------------- Ficha de garantía ----------------
+function normNombreDoc(s: string | null | undefined): string {
+  return (s || "").toLowerCase().replace(/^soporte\s*-\s*/i, "").trim();
+}
+function buscarResumenDoc(resumenes: ResumenDoc[], nombre: string): ResumenDoc | undefined {
+  const n = normNombreDoc(nombre);
+  return resumenes.find((x) => normNombreDoc(x.nombre) === n);
+}
+
+const ORDEN_ETAPA = ["elabora", "dil", "ucm", "precio", "dge"] as const;
+const LABEL_ETAPA: Record<string, string> = { elabora: "Elabora", dil: "DIL", ucm: "UCM", precio: "Precio", dge: "DGE" };
+
+function EtapaFirmas({ f }: { f: Fila }) {
+  const final = (f.dictamen_final || f.dictamen_sugerido || "").toLowerCase();
+  const aplicaPrecioDge = final.includes("pasa") && !final.includes("no pasa");
+  const pasos = aplicaPrecioDge ? ORDEN_ETAPA : ORDEN_ETAPA.filter((e) => e !== "precio" && e !== "dge");
+  const actual = (f as any).etapa_firma || "elabora";
+  const idxActual = f.terminado ? pasos.length : Math.max(0, pasos.indexOf(actual as any));
+
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3">
+      {pasos.map((etapa, i) => {
+        const hecho = i < idxActual || f.terminado;
+        const enTurno = i === idxActual && !f.terminado;
+        return (
+          <div key={etapa} className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-1">
+              <span
+                className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold sm:h-6 sm:w-6 sm:text-[11px] ${
+                  hecho ? "bg-emerald-500 text-white" : enTurno ? "bg-amber-100 text-amber-800 ring-2 ring-amber-400" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {hecho ? "✓" : i + 1}
+              </span>
+              <span className={`text-[11px] font-medium sm:text-xs ${enTurno ? "text-amber-800" : hecho ? "text-emerald-700" : "text-muted-foreground"}`}>
+                {LABEL_ETAPA[etapa]}
+              </span>
+            </div>
+            {i < pasos.length - 1 && <span className="h-px w-3 shrink-0 bg-border sm:w-5" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }) {
   const [subir, setSubir] = useState(false);
   const [refresco, setRefresco] = useState(0);
   const [versiones, setVersiones] = useState<Fila[]>([]);
   const [verVieja, setVerVieja] = useState<Fila | null>(null);
+  const [docsDireccion, setDocsDireccion] = useState<{ nombre: string; url: string }[]>([]);
+  const [resumenesIA, setResumenesIA] = useState<ResumenDoc[]>([]);
+
+  useEffect(() => {
+    const numeroCredito = f.datos?.numeroCredito || "";
+    const condiciones = [
+      f.caso_id ? `caso_id.eq.${f.caso_id}` : null,
+      f.expediente ? `expediente.eq.${encodeURIComponent(f.expediente)}` : null,
+      numeroCredito ? `numero_credito.eq.${encodeURIComponent(numeroCredito)}` : null,
+    ].filter(Boolean) as string[];
+    const filtro = condiciones.length === 0 ? "id=eq.0" : condiciones.length === 1 ? condiciones[0].replace(".eq.", "=eq.") : `or=(${condiciones.join(",")})`;
+    fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos&${filtro}&area=eq.URRJ&order=created_at.desc&limit=50`, { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => {
+        const vistos = new Set<string>();
+        const todos: { nombre: string; url: string }[] = [];
+        for (const row of rows) for (const d of row.documentos || []) {
+          if (d?.url && !vistos.has(d.url)) { vistos.add(d.url); todos.push({ nombre: d.nombre || "documento", url: d.url }); }
+        }
+        setDocsDireccion(todos);
+      }).catch(() => setDocsDireccion([]));
+
+    const claveResumenIA = numeroCredito || f.expediente || f.id || "";
+    if (claveResumenIA) obtenerResumenPorClaveCaso(claveResumenIA).then((cache) => setResumenesIA(cache?.resumenes || [])).catch(() => setResumenesIA([]));
+  }, [f.id, f.caso_id, f.expediente, f.datos?.numeroCredito]);
 
   useEffect(() => {
     let activo = true;
@@ -275,12 +342,14 @@ export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }
         <button onClick={descargar} className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button>
       </div>
 
-      <div className="rounded-xl p-5 text-white" style={{ background: "linear-gradient(135deg,#0B1E3A,#0C5C46)" }}>
-        <p className="font-mono text-sm text-white/80">{f.folio}</p>
-        <h2 className="mt-1 text-xl font-bold">{d.ubicacion || f.expediente || "Pre-dictamen"}</h2>
-        <p className="text-sm text-white/70">{f.posicion} · {f.tipo_juicio} · {f.estado}</p>
+      <div className="rounded-xl p-4 text-white sm:p-6" style={{ background: "linear-gradient(135deg,#0B1E3A,#0C5C46)" }}>
+        <p className="font-mono text-xs text-white/80 sm:text-sm">{f.folio}</p>
+        <h2 className="mt-1 text-lg font-bold sm:text-2xl">{d.ubicacion || f.expediente || "Pre-dictamen"}</h2>
+        <p className="text-xs text-white/70 sm:text-sm">{f.posicion} · {f.tipo_juicio} · {f.estado}</p>
         {f.terminado && <span className="mt-2 inline-block rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white">✓ TERMINADO</span>}
       </div>
+
+      <EtapaFirmas f={f} />
 
       <div className={`rounded-lg border p-4 ${dicColorBox}`}>
         <p className="text-sm font-semibold">Dictamen del sistema: {f.dictamen_sugerido || "—"}</p>
@@ -354,9 +423,33 @@ export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-4">
+      {docsDireccion.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          <p className="mb-2 text-sm font-semibold sm:text-base">Documentos que envió la Dirección para dictaminar</p>
+          <div className="divide-y divide-border">
+            {docsDireccion.map((doc, i) => {
+              const r = buscarResumenDoc(resumenesIA, doc.nombre);
+              return (
+                <div key={i} className="py-2.5 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2"><FileText className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="truncate">{doc.nombre}</span></span>
+                    <BotonVerDoc url={doc.url} nombre={doc.nombre} label="ver" />
+                  </div>
+                  {r && (
+                    <p className="mt-1 pl-6 text-[11px] text-purple-700 sm:text-xs">
+                      <span className="rounded bg-purple-100 px-1 py-0.5 font-medium">{r.tipo}</span> · {r.resumen}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold">Documentos y actuaciones</p>
+          <p className="text-sm font-semibold sm:text-base">Documentos y actuaciones</p>
           <button onClick={() => setSubir(true)} className="flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"><Upload className="h-3.5 w-3.5" /> Subir documento</button>
         </div>
         <ListaDocs predictamenId={f.id} refresco={refresco} />
