@@ -47,6 +47,8 @@ export function InicioValidaciones() {
     setCargando(true);
     Promise.all([
       listarCadenaFirmasPendientes(),
+      // "instruccion_cliente" vive dentro de la ficha de UCM (ver InstruccionesPanel
+      // en ucm-ficha.tsx) — NO es del dictamen de URRJ, aunque un campo se llame val_urrj.
       fetch(`${SUPABASE_URL}/rest/v1/instruccion_cliente?select=id,caso_id,folio,docs_faltantes,val_urrj,val_gad,val_dil,cliente_juicio(nombre),caso_juridico(expediente)&en_papelera=eq.false&order=created_at.desc`, { headers })
         .then((r) => (r.ok ? r.json() : [])).catch(() => []),
       listarSolicitudes(),
@@ -57,10 +59,13 @@ export function InicioValidaciones() {
     }).finally(() => setCargando(false));
   }, []);
 
+  // URRJ = solo la cadena de firmas del predictamen (elabora → DIL → UCM → precio → DGE),
+  // que es lo que hace pasar el caso a UCP / UCM / UFC.
+  // UCM = su propia cadena de firmas + el panel de instrucciones de su ficha.
   const conteos: Record<Modulo, number> = {
-    UCM: firmas.filter((f) => f.area === "UCM").length,
+    UCM: firmas.filter((f) => f.area === "UCM").length + instrucciones.length,
     UCP: firmas.filter((f) => f.area === "UCP").length,
-    URRJ: firmas.filter((f) => f.area === "URRJ").length + instrucciones.length,
+    URRJ: firmas.filter((f) => f.area === "URRJ").length,
     Contratos: contratos.length,
     Escritos: 0, Liquidación: 0, UDP: 0, UFC: 0,
   };
@@ -88,10 +93,10 @@ export function InicioValidaciones() {
         </div>
       ) : (
         <div className="space-y-2">
-          {modulo === "URRJ" && instrucciones.map((i) => (
+          {modulo === "UCM" && instrucciones.map((i) => (
             <button key={`ins-${i.id}`} onClick={() => i.caso_id && navigate({ to: "/expedientes/$id", params: { id: i.caso_id } })} className="flex w-full items-start justify-between gap-2 rounded-lg border border-border p-2.5 text-left hover:bg-muted/30">
               <div className="min-w-0">
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Instrucciones</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Instrucciones (ficha UCM)</span>
                 <p className="mt-1 truncate text-sm font-medium">{i.cliente_juicio?.nombre || "—"}</p>
                 <p className="text-[11px] text-muted-foreground">{i.folio} · Exp. {i.caso_juridico?.expediente || "—"}</p>
               </div>
