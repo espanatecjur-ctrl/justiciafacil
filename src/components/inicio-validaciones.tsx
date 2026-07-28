@@ -35,11 +35,26 @@ interface Instruccion {
   caso_juridico?: { expediente: string | null } | null;
 }
 
+interface DictamenRegistral {
+  id: string; expediente: string | null; acreditado: string | null; resultado: string | null;
+  firma_elabora: any; firma_valida: any; created_at: string;
+}
+
+interface ItemRol {
+  key: string; rol: string; tipo: "Jurídico" | "Registral"; etiqueta: string;
+  cliente: string; expediente: string; fecha: string;
+  onClick?: () => void;
+}
+
+const ORDEN_ROLES = ["Elabora (URRJ)", "DIL", "UCM", "Contabilidad", "DGE"];
+const ROL_POR_SLOT: Record<string, string> = { elabora: "Elabora (URRJ)", dil: "DIL", ucm: "UCM", precio: "Contabilidad", dge: "DGE" };
+
 export function InicioValidaciones() {
   const navigate = useNavigate();
   const [modulo, setModulo] = useState<Modulo>("URRJ");
   const [cargando, setCargando] = useState(true);
   const [firmas, setFirmas] = useState<PendienteCadena[]>([]);
+  const [registral, setRegistral] = useState<DictamenRegistral[]>([]);
   const [instrucciones, setInstrucciones] = useState<Instruccion[]>([]);
   const [contratos, setContratos] = useState<SolicitudContrato[]>([]);
 
@@ -47,25 +62,43 @@ export function InicioValidaciones() {
     setCargando(true);
     Promise.all([
       listarCadenaFirmasPendientes(),
-      // "instruccion_cliente" vive dentro de la ficha de UCM (ver InstruccionesPanel
-      // en ucm-ficha.tsx) — NO es del dictamen de URRJ, aunque un campo se llame val_urrj.
+      fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=id,expediente,acreditado,resultado,firma_elabora,firma_valida,created_at&terminado=eq.false&order=created_at.desc&limit=200`, { headers })
+        .then((r) => (r.ok ? r.json() : [])).catch(() => []),
       fetch(`${SUPABASE_URL}/rest/v1/instruccion_cliente?select=id,caso_id,folio,docs_faltantes,val_urrj,val_gad,val_dil,cliente_juicio(nombre),caso_juridico(expediente)&en_papelera=eq.false&order=created_at.desc`, { headers })
         .then((r) => (r.ok ? r.json() : [])).catch(() => []),
       listarSolicitudes(),
-    ]).then(([f, i, c]) => {
+    ]).then(([f, r, i, c]) => {
       setFirmas(f);
+      setRegistral(r);
       setInstrucciones((i as Instruccion[]).filter((x) => !x.val_urrj || !x.val_gad || !x.val_dil));
       setContratos(c.filter((s) => (s.estado || "Pendiente") !== "Entregada"));
     }).finally(() => setCargando(false));
   }, []);
 
-  // URRJ = solo la cadena de firmas del predictamen (elabora → DIL → UCM → precio → DGE),
-  // que es lo que hace pasar el caso a UCP / UCM / UFC.
-  // UCM = su propia cadena de firmas + el panel de instrucciones de su ficha.
+  const itemsURRJ: ItemRol[] = [
+    ...firmas.filter((v) => v.area === "URRJ").map((v): ItemRol => ({
+      key: v.token, rol: ROL_POR_SLOT[v.slot] || v.slot, tipo: "Jurídico",
+      etiqueta: SLOT_LABEL[v.slot] || v.slot, cliente: v.cliente_o_garantia || "—", expediente: v.expediente || "—",
+      fecha: v.created_at, onClick: () => navigate({ to: "/firmar", search: { token: v.token } as any }),
+    })),
+    ...registral.filter((d) => !d.firma_elabora).map((d): ItemRol => ({
+      key: `reg-elab-${d.id}`, rol: "Elabora (URRJ)", tipo: "Registral",
+      etiqueta: "Falta elaborar", cliente: d.acreditado || "—", expediente: d.expediente || "—",
+      fecha: d.created_at, onClick: () => navigate({ to: "/urrj", search: { exp: d.expediente || undefined, registral: true } as any }),
+    })),
+    ...registral.filter((d) => d.firma_elabora && !d.firma_valida).map((d): ItemRol => ({
+      key: `reg-val-${d.id}`, rol: "DIL", tipo: "Registral",
+      etiqueta: "Falta validar (DIL)", cliente: d.acreditado || "—", expediente: d.expediente || "—",
+      fecha: d.created_at, onClick: () => navigate({ to: "/urrj", search: { exp: d.expediente || undefined, registral: true } as any }),
+    })),
+  ];
+  const porRol: Record<string, ItemRol[]> = {};
+  for (const it of itemsURRJ) (porRol[it.rol] ||= []).push(it);
+
   const conteos: Record<Modulo, number> = {
     UCM: firmas.filter((f) => f.area === "UCM").length + instrucciones.length,
     UCP: firmas.filter((f) => f.area === "UCP").length,
-    URRJ: firmas.filter((f) => f.area === "URRJ").length,
+    URRJ: itemsURRJ.length,
     Contratos: contratos.length,
     Escritos: 0, Liquidación: 0, UDP: 0, UFC: 0,
   };
@@ -91,6 +124,33 @@ export function InicioValidaciones() {
           <Lock className="mx-auto h-4 w-4" />
           <span>{modulo} aún sin validaciones configuradas.</span>
         </div>
+      ) : modulo === "URRJ" ? (
+        itemsURRJ.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted-foreground">Nada pendiente en URRJ.</p>
+        ) : (
+          <div className="space-y-4">
+            {ORDEN_ROLES.filter((rol) => porRol[rol]?.length).map((rol) => (
+              <div key={rol}>
+                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">{rol} · {porRol[rol].length} pendiente{porRol[rol].length === 1 ? "" : "s"}</p>
+                <div className="space-y-2">
+                  {porRol[rol].map((it) => (
+                    <button key={it.key} onClick={it.onClick} className="flex w-full items-start justify-between gap-2 rounded-lg border border-border p-2.5 text-left hover:bg-muted/30">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${it.tipo === "Registral" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>{it.tipo}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">{it.etiqueta}</span>
+                        </div>
+                        <p className="mt-1 truncate text-sm font-medium">{it.cliente}</p>
+                        <p className="text-[11px] text-muted-foreground">Exp. {it.expediente} · {hace(it.fecha)}</p>
+                      </div>
+                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       ) : (
         <div className="space-y-2">
           {modulo === "UCM" && instrucciones.map((i) => (
@@ -112,7 +172,7 @@ export function InicioValidaciones() {
             </div>
           ))}
 
-          {(modulo === "URRJ" || modulo === "UCP" || modulo === "UCM") && firmas.filter((f) => f.area === modulo).map((v) => (
+          {(modulo === "UCP" || modulo === "UCM") && firmas.filter((f) => f.area === modulo).map((v) => (
             <button key={v.token} onClick={() => navigate({ to: "/firmar", search: { token: v.token } as any })} className="flex w-full items-start justify-between gap-2 rounded-lg border border-border p-2.5 text-left hover:bg-muted/30">
               <div className="min-w-0">
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${COLOR_SLOT[v.slot] || "bg-slate-100 text-slate-700"}`}>{SLOT_LABEL[v.slot] || v.slot}</span>
