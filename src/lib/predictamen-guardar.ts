@@ -11,15 +11,11 @@ const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
 
 export interface Precarga {
   datos?: any;
-  antecedenteId?: string;  // id del pre-dictamen anterior
-  version?: number;        // versión del anterior
-  cambios?: string;        // nota del abogado (qué cambió)
-  /** id de la solicitud_predictamen de origen (Dirección) — cuando se dictamina
-   *  desde "Solicitudes URRJ". Sirve para ir sincronizando el expediente/crédito/
-   *  caso_id que se van capturando aquí de vuelta a esa solicitud, así los
-   *  documentos que trajo (que viven en solicitud_predictamen) se puedan
-   *  encontrar después y trasladar a la ficha formal. */
+  antecedenteId?: string;
+  version?: number;
+  cambios?: string;
   solicitudId?: string;
+  antecedenteTerminado?: boolean;
 }
 
 const ETIQUETAS: Record<string, string> = {
@@ -29,7 +25,6 @@ const ETIQUETAS: Record<string, string> = {
   anotaciones: "Anotaciones", anotacionesHumanas: "Anotaciones",
 };
 
-// Detecta qué campos cambiaron entre el anterior y el nuevo
 export function diffDatos(viejo: any, nuevo: any): { campo: string; antes: string; ahora: string }[] {
   const out: { campo: string; antes: string; ahora: string }[] = [];
   if (!viejo || !nuevo) return out;
@@ -45,14 +40,10 @@ export function diffDatos(viejo: any, nuevo: any): { campo: string; antes: strin
 
 export interface PredictamenExistente {
   id: string; folio: string | null; posicion: string | null; caso_id: string | null; expediente: string | null;
-  /** true si es un borrador "Pendiente" (todavía sin posición elegida) — se
-   *  puede retomar en vez de solo bloquear. */
   esBorrador?: boolean;
   datos?: any;
 }
 
-/** Busca un pre-dictamen VIGENTE (no en papelera) por caso o por expediente.
- *  Sirve para no duplicar: si ya hay uno, se avisa y se ofrece ir a ese. */
 export async function buscarPredictamenVigente(expediente?: string | null, casoId?: string | null): Promise<PredictamenExistente | null> {
   const conds: string[] = [];
   if (casoId) conds.push(`caso_id.eq.${casoId}`);
@@ -67,34 +58,22 @@ export async function buscarPredictamenVigente(expediente?: string | null, casoI
   } catch { return null; }
 }
 
-/** Igual que buscarPredictamenVigente, pero trae también `datos` y `version` —
- *  se usa para enlazar correctamente el antecedente cuando se dictamina desde
- *  una Solicitud (para no dejar dos filas "vigente" del mismo expediente). */
-export async function buscarPredictamenVigenteCompleto(expediente?: string | null, casoId?: string | null): Promise<(PredictamenExistente & { datos?: any; version?: number }) | null> {
+export async function buscarPredictamenVigenteCompleto(expediente?: string | null, casoId?: string | null): Promise<(PredictamenExistente & { datos?: any; version?: number; terminado?: boolean }) | null> {
   const conds: string[] = [];
   if (casoId) conds.push(`caso_id.eq.${casoId}`);
   if (expediente && expediente.trim()) conds.push(`expediente.eq.${encodeURIComponent(expediente.trim())}`);
   if (conds.length === 0) return null;
   const filtro = conds.length === 1 ? conds[0].replace(".eq.", "=eq.") : `or=(${conds.join(",")})`;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,caso_id,expediente,datos,version&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,caso_id,expediente,datos,version,terminado&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers });
     if (!res.ok) return null;
     const data = await res.json();
     return data?.[0] || null;
   } catch { return null; }
 }
 
-// Bloquea si el crédito, expediente, dirección o cliente ya existe en otra
-// garantía vigente. Devuelve el motivo (texto) o null si no hay repetido.
 const normRO = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
-/** Refleja de vuelta en la solicitud_predictamen (Dirección) el expediente /
- *  número de crédito / caso_id que se van capturando al dictaminar. Nunca
- *  borra un valor que ya estaba: solo llena lo que venga con dato. Así, más
- *  adelante, el traslado de documentos a Drive (trasladarDocumentosSolicitud)
- *  puede encontrar esta solicitud por caso_id/expediente/crédito. Si falla
- *  (ej. sin internet), no rompe el guardado del pre-dictamen — se puede volver
- *  a intentar la próxima vez que se capture algo. */
 export async function sincronizarSolicitud(
   solicitudId: string | undefined | null,
   campos: { numero_credito?: string; expediente?: string; caso_id?: string },
@@ -112,10 +91,6 @@ export async function sincronizarSolicitud(
   } catch { /* se reintenta solo en la siguiente captura */ }
 }
 
-/** Adjunta referencias de documentos a la ficha de un pre-dictamen (borrador o
- *  normal), para que "tenga espacio" aunque todavía no exista un caso_juridico
- *  formal. Se guardan dentro de datos.documentos (lectura + escritura, porque
- *  es un jsonb y hay que combinarlo, no solo pisarlo). */
 export async function adjuntarDocumentosAPredictamen(id: string, documentos: { nombre: string; url: string }[]): Promise<void> {
   if (!id || !documentos.length) return;
   try {
@@ -131,16 +106,6 @@ export async function adjuntarDocumentosAPredictamen(id: string, documentos: { n
   } catch { /* si falla, los documentos igual quedan en la solicitud */ }
 }
 
-/** Guarda un "borrador" en cuanto se captura el número de crédito (antes de elegir
- *  posición). Así el trabajo no se pierde aunque no se termine el dictamen en ese
- *  momento: queda en el historial marcado como "Pendiente". Se marca con
- *  datos.borrador = true para distinguirlo de un pre-dictamen real.
- *  También guarda lo que ya se haya sacado del boletín (expediente, deudor,
- *  juzgado, hallazgos, última actuación), para que si se sale y regresa
- *  después, no haya que volver a buscarlo. */
-/** Si el candado de la base (índice único) rechaza una creación por
- *  duplicado, esto busca el borrador que YA existe para ese mismo crédito o
- *  expediente, para no dejar a la persona sin nada guardado. */
 async function buscarBorradorExistentePorClave(numeroCredito?: string, expediente?: string): Promise<string | null> {
   const clave = (numeroCredito || "").trim() || (expediente || "").trim();
   if (!clave) return null;
@@ -176,13 +141,6 @@ export async function guardarBorrador(datos: {
       method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
     });
     if (!res.ok) {
-      // 409 = el candado de la base ya detectó que esto se estaba creando dos
-      // veces al mismo tiempo — en vez de perder el guardado, se usa el
-      // registro que ya ganó la carrera... PERO hay que escribirle ENCIMA lo
-      // que se estaba intentando guardar (hallazgos, crédito, etc.), porque
-      // ese registro existente puede no tener esta información todavía. Sin
-      // este paso, la información se pierde silenciosamente aunque la app
-      // diga "guardado en vivo".
       if (res.status === 409) {
         const idExistente = await buscarBorradorExistentePorClave(datos.numeroCredito, datos.expediente);
         if (idExistente) await actualizarBorrador(idExistente, datos);
@@ -195,9 +153,6 @@ export async function guardarBorrador(datos: {
   } catch { return null; }
 }
 
-/** Actualiza un borrador YA CREADO con lo nuevo que se haya capturado
- *  (ej. se acaba de guardar los hallazgos del boletín). No pisa el número de
- *  crédito ni la posición — solo agrega/actualiza los datos del boletín. */
 export async function actualizarBorrador(id: string, cambios: {
   expediente?: string; deudor?: string; juzgado?: string; hallazgos?: string[];
   ultimaActuacion?: string; ultimaActuacionTexto?: string;
@@ -209,10 +164,6 @@ export async function actualizarBorrador(id: string, cambios: {
     if (!res.ok) return;
     const rows = await res.json();
     const datosActuales = rows?.[0]?.datos || {};
-    // numeroCredito/administradora/direccion se guardan dentro de `datos` con
-    // los mismos nombres que usa guardarBorrador (numeroCredito/quienCede/ubicacion),
-    // no con los nombres del formulario — para que ambas funciones lean/escriban
-    // siempre el mismo lugar.
     const datosNuevos: any = { ...datosActuales, ...cambios };
     if (cambios.numeroCredito !== undefined) datosNuevos.numeroCredito = cambios.numeroCredito;
     if (cambios.administradora !== undefined) datosNuevos.quienCede = cambios.administradora;
@@ -226,14 +177,6 @@ export async function actualizarBorrador(id: string, cambios: {
   } catch { /* si falla, se queda solo en memoria — no es grave */ }
 }
 
-/** Guarda (o corrige) los "Datos básicos de la garantía" — administradora,
- *  número de crédito, dirección — sin importar si es la primera vez o una
- *  corrección después. A diferencia de revisarCredito() (que solo crea el
- *  borrador UNA vez), esta función se puede llamar las veces que haga falta:
- *  crea el borrador si todavía no existe, o lo actualiza si ya existe. Y
- *  SIEMPRE intenta reflejar crédito/expediente de vuelta en la solicitud de
- *  Dirección (sincronizarSolicitud), para que los documentos que trajo se
- *  puedan encontrar y trasladar después a la ficha formal. */
 export async function guardarDatosBasicos(
   borradorIdActual: string | null,
   datos: {
@@ -257,12 +200,6 @@ export async function guardarDatosBasicos(
   }
 }
 
-/** Autoguardado EN VIVO del recorrido completo (las 8 fases de Actor/Demandado/
- *  Sucesorio, con TODOS sus campos, no solo los 3 de "Datos básicos"). Se llama
- *  cada vez que cambia algo en el formulario (con un pequeño retraso, para no
- *  mandar una petición por cada tecla). A diferencia de actualizarBorrador,
- *  aquí `datosCompletos` YA es el objeto completo acumulado en memoria — se
- *  guarda tal cual, sin necesidad de traer lo anterior y mezclarlo. */
 export async function guardarProgreso(
   idActual: string | null,
   expediente: string | null | undefined,
@@ -303,8 +240,6 @@ export async function guardarProgreso(
   } catch { return idActual; }
 }
 
-/** Descarta el borrador (lo manda a la papelera) porque ya se guardó el
- *  pre-dictamen real — para no dejar un registro "Pendiente" duplicado. */
 export async function descartarBorrador(id?: string | null): Promise<void> {
   if (!id) return;
   try {
@@ -314,9 +249,6 @@ export async function descartarBorrador(id?: string | null): Promise<void> {
   } catch { /* si falla, el borrador se puede limpiar después a mano */ }
 }
 
-/** Busca un pre-dictamen VIGENTE por número de crédito (dato manual, no es el expediente).
- *  Se usa en el paso "Datos básicos" antes de elegir posición: si el crédito ya está
- *  registrado, no se deja seguir — se manda a ver/re-dictaminar el que ya existe. */
 export async function buscarPredictamenPorCredito(numeroCredito?: string | null): Promise<PredictamenExistente | null> {
   const cred = normRO(numeroCredito);
   if (!cred) return null;
@@ -353,10 +285,6 @@ export interface PredictamenOpcion {
   borrador?: boolean;
 }
 
-/** Lista el historial de URRJ (pre-dictámenes vigentes, incluidos los "Pendiente")
- *  en un formato listo para el buscador de garantías de "Documentos → pre-dictamen".
- *  Así se puede encontrar una garantía que ya está en URRJ aunque todavía no
- *  tenga fila en caso_juridico (por ejemplo, un borrador recién capturado). */
 export async function listarPredictamenesParaSelector(): Promise<PredictamenOpcion[]> {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,caso_id,expediente,juzgado,datos&vigente=eq.true&en_papelera=eq.false&order=created_at.desc&limit=500`, { headers });
@@ -371,14 +299,6 @@ export async function listarPredictamenesParaSelector(): Promise<PredictamenOpci
   } catch { return []; }
 }
 
-// ============================================================
-//  Importación masiva de cartera (Excel → borradores "Pendiente")
-// ------------------------------------------------------------
-//  Se usa desde "Importar cartera" en URRJ. Cada fila del Excel se
-//  convierte en un pre-dictamen borrador (igual que el checkpoint
-//  de "Datos básicos"), listo para que URRJ lo tome y dictamine.
-//  La regla de oro es por NÚMERO DE CRÉDITO: si ya existe, se salta.
-// ============================================================
 export interface FilaCartera {
   estado?: string;
   cartera?: string;
@@ -401,9 +321,6 @@ export interface FilaCartera {
   administradoraCodigo?: string;
 }
 
-/** Trae todos los números de crédito que YA existen en pre-dictámenes vigentes,
- *  en un solo viaje — para revisar duplicados de un lote completo sin hacer
- *  una consulta por cada fila del Excel. */
 export async function listarCreditosExistentes(): Promise<Set<string>> {
   const norm = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
   try {
@@ -414,8 +331,6 @@ export async function listarCreditosExistentes(): Promise<Set<string>> {
   } catch { return new Set(); }
 }
 
-/** Crea un lote de borradores "Pendiente" de un jalón (varias filas en un solo
- *  POST). Se usa en tandas (ej. de 50 en 50) para no saturar la petición. */
 export async function crearBorradoresEnLote(filas: FilaCartera[]): Promise<{ ok: boolean; error?: string; creados: number }> {
   if (!filas.length) return { ok: true, creados: 0 };
   const cuerpo = filas.map((f) => ({
@@ -444,9 +359,7 @@ export async function crearBorradoresEnLote(filas: FilaCartera[]): Promise<{ ok:
   }
 }
 
-
 export async function guardarPredictamen(payload: any, precargar?: Precarga | null, datosPDF?: any, opts?: { reglaOroURRJ?: boolean }): Promise<string | null> {
-  // Regla de oro: solo al crear una garantía NUEVA (no al re-dictaminar).
   if (opts?.reglaOroURRJ && !precargar) {
     const motivo = await motivoRepetidoURRJ(payload);
     if (motivo) throw new Error(`REGLA DE ORO (URRJ): ya existe una garantía con ${motivo}. No se pueden subir repetidos.`);
@@ -457,19 +370,32 @@ export async function guardarPredictamen(payload: any, precargar?: Precarga | nu
     const campos = diffDatos(precargar.datos, payload.datos);
     cambiosTxt = JSON.stringify({ campos, nota: precargar.cambios || "" });
   }
-  const body = { ...payload, version, vigente: true, antecedente_de: null, cambios: cambiosTxt, pasa_a_ucp: /pasa a ucp/i.test(String(payload.dictamen_final || "")) };
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
-    method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Supabase ${res.status}`);
-  const data = await res.json();
-  const nuevoId: string | null = data?.[0]?.id ?? null;
+  const terminado = !!payload.dictamen_final;
+  const reusaMismaFila = !!precargar?.antecedenteId && !precargar?.antecedenteTerminado;
 
-  // marcar el anterior como antecedente
-  if (precargar?.antecedenteId && nuevoId) {
-    await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${precargar.antecedenteId}`, {
-      method: "PATCH", headers, body: JSON.stringify({ vigente: false, antecedente_de: nuevoId }),
+  let nuevoId: string | null = null;
+  if (reusaMismaFila) {
+    const body = { ...payload, vigente: true, terminado, cambios: cambiosTxt, pasa_a_ucp: /pasa a ucp/i.test(String(payload.dictamen_final || "")) };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${precargar!.antecedenteId}`, {
+      method: "PATCH", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
     });
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    const data = await res.json();
+    nuevoId = data?.[0]?.id ?? precargar!.antecedenteId ?? null;
+  } else {
+    const body = { ...payload, version, vigente: true, terminado, antecedente_de: null, cambios: cambiosTxt, pasa_a_ucp: /pasa a ucp/i.test(String(payload.dictamen_final || "")) };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/predictamen`, {
+      method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    const data = await res.json();
+    nuevoId = data?.[0]?.id ?? null;
+
+    if (precargar?.antecedenteId && nuevoId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${precargar.antecedenteId}`, {
+        method: "PATCH", headers, body: JSON.stringify({ vigente: false, antecedente_de: nuevoId }),
+      });
+    }
   }
   try {
     if (payload.caso_id && payload.dictamen_final) {
@@ -477,18 +403,17 @@ export async function guardarPredictamen(payload: any, precargar?: Precarga | nu
     }
   } catch { /* la línea de vida no debe romper el guardado */ }
 
-  // Sincroniza expediente/crédito/caso_id de vuelta a la solicitud de origen
-  // (si se dictaminó desde "Solicitudes URRJ"), para que sus documentos se
-  // puedan encontrar y trasladar a la ficha formal más adelante.
   await sincronizarSolicitud(precargar?.solicitudId, {
     numero_credito: payload?.datos?.numeroCredito,
     expediente: payload?.expediente,
     caso_id: payload?.caso_id,
   });
 
-  // Archivar el PDF por fase (Camino 1): genera el PDF una vez, lo sube a Storage
-  // y guarda su URL en pdf_url. Import dinámico para no crear ciclos. Si algo
-  // falla, el pre-dictamen igual quedó guardado (el PDF se puede generar luego).
+  if (precargar?.solicitudId && payload.dictamen_final) {
+    const { actualizarEstadoSolicitud } = await import("@/lib/solicitud-predictamen");
+    actualizarEstadoSolicitud(precargar.solicitudId, "terminado");
+  }
+
   if (datosPDF && nuevoId) {
     try {
       const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
