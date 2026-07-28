@@ -255,6 +255,18 @@ export function RecorridoActor({
       correoEsperado: destino, tituloSlot: TITULO_ETAPA.dil,
       expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
     });
+    // Antes esto solo cambiaba la pantalla (memoria del navegador) y nunca se
+    // guardaba en la base — si alguien recargaba la página antes de que DIL
+    // firmara, se veía como si nunca se hubiera mandado a validar. Ahora se
+    // guarda de una vez en predictamen, igual que hace avanzarCadena en los
+    // siguientes pasos (DIL → UCM → Precio → DGE).
+    if (r.ok) {
+      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${borradorIdLocal}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ etapa_firma: "dil", firma_elabora: firmaElabora?.nombre || null, firma_elabora_fecha: firmaElabora?.fecha || null }),
+      });
+    }
     setEnviandoValidacion(false);
     setEtapaFirma("dil");
     setValidacionMsg(r.ok ? (r.enviado ? `✅ Enviado a ${destino} — y ya aparece en "Mis validaciones" si tiene usuario.` : `Link generado — se abrió tu correo para mandarlo a ${destino} a mano.`) : `⚠️ ${r.error || "No se pudo mandar a validar."}`);
@@ -788,6 +800,25 @@ export function RecorridoActor({
   if (verRegistral) {
     const precReg: PrecargaRegistral = { acreditado: d.deudor || undefined, numeroCredito: d.numeroCredito || d.expediente || undefined, direccion: d.ubicacion || undefined };
     return <DictamenRegistral precarga={precReg} casoId={d.caso_id || undefined} puedeFirmarElabora={puedeFirmarElabora} puedeValidar={puedeValidar} puedePrecioPiso={puedePrecioPiso} onVolver={() => setVerRegistral(false)} />;
+  }
+
+  // DIL/UCM (o cualquiera que solo pueda validar, no elaborar) no debe entrar
+  // al asistente completo de URRJ una vez que el dictamen ya está elaborado —
+  // aquí solo firman desde Validaciones. DGE sigue viendo todo (puedeFirmarElabora
+  // es true para DGE por la regla "ve todo"), así que este bloqueo no le aplica.
+  if (!puedeFirmarElabora && firmaElabora && !modoFicha) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-border bg-card p-6 text-center">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-100 text-amber-700"><Lock className="h-6 w-6" /></div>
+        <div>
+          <p className="font-display text-base font-semibold">El dictamen ya está elaborado</p>
+          <p className="mt-1 text-sm text-muted-foreground">Exp. {d.expediente || d.numeroCredito || "—"} · Tu firma se hace desde Validaciones, no aquí en el asistente de URRJ.</p>
+        </div>
+        <Link to="/" className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: NAVY }}>
+          Ir a firmar <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    );
   }
 
   return (
