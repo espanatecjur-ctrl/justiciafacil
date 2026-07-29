@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Folder, Plus, Eye, Download, X, Loader2, FileText, Image as ImageIcon, File as FileIcon, Gavel, Camera, ClipboardList, MoreVertical, Edit, Archive, Trash2, Check } from "lucide-react";
 import { type CasoJuridico } from "@/lib/supabase";
 import { listarDocumentos, editarMovimiento, moverPapelera, type DocumentoGarantia, type DatosMovimiento } from "@/lib/drive";
+import { firmarCopias } from "@/lib/drive-explorar";
 import { AgregarMovimientoModal } from "@/components/agregar-movimiento";
 import { registrarEvento } from "@/lib/cronologia-caso";
 
@@ -135,10 +136,15 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
   const [ver, setVer] = useState<DocumentoGarantia | null>(null);
   const [editar, setEditar] = useState<DocumentoGarantia | null>(null);
   const [agregar, setAgregar] = useState(false);
+  const [urlsRelacionados, setUrlsRelacionados] = useState<Record<string, string>>({});
 
   const cargar = () => {
     setCargando(true);
-    listarDocumentos(caso).then(setDocs).finally(() => setCargando(false));
+    listarDocumentos(caso).then((d) => {
+      setDocs(d);
+      const paths = d.map((x) => x.drive_copia?.storage_path).filter((p): p is string => !!p);
+      if (paths.length) firmarCopias(paths).then(setUrlsRelacionados);
+    }).finally(() => setCargando(false));
   };
   useEffect(() => { cargar(); /* eslint-disable-next-line */ }, [caso.id]);
 
@@ -206,9 +212,23 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
                       </span>
                     </td>
                     <td className="border border-border px-3 py-2.5">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5">
                         {d.link && iconoArchivo(d.mime, d.nombre)}
-                        <span className="max-w-[260px] truncate" title={detalleDe(d)}>{detalleDe(d)}</span>
+                        <div className="min-w-0">
+                          <span className="whitespace-normal break-words" title={detalleDe(d)}>{detalleDe(d)}</span>
+                          {d.drive_copia ? (
+                            <a
+                              href={urlsRelacionados[d.drive_copia.storage_path] || "#"}
+                              target="_blank" rel="noreferrer"
+                              className="mt-1 flex w-fit items-center gap-1 rounded-md bg-[color:var(--teal)]/10 px-1.5 py-0.5 text-[11px] font-medium text-[color:var(--teal)] hover:underline"
+                              title={`Pertenece a este documento fijo: ${d.drive_copia.nombre}`}
+                            >
+                              {iconoArchivo(d.drive_copia.mime, d.drive_copia.nombre)} {d.drive_copia.nombre}
+                            </a>
+                          ) : (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Sin documento fijo relacionado todavía</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="whitespace-nowrap border border-border px-3 py-2.5 text-muted-foreground">{d.subido_por || "—"}</td>
