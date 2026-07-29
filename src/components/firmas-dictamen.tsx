@@ -1,10 +1,48 @@
 import { useState } from "react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
-import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { CheckCircle2, Clock, Mail, Loader2 } from "lucide-react";
 import { crearYEnviarSolicitudFirma, correoDeRol } from "@/lib/firma-solicitud";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
+
+// Si ambas validaciones (jurídico + registral) ya quedaron firmadas, arma el
+// Dictamen Final en PDF y lo guarda solo en "Documentos fijos" (categoría
+// automática). No bloquea nada si falla — es un "de pilón", no algo crítico.
+export async function intentarAutoguardarDictamenFinal(dictamenId: string, casoId: string) {
+  try {
+    const rd = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&id=eq.${dictamenId}&limit=1`, { headers });
+    const dict = (rd.ok ? await rd.json() : [])?.[0];
+    if (!dict) return;
+    const f = dict.firmas || {};
+    if (!(f.jur_dil?.fecha && f.reg_ucm?.fecha)) return; // todavía falta alguna
+
+    const rc = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${casoId}&limit=1`, { headers });
+    const caso: CasoJuridico | null = (rc.ok ? await rc.json() : [])?.[0] || null;
+    if (!caso) return;
+
+    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
+    const { autoguardarDictamenFinalSiListo } = await import("@/components/checklist-documentos-ucp");
+    const blob = await descargarDictamenFinalPDF({
+      expediente: caso.expediente || undefined,
+      juzgado: (caso as any).juzgado || undefined,
+      garantia: caso.direccion_garantia || (caso as any).gar_id || undefined,
+      cliente: caso.cliente_nombre || undefined,
+      entidad: (caso as any).entidad || undefined,
+      veredictoJuridico: dict.juridico?.veredicto || undefined,
+      veredictoRegistral: typeof dict.registral?.veredicto === "string" ? dict.registral.veredicto : undefined,
+      veredictoFinal: dict.veredicto || undefined,
+      firmas: [
+        { titulo: "Dictamen jurídico", firma: f.jur_dil },
+        { titulo: "Dictamen registral (RPPC)", firma: f.reg_ucm },
+      ],
+      detalleJuridico: dict.juridico && typeof dict.juridico === "object" ? dict.juridico : undefined,
+      detalleRegistral: dict.registral && typeof dict.registral === "object" ? dict.registral : undefined,
+    }, "blob") as Blob;
+    const nombre = `dictamen-final-${(caso.expediente || "garantia").replace(/[^\w.-]+/g, "_")}.pdf`;
+    await autoguardarDictamenFinalSiListo(caso, "UCP", blob, nombre);
+  } catch { /* de pilón — nunca debe tronar el guardado de la firma por esto */ }
+}
 
 // Bloque de firmas de UN dictamen (jurídico o registral).
 // Cada dictamen lleva 2 firmas: Elabora + Valida (DIL/UCM).
@@ -41,6 +79,9 @@ export function FirmasDictamen({ dictamenId, casoId, expedienteTexto, rolValida,
       });
       if (!r.ok) throw new Error(`${r.status}`);
       onGuardado?.();
+      if ((clave === "jur_dil" || clave === "reg_ucm") && datos.fecha) {
+        intentarAutoguardarDictamenFinal(dictamenId, casoId);
+      }
     } catch (e: any) { setError("No se pudo guardar la firma: " + e.message); }
   };
 
