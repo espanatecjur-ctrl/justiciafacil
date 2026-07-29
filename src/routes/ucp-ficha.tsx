@@ -20,6 +20,7 @@ import { TraspasoArea } from "@/components/traspaso-area";
 import { BannerCoincidencias } from "@/components/banner-coincidencias";
 import { VisitaJuzgadoSeccion } from "@/components/visita-juzgado";
 import { ChecklistDocumentosUCP } from "@/components/checklist-documentos-ucp";
+import { DictamenLegalFinal } from "@/components/dictamen-legal-final";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -474,6 +475,16 @@ function UCPFicha() {
             onVer={() => verDictamenPDF()}
             onDescargar={() => descargarPDF()}
           />
+          {dict?.id && (
+            <DictamenLegalFinal
+              dictamenId={dict.id}
+              casoId={c.id}
+              clienteJcId={(c as any).cliente_jc_id}
+              veredicto={dict?.veredicto || null}
+              informeInicial={(dict as any)?.informe_cierre || null}
+              onGuardado={() => {}}
+            />
+          )}
         </div>
       )}
 
