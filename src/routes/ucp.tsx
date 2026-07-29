@@ -387,6 +387,11 @@ function UCP() {
   const ensureDictamen = async (c: CasoJuridico): Promise<DictamenRow | null> => {
     const ya = dictPorCaso[c.id];
     if (ya) return ya;
+    // No confiar solo en la lista local (puede no haber cargado todavía, ej. al
+    // entrar por un link directo) — buscar primero en la base antes de crear uno nuevo.
+    const buscar = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${c.id}&vigente=eq.true&order=created_at.desc&limit=1`, { headers });
+    const existentes = buscar.ok ? await buscar.json() : [];
+    if (existentes?.[0]) return existentes[0];
     const body = {
       caso_id: c.id, predictamen_id: predPorCaso[c.id]?.id ?? null,
       estado: "requisitos", requisitos: REQ_VACIOS(), veredicto: "PENDIENTE", vigente: true,
