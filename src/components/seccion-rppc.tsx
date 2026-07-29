@@ -233,6 +233,108 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
     <div className="space-y-4">
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
+      {/* ---------- gestoría RPPC (3 fases) — al principio, es lo primero que se hace ---------- */}
+      <Card className="legal-card">
+        <CardContent className="space-y-3 p-4">
+          <p className="text-sm font-semibold">Gestoría RPPC</p>
+          <p className="text-xs text-muted-foreground">
+            Cada documento (CLG, testimonio, inscripción) avanza por 3 fases: solicitud → seguimiento → entrega. El CLG vence a los 90 días.
+          </p>
+
+          {/* alta de gestoría */}
+          <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
+            <Campo label="Documento">
+              <select className={INP} value={nueva.documento} onChange={(e) => setNueva((p) => ({ ...p, documento: e.target.value }))}>
+                {DOCUMENTOS.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </Campo>
+            <Campo label="RPPC / oficina"><Input value={nueva.rppc} onChange={(e) => setNueva((p) => ({ ...p, rppc: e.target.value }))} /></Campo>
+            <Campo label="Gestor"><Input value={nueva.gestor} onChange={(e) => setNueva((p) => ({ ...p, gestor: e.target.value }))} /></Campo>
+            <Campo label="Folio real"><Input value={nueva.folio_real} onChange={(e) => setNueva((p) => ({ ...p, folio_real: e.target.value }))} /></Campo>
+            <Campo label="Costo estimado"><Input inputMode="numeric" value={nueva.costo_estimado} onChange={(e) => setNueva((p) => ({ ...p, costo_estimado: e.target.value }))} /></Campo>
+            <Campo label="Costo de ciudad"><Input inputMode="numeric" value={nueva.costo_ciudad} onChange={(e) => setNueva((p) => ({ ...p, costo_ciudad: e.target.value }))} /></Campo>
+            <div className="sm:col-span-3">
+              <Button size="sm" onClick={agregarGestoria} disabled={agregando}>
+                {agregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar gestoría
+              </Button>
+            </div>
+          </div>
+
+          {/* lista de gestorías */}
+          {cargandoG ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando gestorías…</div>
+          ) : gestorias.length === 0 ? (
+            <p className="py-3 text-center text-xs text-muted-foreground">Aún no hay gestorías. Agrega la primera arriba.</p>
+          ) : (
+            <div className="space-y-2">
+              {gestorias.map((g) => {
+                const i = faseIdx(g.fase);
+                const dias = diasPara(g.vence);
+                const vencido = dias !== null && dias < 0;
+                return (
+                  <div key={g.id} className="rounded-lg border border-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <FileCheck2 className="h-4 w-4 text-[color:var(--teal)]" />
+                        <span className="text-sm font-medium">{g.documento}</span>
+                        {g.rppc && <span className="text-xs text-muted-foreground">· {g.rppc}</span>}
+                        {g.folio_real && <span className="text-xs text-muted-foreground">· folio {g.folio_real}</span>}
+                      </div>
+                      <button className="text-muted-foreground hover:text-red-600" onClick={() => borrarGestoria(g)} title="Quitar">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* stepper de fases */}
+                    <div className="mt-2 flex items-center gap-1">
+                      {FASES.map((f, idx) => (
+                        <div key={f.clave} className="flex flex-1 items-center gap-1">
+                          <div className={`flex-1 rounded px-2 py-1 text-center text-[11px] ${idx < i ? "bg-emerald-100 text-emerald-800" : idx === i ? "bg-[color:var(--teal)] text-white" : "bg-muted text-muted-foreground"}`}>
+                            {f.label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                      <span>Pago de la fase: <b>{FASES[i].pago}</b></span>
+                      {g.vence && (
+                        <span className={vencido ? "text-red-600 font-medium" : ""}>
+                          <Clock className="mr-1 inline h-3 w-3" />
+                          {vencido ? `CLG vencido hace ${Math.abs(dias!)} días` : `CLG vence en ${dias} días (${g.vence})`}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* evidencia + validación DIL en entrega */}
+                    {(g.fase === "seguimiento" || g.fase === "entrega" || g.fase === "cerrada") && (
+                      <Textarea className="mt-2 min-h-[38px] text-sm" placeholder="Evidencia: pantallas RPPC, recibo del pago, notas…"
+                        defaultValue={g.evidencia || ""} onBlur={(e) => { if (e.target.value !== (g.evidencia || "")) patchGestoria(g, { evidencia: e.target.value }); }} />
+                    )}
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {g.fase !== "cerrada" ? (
+                        <Button size="sm" variant="outline" onClick={() => avanzarFase(g)}>
+                          Avanzar a {FASES[i + 1].label}
+                        </Button>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Gestoría cerrada</span>
+                      )}
+                      {(g.fase === "entrega" || g.fase === "cerrada") && (
+                        <label className="flex items-center gap-2 text-xs">
+                          <input type="checkbox" checked={g.validado_dil} onChange={() => patchGestoria(g, { validado_dil: !g.validado_dil })} />
+                          Validado por DIL
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* ---------- referencia: lo que ya se llenó en URRJ ---------- */}
       {pred?.datos && (
         <Card className="border-2" style={{ borderColor: "#0C447C33", background: "#0C447C08" }}>
@@ -348,108 +450,6 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
         cargoValida="Unidad de Consolidación Municipal"
         onGuardado={onGuardado}
       />
-
-      {/* ---------- gestoría RPPC (3 fases) ---------- */}
-      <Card className="legal-card">
-        <CardContent className="space-y-3 p-4">
-          <p className="text-sm font-semibold">Gestoría RPPC</p>
-          <p className="text-xs text-muted-foreground">
-            Cada documento (CLG, testimonio, inscripción) avanza por 3 fases: solicitud → seguimiento → entrega. El CLG vence a los 90 días.
-          </p>
-
-          {/* alta de gestoría */}
-          <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
-            <Campo label="Documento">
-              <select className={INP} value={nueva.documento} onChange={(e) => setNueva((p) => ({ ...p, documento: e.target.value }))}>
-                {DOCUMENTOS.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </Campo>
-            <Campo label="RPPC / oficina"><Input value={nueva.rppc} onChange={(e) => setNueva((p) => ({ ...p, rppc: e.target.value }))} /></Campo>
-            <Campo label="Gestor"><Input value={nueva.gestor} onChange={(e) => setNueva((p) => ({ ...p, gestor: e.target.value }))} /></Campo>
-            <Campo label="Folio real"><Input value={nueva.folio_real} onChange={(e) => setNueva((p) => ({ ...p, folio_real: e.target.value }))} /></Campo>
-            <Campo label="Costo estimado"><Input inputMode="numeric" value={nueva.costo_estimado} onChange={(e) => setNueva((p) => ({ ...p, costo_estimado: e.target.value }))} /></Campo>
-            <Campo label="Costo de ciudad"><Input inputMode="numeric" value={nueva.costo_ciudad} onChange={(e) => setNueva((p) => ({ ...p, costo_ciudad: e.target.value }))} /></Campo>
-            <div className="sm:col-span-3">
-              <Button size="sm" onClick={agregarGestoria} disabled={agregando}>
-                {agregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Agregar gestoría
-              </Button>
-            </div>
-          </div>
-
-          {/* lista de gestorías */}
-          {cargandoG ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando gestorías…</div>
-          ) : gestorias.length === 0 ? (
-            <p className="py-3 text-center text-xs text-muted-foreground">Aún no hay gestorías. Agrega la primera arriba.</p>
-          ) : (
-            <div className="space-y-2">
-              {gestorias.map((g) => {
-                const i = faseIdx(g.fase);
-                const dias = diasPara(g.vence);
-                const vencido = dias !== null && dias < 0;
-                return (
-                  <div key={g.id} className="rounded-lg border border-border p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <FileCheck2 className="h-4 w-4 text-[color:var(--teal)]" />
-                        <span className="text-sm font-medium">{g.documento}</span>
-                        {g.rppc && <span className="text-xs text-muted-foreground">· {g.rppc}</span>}
-                        {g.folio_real && <span className="text-xs text-muted-foreground">· folio {g.folio_real}</span>}
-                      </div>
-                      <button className="text-muted-foreground hover:text-red-600" onClick={() => borrarGestoria(g)} title="Quitar">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {/* stepper de fases */}
-                    <div className="mt-2 flex items-center gap-1">
-                      {FASES.map((f, idx) => (
-                        <div key={f.clave} className="flex flex-1 items-center gap-1">
-                          <div className={`flex-1 rounded px-2 py-1 text-center text-[11px] ${idx < i ? "bg-emerald-100 text-emerald-800" : idx === i ? "bg-[color:var(--teal)] text-white" : "bg-muted text-muted-foreground"}`}>
-                            {f.label}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                      <span>Pago de la fase: <b>{FASES[i].pago}</b></span>
-                      {g.vence && (
-                        <span className={vencido ? "text-red-600 font-medium" : ""}>
-                          <Clock className="mr-1 inline h-3 w-3" />
-                          {vencido ? `CLG vencido hace ${Math.abs(dias!)} días` : `CLG vence en ${dias} días (${g.vence})`}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* evidencia + validación DIL en entrega */}
-                    {(g.fase === "seguimiento" || g.fase === "entrega" || g.fase === "cerrada") && (
-                      <Textarea className="mt-2 min-h-[38px] text-sm" placeholder="Evidencia: pantallas RPPC, recibo del pago, notas…"
-                        defaultValue={g.evidencia || ""} onBlur={(e) => { if (e.target.value !== (g.evidencia || "")) patchGestoria(g, { evidencia: e.target.value }); }} />
-                    )}
-
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {g.fase !== "cerrada" ? (
-                        <Button size="sm" variant="outline" onClick={() => avanzarFase(g)}>
-                          Avanzar a {FASES[i + 1].label}
-                        </Button>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Gestoría cerrada</span>
-                      )}
-                      {(g.fase === "entrega" || g.fase === "cerrada") && (
-                        <label className="flex items-center gap-2 text-xs">
-                          <input type="checkbox" checked={g.validado_dil} onChange={() => patchGestoria(g, { validado_dil: !g.validado_dil })} />
-                          Validado por DIL
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
