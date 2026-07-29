@@ -56,7 +56,7 @@ function etiquetaDe(clave: string): string {
   return clave.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
-export async function descargarDictamenFinalPDF(d: DictamenFinalPDF, modo: "descargar" | "ver" = "descargar") {
+export async function descargarDictamenFinalPDF(d: DictamenFinalPDF, modo: "descargar" | "ver" | "blob" = "descargar"): Promise<Blob | void> {
   const mod: any = await import(/* @vite-ignore */ "https://esm.sh/jspdf@2.5.1");
   const jsPDF = mod.jsPDF || mod.default;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -206,7 +206,9 @@ export async function descargarDictamenFinalPDF(d: DictamenFinalPDF, modo: "desc
   doc.text("Documento generado por JusticiaFácil DIIPA · el sistema calcula y avisa; las personas firman y deciden.", M, 290);
 
   const nombre = `dictamen-final-${(d.expediente || "garantia").replace(/[^\w.-]+/g, "_")}.pdf`;
-  if (modo === "ver") {
+  if (modo === "blob") {
+    return doc.output("blob") as Blob;
+  } else if (modo === "ver") {
     // abre el PDF en una pestaña nueva (ojo de vista)
     const url = doc.output("bloburl");
     window.open(url as any, "_blank");
