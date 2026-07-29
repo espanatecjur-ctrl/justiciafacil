@@ -209,6 +209,8 @@ function UCPFicha() {
     veredictoRegistral: (typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : undefined),
     veredictoFinal: dict?.veredicto || undefined,
     firmas: armarFirmas(),
+    detalleJuridico: dict?.juridico && typeof dict.juridico === "object" ? dict.juridico : undefined,
+    detalleRegistral: dict?.registral && typeof dict.registral === "object" ? dict.registral : undefined,
   });
   const descargarPDF = async () => {
     if (!c) return;
@@ -458,8 +460,8 @@ function UCPFicha() {
             firmas={dict?.firmas}
             claveFirma="juridico"
             onAbrir={() => navigate({ to: "/ucp", search: { id: c.id, tab: "juridico" } })}
-            onVer={() => navigate({ to: "/ucp", search: { id: c.id, tab: "juridico" } })}
-            onDescargar={() => navigate({ to: "/ucp", search: { id: c.id, tab: "juridico" } })}
+            onVer={() => verDictamenPDF()}
+            onDescargar={() => descargarPDF()}
           />
           <BloqueDictamen
             titulo="Dictamen registral (RPPC)"
@@ -468,8 +470,8 @@ function UCPFicha() {
             firmas={dict?.firmas}
             claveFirma="registral"
             onAbrir={() => navigate({ to: "/ucp", search: { id: c.id, tab: "rppc" } })}
-            onVer={() => navigate({ to: "/ucp", search: { id: c.id, tab: "rppc" } })}
-            onDescargar={() => navigate({ to: "/ucp", search: { id: c.id, tab: "rppc" } })}
+            onVer={() => verDictamenPDF()}
+            onDescargar={() => descargarPDF()}
           />
         </div>
       )}
