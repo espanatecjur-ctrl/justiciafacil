@@ -61,6 +61,32 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
 
   const docsDe = (clave: string) => docs.filter((d) => (d as any).categoria_checklist === clave);
 
+  // Cuando se envía o elige un documento para la categoría CLG, se refleja en
+  // la Gestoría RPPC (misma fuente que alimenta el indicador de la tabla de
+  // UCP) — así "Documentos fijos" y "Gestoría RPPC" nunca quedan desconectados.
+  const sincronizarGestoriaCLG = async (nombreDoc: string) => {
+    try {
+      const rd = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=id&caso_id=eq.${caso.id}&vigente=eq.true&limit=1`, { headers });
+      const dictamenId = (rd.ok ? await rd.json() : [])?.[0]?.id;
+      if (!dictamenId) return; // sin dictamen todavía — no hay a qué ligarlo
+      const rg = await fetch(`${SUPABASE_URL}/rest/v1/gestoria_rppc?select=id,fase&dictamen_id=eq.${dictamenId}&documento=eq.CLG&limit=1`, { headers });
+      const existente = (rg.ok ? await rg.json() : [])?.[0];
+      const hoy = new Date().toISOString().slice(0, 10);
+      if (existente) {
+        if (existente.fase !== "entrega" && existente.fase !== "cerrada") {
+          await fetch(`${SUPABASE_URL}/rest/v1/gestoria_rppc?id=eq.${existente.id}`, {
+            method: "PATCH", headers, body: JSON.stringify({ fase: "entrega", fecha_entrega: hoy, evidencia: `Documento: ${nombreDoc}` }),
+          });
+        }
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/gestoria_rppc`, {
+          method: "POST", headers,
+          body: JSON.stringify({ dictamen_id: dictamenId, caso_id: caso.id, documento: "CLG", fase: "entrega", fecha_solicitud: hoy, fecha_entrega: hoy, evidencia: `Documento: ${nombreDoc}` }),
+        });
+      }
+    } catch { /* no bloquea el guardado del documento si esto falla */ }
+  };
+
   const enviar = async (clave: string, file: File) => {
     setSubiendo(clave);
     try {
@@ -69,6 +95,7 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
         await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${r.doc.id}`, {
           method: "PATCH", headers, body: JSON.stringify({ categoria_checklist: clave }),
         });
+        if (clave === "clg") await sincronizarGestoriaCLG(file.name);
       }
       cargar();
     } finally { setSubiendo(null); }
@@ -86,6 +113,7 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
           tipo: "otro", subido_por: miCorreo || null, categoria_checklist: clave, drive_copia_id: copia.id,
         }),
       });
+      if (clave === "clg") await sincronizarGestoriaCLG(copia.nombre || "documento");
       setEligiendoPara(null);
       cargar();
     } finally { setAsignando(null); }
