@@ -18,6 +18,7 @@ import { CronologiaCaso } from "@/components/cronologia-caso";
 import { registrarEvento } from "@/lib/cronologia-caso";
 import { TraspasoArea } from "@/components/traspaso-area";
 import { BannerCoincidencias } from "@/components/banner-coincidencias";
+import { VisitaJuzgadoSeccion } from "@/components/visita-juzgado";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -429,6 +430,9 @@ function UCPFicha() {
             )}
           </SeccionUCP>
 
+          {/* Visitas al juzgado — registro real, no solo texto de contrato */}
+          <VisitaJuzgadoSeccion casoId={c.id} expediente={c.expediente} juzgado={c.nombre_juzgado || c.juzgado} area="UCP" />
+
           {/* Cronología del expediente (compartida entre áreas) */}
           <CronologiaCaso casoId={c.id} expediente={c.expediente} recargaId={recargaCron} />
         </div>
@@ -443,9 +447,9 @@ function UCPFicha() {
             veredicto={pred?.dictamen_final || null}
             firmas={{ urrj: pred?.firma_elabora || null }}
             claveFirma="urrj"
-            onAbrir={() => navigate({ to: "/urrj", search: { caso: c.id } })}
-            onVer={() => pred?.pdf_url && window.open(pred.pdf_url, "_blank")}
-            onDescargar={() => pred?.pdf_url && window.open(pred.pdf_url, "_blank")}
+            onAbrir={() => navigate({ to: "/urrj", search: pred?.id ? { pred: pred.id } : { caso: c.id } })}
+            onVer={() => navigate({ to: "/urrj", search: pred?.id ? { pred: pred.id } : { caso: c.id } })}
+            onDescargar={() => navigate({ to: "/urrj", search: pred?.id ? { pred: pred.id } : { caso: c.id } })}
           />
           <BloqueDictamen
             titulo="Dictamen jurídico"
