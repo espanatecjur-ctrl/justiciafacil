@@ -46,11 +46,27 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
 
   const lista = Object.values(copias);
 
+  // Separa "Subcarpeta / archivo.pdf" en carpeta + archivo (si no trae subcarpeta, queda "" = raíz).
+  const partesNombre = (nombre: string): { carpeta: string; archivo: string } => {
+    const i = nombre.indexOf(" / ");
+    return i === -1 ? { carpeta: "", archivo: nombre } : { carpeta: nombre.slice(0, i), archivo: nombre.slice(i + 3) };
+  };
+
+  // Orden por carpeta primero (raíz al final) y luego por archivo — así los documentos
+  // de una misma subcarpeta quedan juntos en vez de revueltos entre sí.
+  const listaOrdenada = [...lista].sort((a, b) => {
+    const pa = partesNombre(a.nombre || ""), pb = partesNombre(b.nombre || "");
+    if (pa.carpeta === pb.carpeta) return pa.archivo.localeCompare(pb.archivo, "es");
+    if (!pa.carpeta) return 1;
+    if (!pb.carpeta) return -1;
+    return pa.carpeta.localeCompare(pb.carpeta, "es");
+  });
+
   // Buscador: filtra por nombre, incluyendo lo que viene de subcarpetas (el nombre ya trae "Subcarpeta / archivo.pdf").
   const [q, setQ] = useState("");
   const listaBuscada = q.trim()
-    ? lista.filter((c) => (c.nombre || "").toLowerCase().includes(q.trim().toLowerCase()))
-    : lista;
+    ? listaOrdenada.filter((c) => (c.nombre || "").toLowerCase().includes(q.trim().toLowerCase()))
+    : listaOrdenada;
 
   // Paginación: no renderizamos ni firmamos todo de un jalón — pesa mucho con muchos documentos.
   const POR_PAGINA = 12;
@@ -201,27 +217,39 @@ export function DocumentosFijos({ caso, area }: { caso: CasoJuridico; area: stri
             </thead>
             <tbody className="bg-white">
               {listaPagina.map((c, i) => {
-                const nombre = c.nombre || "Documento";
-                const tipoTxt = (c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(nombre) ? "Word" : /\.(xlsx?)$/i.test(nombre) ? "Excel" : /\.(pptx?)$/i.test(nombre) ? "PowerPoint" : (c.mime || "").startsWith("image/") ? "Imagen" : "Documento";
+                const { carpeta, archivo } = partesNombre(c.nombre || "Documento");
+                const idxGlobal = paginaActual * POR_PAGINA + i;
+                const carpetaAnterior = idxGlobal > 0 ? partesNombre(listaBuscada[idxGlobal - 1]?.nombre || "").carpeta : undefined;
+                const nuevoGrupo = carpeta !== carpetaAnterior;
+                const tipoTxt = (c.mime || "").includes("pdf") ? "PDF" : /\.(docx?)$/i.test(archivo) ? "Word" : /\.(xlsx?)$/i.test(archivo) ? "Excel" : /\.(pptx?)$/i.test(archivo) ? "PowerPoint" : (c.mime || "").startsWith("image/") ? "Imagen" : "Documento";
                 return (
+                  <>
+                  {nuevoGrupo && (
+                    <tr key={`grupo-${carpeta}-${i}`} className="bg-[color:var(--teal)]/10">
+                      <td colSpan={3} className="border border-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--teal)]">
+                        {carpeta || "Sin subcarpeta (raíz)"}
+                      </td>
+                    </tr>
+                  )}
                   <tr key={c.drive_id} className={i % 2 ? "bg-white hover:bg-muted/20" : "bg-muted/10 hover:bg-muted/20"}>
                     <td className="border border-border px-3 py-2.5">
-                      <button onClick={() => setDocSel({ id: c.drive_id, nombre, url: urls[c.storage_path] || "" })} className="flex items-center gap-2 text-left hover:underline" title="Ampliar vista previa">
+                      <button onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || archivo, url: urls[c.storage_path] || "" })} className="flex items-center gap-2 text-left hover:underline" title="Ampliar vista previa">
                         <FileText className="h-4 w-4 shrink-0 text-[color:var(--teal)]" />
-                        <span className="max-w-[380px] truncate" title={nombre}>{nombre}</span>
+                        <span className="max-w-[380px] truncate" title={archivo}>{archivo}</span>
                       </button>
                     </td>
                     <td className="whitespace-nowrap border border-border px-3 py-2.5 text-muted-foreground">{tipoTxt}</td>
                     <td className="whitespace-nowrap border border-border px-2 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-3">
-                        <button onClick={() => setDocSel({ id: c.drive_id, nombre, url: urls[c.storage_path] || "" })} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Ver</button>
-                        {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(nombre)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
-                        <button onClick={() => mandarAPapelera(c.drive_id, nombre)} disabled={mandando === c.drive_id} title="Mandar a la papelera" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50">
+                        <button onClick={() => setDocSel({ id: c.drive_id, nombre: c.nombre || archivo, url: urls[c.storage_path] || "" })} className="inline-flex items-center gap-1 text-xs text-[color:var(--teal)] hover:underline"><Maximize2 className="h-3.5 w-3.5" /> Ver</button>
+                        {urls[c.storage_path] && <a href={`${urls[c.storage_path]}&download=${encodeURIComponent(archivo)}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ExternalLink className="h-3.5 w-3.5" /> Descargar</a>}
+                        <button onClick={() => mandarAPapelera(c.drive_id, c.nombre || archivo)} disabled={mandando === c.drive_id} title="Mandar a la papelera" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50">
                           {mandando === c.drive_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                     </td>
                   </tr>
+                  </>
                 );
               })}
             </tbody>
