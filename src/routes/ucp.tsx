@@ -16,6 +16,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { correoActual } from "@/lib/auth";
 import { cargarPermisosModulo, puedeAccion } from "@/lib/permisos-acciones";
 import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
+import { buscarClientesJC, type ClienteJC } from "@/lib/juris-clientes";
 import {
   FichaUCP, REQ_VACIOS, reqCompletos, reqCuenta,
   type Requisitos, type DictamenRow, type PredFuente,
@@ -121,7 +122,10 @@ function UCP() {
 
   // alta de garantía (folios capturados a mano; después se conectan a SIGA)
   const [dlg, setDlg] = useState(false);
-  const [nueva, setNueva] = useState({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_codigo: "", materia: "" });
+  const [nueva, setNueva] = useState({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_jc_id: "", cliente_codigo: "", materia: "" });
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [resultCliente, setResultCliente] = useState<ClienteJC[]>([]);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [guardandoAlta, setGuardandoAlta] = useState(false);
 
   // escoger de URRJ + juicio/derecho de crédito
@@ -437,9 +441,24 @@ function UCP() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idDesdeUrl]);
 
+  const buscarCliente = async () => {
+    if (buscaCliente.trim().length < 2) return;
+    setBuscandoCliente(true);
+    try {
+      setResultCliente(await buscarClientesJC(buscaCliente));
+    } finally { setBuscandoCliente(false); }
+  };
+  const elegirCliente = (c: ClienteJC) => {
+    setNueva((p) => ({ ...p, cliente_nombre: c.nombre || "", cliente_jc_id: c.id }));
+    setResultCliente([]); setBuscaCliente("");
+  };
+
   const agregarGarantia = async () => {
     if (!nueva.expediente.trim() && !nueva.direccion_garantia.trim()) {
       setError("Pon al menos el expediente o la dirección de la garantía."); return;
+    }
+    if (!nueva.cliente_jc_id) {
+      setError("En UCP toda garantía debe tener cliente. Escógelo de JurisConecta arriba — si todavía no hay comprador, esta garantía va en URRJ, no aquí."); return;
     }
 
     // Aviso anti-duplicado: si coincide en algo (crédito, dirección o cliente+expediente) con algo que ya existe, preguntar.
@@ -469,12 +488,16 @@ function UCP() {
         if (val) payload[k] = val;
       }
       const res = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, {
-        method: "POST", headers, body: JSON.stringify({ ...payload, ...(sinJuicio ? { nota: `Sin juicio/derecho de crédito: ${motivoSinJuicio || "no especificado"}` } : {}) }),
+        method: "POST", headers, body: JSON.stringify({
+          ...payload,
+          unidad: "UCP", // este formulario es de UCP — UCP siempre tiene cliente (ya validado arriba)
+          ...(sinJuicio ? { nota: `Sin juicio/derecho de crédito: ${motivoSinJuicio || "no especificado"}` } : {}),
+        }),
       });
       if (!res.ok) throw new Error(`Supabase ${res.status} — revisa el permiso de inserción en caso_juridico`);
       setDlg(false);
-      setNueva({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_codigo: "", materia: "" });
-      setSinJuicio(false); setMotivoSinJuicio(""); setResultURRJ([]); setBuscaURRJ("");
+      setNueva({ expediente: "", no_credito: "", gar_id: "", direccion_garantia: "", juzgado: "", entidad: "", cliente_nombre: "", cliente_jc_id: "", cliente_codigo: "", materia: "" });
+      setSinJuicio(false); setMotivoSinJuicio(""); setResultURRJ([]); setBuscaURRJ(""); setResultCliente([]); setBuscaCliente("");
       cargar();
     } catch (e: any) {
       setError("No se pudo agregar la garantía: " + e.message);
@@ -648,15 +671,57 @@ function UCP() {
                     ["gar_id", "ID garantía / folio (de SIGA)"],
                     ["direccion_garantia", "Dirección de la garantía"],
                     ["juzgado", "Juzgado"], ["entidad", "Estado / entidad"],
-                    ["cliente_nombre", "Cliente"],
-                    ["cliente_codigo", "Folio del cliente (de SIGA)"],
-                    ["materia", "Materia"],
                   ] as const).map(([k, label]) => (
                     <label key={k} className="block text-sm">
                       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
                       <Input value={(nueva as any)[k]} onChange={(e) => setNueva((p) => ({ ...p, [k]: e.target.value }))} />
                     </label>
                   ))}
+
+                  {/* Cliente — SIEMPRE se escoge de JurisConecta, no se captura a mano */}
+                  <div className="rounded-md border border-input p-2.5">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Cliente (dado de alta en JurisConecta)</span>
+                    {nueva.cliente_jc_id ? (
+                      <div className="flex items-center justify-between rounded-md bg-emerald-50 px-2.5 py-1.5 text-sm">
+                        <span className="font-medium text-emerald-800">{nueva.cliente_nombre}</span>
+                        <button className="text-xs text-emerald-700 underline" onClick={() => setNueva((p) => ({ ...p, cliente_nombre: "", cliente_jc_id: "" }))}>Cambiar</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <Input placeholder="Buscar por nombre, folio, correo o teléfono…" value={buscaCliente}
+                            onChange={(e) => setBuscaCliente(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); buscarCliente(); } }}
+                            className="flex-1 text-sm" />
+                          <Button size="sm" variant="outline" onClick={buscarCliente} disabled={buscandoCliente}>
+                            {buscandoCliente ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
+                          </Button>
+                        </div>
+                        {resultCliente.length > 0 && (
+                          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                            {resultCliente.map((c) => (
+                              <button key={c.id} onClick={() => elegirCliente(c)} className="block w-full rounded border border-input bg-background px-2 py-1.5 text-left text-xs hover:bg-muted/40">
+                                <b>{c.nombre}</b> {c.codigo && <span className="ml-1 rounded-full bg-muted px-1.5 text-[9px]">{c.codigo}</span>} · {c.folio || "sin folio"}
+                                {c.garantia && <span className="block text-muted-foreground">{c.garantia}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {buscaCliente.trim().length >= 2 && !buscandoCliente && resultCliente.length === 0 && (
+                          <p className="mt-1.5 text-[11px] text-muted-foreground">No se encontró — el cliente debe darse de alta primero en JurisConecta.</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Folio del cliente (de SIGA)</span>
+                    <Input value={nueva.cliente_codigo} onChange={(e) => setNueva((p) => ({ ...p, cliente_codigo: e.target.value }))} />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Materia</span>
+                    <Input value={nueva.materia} onChange={(e) => setNueva((p) => ({ ...p, materia: e.target.value }))} />
+                  </label>
 
                   {/* Juicio / derecho de crédito */}
                   <div className="rounded-md border border-input p-2.5">
@@ -670,8 +735,8 @@ function UCP() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Los folios (garantía y cliente) hoy se capturan a mano; más adelante se conectarán con SIGA.
-                    La garantía nueva entra al registro; para dictaminarla en UCP primero necesita su pre-dictamen URRJ positivo.
+                    El cliente se escoge de JurisConecta — ya no se captura a mano, y es <b>obligatorio</b> para guardar aquí (UCP siempre tiene cliente; sin comprador todavía, esa garantía va en URRJ).
+                    Los demás folios se capturan a mano por ahora; más adelante se conectarán con SIGA.
                   </p>
                 </div>
                 <DialogFooter>
