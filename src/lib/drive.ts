@@ -94,6 +94,8 @@ export type DocumentoGarantia = {
   en_papelera: boolean | null;
   papelera_fecha: string | null;
   etapa: string | null;       // a qué etapa del juicio pertenece
+  drive_copia_id: string | null; // liga con el archivo real en "Documentos fijos" (drive_copia)
+  drive_copia?: { nombre: string | null; storage_path: string; mime: string | null } | null;
 };
 
 // convierte un File del navegador a base64 (sin el prefijo data:)
@@ -146,6 +148,18 @@ export async function subirDocumento(area: string, caso: CasoJuridico, file: Fil
     });
     const filas = ins.ok ? await ins.json() : [];
     const doc: DocumentoGarantia = filas?.[0] || { id: data.id, created_at: new Date().toISOString(), ...fila } as DocumentoGarantia;
+
+    // 3) copiarlo también a Supabase (Documentos fijos) en el mismo paso —
+    // no se espera a que alguien le dé "Copiar" aparte. Si esto falla, el
+    // documento ya quedó subido y registrado igual; solo faltará copiarlo
+    // manualmente después (el aviso de "documentos nuevos sin copiar" lo sigue mostrando).
+    if (caso.drive_carpeta_id) {
+      try {
+        const { sincronizarCarpeta } = await import("@/lib/drive-explorar");
+        await sincronizarCarpeta(caso.id, caso.drive_carpeta_id, area, caso.no_credito || undefined, caso.cliente_nombre || undefined);
+      } catch { /* no bloquea la subida si falla la copia */ }
+    }
+
     return { ok: true, doc };
   } catch (e: any) {
     return { ok: false, error: String(e?.message || e) };
@@ -158,7 +172,7 @@ export async function listarDocumentos(caso: CasoJuridico): Promise<DocumentoGar
     const filtro = caso.id
       ? `caso_id=eq.${caso.id}`
       : `expediente=eq.${encodeURIComponent(caso.expediente || "")}`;
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=*&${filtro}&en_papelera=eq.false&order=created_at.desc`, { headers });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=*,drive_copia(nombre,storage_path,mime)&${filtro}&en_papelera=eq.false&order=created_at.desc`, { headers });
     return r.ok ? await r.json() : [];
   } catch {
     return [];
