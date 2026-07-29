@@ -74,9 +74,11 @@ export function CarpetaDriveVinculada({
     puedeAbrirDrive(modulo).then(setPuedeDrive).catch(() => setPuedeDrive(false));
   }, [modulo]);
 
-  // ---- Prueba piloto: en UCM, UCP y UFC se separa "Documentos fijos" del explorador completo ----
-  // (UDP / Amparos / URRJ siguen viendo el explorador de siempre por ahora).
-  const enPrueba = modulo === "ucm" || modulo === "ucp" || modulo === "ufc";
+  // Antes esto solo aplicaba en UCM/UCP/UFC como prueba piloto. Ahora aplica en
+  // todos lados: el explorador de Drive completo queda oculto por defecto para
+  // todos — solo DGE/Super_Admin lo ven siempre, y quien más lo necesite se le
+  // enciende explícitamente desde Configuración. El resto ve "Documentos fijos".
+  const enPrueba = true;
   const [driveAvanzado, setDriveAvanzado] = useState(!enPrueba); // fuera de la prueba: comportamiento de siempre
   useEffect(() => {
     if (!enPrueba) { setDriveAvanzado(true); return; }
