@@ -6,8 +6,7 @@ import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BloquePrecioURRJ, PRECIO_VACIO, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { rechazarSolicitud } from "@/lib/firma-solicitud";
 import { avanzarCadena, rechazarYRetroceder, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
-import { BotonVerDoc } from "@/components/visor-documento";
-import { Loader2, Lock, CheckCircle2, ShieldCheck, XCircle, FileText, StickyNote } from "lucide-react";
+import { Loader2, Lock, CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/firmar")({
   validateSearch: (s: Record<string, unknown>) => ({ token: typeof s.token === "string" ? s.token : undefined }),
@@ -31,7 +30,7 @@ const SLOT_TITULO: Record<string, string> = {
 function Firmar() {
   const { token } = Route.useSearch();
   const [correo, setCorreo] = useState<string | null>(null);
-  const [sol, setSol] = useState<any>(null);
+  const [sol, setSol] = useState<any>(null);   // fila de firma_solicitud
   const [caso, setCaso] = useState<any>(null);
   const [dict, setDict] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
@@ -45,9 +44,6 @@ function Firmar() {
   const [siguienteInfo, setSiguienteInfo] = useState<{ ok: boolean; siguiente: EtapaFirma; correo?: string; link?: string; error?: string } | null>(null);
   const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
   const [guardandoPrecio, setGuardandoPrecio] = useState(false);
-  const [docs, setDocs] = useState<{ nombre: string; url: string }[]>([]);
-  const [nota, setNota] = useState("");
-  const [registral, setRegistral] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -74,32 +70,6 @@ function Firmar() {
         setCaso(cres?.[0] || null);
         setDict(dres?.[0] || null);
         if (dres?.[0]?.datos?.precio) setPrecio((p) => ({ ...p, ...dres[0].datos.precio }));
-
-        const numeroCredito = dres?.[0]?.datos?.numeroCredito || "";
-        const condiciones = [
-          cres?.[0]?.id ? `caso_id.eq.${cres[0].id}` : null,
-          cres?.[0]?.expediente ? `expediente.eq.${encodeURIComponent(cres[0].expediente)}` : null,
-          numeroCredito ? `numero_credito.eq.${encodeURIComponent(numeroCredito)}` : null,
-        ].filter(Boolean) as string[];
-        if (condiciones.length) {
-          const filtro = condiciones.length === 1 ? condiciones[0].replace(".eq.", "=eq.") : `or=(${condiciones.join(",")})`;
-          fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos&${filtro}&order=created_at.desc&limit=50`, { headers })
-            .then((r) => (r.ok ? r.json() : []))
-            .then((rows: any[]) => {
-              const vistos = new Set<string>();
-              const todos: { nombre: string; url: string }[] = [];
-              for (const row of rows) for (const d of row.documentos || []) {
-                if (d?.url && !vistos.has(d.url)) { vistos.add(d.url); todos.push({ nombre: d.nombre || "documento", url: d.url }); }
-              }
-              setDocs(todos);
-            }).catch(() => setDocs([]));
-        }
-
-        const claveExp = (cres?.[0]?.expediente || dres?.[0]?.expediente || "").trim();
-        if (claveExp) {
-          fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,firma_elabora,firma_valida,terminado,conclusion&expediente=eq.${encodeURIComponent(claveExp)}&order=created_at.desc&limit=1`, { headers })
-            .then((r) => (r.ok ? r.json() : [])).then((rows) => setRegistral(rows?.[0] || null)).catch(() => setRegistral(null));
-        }
       } catch (e: any) {
         setErr("No se pudo cargar: " + (e?.message || ""));
       } finally {
@@ -113,28 +83,27 @@ function Firmar() {
     setGuardando(true); setErr(null);
     try {
       if (sol.dictamen_id) {
+        // UCP: las firmas viven en dictamen.firmas[slot]
         const firmas = { ...(dict.firmas || {}), [sol.slot]: f };
         const r1 = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?id=eq.${dict.id}`, {
           method: "PATCH", headers, body: JSON.stringify({ firmas, updated_at: new Date().toISOString() }),
         });
         if (!r1.ok) throw new Error(`dictamen ${r1.status}`);
         setDict({ ...dict, firmas });
+        if (sol.slot === "jur_dil" || sol.slot === "reg_ucm") {
+          import("@/components/firmas-dictamen").then((m) => (m as any).intentarAutoguardarDictamenFinal?.(dict.id, sol.caso_id)).catch(() => {});
+        }
       } else if (sol.predictamen_id) {
+        // URRJ: cadena de 4 etapas — cada una en su propia columna.
         const COLUMNA: Record<string, string> = { elabora: "firma_elabora", dil: "firma_dil", ucm: "firma_ucm", dge: "firma_dge" };
         const campo = COLUMNA[sol.slot] || "firma_valida";
         const campoFecha = campo + "_fecha";
-        const notasPrevias: any[] = Array.isArray(dict.datos?.notas_validacion) ? dict.datos.notas_validacion : [];
-        const datosNuevos = nota.trim()
-          ? { ...(dict.datos || {}), notas_validacion: [...notasPrevias, { slot: sol.slot, quien: f.nombre, nota: nota.trim(), fecha: f.fecha }] }
-          : dict.datos;
-        const patch: any = { [campo]: f.nombre, [campoFecha]: f.fecha };
-        if (nota.trim()) patch.datos = datosNuevos;
         const r1 = await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${dict.id}`, {
-          method: "PATCH", headers, body: JSON.stringify(patch),
+          method: "PATCH", headers, body: JSON.stringify({ [campo]: f.nombre, [campoFecha]: f.fecha }),
         });
         if (!r1.ok) throw new Error(`predictamen ${r1.status}`);
-        const dictActualizado = { ...dict, [campo]: f.nombre, [campoFecha]: f.fecha, ...(nota.trim() ? { datos: datosNuevos } : {}) };
-        setDict(dictActualizado);
+        setDict({ ...dict, [campo]: f.nombre, [campoFecha]: f.fecha });
+        // Encadena sola a la siguiente etapa (DGE se salta si no quedó Positivo).
         if (sol.slot !== "elabora") {
           const av = await avanzarCadena({
             predictamenId: dict.id, casoId: caso?.id, expedienteTexto: caso?.expediente || "el expediente",
@@ -142,7 +111,6 @@ function Firmar() {
           });
           setSiguienteInfo(av);
         }
-        regenerarPDF(dictActualizado);
       }
       await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud?token=eq.${encodeURIComponent(token)}`, {
         method: "PATCH", headers, body: JSON.stringify({ firmado: true, firmado_por: correo, firmado_at: new Date().toISOString() }),
@@ -153,30 +121,6 @@ function Firmar() {
     } finally {
       setGuardando(false);
     }
-  };
-
-  const regenerarPDF = async (d: any) => {
-    try {
-      const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
-      const dd = d.datos || {};
-      const res = d.resultados || {};
-      const riesgos = Object.entries(res).filter(([, v]: any) => v && typeof v === "object" && v.semaforo).map(([k, v]: any) => ({ nombre: k, r: v }));
-      const fin = res.financiero;
-      const url = await descargarPredictamenPDF({
-        expediente: d.expediente || "", juzgado: d.juzgado || "", estado: d.estado || "", tipoJuicio: d.tipo_juicio || "", posicion: d.posicion || "",
-        ubicacion: dd.ubicacion || "", deudor: dd.deudor || dd.deCujus || "", quienCede: dd.quienCede || dd.acreedor || dd.heredero || "", queCede: dd.queCede || "Derechos",
-        dictamen: d.dictamen_sugerido || "", riesgos,
-        intereses: fin ? { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura } : { ordinarios: 0, moratorios: 0, iva: 0, total: 0, usura: false },
-        anotaciones: dd.anotacionesHumanas || dd.anotaciones || "",
-        firmaElabora: d.firma_elabora ? { nombre: d.firma_elabora, cargo: "", fecha: d.firma_elabora_fecha || "", dibujo: null } : null,
-        firmaValida: d.firma_dil ? { nombre: d.firma_dil, cargo: "", fecha: d.firma_dil_fecha || "", dibujo: null } : null,
-        decision: d.dictamen_final || "",
-      }, "archivar");
-      if (typeof url === "string") {
-        await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${d.id}`, { method: "PATCH", headers, body: JSON.stringify({ pdf_url: url }) });
-        setDict((p: any) => (p ? { ...p, pdf_url: url } : p));
-      }
-    } catch { /* el PDF se puede volver a generar después desde el Historial */ }
   };
 
   const guardarPrecio = async () => {
@@ -210,6 +154,8 @@ function Firmar() {
     setRechazando(true); setErr(null);
     const r = await rechazarSolicitud(token, motivoRechazo.trim(), correo);
     if (!r.ok) { setRechazando(false); setErr("No se pudo registrar el rechazo — intenta de nuevo."); return; }
+    // URRJ: además de marcar esta solicitud como rechazada, la cadena
+    // retrocede UN PASO (no hasta el inicio) y se avisa a esa persona.
     if (sol?.predictamen_id && sol.slot !== "elabora") {
       const rb = await rechazarYRetroceder({
         predictamenId: dict.id, casoId: caso?.id, expedienteTexto: caso?.expediente || "el expediente",
@@ -245,9 +191,6 @@ function Firmar() {
   const esURRJ = !!sol?.predictamen_id;
   const titulo = TITULO_ETAPA[sol?.slot] || SLOT_TITULO[sol?.slot] || sol?.slot || "Firma";
   const vReg = typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : "—";
-  const resURRJ = dict?.resultados || {};
-  const riesgos = Object.entries(resURRJ).filter(([, v]: any) => v && typeof v === "object" && v.semaforo).map(([k, v]: any) => ({ k, v }));
-  const fin = resURRJ.financiero;
   const COLUMNA_URRJ: Record<string, string> = { elabora: "firma_elabora", dil: "firma_dil", ucm: "firma_ucm", dge: "firma_dge" };
   const valorFirma: DatosFirma | null = esURRJ
     ? (() => {
@@ -298,65 +241,6 @@ function Firmar() {
         )}
       </div>
 
-      {esURRJ && riesgos.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 text-sm">
-          <p className="mb-2 font-semibold" style={{ color: NAVY }}>Auditores / riesgos</p>
-          <div className="space-y-2">
-            {riesgos.map(({ k, v }: any) => (
-              <div key={k} className="rounded-lg border border-border p-2.5">
-                <div className="flex items-center gap-2 font-medium"><span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: semColor(v.semaforo) }} />{v.etiqueta}{v.dato ? <span className="font-normal text-muted-foreground"> · {v.dato}</span> : null}</div>
-                {v.detalle && <p className="mt-1 text-[13px] text-muted-foreground">{v.detalle}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {esURRJ && fin && (
-        <div className="rounded-xl border border-border bg-card p-4 text-sm">
-          <p className="mb-2 font-semibold" style={{ color: NAVY }}>Intereses</p>
-          <div className="space-y-0.5">
-            <div className="flex justify-between"><span className="text-muted-foreground">Ordinarios</span><b>{fmtMXN(fin.ordinarios)}</b></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Moratorios</span><b>{fmtMXN(fin.moratorios)}</b></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Total deuda</span><b>{fmtMXN(fin.totalDeuda)}</b></div>
-          </div>
-        </div>
-      )}
-
-      {esURRJ && (dict?.datos?.anotacionesHumanas || dict?.datos?.anotaciones) && (
-        <div className="rounded-xl border border-border bg-card p-4 text-sm">
-          <p className="mb-1 font-semibold" style={{ color: NAVY }}>Anotaciones del abogado que elaboró</p>
-          <p className="whitespace-pre-wrap text-muted-foreground">{dict?.datos?.anotacionesHumanas || dict?.datos?.anotaciones}</p>
-        </div>
-      )}
-
-      {esURRJ && registral && (
-        <div className="rounded-xl border border-border bg-card p-4 text-sm">
-          <p className="mb-2 flex items-center justify-between font-semibold" style={{ color: NAVY }}>
-            Dictamen registral
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${registral.terminado ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{registral.terminado ? "Terminado" : "En curso"}</span>
-          </p>
-          <Dato k="Resultado" v={registral.resultado || "—"} />
-          <Dato k="Elabora" v={registral.firma_elabora?.nombre || "Sin firmar"} />
-          <Dato k="Valida (DIL)" v={registral.firma_valida?.nombre || "Sin firmar"} />
-          {registral.conclusion && <p className="mt-1.5 whitespace-pre-wrap text-muted-foreground">{registral.conclusion}</p>}
-        </div>
-      )}
-
-      {docs.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 text-sm">
-          <p className="mb-2 flex items-center gap-1.5 font-semibold" style={{ color: NAVY }}><FileText className="h-4 w-4" /> Documentos del caso</p>
-          <div className="divide-y divide-border">
-            {docs.map((doc, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 py-2">
-                <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground"><FileText className="h-3.5 w-3.5 shrink-0" />{doc.nombre}</span>
-                <BotonVerDoc url={doc.url} nombre={doc.nombre} label="ver" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {ok ? (
         <Aviso icon={CheckCircle2} color="#0C5C46" titulo="Firma registrada ✓">
           Gracias, tu firma quedó guardada.
@@ -392,9 +276,6 @@ function Firmar() {
       ) : (
         <div className="rounded-xl border-2 border-[color:var(--teal)]/40 bg-[color:var(--teal)]/5 p-4">
           <p className="mb-2 text-sm font-semibold" style={{ color: "#0C5C46" }}>Tu firma · {titulo}</p>
-          <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><StickyNote className="h-3.5 w-3.5" /> Tus anotaciones (opcional)</label>
-          <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={2} placeholder="Algo que quieras dejar anotado sobre tu revisión…"
-            className="mb-3 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
           <FirmaParte titulo={titulo} valor={valorFirma} onFirmar={firmar} cargoSugerido={titulo} />
           {guardando && <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Guardando…</p>}
           <button onClick={() => setModoRechazo(true)} className="mt-3 flex items-center gap-1.5 text-xs font-medium text-red-700 hover:underline"><XCircle className="h-3.5 w-3.5" /> No estoy de acuerdo — rechazar y regresar</button>
@@ -403,11 +284,6 @@ function Firmar() {
     </Wrap>
   );
 }
-
-function semColor(s: string) {
-  return s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
-}
-const fmtMXN = (v: number) => (v || 0).toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
 function Dato({ k, v }: { k: string; v: string }) {
   return (
