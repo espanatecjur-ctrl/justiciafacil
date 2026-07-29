@@ -458,7 +458,7 @@ function UCPFicha() {
             icon={<ScrollText className="h-4 w-4" style={{ color: AZUL }} />}
             veredicto={dict?.juridico?.veredicto || dict?.veredicto || null}
             firmas={dict?.firmas}
-            claveFirma="juridico"
+            claveFirma="jur_dil"
             onAbrir={() => navigate({ to: "/ucp", search: { id: c.id, tab: "juridico" } })}
             onVer={() => verDictamenPDF()}
             onDescargar={() => descargarPDF()}
@@ -468,7 +468,7 @@ function UCPFicha() {
             icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
             veredicto={typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : (dict?.rppc ? "registrado" : null)}
             firmas={dict?.firmas}
-            claveFirma="registral"
+            claveFirma="reg_ucm"
             onAbrir={() => navigate({ to: "/ucp", search: { id: c.id, tab: "rppc" } })}
             onVer={() => verDictamenPDF()}
             onDescargar={() => descargarPDF()}
