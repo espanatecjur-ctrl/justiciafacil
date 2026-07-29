@@ -27,9 +27,29 @@ interface Registral {
   anotaciones: string;
   semaforo: Semaforo;
   nota: string;
+  // --- tracto y detalle (mismo nivel que la ficha de URRJ) ---
+  fecha_verificacion: string;
+  distrito_registral: string;
+  p_direccion: string;
+  p_fecha_inscripcion: string;
+  p_no_escritura: string;
+  p_fecha_escritura: string;
+  p_titular: string;
+  p_notario: string;
+  p_superficie: string;
+  g_fecha_inscripcion: string;
+  g_no_escritura: string;
+  g_fecha_escritura: string;
+  g_acreedor: string;
+  g_notario: string;
+  g_monto: string;
 }
-const REGISTRAL_VACIO = (): Registral =>
-  ({ folio_real: "", propietario: "", prelacion: "", hipoteca_inscrita: "", anotaciones: "", semaforo: "gris", nota: "" });
+const REGISTRAL_VACIO = (): Registral => ({
+  folio_real: "", propietario: "", prelacion: "", hipoteca_inscrita: "", anotaciones: "", semaforo: "gris", nota: "",
+  fecha_verificacion: "", distrito_registral: "",
+  p_direccion: "", p_fecha_inscripcion: "", p_no_escritura: "", p_fecha_escritura: "", p_titular: "", p_notario: "", p_superficie: "",
+  g_fecha_inscripcion: "", g_no_escritura: "", g_fecha_escritura: "", g_acreedor: "", g_notario: "", g_monto: "",
+});
 
 function semilla(reg: any, pred?: PredFuente): Registral {
   const d = pred?.datos || {};
@@ -42,6 +62,21 @@ function semilla(reg: any, pred?: PredFuente): Registral {
     anotaciones: reg?.anotaciones ?? d.anotaciones ?? "",
     semaforo: reg?.semaforo ?? "gris",
     nota: reg?.nota ?? "",
+    fecha_verificacion: reg?.fecha_verificacion ?? "",
+    distrito_registral: reg?.distrito_registral ?? d.estado ?? "",
+    p_direccion: reg?.p_direccion ?? d.ubicacion ?? "",
+    p_fecha_inscripcion: reg?.p_fecha_inscripcion ?? "",
+    p_no_escritura: reg?.p_no_escritura ?? "",
+    p_fecha_escritura: reg?.p_fecha_escritura ?? "",
+    p_titular: reg?.p_titular ?? reg?.propietario ?? d.propietario ?? "",
+    p_notario: reg?.p_notario ?? "",
+    p_superficie: reg?.p_superficie ?? "",
+    g_fecha_inscripcion: reg?.g_fecha_inscripcion ?? "",
+    g_no_escritura: reg?.g_no_escritura ?? "",
+    g_fecha_escritura: reg?.g_fecha_escritura ?? "",
+    g_acreedor: reg?.g_acreedor ?? "",
+    g_notario: reg?.g_notario ?? "",
+    g_monto: reg?.g_monto ?? "",
   };
 }
 
@@ -198,24 +233,70 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
     <div className="space-y-4">
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
+      {/* ---------- referencia: lo que ya se llenó en URRJ ---------- */}
+      {pred?.datos && (
+        <Card className="border-2" style={{ borderColor: "#0C447C33", background: "#0C447C08" }}>
+          <CardContent className="space-y-1.5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#0C447C" }}>📎 Referencia — lo ya capturado en URRJ (pre-dictamen)</p>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
+              {pred.datos.folioReal && <p><b className="text-foreground">Folio real:</b> {pred.datos.folioReal}</p>}
+              {pred.datos.propietario && <p><b className="text-foreground">Propietario:</b> {pred.datos.propietario}</p>}
+              {pred.datos.prelacion && <p><b className="text-foreground">Prelación:</b> {pred.datos.prelacion}</p>}
+              {pred.datos.hipotecaInscrita && <p><b className="text-foreground">Hipoteca inscrita:</b> {pred.datos.hipotecaInscrita === "si" ? "Sí" : "No"}</p>}
+              {pred.datos.ubicacion && <p><b className="text-foreground">Ubicación:</b> {pred.datos.ubicacion}</p>}
+              {pred.datos.estado && <p><b className="text-foreground">Estado:</b> {pred.datos.estado}</p>}
+            </div>
+            {pred.datos.anotaciones && <p className="mt-1 text-xs italic text-muted-foreground">"{pred.datos.anotaciones}"</p>}
+            <p className="pt-1 text-[10px] text-muted-foreground">Ya se copió a los campos de abajo — solo revisa que coincida y agrega lo que falte del RPPC.</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ---------- datos registrales ---------- */}
-      <Card className="legal-card">
+      <Card className="legal-card border-2" style={{ borderColor: "#0C447C22" }}>
         <CardContent className="space-y-3 p-4">
           <div className="flex items-center gap-2">
-            <Landmark className="h-4 w-4 text-[color:var(--teal)]" />
-            <p className="text-sm font-semibold">Datos registrales</p>
+            <Landmark className="h-4 w-4" style={{ color: "#0C447C" }} />
+            <p className="text-sm font-semibold">Dictamen registral (RPPC) · UCP</p>
             <Badge variant="outline" className={`ml-auto border ${VER_CLS[ver]}`}>Registral: {ver}</Badge>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {/* cabecera */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <Campo label="Fecha de verificación"><Input type="date" value={reg.fecha_verificacion} onChange={(e) => setR("fecha_verificacion", e.target.value)} /></Campo>
             <Campo label="Folio real"><Input value={reg.folio_real} onChange={(e) => setR("folio_real", e.target.value)} /></Campo>
-            <Campo label="Propietario registral"><Input value={reg.propietario} onChange={(e) => setR("propietario", e.target.value)} /></Campo>
+            <Campo label="Distrito registral"><Input value={reg.distrito_registral} onChange={(e) => setR("distrito_registral", e.target.value)} /></Campo>
+          </div>
+
+          {/* tracto de propiedad */}
+          <p className="pt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: "#0C447C" }}>Tracto de propiedad</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <Campo label="Dirección"><Input value={reg.p_direccion} onChange={(e) => setR("p_direccion", e.target.value)} /></Campo>
+            <Campo label="Titular registral"><Input value={reg.p_titular} onChange={(e) => setR("p_titular", e.target.value)} /></Campo>
+            <Campo label="Superficie"><Input value={reg.p_superficie} onChange={(e) => setR("p_superficie", e.target.value)} /></Campo>
+            <Campo label="No. de escritura"><Input value={reg.p_no_escritura} onChange={(e) => setR("p_no_escritura", e.target.value)} /></Campo>
+            <Campo label="Fecha de escritura"><Input type="date" value={reg.p_fecha_escritura} onChange={(e) => setR("p_fecha_escritura", e.target.value)} /></Campo>
+            <Campo label="Fecha de inscripción"><Input type="date" value={reg.p_fecha_inscripcion} onChange={(e) => setR("p_fecha_inscripcion", e.target.value)} /></Campo>
+            <Campo label="Notario"><Input value={reg.p_notario} onChange={(e) => setR("p_notario", e.target.value)} /></Campo>
             <Campo label="Prelación / grado"><Input value={reg.prelacion} onChange={(e) => setR("prelacion", e.target.value)} /></Campo>
+            <Campo label="Propietario registral"><Input value={reg.propietario} onChange={(e) => setR("propietario", e.target.value)} /></Campo>
+          </div>
+
+          {/* gravamen */}
+          <p className="pt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: "#0C447C" }}>Gravamen</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <Campo label="Acreedor"><Input value={reg.g_acreedor} onChange={(e) => setR("g_acreedor", e.target.value)} /></Campo>
+            <Campo label="Monto"><Input value={reg.g_monto} onChange={(e) => setR("g_monto", e.target.value)} /></Campo>
+            <Campo label="Notario"><Input value={reg.g_notario} onChange={(e) => setR("g_notario", e.target.value)} /></Campo>
+            <Campo label="No. de escritura"><Input value={reg.g_no_escritura} onChange={(e) => setR("g_no_escritura", e.target.value)} /></Campo>
+            <Campo label="Fecha de escritura"><Input type="date" value={reg.g_fecha_escritura} onChange={(e) => setR("g_fecha_escritura", e.target.value)} /></Campo>
+            <Campo label="Fecha de inscripción"><Input type="date" value={reg.g_fecha_inscripcion} onChange={(e) => setR("g_fecha_inscripcion", e.target.value)} /></Campo>
             <Campo label="¿Hipoteca inscrita y vigente?">
               <div className="flex gap-1">
                 {["si", "no"].map((o) => (
                   <button key={o} onClick={() => setR("hipoteca_inscrita", o)}
-                    className={`flex-1 rounded-md border px-2 py-1.5 text-sm ${reg.hipoteca_inscrita === o ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-border text-muted-foreground"}`}>
+                    className={`flex-1 rounded-md border px-2 py-1.5 text-sm ${reg.hipoteca_inscrita === o ? "font-medium" : "border-border text-muted-foreground"}`}
+                    style={reg.hipoteca_inscrita === o ? { borderColor: "#0C447C", background: "#0C447C1a", color: "#0C447C" } : undefined}>
                     {o === "si" ? "Sí" : "No"}
                   </button>
                 ))}
@@ -247,7 +328,7 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
           <Textarea className="min-h-[44px] text-sm" placeholder="Nota / justificación registral…"
             value={reg.nota} onChange={(e) => setR("nota", e.target.value)} />
 
-          <Button size="sm" onClick={guardarRegistral} disabled={guardando}>
+          <Button size="sm" onClick={guardarRegistral} disabled={guardando} style={{ background: "#0C447C" }}>
             {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar registral
           </Button>
         </CardContent>
