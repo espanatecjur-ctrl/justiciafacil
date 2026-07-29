@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { type Semaforo } from "@/lib/ucp-dictamen";
 import { type DictamenRow, type PredFuente } from "@/components/ficha-ucp";
+import { FirmasDictamen } from "@/components/firmas-dictamen";
 import {
   Landmark, Save, Loader2, Plus, CheckCircle2, AlertTriangle, Clock, FileCheck2, Trash2,
 } from "lucide-react";
@@ -251,6 +252,21 @@ export function SeccionRPPC({ caso, dictamen, pred, onGuardado }: Props) {
           </Button>
         </CardContent>
       </Card>
+
+      <FirmasDictamen
+        dictamenId={dictamen.id}
+        casoId={caso.id}
+        expedienteTexto={caso.expediente || caso.direccion_garantia || "sin expediente"}
+        rolValida="UCM"
+        firmas={dictamen.firmas as Record<string, any> | null}
+        claveElabora="reg_elabora"
+        claveValida="reg_ucm"
+        tituloElabora="Elabora · dictamen registral"
+        tituloValida="Valida · UCM"
+        cargoElabora="Abogado / gestor RPPC"
+        cargoValida="Unidad de Consolidación Municipal"
+        onGuardado={onGuardado}
+      />
 
       {/* ---------- gestoría RPPC (3 fases) ---------- */}
       <Card className="legal-card">
