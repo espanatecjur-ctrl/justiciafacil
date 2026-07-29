@@ -22,7 +22,7 @@ import {
 } from "@/components/ficha-ucp";
 import {
   Plus, RefreshCw, Loader2, Scale, Landmark, FileStack, Search, FolderOpen, Eye,
-  MoreVertical, UserCheck, Upload, CheckCircle2, FileText,
+  MoreVertical, UserCheck, Upload, CheckCircle2, FileText, Clock, XCircle, FileCheck2,
   Trash2, Copy, Send,
 } from "lucide-react";
 
@@ -96,6 +96,7 @@ function UCP() {
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [preds, setPreds] = useState<PredRow[]>([]);
   const [dicts, setDicts] = useState<DictamenRow[]>([]);
+  const [clgPorDictamen, setClgPorDictamen] = useState<Record<string, { fase: string; vence: string | null }>>({});
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [permUCP, setPermUCP] = useState<string[]>([]);
@@ -163,9 +164,16 @@ function UCP() {
         .then((r) => (r.ok ? r.json() : [])),
       fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=id,caso_id,predictamen_id,estado,requisitos,juridico,registral,contable,firmas,rppc,veredicto,vigente&vigente=eq.true`, { headers })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`dictamen ${r.status} — ¿corriste el SQL?`)))),
+      fetch(`${SUPABASE_URL}/rest/v1/gestoria_rppc?select=dictamen_id,fase,vence&documento=eq.CLG&order=created_at.desc`, { headers })
+        .then((r) => (r.ok ? r.json() : [])),
     ])
-      .then(([c, p, d]) => {
+      .then(([c, p, d, g]) => {
         setCasos(c); setPreds(p); setDicts(d);
+        const mapaClg: Record<string, { fase: string; vence: string | null }> = {};
+        for (const row of g as { dictamen_id: string; fase: string; vence: string | null }[]) {
+          if (row.dictamen_id && !mapaClg[row.dictamen_id]) mapaClg[row.dictamen_id] = { fase: row.fase, vence: row.vence };
+        }
+        setClgPorDictamen(mapaClg);
         const ids = (c as CasoJuridico[]).map((x) => x.id).filter(Boolean) as string[];
         diasSinAvanceLote(ids).then(setDiasAvance).catch(() => {});
       })
@@ -517,6 +525,44 @@ function UCP() {
     ? <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700"><Scale className="h-3 w-3" /> POSITIVO</Badge>
     : <span className="text-xs text-muted-foreground">Pendiente URRJ</span>;
 
+  // Indicadores rápidos de la unidad: CLG (gestoría), Jurídico y Registral —
+  // un solo indicador por cosa, sin repetir información entre columnas.
+  const chip = (tono: "verde" | "ambar" | "rojo" | "gris", texto: string, icon: React.ReactNode) => {
+    const cls = tono === "verde" ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tono === "ambar" ? "border-amber-200 bg-amber-50 text-amber-700"
+      : tono === "rojo" ? "border-red-200 bg-red-50 text-red-700"
+      : "border-border bg-muted text-muted-foreground";
+    return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>{icon}{texto}</span>;
+  };
+
+  const indicadoresCell = (d?: DictamenRow) => {
+    if (!d) return <span className="text-[11px] text-muted-foreground">Sin dictamen todavía</span>;
+    const f = (d.firmas as Record<string, any>) || {};
+
+    // CLG: viene de la gestoría RPPC de este dictamen, no de un campo aparte.
+    const clg = clgPorDictamen[d.id];
+    let clgChip: React.ReactNode;
+    if (!clg) clgChip = chip("gris", "Sin CLG", <FileCheck2 className="h-3 w-3" />);
+    else if (clg.fase === "entrega" || clg.fase === "cerrada") {
+      const vencido = clg.vence ? new Date(clg.vence).getTime() < Date.now() : false;
+      clgChip = vencido ? chip("rojo", "CLG vencido", <XCircle className="h-3 w-3" />) : chip("verde", "CLG listo", <CheckCircle2 className="h-3 w-3" />);
+    } else clgChip = chip("ambar", "Gestoría pendiente", <Clock className="h-3 w-3" />);
+
+    // Jurídico: elaborado + falta firma / firmado / sin elaborar
+    const jurElab = !!f.jur_elabora?.fecha, jurFirme = !!f.jur_dil?.fecha;
+    const jurChip = jurFirme ? chip("verde", "Jurídico firmado", <CheckCircle2 className="h-3 w-3" />)
+      : jurElab ? chip("ambar", "Jurídico: falta firma", <Clock className="h-3 w-3" />)
+      : chip("gris", "Jurídico sin elaborar", <Scale className="h-3 w-3" />);
+
+    // Registral: igual
+    const regElab = !!f.reg_elabora?.fecha, regFirme = !!f.reg_ucm?.fecha;
+    const regChip = regFirme ? chip("verde", "Registral firmado", <CheckCircle2 className="h-3 w-3" />)
+      : regElab ? chip("ambar", "Registral: falta firma", <Clock className="h-3 w-3" />)
+      : chip("gris", "Registral sin elaborar", <Landmark className="h-3 w-3" />);
+
+    return <div className="flex flex-col gap-1">{clgChip}{jurChip}{regChip}</div>;
+  };
+
   const dupBadge = (c: CasoJuridico) => {
     const dr = (c as any).dup_resolucion;
     if (dr?.estado === "conservar") {
@@ -690,6 +736,7 @@ function UCP() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Área actual</TableHead>
                   <TableHead>Pre-dictamen</TableHead>
+                  <TableHead>CLG / Jurídico / Registral</TableHead>
                   <TableHead>Requisitos</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -706,6 +753,7 @@ function UCP() {
                       <TableCell className="text-xs">{c.cliente_nombre || c.cliente_codigo || "—"}</TableCell>
                       <TableCell>{areaBadge(c, d)}</TableCell>
                       <TableCell>{preDictamenCell(elegible)}</TableCell>
+                      <TableCell>{indicadoresCell(d)}</TableCell>
                       <TableCell className="text-xs">{d ? `${reqCuenta(r)}/7` : "—"}</TableCell>
                       <TableCell>{badgesEstado(c, d, ver, info)}</TableCell>
                       <TableCell><div className="flex items-center justify-end">{menuBtn(c)}</div></TableCell>
@@ -747,6 +795,10 @@ function UCP() {
                     <div>
                       <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Pre-dictamen</span>
                       <div className="mt-0.5">{preDictamenCell(elegible)}</div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">CLG / Jurídico / Registral</span>
+                      <div className="mt-0.5">{indicadoresCell(d)}</div>
                     </div>
                     <div>
                       <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Requisitos</span>
