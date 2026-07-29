@@ -117,6 +117,7 @@ function UCPFicha() {
   const navigate = useNavigate();
   const [c, setC] = useState<CasoJuridico | null>(null);
   const [dict, setDict] = useState<any>(null);
+  const [pred, setPred] = useState<any>(null);
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modulo, setModulo] = useState<Modulo>("general");
@@ -157,10 +158,11 @@ function UCPFicha() {
     Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
       fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${id}&vigente=eq.true&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&caso_id=eq.${id}&vigente=eq.true&en_papelera=eq.false&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
     ])
-      .then(async ([cs, ds]) => {
+      .then(async ([cs, ds, ps]) => {
         const caso: CasoJuridico | null = cs?.[0] || null;
-        setC(caso); setDict(ds?.[0] || null);
+        setC(caso); setDict(ds?.[0] || null); setPred(ps?.[0] || null);
         if (caso?.expediente) {
           const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(caso.expediente.trim())}&order=fecha_acuerdo.desc&limit=200`, { headers });
           setAcuerdos(ra.ok ? await ra.json() : []);
@@ -434,7 +436,17 @@ function UCPFicha() {
 
       {/* ============ PROCESO (dictamen jurídico + registral + PDF + firmas) ============ */}
       {modulo === "proceso" && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <BloqueDictamen
+            titulo="Pre-dictamen URRJ"
+            icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />}
+            veredicto={pred?.dictamen_final || null}
+            firmas={{ urrj: pred?.firma_elabora || null }}
+            claveFirma="urrj"
+            onAbrir={() => navigate({ to: "/urrj", search: { caso: c.id } })}
+            onVer={() => pred?.pdf_url && window.open(pred.pdf_url, "_blank")}
+            onDescargar={() => pred?.pdf_url && window.open(pred.pdf_url, "_blank")}
+          />
           <BloqueDictamen
             titulo="Dictamen jurídico"
             icon={<ScrollText className="h-4 w-4" style={{ color: AZUL }} />}
