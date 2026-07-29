@@ -19,6 +19,7 @@ import { registrarEvento } from "@/lib/cronologia-caso";
 import { TraspasoArea } from "@/components/traspaso-area";
 import { BannerCoincidencias } from "@/components/banner-coincidencias";
 import { VisitaJuzgadoSeccion } from "@/components/visita-juzgado";
+import { ChecklistDocumentosUCP } from "@/components/checklist-documentos-ucp";
 
 export const Route = createFileRoute("/ucp-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
@@ -484,6 +485,7 @@ function UCPFicha() {
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
+          <ChecklistDocumentosUCP caso={c} area="UCP" />
           <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
           <DocumentosFijos caso={c} area="UCP" />
           <DocumentosGarantia area="UCP" caso={c} />
