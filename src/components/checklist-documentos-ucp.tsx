@@ -7,12 +7,12 @@
 // se habilita "Validar existe".
 // ============================================================
 import { useEffect, useState } from "react";
-import { FileCheck2, UploadCloud, Loader2, CheckCircle2, Clock, FileText, ExternalLink } from "lucide-react";
+import { FileCheck2, UploadCloud, Loader2, CheckCircle2, Clock, FileText, ExternalLink, FolderOpen, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { subirDocumento, type DocumentoGarantia } from "@/lib/drive";
 import { correoActual } from "@/lib/auth";
-import { firmarCopias } from "@/lib/drive-explorar";
+import { firmarCopias, type Copia } from "@/lib/drive-explorar";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -36,6 +36,9 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
   const [validando, setValidando] = useState<string | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [miCorreo, setMiCorreo] = useState("");
+  const [copiasDisponibles, setCopiasDisponibles] = useState<(Copia & { id: string })[]>([]);
+  const [eligiendoPara, setEligiendoPara] = useState<string | null>(null);
+  const [asignando, setAsignando] = useState<string | null>(null);
 
   useEffect(() => { correoActual().then((c) => setMiCorreo(c || "")).catch(() => {}); }, []);
 
@@ -44,9 +47,13 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
     Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=*&caso_id=eq.${caso.id}&categoria_checklist=not.is.null&en_papelera=eq.false`, { headers }).then((r) => (r.ok ? r.json() : [])),
       fetch(`${SUPABASE_URL}/rest/v1/checklist_documento?select=*&caso_id=eq.${caso.id}`, { headers }).then((r) => (r.ok ? r.json() : [])),
-    ]).then(([d, c]) => {
-      setDocs(d); setChecklist(c);
-      const conLink = d.map((x: DocumentoGarantia) => x.drive_copia?.storage_path).filter((p: any): p is string => !!p);
+      fetch(`${SUPABASE_URL}/rest/v1/drive_copia?select=id,drive_id,storage_path,nombre,mime&caso_id=eq.${caso.id}&papelera=eq.false&order=nombre.asc`, { headers }).then((r) => (r.ok ? r.json() : [])),
+    ]).then(([d, c, copias]) => {
+      setDocs(d); setChecklist(c); setCopiasDisponibles(copias);
+      const conLink = [
+        ...d.map((x: DocumentoGarantia) => x.drive_copia?.storage_path).filter((p: any): p is string => !!p),
+        ...copias.map((x: Copia) => x.storage_path),
+      ];
       if (conLink.length) firmarCopias(conLink).then(setUrls);
     }).finally(() => setCargando(false));
   };
@@ -65,6 +72,23 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
       }
       cargar();
     } finally { setSubiendo(null); }
+  };
+
+  const yaAsignados = new Set(docs.map((d) => d.drive_copia_id).filter(Boolean));
+
+  const asignarExistente = async (clave: string, copia: Copia & { id: string }) => {
+    setAsignando(copia.id);
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia`, {
+        method: "POST", headers,
+        body: JSON.stringify({
+          caso_id: caso.id, expediente: caso.expediente || null, nombre: copia.nombre, mime: copia.mime,
+          tipo: "otro", subido_por: miCorreo || null, categoria_checklist: clave, drive_copia_id: copia.id,
+        }),
+      });
+      setEligiendoPara(null);
+      cargar();
+    } finally { setAsignando(null); }
   };
 
   const validar = async (clave: string) => {
@@ -126,17 +150,47 @@ export function ChecklistDocumentosUCP({ caso, area = "UCP" }: { caso: CasoJurid
                 )}
 
                 {!cat.auto && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium ${subiendo === cat.clave ? "opacity-60" : "hover:bg-muted"}`} style={{ borderColor: "#0C447C", color: "#0C447C" }}>
-                      {subiendo === cat.clave ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-                      {propios.length > 0 && cat.multiple ? "Enviar otro documento" : "Enviar documento"}
-                      <input type="file" className="hidden" disabled={subiendo === cat.clave} onChange={(e) => { const f = e.target.files?.[0]; if (f) enviar(cat.clave, f); e.target.value = ""; }} />
-                    </label>
-                    {propios.length > 0 && !validado && (
-                      <button onClick={() => validar(cat.clave)} disabled={validando === cat.clave}
-                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
-                        {validando === cat.clave ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Validar que existe
+                  <div className="mt-2 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium ${subiendo === cat.clave ? "opacity-60" : "hover:bg-muted"}`} style={{ borderColor: "#0C447C", color: "#0C447C" }}>
+                        {subiendo === cat.clave ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+                        {propios.length > 0 && cat.multiple ? "Subir otro documento nuevo" : "Subir documento nuevo"}
+                        <input type="file" className="hidden" disabled={subiendo === cat.clave} onChange={(e) => { const f = e.target.files?.[0]; if (f) enviar(cat.clave, f); e.target.value = ""; }} />
+                      </label>
+                      <button
+                        onClick={() => setEligiendoPara(eligiendoPara === cat.clave ? null : cat.clave)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" /> Elegir de Documentos Fijos
                       </button>
+                      {propios.length > 0 && !validado && (
+                        <button onClick={() => validar(cat.clave)} disabled={validando === cat.clave}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                          {validando === cat.clave ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Validar que existe
+                        </button>
+                      )}
+                    </div>
+
+                    {eligiendoPara === cat.clave && (
+                      <div className="rounded-md border border-border bg-muted/20 p-2">
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <p className="text-[11px] font-medium text-muted-foreground">Documentos ya guardados en el sistema para este caso — elige el que corresponda:</p>
+                          <button onClick={() => setEligiendoPara(null)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                        </div>
+                        {copiasDisponibles.filter((cp) => !yaAsignados.has(cp.id)).length === 0 ? (
+                          <p className="py-2 text-center text-[11px] text-muted-foreground">No hay documentos fijos sin asignar todavía.</p>
+                        ) : (
+                          <div className="max-h-52 space-y-1 overflow-y-auto">
+                            {copiasDisponibles.filter((cp) => !yaAsignados.has(cp.id)).map((cp) => (
+                              <button key={cp.id} onClick={() => asignarExistente(cat.clave, cp)} disabled={asignando === cp.id}
+                                className="flex w-full items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-60">
+                                <span className="flex items-center gap-1.5 truncate"><FileText className="h-3.5 w-3.5 shrink-0 text-[color:var(--teal)]" /> {cp.nombre || "Documento"}</span>
+                                {asignando === cp.id ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> : <span className="shrink-0 text-[10px] font-medium" style={{ color: "#0C447C" }}>Usar este</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
