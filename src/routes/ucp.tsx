@@ -28,6 +28,10 @@ import {
 
 export const Route = createFileRoute("/ucp")({
   head: () => ({ meta: [{ title: "UCP — SIGA-DIIPA" }] }),
+  validateSearch: (s: Record<string, unknown>): { id?: string; tab?: "requisitos" | "juridico" | "rppc" } => ({
+    id: typeof s.id === "string" ? s.id : undefined,
+    tab: s.tab === "requisitos" || s.tab === "juridico" || s.tab === "rppc" ? s.tab : undefined,
+  }),
   component: UCP,
 });
 
@@ -87,6 +91,7 @@ interface Seleccion { caso: CasoJuridico; dictamen: DictamenRow; pred?: PredFuen
 
 function UCP() {
   const navigate = useNavigate();
+  const { id: idDesdeUrl, tab: tabDesdeUrl } = Route.useSearch();
   const [casos, setCasos] = useState<CasoJuridico[]>([]);
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [preds, setPreds] = useState<PredRow[]>([]);
@@ -406,6 +411,18 @@ function UCP() {
       setError("No se pudo abrir: " + e.message);
     } finally { setAbriendo(null); }
   };
+
+  // Si llegamos desde otra pantalla (ej. "Abrir proceso" en la ficha resumen)
+  // con el id de un caso, lo abrimos directo en vez de mostrar la lista.
+  useEffect(() => {
+    if (!idDesdeUrl) return;
+    (async () => {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${idDesdeUrl}&limit=1`, { headers });
+      const c = r.ok ? (await r.json())?.[0] : null;
+      if (c) abrir(c, tabDesdeUrl || "juridico");
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idDesdeUrl]);
 
   const agregarGarantia = async () => {
     if (!nueva.expediente.trim() && !nueva.direccion_garantia.trim()) {
