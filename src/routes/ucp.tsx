@@ -357,7 +357,7 @@ function UCP() {
     finally { setGuardandoDup(false); }
   };
 
-  const baseUCP = useMemo(() => casos.filter((c) => normArea(c.unidad) !== "UDP" && !c.archivado), [casos]);
+  const baseUCP = useMemo(() => casos.filter((c) => (normArea(c.unidad) || "UCP") === "UCP" && !c.archivado), [casos]);
 
   const stats = useMemo(() => {
     const elegibles = baseUCP.filter((c) => c.id && predPorCaso[c.id]);
