@@ -583,7 +583,7 @@ function UCP() {
       : regElab ? chip("ambar", "Registral: falta firma", <Clock className="h-3 w-3" />)
       : chip("gris", "Registral sin elaborar", <Landmark className="h-3 w-3" />);
 
-    return <div className="flex flex-col gap-1">{clgChip}{jurChip}{regChip}</div>;
+    return <div className="flex flex-wrap items-center gap-1">{clgChip}{jurChip}{regChip}</div>;
   };
 
   const dupBadge = (c: CasoJuridico) => {
@@ -835,42 +835,32 @@ function UCP() {
               const { elegible, d, r, info, ver } = derivar(c);
               return (
                 <div key={c.id} className="p-3">
+                  {/* encabezado: folio + cliente a la izquierda, menú a la derecha */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-semibold">{c.expediente || "—"}</p>
-                      <p className="text-[11px]"><span className="font-semibold text-[color:var(--teal)]">{c.folio || "sin folio"}</span> · Crédito: {(c as any).no_credito || "—"}</p>
-                      {c.juzgado && <p className="break-words text-[11px] text-muted-foreground">{c.juzgado}</p>}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded bg-[color:var(--teal)]/10 px-1.5 py-0.5 text-[11px] font-bold text-[color:var(--teal)]">{c.folio || "sin folio"}</span>
+                        <span className="text-[11px] text-muted-foreground">{(c as any).no_credito || "sin crédito"}</span>
+                      </div>
+                      <p className="mt-0.5 truncate text-sm font-semibold">{c.cliente_nombre || c.cliente_codigo || "— sin cliente —"}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{c.direccion_garantia || "sin dirección"}</p>
                     </div>
                     {menuBtn(c)}
                   </div>
+
                   {avisoSinAvance(c) && <div className="mt-1.5">{avisoSinAvance(c)}</div>}
-                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                    <div className="col-span-2">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Garantía</span>
-                      <p className="break-words">{c.direccion_garantia || "—"}{c.entidad ? <span className="text-muted-foreground"> · {c.entidad}</span> : null}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Cliente</span>
-                      <p className="break-words">{c.cliente_nombre || c.cliente_codigo || "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Área actual</span>
-                      <div className="mt-0.5">{areaBadge(c, d)}</div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Pre-dictamen</span>
-                      <div className="mt-0.5">{preDictamenCell(elegible)}</div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">CLG / Jurídico / Registral</span>
-                      <div className="mt-0.5">{indicadoresCell(d)}</div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Requisitos</span>
-                      <p className="mt-0.5">{d ? `${reqCuenta(r)}/7` : "—"}</p>
-                    </div>
+
+                  {/* fila compacta de estado: área · pre-dictamen · requisitos */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {areaBadge(c, d)}
+                    {preDictamenCell(elegible)}
+                    <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">Req. {d ? `${reqCuenta(r)}/7` : "—"}</span>
                   </div>
-                  <div className="mt-2">{badgesEstado(c, d, ver, info)}</div>
+
+                  {/* los 3 indicadores en una sola fila, no apilados */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">{indicadoresCell(d)}</div>
+
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">{badgesEstado(c, d, ver, info)}</div>
                 </div>
               );
             })}
