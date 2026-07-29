@@ -47,6 +47,13 @@ export interface DictamenFinalPDF {
   contable?: { gastos?: number; cobros?: number; valorActual?: number; nota?: string; validada?: boolean } | null;
   antecedente?: { elabora?: DatosFirma | null; valida?: DatosFirma | null } | null;
   firmas?: FirmaConTitulo[];
+  detalleJuridico?: Record<string, string>;
+  detalleRegistral?: Record<string, string>;
+}
+
+// Convierte una clave tipo "monto_total_reclamado" en una etiqueta legible: "Monto total reclamado".
+function etiquetaDe(clave: string): string {
+  return clave.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
 export async function descargarDictamenFinalPDF(d: DictamenFinalPDF, modo: "descargar" | "ver" = "descargar") {
@@ -94,6 +101,28 @@ export async function descargarDictamenFinalPDF(d: DictamenFinalPDF, modo: "desc
   chip("Registral", d.veredictoRegistral, M + 62);
   chip("FINAL", d.veredictoFinal, M + 124);
   y += 18;
+
+  // ---- detalle completo del dictamen jurídico (todo lo capturado, no solo el veredicto) ----
+  const detalle = (titulo: string, obj?: Record<string, any>) => {
+    if (!obj) return;
+    const entradas = Object.entries(obj).filter(([k, v]) => k !== "veredicto" && v != null && String(v).trim() !== "" && typeof v !== "object");
+    if (!entradas.length) return;
+    salto(12);
+    doc.setTextColor(60, 60, 60); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+    doc.text(titulo, M, y); y += 5;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+    for (const [k, v] of entradas) {
+      salto(10);
+      doc.setTextColor(120, 120, 120); doc.setFont("helvetica", "bold");
+      doc.text(etiquetaDe(k) + ":", M, y); y += 4;
+      doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
+      const lineas = doc.splitTextToSize(String(v), W - 2 * M);
+      doc.text(lineas, M, y); y += lineas.length * 4 + 2;
+    }
+    y += 2;
+  };
+  detalle("Dictamen jurídico — detalle completo", d.detalleJuridico);
+  detalle("Dictamen registral — detalle completo", d.detalleRegistral);
 
   // ---- hitos ----
   if (d.hitos && d.hitos.length) {
