@@ -488,6 +488,9 @@ export function FichaUCP({ caso, dictamen, pred, tabInicial = "requisitos", onVo
           {/* Firmas del dictamen jurídico: Elabora + Valida DIL */}
           <FirmasDictamen
             dictamenId={dictamen.id}
+            casoId={caso.id}
+            expedienteTexto={caso.expediente || caso.direccion_garantia || "sin expediente"}
+            rolValida="DIL"
             firmas={dictamen.firmas as Record<string, any> | null}
             claveElabora="jur_elabora"
             claveValida="jur_dil"
