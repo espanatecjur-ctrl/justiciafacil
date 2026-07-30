@@ -5,7 +5,7 @@ import { sbSelect, SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/s
 import { RobotBoletines } from "@/components/robot-boletines";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Scale, AlertTriangle, Gavel, Archive, FilePlus } from "lucide-react";
+import { Search, Scale, AlertTriangle, Gavel, Archive, FilePlus, History } from "lucide-react";
 import { FilaAcciones } from "@/components/fila-acciones";
 import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
 import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
@@ -33,12 +33,21 @@ function leFalta(c: CasoJuridico): boolean {
   return sinJuzgado || !c.expediente || !c.etapa_actual;
 }
 
-// Una garantía es de UCM solo si se creó directo aquí (unidad UCM) o pasó las 5 firmas.
-// Lo que sigue en UCP / UDP / URRJ NO es de esta unidad.
+// Una garantía es de UCM si se creó directo aquí (unidad UCM), pasó las 5 firmas,
+// O si ya se marcó pasa_a_ucm=true desde UCP (vista en vivo del mismo registro —
+// NO se duplica la fila, solo se incluye aquí también). Amparo/recurso/exhorto tienen su propia pantalla.
 function esDeUCM(c: CasoJuridico): boolean {
-  if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return false; // tienen su propia pantalla
+  if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return false;
+  if ((c as any).pasa_a_ucm === true) return true;
   const u = (c.unidad || "").toUpperCase();
   return !(u.includes("UCP") || u.includes("UDP") || u.includes("URRJ"));
+}
+
+// Indica si esta fila es una "vista en vivo" — el registro sigue siendo de UCP
+// (unidad no cambió) pero ya se marcó como avanzado a seguimiento en UCM.
+function esVistaEnVivoDeUCP(c: CasoJuridico): boolean {
+  const u = (c.unidad || "").toUpperCase();
+  return (c as any).pasa_a_ucm === true && u.includes("UCP");
 }
 
 function UcmPage() {
@@ -97,7 +106,7 @@ function UcmPage() {
   };
   useEffect(() => { cargar(); }, []);
 
-  // Base de la unidad: solo lo que es de UCM (excluye UCP/UDP/URRJ y amparo/recurso/exhorto).
+  // Base de la unidad: lo que es de UCM directo + vista en vivo de lo que ya avanzó desde UCP (pasa_a_ucm=true).
   const casosUCM = useMemo(() => casos.filter(esDeUCM), [casos]);
 
   // Badge del dictamen de UCP (positivo/negativo/en espera) reflejado en UCM
@@ -113,6 +122,18 @@ function UcmPage() {
     };
     const pill = (label: string, val: string) => val ? <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${cls(val)}`}>{label}: {val}</span> : null;
     return <div className="mt-1 flex flex-wrap gap-1" title="Dictamen registrado en UCP">{pill("Jur", d.jur)}{pill("Reg", d.reg)}{pill("UCP", d.ver)}</div>;
+  };
+
+  // Indicador: esta fila sigue viviendo en UCP (unidad no cambió), aquí solo se muestra
+  // como vista en vivo porque ya se marcó pasa_a_ucm=true. Toda la info (documentos,
+  // actuaciones, notas) es la misma fila — no hay copia.
+  const origenUcpBadge = (c: CasoJuridico) => {
+    if (!esVistaEnVivoDeUCP(c)) return null;
+    return (
+      <div className="mt-1 flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 w-fit" title="Este expediente sigue en UCP. Se muestra aquí en vivo porque ya avanzó a seguimiento — es el mismo registro, no una copia.">
+        <History className="h-2.5 w-2.5" /> Vista en vivo — recolectado en UCP
+      </div>
+    );
   };
 
   const filtrados = useMemo(() => {
@@ -230,6 +251,7 @@ function UcmPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">{c.cliente_nombre || c.tiene_cliente || ""}</p>
                     {dictamenBadge(c)}
+                    {origenUcpBadge(c)}
                     <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
                     {c.id && diasAvance[c.id] !== undefined && diasAvance[c.id] >= DIAS_ALERTA && (
                       <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${diasAvance[c.id] >= DIAS_ALERTA * 2 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
@@ -291,6 +313,7 @@ function UcmPage() {
               {c.cliente_nombre && <p className="truncate text-xs text-muted-foreground">{c.cliente_nombre}</p>}
               <p className="mt-0.5 text-[11px]"><span className="font-semibold text-[color:var(--teal)]">{c.folio || "sin folio"}</span> · Crédito: {(c as any).no_credito || "—"}</p>
               {dictamenBadge(c)}
+              {origenUcpBadge(c)}
               <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
               <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
