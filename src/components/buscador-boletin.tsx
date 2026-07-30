@@ -115,6 +115,7 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
     return `Amparo detectado en boletín (exp. ${party?.expediente || exp}):\n${lineas}`;
   };
   const [guardadoGen, setGuardadoGen] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const notaGeneral = () => {
     const cab = `Boletín (exp. ${party?.expediente || exp})${party?.actor || party?.demandado ? ` · ${party?.actor || "—"} vs. ${party?.demandado || "—"}` : ""} — ${acuerdos.length} actuación(es):`;
     const lineas = acuerdos.map((a) => `- ${fmt(a.fecha)} · ${(a.etapa || "").trim()} ${a.acuerdo || ""}`.replace(/ +/g, " ").trim()).join("\n");
@@ -137,9 +138,22 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
   // diario — así queda guardado una sola vez y se ve en todos lados.
   // El prefijo "manual:" en el hash evita chocar con lo que guarde el
   // robot diario si más adelante encuentra la misma actuación.
-  const guardarEnFichaDelExpediente = async () => {
+  const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
+
+  // Devuelve true solo si REALMENTE se guardó. Antes esta función podía fallar
+  // en silencio (falta de entidad/juzgado, o error del POST) y el botón igual
+  // mostraba "✓ guardado" — quien lo usaba nunca se enteraba que no se guardó nada.
+  const guardarEnFichaDelExpediente = async (): Promise<boolean> => {
+    setErrorGuardado(null);
     const ent = entidadLabel(); const juz = juzgadoLabel();
-    if (!ent || !juz || acuerdos.length === 0) return;
+    if (!ent || !juz) {
+      setErrorGuardado("No se pudo guardar: falta la entidad o el juzgado (revisa que estén seleccionados arriba).");
+      return false;
+    }
+    if (acuerdos.length === 0) {
+      setErrorGuardado("No hay acuerdos para guardar.");
+      return false;
+    }
     const filas = acuerdos.map((a) => {
       const fecha = a.fecha ? String(a.fecha).slice(0, 10) : new Date().toISOString().slice(0, 10);
       const hash = `manual:${ent}|${juz}|${a.expediente || exp}|${fecha}|${a.acuerdo || ""}`.toLowerCase().replace(/\s+/g, " ").trim();
@@ -155,8 +169,14 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=minimal" },
         body: JSON.stringify(filas),
       });
-      if (r.ok) onGuardadoEnFicha?.();
-    } catch { /* si falla el guardado en la ficha, no bloquea el resto del flujo */ }
+      if (r.ok) { onGuardadoEnFicha?.(); return true; }
+      const texto = await r.text().catch(() => "");
+      setErrorGuardado(`No se pudo guardar (error ${r.status}). ${texto ? texto.slice(0, 200) : ""}`);
+      return false;
+    } catch (e: any) {
+      setErrorGuardado(`No se pudo guardar: ${e?.message || "error de conexión"}.`);
+      return false;
+    }
   };
 
   return (
@@ -287,7 +307,28 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
                   <p className="break-words text-sm"><span className="font-semibold">{party?.actor || "—"}</span> <span className="text-muted-foreground">vs.</span> <span className="font-semibold">{party?.demandado || "—"}</span></p>
                 )}
                 {acuerdos.length > 0 && (
-                  <button type="button" disabled={guardadoGen} onClick={() => { onGuardarHallazgos?.(notaGeneral()); onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined }); guardarEnFichaDelExpediente(); setGuardadoGen(true); }} className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60">{guardadoGen ? `✓ ${acuerdos.length} actuación(es) guardadas en la ficha del expediente` : `📋 Guardar las ${acuerdos.length} actuación(es) en la ficha`}</button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={guardadoGen || guardando}
+                      onClick={async () => {
+                        setGuardando(true);
+                        const ok = await guardarEnFichaDelExpediente();
+                        setGuardando(false);
+                        if (ok) {
+                          onGuardarHallazgos?.(notaGeneral());
+                          onDatosBoletin?.({ expediente: party?.expediente || exp, actor: party?.actor, demandado: party?.demandado, juzgado: juzgadoLabel(), etapa: acuerdos[0]?.etapa || undefined, ultimaActuacionFecha: acuerdos[0]?.fecha ? String(acuerdos[0].fecha).slice(0, 10) : undefined, ultimaActuacionTexto: acuerdos[0]?.acuerdo || undefined });
+                          setGuardadoGen(true);
+                        }
+                      }}
+                      className="mt-2 rounded-md border border-[color:var(--teal)] px-3 py-1.5 text-[11px] font-semibold text-[color:var(--teal)] disabled:opacity-60"
+                    >
+                      {guardando ? "Guardando…" : guardadoGen ? `✓ ${acuerdos.length} actuación(es) guardadas en la ficha del expediente` : `📋 Guardar las ${acuerdos.length} actuación(es) en la ficha`}
+                    </button>
+                    {errorGuardado && (
+                      <p className="mt-1 text-[11px] font-medium text-red-600">⚠ {errorGuardado}</p>
+                    )}
+                  </>
                 )}
               </div>
               {resaltarAmparo && acuerdosAmparo.length > 0 && (
