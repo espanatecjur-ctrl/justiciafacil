@@ -75,6 +75,10 @@ function normArea(u?: string | null): string {
 }
 function areaActual(c: CasoJuridico, d?: DictamenRow): string {
   if (d?.estado === "etapa_b") return "UCM"; // ya pasó a Fase B → UCM
+  // pasa_a_ucm=true: el registro sigue siendo de UCP (no se duplica), pero ya
+  // avanzó a seguimiento en UCM — se muestra el badge UCM aquí como indicador,
+  // y la fila sigue apareciendo en esta lista (vista en vivo, mismo caso_id).
+  if ((c as any).pasa_a_ucm === true) return "UCM";
   const a = normArea(c.unidad);
   return a || "UCP"; // entrada / por defecto → UCP
 }
@@ -536,9 +540,12 @@ function UCP() {
 
   const areaBadge = (c: CasoJuridico, d?: DictamenRow) => {
     const a = areaActual(c, d);
+    const vistaEnVivo = a === "UCM" && (c as any).pasa_a_ucm === true && d?.estado !== "etapa_b";
     return (
       <div className="flex flex-col">
-        <Badge variant="outline" className={`w-fit border ${AREA_INFO[a] || "bg-muted text-muted-foreground border-border"}`}>{a || "—"}{d?.estado === "etapa_b" ? " · antecedente" : ""}</Badge>
+        <Badge variant="outline" className={`w-fit border ${AREA_INFO[a] || "bg-muted text-muted-foreground border-border"}`} title={vistaEnVivo ? "Ya está en seguimiento en UCM — este registro sigue viviendo en UCP, no es una copia." : undefined}>
+          {a || "—"}{d?.estado === "etapa_b" ? " · antecedente" : ""}{vistaEnVivo ? " · ya en UCM" : ""}
+        </Badge>
         {c.encargado_unidad && <span className="mt-0.5 text-[10px] text-muted-foreground">{c.encargado_unidad}</span>}
       </div>
     );
