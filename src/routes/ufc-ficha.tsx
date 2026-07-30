@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, FileSignature, Loader2, Save, X, Send, LayoutGrid, Stamp, GitBranch,
-  FolderOpen, Megaphone, AlertTriangle, CheckCircle2,
+  FolderOpen, Megaphone, AlertTriangle, CheckCircle2, History,
 } from "lucide-react";
 import { obtenerFormalizacion, actualizarFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, ESTADOS_TRAMITE, type Formalizacion } from "@/lib/formalizacion";
 import { crearSolicitud, TIPOS_DOCUMENTO_SOLICITUD, limite24hHabiles } from "@/lib/solicitud-contrato";
@@ -10,6 +10,7 @@ import { usuarioActualEtiqueta } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
+import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
 
@@ -114,7 +115,7 @@ function UFCFicha() {
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
   if (!f) return <div className="p-8 text-sm text-muted-foreground">No se encontró la formalización. <button onClick={() => navigate({ to: "/ufc" })} className="underline">Volver</button></div>;
 
-  // Objeto "caso virtual" para reusar los mismos componentes de Drive que UCM/UCP (carpeta propia e independiente).
+  // Objeto "caso virtual" para reusar los mismos componentes de Drive que UCM/UCP (carpeta propia e independiente de UFC).
   const casoVirtual: CasoJuridico = {
     id: f.id || "",
     expediente: f.expediente ?? null,
@@ -123,6 +124,17 @@ function UFCFicha() {
     drive_carpeta_id: f.drive_carpeta_id ?? null,
     drive_carpeta_nombre: f.drive_carpeta_nombre ?? null,
   } as unknown as CasoJuridico;
+
+  // Objeto "caso real" — apunta al caso_id del expediente jurídico de origen (UCP/UCM), NO al id de la formalización.
+  // Se usa exclusivamente para mostrar/editar en vivo "Documentos y movimientos" del expediente vinculado.
+  const casoReal: CasoJuridico | null = f.caso_id
+    ? ({
+        id: f.caso_id,
+        expediente: f.expediente ?? null,
+        no_credito: f.id_interno ?? null,
+        cliente_nombre: f.nombre_cesionario ?? null,
+      } as unknown as CasoJuridico)
+    : null;
 
   const MODULOS: { id: Modulo; label: string; icon: React.ReactNode }[] = [
     { id: "general", label: "General", icon: <LayoutGrid className="h-4 w-4" /> },
@@ -303,11 +315,28 @@ function UFCFicha() {
           : <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Esta formalización no tiene un expediente jurídico (UCP/UCM) vinculado — sin expediente no hay sub-juicios que mostrar.</div>
       )}
 
-      {/* ============ DOCUMENTOS (carpeta de Drive propia de UFC) ============ */}
+      {/* ============ DOCUMENTOS (carpeta de Drive propia de UFC + vista en vivo del expediente UCP/UCM) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
+          {/* Vista en vivo de lo que ya se llenó en el expediente jurídico de origen (UCP/UCM) — mismo caso_id, tiempo real */}
+          {casoReal ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: ROJO, color: ROJO, background: "#FBEAEA" }}>
+                <History className="h-4 w-4 shrink-0" />
+                Esto se llenó en el expediente jurídico (UCP/UCM) — vista en vivo, se actualiza en tiempo real. Puedes agregar notas y actuaciones aquí mismo; quedan guardadas en el mismo expediente.
+              </div>
+              <DocumentosGarantia area="UFC" caso={casoReal} />
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              Esta formalización no tiene un expediente jurídico (UCP/UCM) vinculado — sin ese vínculo no hay documentos/actuaciones de origen que mostrar aquí. Vincúlalo desde la pestaña General si corresponde.
+            </div>
+          )}
+
+          {/* Carpeta y documentos fijos propios de UFC (independiente del expediente de origen) */}
           <CarpetaDriveVinculada caso={casoVirtual} area="UFC" modulo="ufc" onGuardar={guardarCarpeta} />
           <DocumentosFijos caso={casoVirtual} area="UFC" />
+
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="mb-2 flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5" style={{ color: ROJO }} />
