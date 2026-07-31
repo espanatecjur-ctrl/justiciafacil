@@ -12,7 +12,7 @@ import {
   listarColaboradores,
   TIPOS_EVENTO, ESTILO_EVENTO, type Evento, type Colaborador,
 } from "@/lib/evento-agenda";
-import { buscarClientesJC, clienteJCPorNombre, type ClienteJC } from "@/lib/juris-clientes";
+import { buscarClientesJC, clienteJCPorNombre, tareasJCDelMes, type ClienteJC, type TareaJCAgenda } from "@/lib/juris-clientes";
 import {
   crearTareaEspejoJC, crearSolicitudClienteJF, marcarTareaJC,
   estadoSolicitudJF, vincularSolicitudJF, descartarSolicitudJF,
@@ -90,17 +90,39 @@ function Calendario() {
     return m;
   }, [colabs]);
 
-  const recargar = () => { listarEventosMes(anio, mes).then(setEventos); };
+  // Convierte una tarea nativa de JurisConecta a la forma de Evento, para
+  // mezclarla en el mismo calendario. Prefijo "jc:" en el id para que nunca
+  // choque con un id real de evento_agenda. Solo lectura: nunca se guarda de
+  // vuelta a JurisConecta desde aquí.
+  const tareaJCaEvento = (t: TareaJCAgenda): Evento => ({
+    id: `jc:${t.id}`,
+    titulo: t.titulo,
+    tipo: t.tipo === "cita" ? "cita" : "tarea",
+    fecha: (t.fecha || "").slice(0, 10),
+    hora: (t.fecha || "").length >= 16 ? t.fecha!.slice(11, 16) : null,
+    nota: [t.detalle, t.cliente_nombre ? `Cliente: ${t.cliente_nombre}` : null, t.a_quien ? `Para: ${t.a_quien}` : null, t.autor_nombre ? `De: ${t.autor_nombre}` : null].filter(Boolean).join(" · "),
+    estado: t.estado === "hecha" ? "hecho" : "pendiente",
+    asignado_a: null,
+    creado_por: null,
+    origen: "jc",
+  });
+
+  const [eventosJC, setEventosJC] = useState<Evento[]>([]);
+  const recargar = () => {
+    listarEventosMes(anio, mes).then(setEventos);
+    tareasJCDelMes(anio, mes).then((jc) => setEventosJC(jc.map(tareaJCaEvento))).catch(() => setEventosJC([]));
+  };
   useEffect(recargar, [anio, mes]); // eslint-disable-line
+  const eventosTodos = useMemo(() => [...eventos, ...eventosJC], [eventos, eventosJC]);
 
   const hoyStr = fechaStr(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
 
   // "Mías" = asignadas a mí o creadas por mí. "Mi equipo" = todo el jurídico. "Todas" = todo.
   const eventosVisibles = useMemo(() => {
-    if (filtro === "todas" || !correoYo) return eventos;
-    if (filtro === "equipo") return eventos.filter((e) => (e.asignado_a && equipoCorreos.has(e.asignado_a)) || (e.creado_por && equipoCorreos.has(e.creado_por)));
-    return eventos.filter((e) => e.asignado_a === correoYo || e.creado_por === correoYo);
-  }, [eventos, filtro, correoYo, equipoCorreos]);
+    if (filtro === "todas" || !correoYo) return eventosTodos;
+    if (filtro === "equipo") return eventosTodos.filter((e) => e.origen === "jc" || (e.asignado_a && equipoCorreos.has(e.asignado_a)) || (e.creado_por && equipoCorreos.has(e.creado_por)));
+    return eventosTodos.filter((e) => e.origen === "jc" || e.asignado_a === correoYo || e.creado_por === correoYo);
+  }, [eventosTodos, filtro, correoYo, equipoCorreos]);
 
   // Eventos agrupados por día.
   const porDia = useMemo(() => {
@@ -208,18 +230,30 @@ function Calendario() {
                   {evs.map((e) => {
                     const st = ESTILO_EVENTO[e.tipo || "evento"] ?? ESTILO_EVENTO.evento;
                     const hecha = e.tipo === "tarea" && e.estado === "hecho";
+                    const esJC = e.origen === "jc";
                     return (
                       <button
                         key={e.id}
-                        onClick={(ev) => { ev.stopPropagation(); setEditando(e); }}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] ${st.bg} ${st.text} ${hecha ? "line-through opacity-60" : ""}`}
-                        title={`${e.titulo || ""}${e.asignado_a ? ` · para ${nombrePorCorreo[e.asignado_a] || e.asignado_a}` : ""}`}
+                        onClick={(ev) => { ev.stopPropagation(); if (!esJC) setEditando(e); }}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] ${esJC ? "bg-violet-100 text-violet-900" : `${st.bg} ${st.text}`} ${hecha ? "line-through opacity-60" : ""} ${esJC ? "cursor-default" : ""}`}
+                        title={esJC ? `${e.titulo || ""} · JurisConecta (solo lectura)` : `${e.titulo || ""}${e.asignado_a ? ` · para ${nombrePorCorreo[e.asignado_a] || e.asignado_a}` : ""}`}
                       >
+                        {esJC && <span className="shrink-0 rounded bg-violet-600 px-1 text-[8px] font-bold text-white">JC</span>}
                         {filtro === "equipo" && e.asignado_a && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorPorCorreo[e.asignado_a] || "#9CA3AF" }} />}
                         {e.tipo === "tarea" && (
-                          <span role="button" onClick={(ev) => { ev.stopPropagation(); toggleHecha(e); }} title={hecha ? "Marcar como pendiente" : "Marcar como hecha"} className="shrink-0 hover:opacity-100">
-                            {hecha ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-60" />}
-                          </span>
+                          esJC ? (
+                            <span title="Viene de JurisConecta — solo lectura" className="shrink-0 opacity-60">
+                              {hecha ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-60" />}
+                            </span>
+                          ) : e.tarea_id ? (
+                            <span title="Esta tarea se marca hecha desde la ficha, no aquí" className="shrink-0 opacity-60">
+                              {hecha ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-60" />}
+                            </span>
+                          ) : (
+                            <span role="button" onClick={(ev) => { ev.stopPropagation(); toggleHecha(e); }} title={hecha ? "Marcar como pendiente" : "Marcar como hecha"} className="shrink-0 hover:opacity-100">
+                              {hecha ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3 opacity-60" />}
+                            </span>
+                          )
                         )}
                         {e.hora && <span className="font-mono text-[10px] opacity-80">{e.hora}</span>}
                         <span className="truncate">{e.titulo || "(sin título)"}</span>
@@ -496,10 +530,16 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
             )}
           </div>
           {tipo === "tarea" && (
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={estado === "hecho"} onChange={(e) => setEstado(e.target.checked ? "hecho" : "pendiente")} />
-              Marcar como hecha
-            </label>
+            evento.tarea_id ? (
+              <p className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                Esta tarea viene de una ficha — se marca como hecha desde ahí, con su anotación de cierre (no se puede marcar aquí). Usa "Ir a elaborar →" arriba.
+              </p>
+            ) : (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={estado === "hecho"} onChange={(e) => setEstado(e.target.checked ? "hecho" : "pendiente")} />
+                Marcar como hecha
+              </label>
+            )
           )}
         </div>
 
