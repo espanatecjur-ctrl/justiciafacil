@@ -13,7 +13,7 @@ import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { getAuth } from "@/lib/auth";
-import { ClipboardList, Plus, Paperclip, Loader2, X, CheckSquare, Square, User, Scale, Gavel } from "lucide-react";
+import { ClipboardList, Plus, Paperclip, Loader2, X, CheckSquare, Square, User, Scale, Gavel, Pencil, Trash2, ArchiveRestore } from "lucide-react";
 import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
 import { crearSolicitudEscrito, DECISIONES_RECURSO } from "@/lib/solicitud-escrito";
 
@@ -40,14 +40,18 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   const exp = (expediente ?? caso?.expediente ?? "").trim();
   const casoId = (caso as any)?.id ?? null;
   const [tareas, setTareas] = useState<Tarea[]>([]);
+  const [papelera, setPapelera] = useState<Tarea[]>([]);
+  const [verPapelera, setVerPapelera] = useState(false);
   const [colabs, setColabs] = useState<Colaborador[]>([]);
   const [agregar, setAgregar] = useState(false);
+  const [editando, setEditando] = useState<Tarea | null>(null);
   const [correoYo, setCorreoYo] = useState<string | null>(null);
   const [solicitarPara, setSolicitarPara] = useState<string | null>(null);
 
   const cargarTareas = () => {
-    if (!exp) { setTareas([]); return; }
-    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&order=estado.desc,created_at.desc`).then(setTareas).catch(() => setTareas([]));
+    if (!exp) { setTareas([]); setPapelera([]); return; }
+    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&estado=neq.papelera&order=estado.desc,created_at.desc`).then(setTareas).catch(() => setTareas([]));
+    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&estado=eq.papelera&order=created_at.desc`).then(setPapelera).catch(() => setPapelera([]));
   };
   useEffect(() => {
     cargarTareas();
@@ -55,6 +59,16 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
     (async () => { try { const a = await getAuth(); const { data } = await a.auth.getSession(); setCorreoYo(data.session?.user?.email ?? null); } catch { /* sin sesión */ } })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exp]);
+
+  const mandarPapelera = async (t: Tarea) => {
+    if (!confirm(`¿Mandar "${t.titulo}" a la papelera?`)) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${t.id}`, { method: "PATCH", headers, body: JSON.stringify({ estado: "papelera", updated_at: new Date().toISOString() }) }).catch(() => {});
+    cargarTareas();
+  };
+  const restaurar = async (t: Tarea) => {
+    await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${t.id}`, { method: "PATCH", headers, body: JSON.stringify({ estado: "pendiente", updated_at: new Date().toISOString() }) }).catch(() => {});
+    cargarTareas();
+  };
 
   const pendientes = tareas.filter((t) => t.estado !== "hecha" && t.tipo !== "evidencia").length;
   const soloTareas = tareas.filter((t) => t.tipo !== "evidencia");
@@ -157,6 +171,12 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
                         {esEvid && t.evidencia_url && <BotonVerDoc url={t.evidencia_url} nombre="Evidencia" label="ver evidencia" className="text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />}
                       </div>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : enProceso ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : enProceso ? "en curso" : "tarea"}</span>
+                      {!esEvid && (
+                        <div className="flex shrink-0 gap-1">
+                          <button onClick={() => setEditando(t)} title="Editar" className="text-muted-foreground hover:text-[color:var(--teal)]"><Pencil className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => mandarPapelera(t)} title="Mandar a papelera" className="text-muted-foreground hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -166,7 +186,26 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
         ))}
       </div>
 
+      {papelera.length > 0 && (
+        <div className="mt-3">
+          <button onClick={() => setVerPapelera((v) => !v)} className="text-[11px] text-muted-foreground hover:underline">
+            {verPapelera ? "Ocultar" : "Ver"} papelera ({papelera.length})
+          </button>
+          {verPapelera && (
+            <div className="mt-2 space-y-1.5">
+              {papelera.map((t) => (
+                <div key={t.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-2 text-xs">
+                  <span className="text-muted-foreground line-through">{t.titulo}</span>
+                  <button onClick={() => restaurar(t)} className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[color:var(--teal)] hover:underline"><ArchiveRestore className="h-3 w-3" /> Restaurar</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
+      {editando && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} tareaEditar={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargarTareas(); }} />}
       {solicitarPara && (
         <SolicitarEscritoModal
           casoId={casoId}
@@ -184,14 +223,14 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   );
 }
 
-function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; onClose: () => void; onGuardado: () => void }) {
-  const [tipo, setTipo] = useState<"tarea" | "evidencia">("tarea");
-  const [titulo, setTitulo] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [etapa, setEtapa] = useState("");
-  const [estadoInicial, setEstadoInicial] = useState<"pendiente" | "en_proceso" | "hecha">("pendiente");
-  const [responsableId, setResponsableId] = useState("");
-  const [fecha, setFecha] = useState("");
+function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], tareaEditar, onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; tareaEditar?: Tarea; onClose: () => void; onGuardado: () => void }) {
+  const [tipo, setTipo] = useState<"tarea" | "evidencia">(tareaEditar?.tipo === "evidencia" ? "evidencia" : "tarea");
+  const [titulo, setTitulo] = useState(tareaEditar?.titulo ?? "");
+  const [descripcion, setDescripcion] = useState(tareaEditar?.descripcion ?? "");
+  const [etapa, setEtapa] = useState(tareaEditar?.etapa ?? "");
+  const [estadoInicial, setEstadoInicial] = useState<"pendiente" | "en_proceso" | "hecha">((tareaEditar?.estado as any) ?? "pendiente");
+  const [responsableId, setResponsableId] = useState(() => colabs.find((c) => c.correo === tareaEditar?.responsable_correo)?.id ?? "");
+  const [fecha, setFecha] = useState(tareaEditar?.fecha_limite ?? "");
   const [archivo, setArchivo] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +257,9 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], o
         fecha_limite: tipo === "tarea" && fecha ? fecha : null,
         estado: tipo === "tarea" ? estadoInicial : "pendiente", evidencia_url, creado_por: creadoPor || null,
       };
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/tarea`, { method: "POST", headers, body: JSON.stringify(body) });
+      const res = tareaEditar
+        ? await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${tareaEditar.id}`, { method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify({ ...body, updated_at: new Date().toISOString() }) })
+        : await fetch(`${SUPABASE_URL}/rest/v1/tarea`, { method: "POST", headers, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
       onGuardado();
     } catch (e: any) { setError(e.message); } finally { setGuardando(false); }
@@ -228,7 +269,7 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], o
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md overflow-hidden rounded-xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 text-white" style={{ background: "#0B1E3A" }}>
-          <p className="font-semibold">Agregar al expediente{exp ? ` · ${exp}` : ""}</p>
+          <p className="font-semibold">{tareaEditar ? "Editar" : "Agregar al expediente"}{exp ? ` · ${exp}` : ""}</p>
           <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-3 p-4">
@@ -283,7 +324,7 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], o
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
             <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
-              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Guardar
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {tareaEditar ? "Guardar cambios" : "Guardar"}
             </button>
           </div>
         </div>
