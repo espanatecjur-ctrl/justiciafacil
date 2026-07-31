@@ -58,15 +58,19 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
 
   // Agrupa por etapa (procesal/jurídica) conservando el orden con orden_etapa.
   // Las tareas sin etapa asignada (tareas sueltas de siempre) van al final, sin encabezado.
+  // Si una etapa no trae orden_etapa (se escribió libre desde "Agregar"), se ordena
+  // por la fecha de creación de su primera tarea, para que quede cronológico igual.
   const gruposEtapa = (() => {
     const mapa = new Map<string, { etapa: string; orden: number; items: Tarea[] }>();
     for (const t of soloTareas) {
       const clave = t.etapa || "__sin_etapa__";
-      if (!mapa.has(clave)) mapa.set(clave, { etapa: clave, orden: t.orden_etapa ?? 999, items: [] });
-      mapa.get(clave)!.items.push(t);
+      if (!mapa.has(clave)) mapa.set(clave, { etapa: clave, orden: t.orden_etapa ?? new Date(t.created_at).getTime(), items: [] });
+      const grp = mapa.get(clave)!;
+      grp.items.push(t);
+      if (t.orden_etapa != null && (grp.orden > t.orden_etapa || grp.orden > 1e12)) grp.orden = t.orden_etapa;
     }
     return Array.from(mapa.values())
-      .sort((a, b) => a.orden - b.orden)
+      .sort((a, b) => (a.etapa === "__sin_etapa__" ? 1 : b.etapa === "__sin_etapa__" ? -1 : a.orden - b.orden))
       .map((g) => {
         const estadoEtapa = g.items.every((i) => i.estado === "hecha") ? "hecha"
           : g.items.some((i) => i.estado === "en_proceso") ? "en_proceso"
@@ -139,14 +143,17 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
         ))}
       </div>
 
-      {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
+      {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
     </div>
   );
 }
 
-function AgregarModal({ casoId, exp, colabs, creadoPor, onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; onClose: () => void; onGuardado: () => void }) {
+function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; onClose: () => void; onGuardado: () => void }) {
   const [tipo, setTipo] = useState<"tarea" | "evidencia">("tarea");
   const [titulo, setTitulo] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [etapa, setEtapa] = useState("");
+  const [estadoInicial, setEstadoInicial] = useState<"pendiente" | "en_proceso" | "hecha">("pendiente");
   const [responsableId, setResponsableId] = useState("");
   const [fecha, setFecha] = useState("");
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -169,10 +176,11 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, onClose, onGuardado }: {
       const c = colabs.find((x) => x.id === responsableId);
       const body = {
         caso_id: casoId, expediente: exp || null,
-        tipo, titulo: titulo.trim(),
+        tipo, titulo: titulo.trim(), descripcion: descripcion.trim() || null,
+        etapa: tipo === "tarea" && etapa.trim() ? etapa.trim() : null,
         responsable_correo: c?.correo || null, responsable_nombre: c?.nombre || null, responsable_rol: c?.rol || null,
         fecha_limite: tipo === "tarea" && fecha ? fecha : null,
-        estado: "pendiente", evidencia_url, creado_por: creadoPor || null,
+        estado: tipo === "tarea" ? estadoInicial : "pendiente", evidencia_url, creado_por: creadoPor || null,
       };
       const res = await fetch(`${SUPABASE_URL}/rest/v1/tarea`, { method: "POST", headers, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
@@ -199,6 +207,25 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, onClose, onGuardado }: {
             <input className={inp} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={tipo === "tarea" ? "Ej. Visita al juzgado a revisar expediente" : "Ej. Foto del expediente"} />
           </div>
           {tipo === "tarea" && (<>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Nota / de dónde sale (opcional)</label>
+              <textarea className={inp} rows={2} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej. Confirmado en boletín del 12/jul. Ver documento X." />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Etapa (opcional — agrupa esta tarea con otras de la misma etapa)</label>
+              <input className={inp} list="etapas-sugeridas" value={etapa} onChange={(e) => setEtapa(e.target.value)} placeholder="Ej. 4. Caducidad — en validación" />
+              <datalist id="etapas-sugeridas">
+                {etapasExistentes.map((e) => <option key={e} value={e} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Estado inicial</label>
+              <select className={inp} value={estadoInicial} onChange={(e) => setEstadoInicial(e.target.value as any)}>
+                <option value="pendiente">Pendiente</option>
+                <option value="en_proceso">En curso</option>
+                <option value="hecha">Ya se hizo (registrar como hecha)</option>
+              </select>
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Responsable</label>
               <select className={inp} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
