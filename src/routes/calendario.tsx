@@ -205,7 +205,7 @@ function Calendario() {
                   <Plus className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
                 </div>
                 <div className="space-y-1">
-                  {evs.slice(0, 3).map((e) => {
+                  {evs.map((e) => {
                     const st = ESTILO_EVENTO[e.tipo || "evento"] ?? ESTILO_EVENTO.evento;
                     const hecha = e.tipo === "tarea" && e.estado === "hecho";
                     return (
@@ -228,7 +228,6 @@ function Calendario() {
                       </button>
                     );
                   })}
-                  {evs.length > 3 && <p className="pl-1 text-[10px] text-muted-foreground">+{evs.length - 3} más</p>}
                 </div>
               </div>
             );
