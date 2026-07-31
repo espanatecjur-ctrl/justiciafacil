@@ -1,222 +1,217 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, Users, Activity,
+  ArrowLeft, FileSignature, Loader2, Save, X, Send, LayoutGrid, Stamp, GitBranch,
+  FolderOpen, Megaphone, AlertTriangle, CheckCircle2, History,
 } from "lucide-react";
+import { obtenerFormalizacion, actualizarFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, ESTADOS_TRAMITE, type Formalizacion } from "@/lib/formalizacion";
+import { crearSolicitud, TIPOS_DOCUMENTO_SOLICITUD, limite24hHabiles } from "@/lib/solicitud-contrato";
+import { usuarioActualEtiqueta } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
-import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
-import { LineaVidaAreas } from "@/components/linea-vida-areas";
-import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
-import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
-import { PanelSeguimiento } from "@/components/panel-seguimiento";
+import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
-import { BuscadorBoletin } from "@/components/buscador-boletin";
-import { VincularClienteModal } from "@/components/vincular-cliente";
-import { CronologiaCaso } from "@/components/cronologia-caso";
-import { registrarEvento } from "@/lib/cronologia-caso";
-import { TraspasoArea } from "@/components/traspaso-area";
-import { BannerCoincidencias } from "@/components/banner-coincidencias";
-import { ClientesJuicio } from "@/components/clientes-juicio";
-import { InstruccionesPanel } from "@/components/instrucciones-panel";
 
-export const Route = createFileRoute("/ucm-ficha")({
+export const Route = createFileRoute("/ufc-ficha")({
   validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
-  head: () => ({ meta: [{ title: "Ficha UCM — JusticiaFácil" }] }),
-  component: UCMFicha,
+  head: () => ({ meta: [{ title: "Ficha UFC — JusticiaFácil" }] }),
+  component: UFCFicha,
 });
 
 const NAVY = "#0B1E3A";
-const AZUL = "#0F6E56"; // color de UCM (teal)
-
+const ROJO = "#8A1F2B"; // color de UFC (formalizaciones)
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
-const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
+const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
+const lbl = "mb-1 block text-xs font-medium text-muted-foreground";
 
-type Modulo = "general" | "seguimiento" | "proceso" | "subjuicios" | "clientes" | "instrucciones" | "documentos" | "boletin";
+type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "boletin";
 
 interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
 
-const fmtFecha = (s: string | null) => {
-  if (!s) return "—";
-  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return s;
-  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
-};
+// Documentos generalmente pedidos por notaría para una cesión de derechos (litigiosos/adjudicatarios).
+// Guía general — cada estado puede sumar formatos o cuotas propias (Registro Público, ISAI local, etc.).
+const DOCUMENTOS_REQUERIDOS = [
+  "Identificación oficial vigente del cedente y del cesionario",
+  "Documento que acredite el derecho a ceder (sentencia, adjudicación, contrato, declaratoria de herederos)",
+  "Predial al corriente de la garantía",
+  "Certificado del Registro Público (situación jurídica y gravámenes)",
+  "Avalúo (cuando lo pida el notario o la autoridad fiscal local)",
+  "Acta de matrimonio del cedente, si aplica sociedad conyugal",
+  "CURP y RFC de ambas partes",
+];
 
-function Campo({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-0.5 block text-[11px] text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function DatoUCP({ label, valor, importante }: { label: string; valor?: string | null; importante?: boolean }) {
-  const vacio = !valor || !String(valor).trim();
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-right text-sm">{vacio ? (importante ? <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="h-3 w-3" /> falta</span> : "—") : valor}</span>
-    </div>
-  );
-}
-
-function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode; titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
-        {accion}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function UCMFicha() {
+function UFCFicha() {
   const { id } = Route.useSearch();
   const navigate = useNavigate();
-  const [c, setC] = useState<CasoJuridico | null>(null);
-  const [dict, setDict] = useState<any>(null);
-  const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
+  const [f, setF] = useState<Formalizacion | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [modulo, setModulo] = useState<Modulo>("general");
-
-  // edición (igual que UCM)
-  const [editAnt, setEditAnt] = useState(false);
-  const [editEst, setEditEst] = useState(false);
-  const [verBoletin, setVerBoletin] = useState(false);
-  const [verVincular, setVerVincular] = useState(false);
-  const [form, setForm] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
-  const [errorDatos, setErrorDatos] = useState<string | null>(null);
-  const [recargaCron, setRecargaCron] = useState(0);
-  const [verSeguimientoJuicio, setVerSeguimientoJuicio] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [modulo, setModulo] = useState<Modulo>("general");
+  const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
+
+  // Mini formulario de solicitud a Contratos
+  const [pidiendo, setPidiendo] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [msgSol, setMsgSol] = useState("");
+  const [sol, setSol] = useState({ tipo_documento: TIPOS_DOCUMENTO_SOLICITUD[0], detalle: "", solicitante: "" });
+
+  useEffect(() => { usuarioActualEtiqueta().then((v) => setSol((s) => ({ ...s, solicitante: v }))); }, []);
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
-    (async () => {
-      const cs = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : []));
-      const caso: CasoJuridico | null = cs?.[0] || null;
-      setC(caso);
-      // el dictamen vive en el ORIGINAL de UCP; si esta ficha es copia, lo leemos de ahí
-      const dictCasoId = caso?.origen_ucp_id || id;
-      const ds = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${dictCasoId}&vigente=eq.true&limit=1`, { headers }).then((r) => (r.ok ? r.json() : []));
-      setDict(ds?.[0] || null);
-      if (caso?.expediente) {
-        const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&or=(caso_id.eq.${id},expediente.eq.${encodeURIComponent(caso.expediente.trim())})&order=fecha_acuerdo.desc&limit=200`, { headers });
-        setAcuerdos(ra.ok ? await ra.json() : []);
+    obtenerFormalizacion(id).then((datos) => {
+      setF(datos);
+      if (datos?.expediente) {
+        fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(datos.expediente.trim())}&order=fecha_acuerdo.desc&limit=200`, { headers })
+          .then((r) => (r.ok ? r.json() : [])).then(setAcuerdos).catch(() => {});
       }
-    })().finally(() => setCargando(false));
+    }).finally(() => setCargando(false));
   }, [id]);
 
-  const guardarDatos = async (campos: Record<string, string>, cerrar: () => void) => {
-    if (!c) return;
-    setGuardando(true); setErrorDatos(null);
-    try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, {
-        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(campos),
-      });
-      if (!r.ok) throw new Error(String(r.status));
-      setC({ ...c, ...(campos as any) });
-      registrarEvento({ caso_id: c.id, expediente: c.expediente, area: "UCM", tipo: "cambio", texto: "Se actualizó: " + Object.keys(campos).join(", ") });
-      setRecargaCron((n) => n + 1);
-      cerrar();
-    } catch {
-      setErrorDatos("No se pudo guardar. Revisa las columnas del caso.");
-    } finally { setGuardando(false); }
-  };
-  const guardarCampos = (campos: Record<string, string>) => guardarDatos(campos, () => {});
+  const set = (k: keyof Formalizacion, v: any) => setF((p) => (p ? { ...p, [k]: v } : p));
 
-  // arma y descarga el PDF del dictamen usando la función que ya existe
-  const armarFirmas = () => {
-    const firmasArr: { titulo: string; firma: any }[] = [];
-    const fj = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.juridico || dict.firmas.juridico_firma) : null;
-    const fr = dict?.firmas && typeof dict.firmas === "object" ? (dict.firmas.registral || dict.firmas.registral_firma) : null;
-    if (fj) firmasArr.push({ titulo: "Dictamen jurídico", firma: typeof fj === "string" ? { nombre: fj } : fj });
-    if (fr) firmasArr.push({ titulo: "Dictamen registral (RPPC)", firma: typeof fr === "string" ? { nombre: fr } : fr });
-    return firmasArr;
+  const guardar = async () => {
+    if (!f?.id) return;
+    setGuardando(true); setMsg("");
+    const ok = await actualizarFormalizacion(f.id, f);
+    setGuardando(false);
+    setMsg(ok ? "Guardado ✓" : "No se pudo guardar");
+    setTimeout(() => setMsg(""), 2500);
   };
-  const datosPDF = () => ({
-    expediente: c?.expediente || undefined,
-    juzgado: c?.juzgado || undefined,
-    garantia: c?.direccion_garantia || (c as any)?.gar_id || undefined,
-    cliente: c?.cliente_nombre || undefined,
-    entidad: c?.entidad || undefined,
-    veredictoJuridico: dict?.juridico?.veredicto || undefined,
-    veredictoRegistral: (typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : undefined),
-    veredictoFinal: dict?.veredicto || undefined,
-    firmas: armarFirmas(),
-  });
-  const descargarPDF = async () => {
-    if (!c) return;
-    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
-    await descargarDictamenFinalPDF(datosPDF());
+
+  // Documentos: la carpeta de Drive se guarda directo en la fila de formalizacion (independiente del expediente original).
+  const guardarCarpeta = async (campos: Record<string, string>) => {
+    if (!f?.id) return;
+    await actualizarFormalizacion(f.id, campos as Partial<Formalizacion>);
+    setF((p) => (p ? { ...p, ...(campos as any) } : p));
   };
-  const verDictamenPDF = async () => {
-    if (!c) return;
-    const { descargarDictamenFinalPDF } = await import("@/lib/dictamen-final-pdf");
-    await descargarDictamenFinalPDF(datosPDF(), "ver");
+
+  const enviarSolicitud = async () => {
+    if (!f) return;
+    setEnviando(true); setMsgSol("");
+    const ok = await crearSolicitud({
+      garantia_ref: f.id_interno || f.direccion_garantia || "Sin ID",
+      origen: "UFC",
+      area: "UFC",
+      tipo_documento: sol.tipo_documento,
+      detalle: sol.detalle,
+      solicitante: sol.solicitante,
+      estado: "Pendiente",
+      fecha_solicitud: new Date().toISOString(),
+      fecha_limite: limite24hHabiles().toISOString(),
+    });
+    setEnviando(false);
+    if (ok) {
+      setMsgSol("Solicitud enviada a Contratos ✓");
+      setTimeout(() => { setPidiendo(false); setMsgSol(""); setSol({ tipo_documento: TIPOS_DOCUMENTO_SOLICITUD[0], detalle: "", solicitante: "" }); }, 1400);
+    } else {
+      setMsgSol("No se pudo enviar (¿corriste el SQL de solicitudes?).");
+    }
   };
 
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
-  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucm" })} className="underline">Volver a UCM</button></div>;
+  if (!f) return <div className="p-8 text-sm text-muted-foreground">No se encontró la formalización. <button onClick={() => navigate({ to: "/ufc" })} className="underline">Volver</button></div>;
 
-  const firmasN = ["elabora", "dil", "gad", "dgc", "dge"].filter((k) => (dict?.firmas as any)?.[k]?.fecha).length;
-  const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
-  const ultima = acuerdos[0] || null;
+  // Objeto "caso virtual" para reusar los mismos componentes de Drive que UCM/UCP (carpeta propia e independiente de UFC).
+  const casoVirtual: CasoJuridico = {
+    id: f.id || "",
+    expediente: f.expediente ?? null,
+    no_credito: f.id_interno ?? null,
+    cliente_nombre: f.nombre_cesionario ?? null,
+    drive_carpeta_id: f.drive_carpeta_id ?? null,
+    drive_carpeta_nombre: f.drive_carpeta_nombre ?? null,
+  } as unknown as CasoJuridico;
+
+  // Objeto "caso real" — apunta al caso_id del expediente jurídico de origen (UCP/UCM), NO al id de la formalización.
+  // Se usa exclusivamente para mostrar/editar en vivo "Documentos y movimientos" del expediente vinculado.
+  const casoReal: CasoJuridico | null = f.caso_id
+    ? ({
+        id: f.caso_id,
+        expediente: f.expediente ?? null,
+        no_credito: f.id_interno ?? null,
+        cliente_nombre: f.nombre_cesionario ?? null,
+      } as unknown as CasoJuridico)
+    : null;
 
   const MODULOS: { id: Modulo; label: string; icon: React.ReactNode }[] = [
     { id: "general", label: "General", icon: <LayoutGrid className="h-4 w-4" /> },
     { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
-    { id: "seguimiento", label: "Seguimiento y actuaciones", icon: <Activity className="h-4 w-4" /> },
     { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
-    { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
-    { id: "instrucciones", label: "Instrucciones", icon: <ScrollText className="h-4 w-4" /> },
     { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
     { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
   ];
 
-  const btnEditar = (onClick: () => void) => (
-    <button onClick={onClick} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>
-      <PenLine className="h-3 w-3" /> Editar / validar
-    </button>
-  );
-  const btnGuardar = (onClick: () => void) => (
-    <button onClick={onClick} disabled={guardando} className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ background: AZUL }}>
-      {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Guardar
-    </button>
-  );
-
   return (
     <div className="space-y-4">
       {/* barra superior */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => navigate({ to: "/ucm" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UCM</button>
-        <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: AZUL }}>UCM</span>
-        <button onClick={descargarPDF} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
-          <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={() => navigate({ to: "/ufc" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UFC</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setPidiendo(true)} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-medium" style={{ borderColor: ROJO, color: ROJO }}>
+            <FileSignature className="h-4 w-4" /> Solicitar a Contratos
+          </button>
+          <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: ROJO }}>
+            {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar {msg && <span className="ml-1 text-xs">· {msg}</span>}
+          </button>
+        </div>
       </div>
 
-      {/* encabezado (siempre visible) */}
-      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${AZUL})` }}>
-        <p className="text-xs uppercase tracking-wide text-white/60">Ficha UCM · Seguimiento de juicio</p>
-        <p className="text-2xl font-bold">{c.expediente || "Sin expediente"}</p>
-        <p className="text-sm text-white/80">{c.direccion_garantia || c.cliente_nombre || "—"}</p>
-        <p className="mt-1 text-xs text-white/70">{c.juzgado || "Juzgado sin asignar"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
-        {c.estado_ucm && <div className="mt-2 mr-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/25 px-2.5 py-1 text-xs font-medium text-white">{c.estado_ucm === "pendiente_formalizacion" ? "Pendiente de formalización" : c.estado_ucm}</div>}
-        <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${firmasN >= 5 ? "bg-emerald-400/25 text-white" : "bg-white/15 text-white"}`}>✍ {firmasN}/5 firmas del dictamen</div>
+      {/* Mini formulario: solicitar a Contratos */}
+      {pidiendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !enviando && setPidiendo(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-base font-bold" style={{ color: NAVY }}>Solicitar a Contratos</p>
+              <button onClick={() => setPidiendo(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Garantía: <b>{f.id_interno || f.direccion_garantia || "Sin ID"}</b> · Área: UFC</p>
+
+            <label className={lbl}>¿Qué se necesita elaborar?</label>
+            <select className={inp} value={sol.tipo_documento} onChange={(e) => setSol({ ...sol, tipo_documento: e.target.value })}>
+              {TIPOS_DOCUMENTO_SOLICITUD.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            <label className={`${lbl} mt-3`}>Detalle de lo que se necesita</label>
+            <textarea className={inp} rows={3} value={sol.detalle} onChange={(e) => setSol({ ...sol, detalle: e.target.value })} placeholder="Ej. Escriturar 3 lotes adjudicados a favor del cesionario…" />
+
+            <label className={`${lbl} mt-3`}>¿Quién lo solicita?</label>
+            <div className="flex items-center gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-sm">
+              <span className="truncate">{sol.solicitante || "Detectando sesión…"}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Se toma solo de tu sesión (rol · correo). No se captura a mano.</p>
+
+            <p className="mt-3 text-[11px] text-muted-foreground">Plazo de entrega: <b>24 horas hábiles</b> (el fin de semana no cuenta).</p>
+
+            <div className="mt-4 flex items-center gap-2">
+              <button onClick={enviarSolicitud} disabled={enviando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: ROJO }}>
+                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar solicitud
+              </button>
+              <button onClick={() => setPidiendo(false)} className="rounded-md border px-4 py-2 text-sm">Cancelar</button>
+              {msgSol && <span className="text-xs">{msgSol}</span>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* encabezado */}
+      <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${ROJO})` }}>
+        <p className="text-xs uppercase tracking-wide text-white/60">Ficha UFC · Formalización y cierre</p>
+        <p className="text-2xl font-bold">{f.id_interno || "Sin ID"}</p>
+        <p className="text-sm text-white/80">{f.direccion_garantia || "Sin dirección"}</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          {f.tipo_proceso && <span className="rounded-full bg-white/15 px-2 py-0.5">{f.tipo_proceso}</span>}
+          {f.tipo_contrato && <span className="rounded-full bg-white/15 px-2 py-0.5">{f.tipo_contrato}</span>}
+          {f.estado_tramite && <span className="rounded-full bg-white/15 px-2 py-0.5">{f.estado_tramite}</span>}
+        </div>
       </div>
 
       {/* pestañas */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
         {MODULOS.map((m) => (
-          <button key={m.id} onClick={() => setModulo(m.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === m.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === m.id ? { background: AZUL } : undefined}>
+          <button key={m.id} onClick={() => setModulo(m.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${modulo === m.id ? "text-white" : "text-muted-foreground hover:bg-muted"}`} style={modulo === m.id ? { background: ROJO } : undefined}>
             {m.icon} {m.label}
           </button>
         ))}
@@ -224,253 +219,166 @@ function UCMFicha() {
 
       {/* ============ GENERAL ============ */}
       {modulo === "general" && (
-        <div className="space-y-4">
-          {c.origen_ucp_id && (
-            <div className="flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: AZUL + "55", background: AZUL + "0d" }}>
-              <p className="text-xs" style={{ color: AZUL }}><span className="font-semibold">📋 Viene de UCP.</span> Los datos base se copiaron de UCP y se mantienen al día solos. Lo que cambies aquí NO regresa a UCP.</p>
-              <button onClick={() => navigate({ to: "/ucp-ficha", search: { id: c.origen_ucp_id } as any })} className="shrink-0 self-start inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>Ver original en UCP</button>
-            </div>
-          )}
-          <BannerCoincidencias caso={c} onNavegar={(nid) => navigate({ to: "/ucm-ficha", search: { id: nid } as any })} />
-          <TraspasoArea caso={c} area="UCM" onGuardarCarpeta={guardarCampos} onTraspaso={() => navigate({ to: "/ucm" })} />
-          <LineaVidaAreas caso={c} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Antecedente de la garantía (editable) */}
-            <SeccionUCP
-              icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
-              titulo="Antecedente de la garantía"
-              accion={!editAnt ? btnEditar(() => { setForm({ no_credito: c.no_credito || "", direccion_garantia: c.direccion_garantia || "", entidad: c.entidad || "" }); setErrorDatos(null); setEditAnt(true); }) : undefined}
-            >
-              {editAnt ? (
-                <div className="space-y-2">
-                  <Campo label="No. de crédito"><input className={inp} value={form.no_credito} onChange={(e) => setForm({ ...form, no_credito: e.target.value })} /></Campo>
-                  <Campo label="Dirección de la garantía"><input className={inp} value={form.direccion_garantia} onChange={(e) => setForm({ ...form, direccion_garantia: e.target.value })} /></Campo>
-                  <Campo label="Entidad"><input className={inp} value={form.entidad} onChange={(e) => setForm({ ...form, entidad: e.target.value })} /></Campo>
-                  <div className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
-                    <span className="text-[11px] text-muted-foreground">Cliente: <b className="text-foreground">{c.cliente_nombre || c.cliente_codigo || "sin vincular"}</b></span>
-                    <button onClick={() => setVerVincular(true)} className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"} cliente</button>
-                  </div>
-                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
-                  <div className="flex gap-2 pt-1">
-                    {btnGuardar(() => guardarDatos({ no_credito: form.no_credito, direccion_garantia: form.direccion_garantia, entidad: form.entidad }, () => setEditAnt(false)))}
-                    <button onClick={() => setEditAnt(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <DatoUCP label="ID garantía" valor={(c as any).gar_id} />
-                  <DatoUCP label="No. de crédito" valor={c.no_credito} importante />
-                  <DatoUCP label="Dirección de la garantía" valor={c.direccion_garantia} importante />
-                  <div className="flex items-center justify-between gap-2">
-                    <DatoUCP label="Cliente / deudor" valor={c.cliente_nombre || c.demandado} importante />
-                    <button onClick={() => setVerVincular(true)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}><Scale className="h-3 w-3" /> {c.cliente_id ? "Cambiar" : "Vincular"}</button>
-                  </div>
-                  <DatoUCP label="Entidad" valor={c.entidad} />
-                  <DatoUCP label="Tipo de proceso" valor={c.tipo_proceso} />
-                </>
-              )}
-            </SeccionUCP>
-
-            {/* Estatus actual (editable + robotsito) */}
-            <SeccionUCP
-              icon={<Scale className="h-4 w-4" style={{ color: AZUL }} />}
-              titulo="Estatus actual"
-              accion={!editEst ? btnEditar(() => { setForm({ etapa_actual: c.etapa_actual || "", estatus_general: c.estatus_general || "", prioridad: c.prioridad || "", expediente: c.expediente || "", juzgado: c.juzgado || "", actor: c.actor || "", demandado: c.demandado || "" }); setErrorDatos(null); setVerBoletin(false); setEditEst(true); }) : undefined}
-            >
-              {editEst ? (
-                <div className="space-y-2">
-                  <Campo label="Etapa actual"><input className={inp} value={form.etapa_actual} onChange={(e) => setForm({ ...form, etapa_actual: e.target.value })} /></Campo>
-                  <Campo label="Estatus general"><input className={inp} value={form.estatus_general} onChange={(e) => setForm({ ...form, estatus_general: e.target.value })} /></Campo>
-                  <Campo label="Prioridad"><input className={inp} value={form.prioridad} onChange={(e) => setForm({ ...form, prioridad: e.target.value })} placeholder="ALTA / MEDIA / BAJA" /></Campo>
-                  <Campo label="No. de expediente / juicio"><input className={inp} value={form.expediente} onChange={(e) => setForm({ ...form, expediente: e.target.value })} placeholder="Ej. 1593/2008" /></Campo>
-                  <Campo label="No. de juzgado"><input className={inp} value={form.juzgado} onChange={(e) => setForm({ ...form, juzgado: e.target.value })} placeholder="Ej. Juzgado Segundo…" /></Campo>
-                  <Campo label="Actor"><input className={inp} value={form.actor} onChange={(e) => setForm({ ...form, actor: e.target.value })} placeholder="Quien demanda" /></Campo>
-                  <Campo label="Demandado"><input className={inp} value={form.demandado} onChange={(e) => setForm({ ...form, demandado: e.target.value })} placeholder="Contra quién" /></Campo>
-
-                  {/* Robotsito del boletín */}
-                  <div className="rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-2.5">
-                    <button type="button" onClick={() => setVerBoletin((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-xs font-semibold" style={{ color: AZUL }}>
-                      <Send className="h-3.5 w-3.5" /> {verBoletin ? "Ocultar buscador del boletín" : "Buscar en el boletín (jurisdicción, juzgado y expediente)"}
-                    </button>
-                    {verBoletin && (
-                      <div className="mt-2">
-                        <p className="mb-2 text-[11px] text-muted-foreground">Elige la jurisdicción y el juzgado, busca el expediente y dale <b>“Guardar hallazgos del boletín”</b>: se rellenan solos. Luego revisa y dale <b>Guardar</b>.</p>
-                        <BuscadorBoletin
-                          expedienteInicial={form.expediente}
-                          onGuardarHallazgos={() => {}}
-                          onDatosBoletin={(d) => setForm((f) => ({
-                            ...f,
-                            expediente: d.expediente || f.expediente,
-                            juzgado: d.juzgado || f.juzgado,
-                            actor: d.actor || f.actor,
-                            demandado: d.demandado || f.demandado,
-                            etapa_actual: d.etapa || f.etapa_actual,
-                          }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {errorDatos && <p className="text-[11px] text-red-600">{errorDatos}</p>}
-                  <div className="flex gap-2 pt-1">
-                    {btnGuardar(() => guardarDatos({ etapa_actual: form.etapa_actual, estatus_general: form.estatus_general, prioridad: form.prioridad, expediente: form.expediente, juzgado: form.juzgado, actor: form.actor, demandado: form.demandado }, () => setEditEst(false)))}
-                    <button onClick={() => setEditEst(false)} className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">Cancelar</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <DatoUCP label="Etapa actual" valor={c.etapa_actual} importante />
-                  <DatoUCP label="Estatus general" valor={c.estatus_general} importante />
-                  {["firme", "ejecutoria", "ejecuc", "adjudic", "remate", "escritur", "cosa juzgada"].some((k) => `${c.etapa_actual || ""} ${c.estatus_general || ""}`.toLowerCase().includes(k)) && (
-                    <div className="mt-1 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 sm:col-span-2">
-                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-                      <div>
-                        <p className="text-sm font-semibold text-emerald-900">Lista para formalizar al cliente</p>
-                        <p className="text-[11px] text-emerald-800">La etapa indica <b>sentencia firme o superior</b> — esta garantía ya se puede formalizar directo con el cliente (sin compra al banco). Mándala a formalizar desde la ficha del cliente.</p>
-                      </div>
-                    </div>
-                  )}
-                  <DatoUCP label="Prioridad" valor={c.prioridad} />
-                  <DatoUCP label="No. de expediente / juicio" valor={c.expediente} />
-                  <DatoUCP label="No. de juzgado" valor={c.juzgado} />
-                  <DatoUCP label="Unidad / Encargado" valor={[c.unidad, c.encargado_unidad].filter(Boolean).join(" · ")} />
-                </>
-              )}
-            </SeccionUCP>
+        <Seccion titulo="Identificación" color={ROJO}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo label="ID interno"><input className={inp} value={f.id_interno || ""} onChange={(e) => set("id_interno", e.target.value)} /></Campo>
+            <Campo label="Tipo de proceso"><select className={inp} value={f.tipo_proceso || ""} onChange={(e) => set("tipo_proceso", e.target.value)}><option value="">—</option>{TIPOS_PROCESO.map((t) => <option key={t}>{t}</option>)}</select></Campo>
+            <Campo label="Tipo de contrato"><select className={inp} value={f.tipo_contrato || ""} onChange={(e) => set("tipo_contrato", e.target.value)}><option value="">—</option>{TIPOS_CONTRATO.map((t) => <option key={t}>{t}</option>)}</select></Campo>
+            <Campo label="Estado del trámite"><select className={inp} value={f.estado_tramite || ""} onChange={(e) => set("estado_tramite", e.target.value)}><option value="">—</option>{ESTADOS_TRAMITE.map((t) => <option key={t}>{t}</option>)}</select></Campo>
+            <Campo label="Dirección de la garantía" full><input className={inp} value={f.direccion_garantia || ""} onChange={(e) => set("direccion_garantia", e.target.value)} /></Campo>
+            <Campo label="Expediente"><input className={inp} value={f.expediente || ""} onChange={(e) => set("expediente", e.target.value)} /></Campo>
+            <Campo label="Distrito judicial"><input className={inp} value={f.distrito_judicial || ""} onChange={(e) => set("distrito_judicial", e.target.value)} /></Campo>
+            <Campo label="Juzgado" full><input className={inp} value={f.juzgado || ""} onChange={(e) => set("juzgado", e.target.value)} /></Campo>
+            <Campo label="Tipo de juicio"><input className={inp} value={f.tipo_juicio || ""} onChange={(e) => set("tipo_juicio", e.target.value)} /></Campo>
+            <Campo label="Vía procesal"><input className={inp} value={f.via_procesal || ""} onChange={(e) => set("via_procesal", e.target.value)} /></Campo>
+            <Campo label="Etapa a seguir"><input className={inp} value={f.etapa_a_seguir || ""} onChange={(e) => set("etapa_a_seguir", e.target.value)} /></Campo>
+            <Campo label="Observaciones" full><textarea className={inp} rows={2} value={f.observaciones || ""} onChange={(e) => set("observaciones", e.target.value)} /></Campo>
           </div>
-
-          {/* última actuación del boletín (resumen) */}
-          <SeccionUCP icon={<Megaphone className="h-4 w-4" style={{ color: AZUL }} />} titulo="Última actuación en el boletín">
-            {sinJuzgado ? (
-              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertTriangle className="mr-1 inline h-4 w-4" /> Falta asignar el juzgado para que el robot pueda seguir este expediente.</div>
-            ) : ultima ? (
-              <div className="rounded-md bg-muted/40 p-3">
-                <span className="text-xs font-medium text-muted-foreground">{fmtFecha(ultima.fecha_acuerdo)}</span>
-                <p className="mt-1 text-sm">{ultima.texto || "—"}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sin actuaciones todavía. El robot revisa el boletín todos los días a las 9:00 AM.</p>
-            )}
-          </SeccionUCP>
-
-          {/* Cronología del expediente (compartida entre áreas) */}
-          <CronologiaCaso casoId={c.id} expediente={c.expediente} recargaId={recargaCron} />
-        </div>
+        </Seccion>
       )}
 
-      {/* ============ PROCESO (dictamen jurídico + registral + PDF + firmas) ============ */}
-      {modulo === "seguimiento" && (
-        <div className="space-y-4">
-          <LineaVidaAreas caso={c} />
-          <LineaTiempoJuicio caso={c} onAbrir={() => setVerSeguimientoJuicio(true)} />
-          <PanelSeguimiento caso={c} />
-        </div>
-      )}
-
+      {/* ============ PROCESO (instrucción notarial, escritura, minuta/pagos, RPP, entrega) ============ */}
       {modulo === "proceso" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <BloqueDictamen
-            titulo="Dictamen jurídico"
-            icon={<ScrollText className="h-4 w-4" style={{ color: AZUL }} />}
-            veredicto={dict?.juridico?.veredicto || dict?.veredicto || null}
-            firmas={dict?.firmas}
-            claveFirma="juridico"
-            onAbrir={() => navigate({ to: "/ucm" })}
-            onVer={() => verDictamenPDF()}
-            onDescargar={() => descargarPDF()}
-          />
-          <BloqueDictamen
-            titulo="Dictamen registral (RPPC)"
-            icon={<Landmark className="h-4 w-4" style={{ color: AZUL }} />}
-            veredicto={typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : (dict?.rppc ? "registrado" : null)}
-            firmas={dict?.firmas}
-            claveFirma="registral"
-            onAbrir={() => navigate({ to: "/ucm" })}
-            onVer={() => verDictamenPDF()}
-            onDescargar={() => descargarPDF()}
-          />
+        <div className="space-y-4">
+          <Seccion titulo="Instrucción notarial" color={ROJO}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Encargado de instrucción"><input className={inp} value={f.encargado_instruccion || ""} onChange={(e) => set("encargado_instruccion", e.target.value)} /></Campo>
+              <Campo label="Responsable de instrucción"><input className={inp} value={f.responsable_instruccion || ""} onChange={(e) => set("responsable_instruccion", e.target.value)} /></Campo>
+              <Campo label="Documento de instrucción notarial" full><input className={inp} value={f.doc_instruccion_notarial || ""} onChange={(e) => set("doc_instruccion_notarial", e.target.value)} placeholder="Enlace o referencia del documento" /></Campo>
+              <Campo label="Número de notaría"><input className={inp} value={f.numero_notaria || ""} onChange={(e) => set("numero_notaria", e.target.value)} /></Campo>
+              <Campo label="Nombre del notario"><input className={inp} value={f.nombre_notario || ""} onChange={(e) => set("nombre_notario", e.target.value)} /></Campo>
+              <Campo label="Jurisdicción del notario" full><input className={inp} value={f.jurisdiccion_notario || ""} onChange={(e) => set("jurisdiccion_notario", e.target.value)} placeholder="Ej. Guadalajara, Jalisco" /></Campo>
+            </div>
+          </Seccion>
+
+          <Seccion titulo="Escritura y cesión" color={ROJO}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Documento de escritura" full><input className={inp} value={f.doc_escritura || ""} onChange={(e) => set("doc_escritura", e.target.value)} /></Campo>
+              <Campo label="Número de escritura"><input className={inp} value={f.numero_escritura || ""} onChange={(e) => set("numero_escritura", e.target.value)} /></Campo>
+              <Campo label="Fecha de escritura"><input type="date" className={inp} value={f.fecha_escritura ? String(f.fecha_escritura).slice(0, 10) : ""} onChange={(e) => set("fecha_escritura", e.target.value)} /></Campo>
+              <Campo label="Libro"><input className={inp} value={f.libro || ""} onChange={(e) => set("libro", e.target.value)} /></Campo>
+              <Campo label="Nombre del cedente"><input className={inp} value={f.nombre_cedente || ""} onChange={(e) => set("nombre_cedente", e.target.value)} /></Campo>
+              <Campo label="Sujeto de derecho (cedente)"><input className={inp} value={f.sujeto_derecho_cedente || ""} onChange={(e) => set("sujeto_derecho_cedente", e.target.value)} /></Campo>
+              <Campo label="Nombre del cesionario"><input className={inp} value={f.nombre_cesionario || ""} onChange={(e) => set("nombre_cesionario", e.target.value)} /></Campo>
+              <Campo label="Sujeto de derecho (cesionario)"><input className={inp} value={f.sujeto_derecho_cesionario || ""} onChange={(e) => set("sujeto_derecho_cesionario", e.target.value)} /></Campo>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!f.firma_apoderado} onChange={(e) => set("firma_apoderado", e.target.checked)} /> Firma del apoderado</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!f.firma_notario} onChange={(e) => set("firma_notario", e.target.checked)} /> Firma del notario</label>
+            </div>
+          </Seccion>
+
+          <Seccion titulo="Minuta y pagos" color={ROJO}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Encargado de minuta"><input className={inp} value={f.encargado_minuta || ""} onChange={(e) => set("encargado_minuta", e.target.value)} /></Campo>
+              <Campo label="Fecha de solicitud de minuta"><input type="date" className={inp} value={f.fecha_solicitud_minuta ? String(f.fecha_solicitud_minuta).slice(0, 10) : ""} onChange={(e) => set("fecha_solicitud_minuta", e.target.value)} /></Campo>
+              <Campo label="Fecha de revisión"><input type="date" className={inp} value={f.fecha_revision ? String(f.fecha_revision).slice(0, 10) : ""} onChange={(e) => set("fecha_revision", e.target.value)} /></Campo>
+              <Campo label="Enlace a contabilidad" full><input className={inp} value={f.enlace_contabilidad || ""} onChange={(e) => set("enlace_contabilidad", e.target.value)} /></Campo>
+              <Campo label="Validación de contabilidad"><input className={inp} value={f.validacion_contabilidad || ""} onChange={(e) => set("validacion_contabilidad", e.target.value)} /></Campo>
+              <Campo label="Ficha de pago de notaría"><input className={inp} value={f.ficha_pago_notaria || ""} onChange={(e) => set("ficha_pago_notaria", e.target.value)} /></Campo>
+              <Campo label="Fecha para firmar"><input type="date" className={inp} value={f.fecha_para_firmar ? String(f.fecha_para_firmar).slice(0, 10) : ""} onChange={(e) => set("fecha_para_firmar", e.target.value)} /></Campo>
+              <Campo label="Fecha de entrega de testimonio"><input type="date" className={inp} value={f.fecha_entrega_testimonio ? String(f.fecha_entrega_testimonio).slice(0, 10) : ""} onChange={(e) => set("fecha_entrega_testimonio", e.target.value)} /></Campo>
+              <Campo label="Días de mora (testimonio)"><input type="number" className={inp} value={f.dias_mora_testimonio ?? ""} onChange={(e) => set("dias_mora_testimonio", e.target.value ? Number(e.target.value) : null)} /></Campo>
+            </div>
+          </Seccion>
+
+          <Seccion titulo="Registro Público de la Propiedad" color={ROJO}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Fecha de ingreso a RPP"><input type="date" className={inp} value={f.fecha_ingreso_rpp ? String(f.fecha_ingreso_rpp).slice(0, 10) : ""} onChange={(e) => set("fecha_ingreso_rpp", e.target.value)} /></Campo>
+              <Campo label="Recibo de pago RPP"><input className={inp} value={f.recibo_pago_rpp || ""} onChange={(e) => set("recibo_pago_rpp", e.target.value)} /></Campo>
+              <Campo label="Folio de registro"><input className={inp} value={f.folio_registro || ""} onChange={(e) => set("folio_registro", e.target.value)} /></Campo>
+              <Campo label="Fecha de entrega RPP"><input type="date" className={inp} value={f.fecha_entrega_rpp ? String(f.fecha_entrega_rpp).slice(0, 10) : ""} onChange={(e) => set("fecha_entrega_rpp", e.target.value)} /></Campo>
+              <Campo label="Días de mora (RPP)"><input type="number" className={inp} value={f.dias_mora_rpp ?? ""} onChange={(e) => set("dias_mora_rpp", e.target.value ? Number(e.target.value) : null)} /></Campo>
+              <Campo label="Boleta de inscripción"><input className={inp} value={f.boleta_inscripcion || ""} onChange={(e) => set("boleta_inscripcion", e.target.value)} /></Campo>
+              <Campo label="Nuevo CLG" full><input className={inp} value={f.nuevo_clg || ""} onChange={(e) => set("nuevo_clg", e.target.value)} /></Campo>
+            </div>
+          </Seccion>
+
+          <Seccion titulo="Entrega y seguimiento" color={ROJO}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Fecha de entrega a DIL"><input type="date" className={inp} value={f.fecha_entrega_dil ? String(f.fecha_entrega_dil).slice(0, 10) : ""} onChange={(e) => set("fecha_entrega_dil", e.target.value)} /></Campo>
+              <Campo label="Documentación"><input className={inp} value={f.documentacion || ""} onChange={(e) => set("documentacion", e.target.value)} /></Campo>
+              <Campo label="Fecha de entrega a UCM"><input type="date" className={inp} value={f.fecha_entrega_ucm ? String(f.fecha_entrega_ucm).slice(0, 10) : ""} onChange={(e) => set("fecha_entrega_ucm", e.target.value)} /></Campo>
+              <Campo label="Días de mora (entrega)"><input type="number" className={inp} value={f.dias_mora_entrega ?? ""} onChange={(e) => set("dias_mora_entrega", e.target.value ? Number(e.target.value) : null)} /></Campo>
+              <Campo label="Responsable jurídico"><input className={inp} value={f.responsable_juridico || ""} onChange={(e) => set("responsable_juridico", e.target.value)} /></Campo>
+              <Campo label="Director jurídico"><input className={inp} value={f.director_juridico || ""} onChange={(e) => set("director_juridico", e.target.value)} /></Campo>
+              <Campo label="Unidad a la que pertenece"><input className={inp} value={f.unidad_pertenece || ""} onChange={(e) => set("unidad_pertenece", e.target.value)} /></Campo>
+              <Campo label="Encargado de la unidad"><input className={inp} value={f.encargado_unidad || ""} onChange={(e) => set("encargado_unidad", e.target.value)} /></Campo>
+              <Campo label="Otra etapa" full><input className={inp} value={f.otra_etapa || ""} onChange={(e) => set("otra_etapa", e.target.value)} /></Campo>
+            </div>
+          </Seccion>
         </div>
       )}
 
-      {/* ============ SUB-JUICIOS ============ */}
+      {/* ============ SUB-JUICIOS (del expediente jurídico de origen, si hay uno vinculado) ============ */}
       {modulo === "subjuicios" && (
-        <div className="rounded-xl border border-border bg-card p-4"><SubJuicios casoId={c.id} /></div>
+        f.caso_id
+          ? <div className="rounded-xl border border-border bg-card p-4"><SubJuicios casoId={f.caso_id} /></div>
+          : <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Esta formalización no tiene un expediente jurídico (UCP/UCM) vinculado — sin expediente no hay sub-juicios que mostrar.</div>
       )}
 
-      {/* ============ CLIENTES / GARANTÍAS ============ */}
-      {modulo === "clientes" && (
-        <ClientesJuicio casoId={c.id} juicioExpediente={c.expediente || undefined} />
-      )}
-
-      {/* ============ INSTRUCCIONES (validación URRJ/GAD/DIL·DGE) ============ */}
-      {modulo === "instrucciones" && (
-        <InstruccionesPanel casoId={c.id} />
-      )}
-
-      {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
+      {/* ============ DOCUMENTOS (carpeta de Drive propia de UFC + vista en vivo del expediente UCP/UCM) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
-          <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
-          <DocumentosFijos caso={c} area="UCM" />
+          {/* Vista en vivo de lo que ya se llenó en el expediente jurídico de origen (UCP/UCM) — mismo caso_id, tiempo real */}
+          {casoReal ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: ROJO, color: ROJO, background: "#FBEAEA" }}>
+                <History className="h-4 w-4 shrink-0" />
+                Esto se llenó en el expediente jurídico (UCP/UCM) — vista en vivo, se actualiza en tiempo real. Puedes agregar notas y actuaciones aquí mismo; quedan guardadas en el mismo expediente.
+              </div>
+              <DocumentosGarantia area="UFC" caso={casoReal} />
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              Esta formalización no tiene un expediente jurídico (UCP/UCM) vinculado — sin ese vínculo no hay documentos/actuaciones de origen que mostrar aquí. Vincúlalo desde la pestaña General si corresponde.
+            </div>
+          )}
+
+          {/* Carpeta y documentos fijos propios de UFC (independiente del expediente de origen) */}
+          <CarpetaDriveVinculada caso={casoVirtual} area="UFC" modulo="ufc" onGuardar={guardarCarpeta} />
+          <DocumentosFijos caso={casoVirtual} area="UFC" />
+
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="mb-2 flex items-center gap-2">
-              <Users className="h-5 w-5 text-[color:var(--teal)]" />
-              <h3 className="text-sm font-semibold">Documentos de Clientes</h3>
+              <CheckCircle2 className="h-5 w-5" style={{ color: ROJO }} />
+              <h3 className="text-sm font-semibold">Documentos que normalmente pide la notaría</h3>
             </div>
-            <p className="text-xs text-muted-foreground">Aquí se conectan los PDFs de la carpeta Drive <b>«CLIENTES»</b> (INE, CURP, comprobantes, actas) y se copian al sistema por cliente.</p>
-            <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
-              <p className="flex items-center gap-1 font-medium text-foreground"><FolderOpen className="h-3.5 w-3.5" /> Carpeta «CLIENTES» de Drive</p>
-              <p className="mt-0.5">Se conectará y copiará en la próxima etapa, ligando cada PDF a su cliente en el CRM.</p>
-            </div>
+            <p className="mb-2 text-xs text-muted-foreground">Guía general para una cesión de derechos (litigiosos o adjudicatarios). Cada estado puede sumar formatos o cuotas propias — confirma con la notaría asignada.</p>
+            <ul className="space-y-1.5">
+              {DOCUMENTOS_REQUERIDOS.map((d) => (
+                <li key={d} className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ROJO }} />
+                  {d}
+                </li>
+              ))}
+            </ul>
           </div>
-          <DocumentosGarantia area="UCM" caso={c} />
         </div>
       )}
 
       {/* ============ BOLETÍN ============ */}
       {modulo === "boletin" && (
-        <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} casoId={c.id} />
+        f.expediente
+          ? <BoletinExpediente acuerdos={acuerdos} expediente={f.expediente} sinJuzgado={!f.juzgado} cargando={false} />
+          : <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground"><AlertTriangle className="mx-auto mb-2 h-5 w-5 text-amber-500" />Falta capturar el número de expediente (pestaña General) para que el robot pueda seguirlo en el boletín.</div>
       )}
-
-      {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setC({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_jc_id: cl.id }); setVerVincular(false); }} />}
-      {verSeguimientoJuicio && <SeguimientoJuicioModal area="UCM" caso={c} onClose={() => setVerSeguimientoJuicio(false)} />}
     </div>
   );
 }
 
-// Bloque resumen de un dictamen (jurídico o registral) con su veredicto, firma y PDF.
-function BloqueDictamen({ titulo, icon, veredicto, firmas, claveFirma, onAbrir, onVer, onDescargar }: {
-  titulo: string; icon: React.ReactNode; veredicto: string | null;
-  firmas: any; claveFirma: string; onAbrir: () => void; onVer: () => void; onDescargar: () => void;
-}) {
-  const v = (veredicto || "").toLowerCase();
-  const positivo = v.includes("positiv") || v.includes("proceden") || v.includes("registrad") || v.includes("favorable");
-  const negativo = v.includes("negativ") || v.includes("improcedent") || v.includes("desfavorable");
-  const Icono = positivo ? CheckCircle2 : negativo ? XCircle : Clock;
-  const color = positivo ? "#0C5C46" : negativo ? "#A32D2D" : "#B26B00";
-
-  const firma = firmas && typeof firmas === "object" ? (firmas[claveFirma] || firmas[`${claveFirma}_firma`]) : null;
-  const firmado = !!firma;
-
+function Seccion({ titulo, color, children }: { titulo: string; color?: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: NAVY }}>{icon} {titulo}</p>
-        <button onClick={onAbrir} className="rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted" style={{ color: AZUL }}>Abrir proceso</button>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <Icono className="h-5 w-5" style={{ color }} />
-        <span className="text-sm font-medium" style={{ color }}>{veredicto ? veredicto : "Sin dictaminar"}</span>
-      </div>
-      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-xs">
-        <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-        {firmado
-          ? <span className="text-[color:var(--teal)]">Firmado{typeof firma === "string" ? `: ${firma}` : (firma?.nombre ? `: ${firma.nombre}` : "")}</span>
-          : <span className="text-muted-foreground">Sin firma</span>}
-      </div>
-      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2">
-        <button onClick={onVer} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] hover:bg-muted"><Eye className="h-3.5 w-3.5" /> Ver PDF</button>
-        <button onClick={onDescargar} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] hover:bg-muted" style={{ borderColor: "#C2A24C", color: "#8a7326" }}><Download className="h-3.5 w-3.5" /> Descargar</button>
-      </div>
+      <p className="mb-3 text-sm font-semibold" style={{ color: color || NAVY }}>{titulo}</p>
+      {children}
     </div>
+  );
+}
+
+function Campo({ label, full, children }: { label: string; full?: boolean; children: React.ReactNode }) {
+  return (
+    <label className={`block text-sm ${full ? "sm:col-span-2" : ""}`}>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </label>
   );
 }
