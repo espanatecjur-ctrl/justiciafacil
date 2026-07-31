@@ -70,8 +70,13 @@ function Calendario() {
   const soyDirector = esDirector(rolYo);
   const [filtro, setFiltro] = useState<"mias" | "equipo" | "todas">("mias"); // por defecto, cada quien ve las suyas
 
-  // Equipo jurídico (para el director): colaboradores de las unidades jurídicas + colores por persona.
-  const equipoJuridico = useMemo(() => colabs.filter((c) => GRUPO_DE_ROL[c.rol || ""] === "Jurídico" && c.correo), [colabs]);
+  // Equipo (para el director): si eres director/a (DGE, Super_Admin) ves a TODO el equipo activo,
+  // no solo Jurídico — porque como directora también asignas tareas a Administración (GAD), etc.
+  // Si no eres director, "Mi equipo" se limita a tus compañeros del grupo Jurídico.
+  const equipoJuridico = useMemo(
+    () => colabs.filter((c) => c.correo && (soyDirector || GRUPO_DE_ROL[c.rol || ""] === "Jurídico")),
+    [colabs, soyDirector]
+  );
   const equipoCorreos = useMemo(() => {
     const s = new Set(equipoJuridico.map((c) => c.correo));
     if (correoYo) s.add(correoYo);
