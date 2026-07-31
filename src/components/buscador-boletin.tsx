@@ -36,7 +36,7 @@ const fmt = (s?: string) => {
 
 const RE_AMPARO = /amparo|suspensi[óo]n|juzgado de distrito|distrito|colegiado|federal/i;
 
-export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin, onGuardadoEnFicha }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string; ultimaActuacionFecha?: string; ultimaActuacionTexto?: string }) => void; onGuardadoEnFicha?: () => void } = {}) {
+export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resaltarAmparo = false, casoId, onHallazgoAmparo, onGuardarHallazgos, onDatosBoletin, onGuardadoEnFicha }: { expedienteInicial?: string; estadoInicial?: "sinaloa" | "bcs" | "jalisco"; resaltarAmparo?: boolean; casoId?: string; onHallazgoAmparo?: (nota: string) => void; onGuardarHallazgos?: (nota: string) => void; onDatosBoletin?: (d: { expediente?: string; actor?: string; demandado?: string; juzgado?: string; etapa?: string; ultimaActuacionFecha?: string; ultimaActuacionTexto?: string }) => void; onGuardadoEnFicha?: () => void } = {}) {
   const [estado, setEstado] = useState<"sinaloa" | "bcs" | "jalisco">(estadoInicial ?? "sinaloa");
   const [cat, setCat] = useState<BoletinJuzgado[]>([]);
   const [distrito, setDistrito] = useState("");
@@ -161,6 +161,7 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
         entidad: ent, juzgado: juz, expediente: a.expediente || exp, fecha_acuerdo: fecha,
         tipo_acuerdo: a.etapa || null, texto: a.acuerdo || null, fuente: "manual", origen: "manual_buscador",
         hash_acuerdo: hash,
+        caso_id: casoId || null,
       };
     });
     try {
