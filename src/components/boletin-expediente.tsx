@@ -32,10 +32,11 @@ const TIPO_COLOR: Record<string, string> = {
   Edicto: "bg-orange-100 text-orange-700", Almoneda: "bg-rose-100 text-rose-700", RPP: "bg-teal-100 text-teal-700",
 };
 
-export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando, onGuardado }: {
+export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando, casoId, onGuardado }: {
   acuerdos: Acuerdo[];
   expediente: string | null;
   sinJuzgado: boolean;
+  casoId?: string;
   cargando?: boolean;
   /** Se llama cuando el usuario guarda actuaciones desde la búsqueda en vivo,
    *  para que la pantalla que la usa recargue la lista y ya se vean sin
@@ -90,7 +91,7 @@ export function BoletinExpediente({ acuerdos, expediente, sinJuzgado, cargando, 
         {verBuscar && (
           <div className="mt-3 border-t border-border pt-3">
             <p className="mb-2 text-[11px] text-muted-foreground">Consulta en vivo (no espera a la corrida de las 9 AM). Elige jurisdicción + juzgado, busca el expediente y dale "Guardar" — se queda aquí y en cualquier otra parte que use el boletín de este expediente. Si más adelante salen actuaciones nuevas (por el robot diario o por otra búsqueda), se agregan sin duplicar las que ya tienes.</p>
-            <BuscadorBoletin expedienteInicial={expediente || ""} onGuardadoEnFicha={onGuardado} />
+            <BuscadorBoletin expedienteInicial={expediente || ""} casoId={casoId} onGuardadoEnFicha={onGuardado} />
           </div>
         )}
       </div>
