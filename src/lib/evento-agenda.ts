@@ -36,6 +36,10 @@ export interface Evento {
   cliente_estado?: "vinculado" | "no_encontrado" | null;
   jc_tarea_id?: string | null;            // tarea-espejo creada en JurisConecta
   jc_solicitud_id?: string | null;        // solicitud pendiente en JurisConecta (si no se encontró)
+  // ---- Puente de vuelta a la ficha que originó esta tarea (JusticiaFácil) ----
+  ref_caso_id?: string | null;            // caso_id de la ficha (ej. ucm-ficha)
+  ref_modulo?: string | null;             // ruta del módulo, ej. "ucm-ficha"
+  tarea_id?: string | null;               // id de la fila en `tarea` que generó este evento-espejo
 }
 
 /** Persona del equipo (para asignar tareas). */
