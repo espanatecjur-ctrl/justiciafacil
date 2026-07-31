@@ -208,7 +208,12 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
                       </div>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : enProceso ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : enProceso ? "en curso" : "tarea"}</span>
                       {!esEvid && (
-                        <div className="flex shrink-0 gap-1">
+                        <div className="flex shrink-0 items-center gap-1">
+                          {!hecha && (
+                            <button onClick={() => setCerrarTarea(t)} className="flex items-center gap-1 rounded-md border border-[color:var(--teal)]/40 px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10">
+                              <ClipboardList className="h-3 w-3" /> Elaborar
+                            </button>
+                          )}
                           <button onClick={() => setEditando(t)} title="Editar" className="text-muted-foreground hover:text-[color:var(--teal)]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => mandarPapelera(t)} title="Mandar a papelera" className="text-muted-foreground hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
@@ -243,12 +248,13 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
       {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
       {editando && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} tareaEditar={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargarTareas(); }} />}
       {cerrarTarea && (
-        <CerrarTareaModal
+        <ElaborarTareaModal
           tarea={cerrarTarea}
+          caso={caso}
           onClose={() => setCerrarTarea(null)}
-          onCerrada={(notaCierre) => {
-            setTareas((p) => p.map((x) => (x.id === cerrarTarea.id ? { ...x, estado: "hecha", nota_cierre: notaCierre } : x)));
-            sincronizarEventoDeTarea({ ...cerrarTarea, estado: "hecha" });
+          onCerrada={(nuevoEstado, notaCierre) => {
+            setTareas((p) => p.map((x) => (x.id === cerrarTarea.id ? { ...x, estado: nuevoEstado, nota_cierre: notaCierre ?? x.nota_cierre } : x)));
+            sincronizarEventoDeTarea({ ...cerrarTarea, estado: nuevoEstado });
             setCerrarTarea(null);
           }}
         />
@@ -379,23 +385,54 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], t
 // No se puede cerrar una tarea con un clic simple: hay que decir qué
 // se hizo y si queda un siguiente paso o se da por terminado.
 // ============================================================
-function CerrarTareaModal({ tarea, onClose, onCerrada }: { tarea: Tarea; onClose: () => void; onCerrada: (notaCierre: string) => void }) {
-  const [comoTermino, setComoTermino] = useState<"terminado" | "siguiente_paso">("terminado");
+// ============================================================
+// ElaborarTareaModal · aquí se trabaja la tarea de verdad
+// ------------------------------------------------------------
+// No se puede marcar hecha con un clic: hay que anotar qué se hizo
+// y, si aplica, subir el documento que la resuelve (se liga a la
+// misma etapa, así aparece también en la Línea del tiempo). "Guardar
+// avance" deja la tarea en curso sin cerrarla.
+// ============================================================
+function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea; caso?: CasoJuridico; onClose: () => void; onCerrada: (nuevoEstado: string, notaCierre: string | null) => void }) {
+  const [comoQueda, setComoQueda] = useState<"avance" | "terminado" | "siguiente_paso">(tarea.estado === "hecha" ? "terminado" : "avance");
   const [nota, setNota] = useState("");
+  const [archivos, setArchivos] = useState<File[]>([]);
+  const [subiendo, setSubiendo] = useState(false);
+  const [subidos, setSubidos] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const guardar = async () => {
-    if (!nota.trim()) { setError("Escribe qué se hizo (y el siguiente paso, si aplica)."); return; }
-    setGuardando(true); setError(null);
-    const notaCierre = (comoTermino === "terminado" ? "Se da por terminado. " : "Siguiente paso: ") + nota.trim();
+  const subirArchivos = async () => {
+    if (archivos.length === 0 || !caso) return;
+    setSubiendo(true); setError(null);
     try {
+      const { subirDocumento } = await import("@/lib/drive");
+      for (const f of archivos) {
+        const r = await subirDocumento("UCM", caso, f, "otro");
+        if (r.ok && r.doc?.id && tarea.etapa) {
+          await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${r.doc.id}`, { method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify({ etapa: tarea.etapa }) });
+        }
+        if (r.ok) setSubidos((p) => [...p, f.name]);
+        else setError(`No se pudo subir "${f.name}": ${r.error || "error desconocido"}`);
+      }
+      setArchivos([]);
+    } finally { setSubiendo(false); }
+  };
+
+  const guardar = async () => {
+    if (!nota.trim()) { setError("Escribe qué se hizo (o el avance), aunque sea breve."); return; }
+    setGuardando(true); setError(null);
+    const etiqueta = comoQueda === "avance" ? "Avance: " : comoQueda === "terminado" ? "Se da por terminado. " : "Siguiente paso: ";
+    const notaCompleta = etiqueta + nota.trim() + (subidos.length > 0 ? ` (Se subió: ${subidos.join(", ")})` : "");
+    const nuevoEstado = comoQueda === "avance" ? "en_proceso" : "hecha";
+    try {
+      const cambios: Record<string, unknown> = { estado: nuevoEstado, updated_at: new Date().toISOString() };
+      if (nuevoEstado === "hecha") cambios.nota_cierre = notaCompleta;
       const r = await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${tarea.id}`, {
-        method: "PATCH", headers: { ...headers, Prefer: "return=minimal" },
-        body: JSON.stringify({ estado: "hecha", nota_cierre: notaCierre, updated_at: new Date().toISOString() }),
+        method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify(cambios),
       });
       if (!r.ok) throw new Error(`Supabase ${r.status}`);
-      onCerrada(notaCierre);
+      onCerrada(nuevoEstado, nuevoEstado === "hecha" ? notaCompleta : null);
     } catch (e: any) { setError(e.message); } finally { setGuardando(false); }
   };
 
@@ -403,30 +440,44 @@ function CerrarTareaModal({ tarea, onClose, onCerrada }: { tarea: Tarea; onClose
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md overflow-hidden rounded-xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 text-white" style={{ background: "#0B1E3A" }}>
-          <p className="font-semibold">Marcar como hecha</p>
+          <p className="font-semibold">Elaborar tarea</p>
           <button onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
-        <div className="space-y-3 p-4">
+        <div className="max-h-[75vh] space-y-3 overflow-y-auto p-4">
           {error && <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">{error}</div>}
           <p className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">{tarea.titulo}</p>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Subir archivo (opcional{tarea.etapa ? " — se liga a esta etapa" : ""})</label>
+            <input type="file" multiple className={inp} onChange={(e) => setArchivos(Array.from(e.target.files || []))} disabled={!caso} />
+            {!caso && <p className="mt-1 text-[10px] text-amber-700">No se puede subir archivo desde aquí (falta el caso completo). Usa "Subir documento" en la Línea del tiempo.</p>}
+            {archivos.length > 0 && (
+              <button onClick={subirArchivos} disabled={subiendo} className="mt-1.5 flex items-center gap-1.5 rounded-md border border-[color:var(--teal)]/40 px-2 py-1 text-[11px] font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/5 disabled:opacity-60">
+                {subiendo ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Subir {archivos.length} archivo(s) ahora
+              </button>
+            )}
+            {subidos.length > 0 && <p className="mt-1 text-[11px] text-emerald-700">✓ Subido: {subidos.join(", ")}</p>}
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">¿Cómo queda?</label>
-            <div className="flex gap-2">
-              <button onClick={() => setComoTermino("terminado")} className={`flex-1 rounded-md border px-3 py-2 text-sm ${comoTermino === "terminado" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Se da por terminado</button>
-              <button onClick={() => setComoTermino("siguiente_paso")} className={`flex-1 rounded-md border px-3 py-2 text-sm ${comoTermino === "siguiente_paso" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Hay siguiente paso</button>
+            <div className="flex gap-1.5">
+              <button onClick={() => setComoQueda("avance")} className={`flex-1 rounded-md border px-2 py-2 text-xs ${comoQueda === "avance" ? "border-sky-400 bg-sky-50 font-medium text-sky-800" : "border-input"}`}>Sigo trabajando<span className="block text-[9px] font-normal text-muted-foreground">guarda avance</span></button>
+              <button onClick={() => setComoQueda("terminado")} className={`flex-1 rounded-md border px-2 py-2 text-xs ${comoQueda === "terminado" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Se da por terminado</button>
+              <button onClick={() => setComoQueda("siguiente_paso")} className={`flex-1 rounded-md border px-2 py-2 text-xs ${comoQueda === "siguiente_paso" ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 font-medium" : "border-input"}`}>Hay siguiente paso</button>
             </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              {comoTermino === "terminado" ? "¿Qué se hizo?" : "¿Qué se hizo y cuál es el siguiente paso?"}
+              {comoQueda === "avance" ? "¿Qué llevas hecho hasta ahora?" : comoQueda === "terminado" ? "¿Qué se hizo?" : "¿Qué se hizo y cuál es el siguiente paso?"}
             </label>
             <textarea className={inp} rows={3} value={nota} onChange={(e) => setNota(e.target.value)} autoFocus
-              placeholder={comoTermino === "terminado" ? "Ej. Se confirmó en boletín que el emplazamiento sí se practicó." : "Ej. Se validó la caducidad, sigue firme. Siguiente: preparar reposición de procedimiento."} />
+              placeholder={comoQueda === "avance" ? "Ej. Ya se pidió el CLG a RPPC, falta que lo manden." : comoQueda === "terminado" ? "Ej. Se confirmó en boletín que el emplazamiento sí se practicó." : "Ej. Se validó la caducidad, sigue firme. Siguiente: preparar reposición de procedimiento."} />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="rounded-md border border-input px-4 py-2 text-sm">Cancelar</button>
-            <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
-              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckSquare className="h-4 w-4" />} Marcar hecha
+            <button onClick={guardar} disabled={guardando} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60" style={{ background: comoQueda === "avance" ? "#0369a1" : "#0C5C46" }}>
+              {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckSquare className="h-4 w-4" />} {comoQueda === "avance" ? "Guardar avance" : "Marcar hecha"}
             </button>
           </div>
         </div>
@@ -492,7 +543,7 @@ export function MisTareas() {
             const hoy = dias === 0;
             return (
               <div key={t.id} className="flex items-start gap-2.5 py-2.5">
-                <button onClick={() => marcarHecha(t)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" title="Marcar hecha"><Square className="h-4 w-4" /></button>
+                <button onClick={() => marcarHecha(t)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" title="Elaborar / marcar hecha"><Square className="h-4 w-4" /></button>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{t.titulo}</p>
                   <p className="text-[11px] text-muted-foreground">
@@ -507,12 +558,16 @@ export function MisTareas() {
         </div>
       )}
       {cerrarTarea && (
-        <CerrarTareaModal
+        <ElaborarTareaModal
           tarea={cerrarTarea}
           onClose={() => setCerrarTarea(null)}
-          onCerrada={() => {
-            setTareas((p) => p.filter((x) => x.id !== cerrarTarea.id));
-            sincronizarEventoDeTarea({ ...cerrarTarea, estado: "hecha" });
+          onCerrada={(nuevoEstado, notaCierre) => {
+            if (nuevoEstado === "hecha") {
+              setTareas((p) => p.filter((x) => x.id !== cerrarTarea.id));
+              sincronizarEventoDeTarea({ ...cerrarTarea, estado: "hecha" });
+            } else {
+              setTareas((p) => p.map((x) => (x.id === cerrarTarea.id ? { ...x, estado: nuevoEstado } : x)));
+            }
             setCerrarTarea(null);
           }}
         />
