@@ -60,7 +60,7 @@ interface Colaborador { id: string; nombre: string; rol: string | null; correo: 
 const fmt = (f?: string | null) => {
   if (!f) return "—";
   const d = new Date(String(f).slice(0, 10) + "T00:00:00");
-  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
+  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; expediente?: string }) {
