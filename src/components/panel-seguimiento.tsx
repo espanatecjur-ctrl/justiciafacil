@@ -15,9 +15,36 @@ import { Card } from "@/components/ui/card";
 import { getAuth } from "@/lib/auth";
 import { ClipboardList, Plus, Paperclip, Loader2, X, CheckSquare, Square, User, Scale, Pencil, Trash2, ArchiveRestore } from "lucide-react";
 import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
+import { crearEvento, actualizarEvento, eliminarEvento } from "@/lib/evento-agenda";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
+
+// Refleja una tarea (con fecha límite) en el Calendario (evento_agenda), para
+// que aparezca ahí y desde ahí se pueda "ir a elaborar" de vuelta a la ficha.
+// Si ya existía el espejo (por tarea_id) lo actualiza; si no, lo crea.
+async function sincronizarEventoDeTarea(t: { id: string; titulo: string; fecha_limite: string | null; estado: string; expediente: string | null; caso_id: string | null; responsable_correo: string | null }) {
+  try {
+    const existentes = await sbSelect<{ id: string }>("evento_agenda", `select=id&tarea_id=eq.${t.id}&limit=1`);
+    const existente = existentes?.[0] || null;
+
+    if (!t.fecha_limite) {
+      if (existente) await eliminarEvento(existente.id); // ya no tiene fecha: se quita del calendario
+      return;
+    }
+
+    const estadoEvento = t.estado === "hecha" ? "hecho" : "pendiente";
+    if (existente) {
+      await actualizarEvento(existente.id, { titulo: t.titulo, fecha: t.fecha_limite, estado: estadoEvento, asignado_a: t.responsable_correo, expediente: t.expediente });
+    } else {
+      await crearEvento({
+        titulo: t.titulo, tipo: "tarea", fecha: t.fecha_limite, estado: estadoEvento,
+        expediente: t.expediente, asignado_a: t.responsable_correo,
+        ref_caso_id: t.caso_id, ref_modulo: "ucm-ficha", tarea_id: t.id,
+      });
+    }
+  } catch { /* si falla el espejo, no bloquea el guardado de la tarea */ }
+}
 
 export interface Tarea {
   id: string; caso_id: string | null; expediente: string | null;
@@ -61,10 +88,12 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   const mandarPapelera = async (t: Tarea) => {
     if (!confirm(`¿Mandar "${t.titulo}" a la papelera?`)) return;
     await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${t.id}`, { method: "PATCH", headers, body: JSON.stringify({ estado: "papelera", updated_at: new Date().toISOString() }) }).catch(() => {});
+    sincronizarEventoDeTarea({ ...t, fecha_limite: null }); // se quita del calendario mientras esté en papelera
     cargarTareas();
   };
   const restaurar = async (t: Tarea) => {
     await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${t.id}`, { method: "PATCH", headers, body: JSON.stringify({ estado: "pendiente", updated_at: new Date().toISOString() }) }).catch(() => {});
+    sincronizarEventoDeTarea({ ...t, estado: "pendiente" });
     cargarTareas();
   };
 
@@ -99,6 +128,7 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
     const nuevo = t.estado === "hecha" ? "pendiente" : "hecha";
     setTareas((p) => p.map((x) => (x.id === t.id ? { ...x, estado: nuevo } : x)));
     await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${t.id}`, { method: "PATCH", headers, body: JSON.stringify({ estado: nuevo, updated_at: new Date().toISOString() }) }).catch(() => {});
+    sincronizarEventoDeTarea({ ...t, estado: nuevo });
   };
 
   return (
@@ -239,9 +269,14 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], t
         estado: tipo === "tarea" ? estadoInicial : "pendiente", evidencia_url, creado_por: creadoPor || null,
       };
       const res = tareaEditar
-        ? await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${tareaEditar.id}`, { method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify({ ...body, updated_at: new Date().toISOString() }) })
-        : await fetch(`${SUPABASE_URL}/rest/v1/tarea`, { method: "POST", headers, body: JSON.stringify(body) });
+        ? await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${tareaEditar.id}`, { method: "PATCH", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify({ ...body, updated_at: new Date().toISOString() }) })
+        : await fetch(`${SUPABASE_URL}/rest/v1/tarea`, { method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`Supabase ${res.status}`);
+      if (tipo === "tarea") {
+        const filas = await res.json().catch(() => []);
+        const guardada = filas?.[0];
+        if (guardada?.id) await sincronizarEventoDeTarea(guardada);
+      }
       onGuardado();
     } catch (e: any) { setError(e.message); } finally { setGuardando(false); }
   };
