@@ -13,6 +13,11 @@ import {
   actualizarEstadoEscrito,
   type EscritoGenerado,
 } from "@/lib/escrito-generado";
+import {
+  listarSolicitudes,
+  actualizarSolicitud,
+  type SolicitudEscrito,
+} from "@/lib/solicitud-escrito";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,13 +56,16 @@ function EscritosIndex() {
   const [nGen, setNGen] = useState(0);
   const [nArch, setNArch] = useState(0);
   const [nPlant, setNPlant] = useState(escritos.length);
+  const [nSol, setNSol] = useState(0);
+  const [refrescarSol, setRefrescarSol] = useState(0);
 
   useEffect(() => {
     listarEscritos("generado").then((l) => setNGen(l.length));
     listarPlantillasEscrito().then((c) => setNPlant(escritos.length + c.length));
     Promise.all([listarEscritos("archivado"), listarEscritos("papelera")])
       .then(([a, p]) => setNArch(a.length + p.length));
-  }, []);
+    listarSolicitudes("estado=in.(solicitado,en_elaboracion,validado_dil)").then((l) => setNSol(l.length));
+  }, [refrescarSol]);
 
   return (
     <div className="space-y-5">
@@ -81,7 +89,7 @@ function EscritosIndex() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Indicador n={String(nPlant)} l="Plantillas" activo={tab === "plantillas"} onClick={() => setTab("plantillas")} tono="text-[#0B1E3A]" />
-        <Indicador n="0" l="Solicitudes pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
+        <Indicador n={String(nSol)} l="Solicitudes pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
         <Indicador n={String(nGen)} l="Escritos generados" activo={tab === "generados"} onClick={() => setTab("generados")} tono="text-emerald-600" />
         <Indicador n={String(nArch)} l="Archivados / papelera" activo={tab === "archivo"} onClick={() => setTab("archivo")} tono="text-slate-600" />
       </div>
@@ -100,7 +108,7 @@ function EscritosIndex() {
       </div>
 
       {tab === "plantillas" && <PanelPlantillas />}
-      {tab === "solicitudes" && <PanelSolicitudes />}
+      {tab === "solicitudes" && <PanelSolicitudes onCambio={() => setRefrescarSol((n) => n + 1)} />}
       {tab === "generados" && <EscritosExistentes estados={["generado"]} vacio="Aún no hay escritos guardados. Genera uno en el Editor y pícale “Guardar”." />}
       {tab === "archivo" && <EscritosExistentes estados={["archivado", "papelera"]} vacio="No hay escritos archivados ni en papelera." />}
     </div>
@@ -199,15 +207,90 @@ function PreviewPlantilla({ plantilla, onCerrar, onElaborar }: { plantilla: Plan
   );
 }
 
-function PanelSolicitudes() {
+function PanelSolicitudes({ onCambio }: { onCambio: () => void }) {
+  const [lista, setLista] = useState<SolicitudEscrito[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [abierta, setAbierta] = useState<string | null>(null);
+
+  const recargar = () => {
+    setCargando(true);
+    listarSolicitudes("estado=in.(solicitado,en_elaboracion,validado_dil,presentado)")
+      .then(setLista)
+      .finally(() => setCargando(false));
+  };
+  useEffect(() => { recargar(); }, []);
+
+  const avanzar = async (s: SolicitudEscrito, nuevoEstado: SolicitudEscrito["estado"]) => {
+    const cambios: Partial<SolicitudEscrito> = { estado: nuevoEstado };
+    if (nuevoEstado === "validado_dil") { cambios.validado_por = "DIL"; cambios.validado_at = new Date().toISOString(); }
+    if (nuevoEstado === "presentado") cambios.fecha_presentacion = new Date().toISOString().slice(0, 10);
+    await actualizarSolicitud(s.id, cambios);
+    recargar(); onCambio();
+  };
+
+  if (cargando) return <Card className="legal-card p-8 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" /></Card>;
+
+  if (lista.length === 0) {
+    return (
+      <Card className="legal-card p-8 text-center">
+        <Inbox className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" />
+        <p className="font-display text-sm font-semibold">Sin solicitudes por ahora</p>
+        <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+          Las solicitudes de escrito que se piden desde la ficha del expediente (pestaña "Seguimiento y actuaciones") aparecen aquí.
+        </p>
+      </Card>
+    );
+  }
+
+  const badge: Record<string, string> = {
+    solicitado: "bg-amber-100 text-amber-900",
+    en_elaboracion: "bg-sky-100 text-sky-900",
+    validado_dil: "bg-violet-100 text-violet-900",
+    presentado: "bg-emerald-100 text-emerald-900",
+  };
+  const badgeLabel: Record<string, string> = {
+    solicitado: "Solicitado · falta elaborar",
+    en_elaboracion: "En elaboración",
+    validado_dil: "Validado por DIL · listo para presentar",
+    presentado: "Presentado",
+  };
+
   return (
-    <Card className="legal-card p-8 text-center">
-      <Inbox className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" />
-      <p className="font-display text-sm font-semibold">Sin solicitudes por ahora</p>
-      <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-        Aquí llegarán las solicitudes de escrito de otras áreas cuando conectemos ese flujo. Por ahora los escritos se elaboran directo en el Editor.
-      </p>
-    </Card>
+    <div className="space-y-2">
+      {lista.map((s) => (
+        <Card key={s.id} className="legal-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-sm font-semibold">{s.titulo}</p>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badge[s.estado] || "bg-muted"}`}>{badgeLabel[s.estado] || s.estado}</span>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {s.expediente ? `Exp. ${s.expediente} · ` : ""}{s.etapa ? `${s.etapa} · ` : ""}{s.posicion_procesal ? `Nuestra parte: ${s.posicion_procesal} · ` : ""}Elabora: {s.quien_elabora === "dil" ? "DIL" : "zona"}
+              </p>
+              {s.decision_recurso && (
+                <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-800">Se acordó: <b>{s.decision_recurso}</b>{s.decision_notas ? ` — ${s.decision_notas}` : ""}</p>
+              )}
+              {abierta === s.id && (
+                <div className="mt-2 space-y-1 rounded-md border border-dashed border-border p-2 text-xs">
+                  {s.recomendacion && <p><b>Recomendación:</b> {s.recomendacion}</p>}
+                  {s.notas_solicitud && <p><b>Notas:</b> {s.notas_solicitud}</p>}
+                </div>
+              )}
+              <button onClick={() => setAbierta(abierta === s.id ? null : s.id)} className="mt-1 text-[11px] text-[color:var(--teal)] hover:underline">
+                {abierta === s.id ? "Ocultar detalle" : "Ver detalle"}
+              </button>
+            </div>
+            <div className="flex shrink-0 flex-col gap-1">
+              {s.estado === "solicitado" && <Button size="sm" variant="outline" onClick={() => avanzar(s, "en_elaboracion")}>Tomar / elaborar</Button>}
+              {s.estado === "en_elaboracion" && <Button size="sm" className="bg-violet-600 text-white hover:bg-violet-700" onClick={() => avanzar(s, "validado_dil")}>Validar (DIL)</Button>}
+              {s.estado === "validado_dil" && <Button size="sm" className="bg-[color:var(--teal)] text-white hover:bg-[color:var(--teal)]/90" onClick={() => avanzar(s, "presentado")}>Marcar presentado</Button>}
+              {s.estado === "presentado" && <span className="text-center text-[11px] text-muted-foreground">✓ {s.fecha_presentacion}</span>}
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }
 
