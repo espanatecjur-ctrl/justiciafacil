@@ -16,7 +16,7 @@ import crypto from "crypto";
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://dquoysougxqknvgooiqg.supabase.co";
 const BUCKET = "expediente-docs";
 const MAX_POR_TANDA = 8;        // cuántos archivos nuevos copia por llamada
-const LIMITE_BYTES = 45 * 1024 * 1024; // 45 MB por archivo (tope de seguridad)
+const LIMITE_BYTES = 60 * 1024 * 1024; // 60 MB por archivo (tope de seguridad, subido de 45MB — revisar si archivos muy grandes empiezan a fallar por tiempo en vez de tamaño)
 
 function base64url(input) {
   return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
