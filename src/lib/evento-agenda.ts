@@ -40,6 +40,8 @@ export interface Evento {
   ref_caso_id?: string | null;            // caso_id de la ficha (ej. ucm-ficha)
   ref_modulo?: string | null;             // ruta del módulo, ej. "ucm-ficha"
   tarea_id?: string | null;               // id de la fila en `tarea` que generó este evento-espejo
+  // ---- Origen (para mezclar con tareas nativas de JurisConecta, solo lectura) ----
+  origen?: "jf" | "jc";
 }
 
 /** Persona del equipo (para asignar tareas). */
