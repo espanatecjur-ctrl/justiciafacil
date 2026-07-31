@@ -29,6 +29,8 @@ export interface SolicitudEscrito {
   quien_solicita_nombre: string | null;
   quien_solicita_rol: string | null;
   quien_elabora: "zona" | "dil";
+  responsable_correo: string | null;
+  responsable_nombre: string | null;
   estado: EstadoSolicitud;
   folio_escrito_generado: string | null;
   decision_recurso: string | null;
