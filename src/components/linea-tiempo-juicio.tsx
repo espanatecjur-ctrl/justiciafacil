@@ -144,9 +144,15 @@ export function LineaTiempoJuicio({ caso, area = "UCM", onAbrir }: { caso: CasoJ
                 return (
                   <div key={d.id} className="rounded-md border border-border bg-card p-2 text-[11px]">
                     <div className="flex items-start justify-between gap-2">
-                      <a href={d.link || "#"} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 font-medium text-[color:var(--teal)] hover:underline">
-                        <FileText className="h-3 w-3 shrink-0" /> <span className="truncate">{d.nombre}</span> <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                      </a>
+                      {d.link ? (
+                        <a href={d.link} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 font-medium text-[color:var(--teal)] hover:underline">
+                          <FileText className="h-3 w-3 shrink-0" /> <span className="truncate">{d.nombre}</span> <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="flex min-w-0 items-center gap-1 font-medium text-foreground" title="Nota de análisis — no tiene archivo adjunto">
+                          <FileText className="h-3 w-3 shrink-0 text-muted-foreground" /> <span className="truncate">{d.nombre}</span>
+                        </span>
+                      )}
                       {PUi && <span className={`flex shrink-0 items-center gap-0.5 ${PUi.cls}`}><PUi.Icon className="h-3 w-3" /> {PUi.txt}</span>}
                     </div>
                     {d.nota_corta && <p className="mt-0.5 text-muted-foreground">{d.nota_corta}</p>}
