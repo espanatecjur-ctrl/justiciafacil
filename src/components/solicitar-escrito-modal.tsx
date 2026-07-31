@@ -8,10 +8,14 @@
 // Si es DIL y ya lo trae elaborado: nace en "validado_dil" directo,
 // listo para presentarse (se salta la cola).
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, X, Gavel } from "lucide-react";
+import { sbSelect } from "@/lib/supabase";
 import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
 import { crearSolicitudEscrito, DECISIONES_RECURSO } from "@/lib/solicitud-escrito";
+import { avisarTareaPorCorreo } from "@/lib/avisar-tarea";
+
+interface Colaborador { id: string; nombre: string; rol: string | null; correo: string | null; }
 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 
@@ -36,6 +40,11 @@ export function SolicitarEscritoModal({ casoId, exp, garantiaId, etapa, etapaNom
   const [tipoEscrito, setTipoEscrito] = useState(rec.tipoEscritoSugerido);
   const [posicion, setPosicion] = useState("Actor");
   const [quienElabora, setQuienElabora] = useState<"zona" | "dil">("zona");
+  const [colabs, setColabs] = useState<Colaborador[]>([]);
+  const [responsableId, setResponsableId] = useState("");
+  useEffect(() => {
+    sbSelect<Colaborador>("colaboradores", "select=id,nombre,rol,correo&activo=eq.true&order=nombre").then(setColabs).catch(() => setColabs([]));
+  }, []);
   const [notas, setNotas] = useState("");
   const [decisionRecurso, setDecisionRecurso] = useState<string>("Ninguno");
   const [decisionNotas, setDecisionNotas] = useState("");
@@ -45,17 +54,26 @@ export function SolicitarEscritoModal({ casoId, exp, garantiaId, etapa, etapaNom
   const guardar = async () => {
     if (!titulo.trim()) { setError("Escribe el título del escrito."); return; }
     setGuardando(true); setError(null);
+    const resp = colabs.find((c) => c.id === responsableId);
     const ok = await crearSolicitudEscrito({
       caso_id: casoId, expediente: exp || null, garantia_id: garantiaId || null,
       etapa: etapaNombre || etapa, posicion_procesal: posicion, tipo_escrito: tipoEscrito, titulo: titulo.trim(),
       recomendacion: rec.recomendacion, notas_solicitud: notas.trim() || null,
       quien_elabora: quienElabora,
+      responsable_correo: resp?.correo || null, responsable_nombre: resp?.nombre || null,
       decision_recurso: decisionRecurso !== "Ninguno" ? decisionRecurso : null,
       decision_notas: decisionRecurso !== "Ninguno" ? decisionNotas.trim() || null : null,
       creado_por: creadoPor || null,
     });
     setGuardando(false);
     if (!ok) { setError("No se pudo guardar la solicitud."); return; }
+    if (resp?.correo) {
+      avisarTareaPorCorreo({
+        titulo: titulo.trim(), descripcion: notas.trim() || rec.recomendacion,
+        expediente: exp || null, caso_id: casoId, etapa: etapaNombre || etapa,
+        responsable_correo: resp.correo, esEscrito: true,
+      });
+    }
     onGuardado();
   };
 
@@ -104,6 +122,13 @@ export function SolicitarEscritoModal({ casoId, exp, garantiaId, etapa, etapaNom
                 El DIL (ya elaborado) <span className="block text-[10px] font-normal text-muted-foreground">pasa directo a UCM</span>
               </button>
             </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Responsable (para avisarle por correo)</label>
+            <select className={inp} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+              <option value="">— Elegir colaborador —</option>
+              {colabs.map((c) => <option key={c.id} value={c.id}>{c.nombre}{c.rol ? ` · ${c.rol}` : ""}</option>)}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Notas para quien lo redacte (opcional)</label>
