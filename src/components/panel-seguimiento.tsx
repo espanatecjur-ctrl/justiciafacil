@@ -24,6 +24,7 @@ export interface Tarea {
   responsable_correo: string | null; responsable_nombre: string | null; responsable_rol: string | null;
   fecha_limite: string | null; estado: string; evidencia_url: string | null;
   creado_por: string | null; created_at: string;
+  etapa?: string | null; orden_etapa?: number | null;
 }
 interface Colaborador { id: string; nombre: string; rol: string | null; correo: string | null; }
 
@@ -55,6 +56,26 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   const pendientes = tareas.filter((t) => t.estado !== "hecha" && t.tipo !== "evidencia").length;
   const soloTareas = tareas.filter((t) => t.tipo !== "evidencia");
 
+  // Agrupa por etapa (procesal/jurídica) conservando el orden con orden_etapa.
+  // Las tareas sin etapa asignada (tareas sueltas de siempre) van al final, sin encabezado.
+  const gruposEtapa = (() => {
+    const mapa = new Map<string, { etapa: string; orden: number; items: Tarea[] }>();
+    for (const t of soloTareas) {
+      const clave = t.etapa || "__sin_etapa__";
+      if (!mapa.has(clave)) mapa.set(clave, { etapa: clave, orden: t.orden_etapa ?? 999, items: [] });
+      mapa.get(clave)!.items.push(t);
+    }
+    return Array.from(mapa.values())
+      .sort((a, b) => a.orden - b.orden)
+      .map((g) => {
+        const estadoEtapa = g.items.every((i) => i.estado === "hecha") ? "hecha"
+          : g.items.some((i) => i.estado === "en_proceso") ? "en_proceso"
+          : "pendiente";
+        return { ...g, estadoEtapa };
+      });
+  })();
+
+
   const toggle = async (t: Tarea) => {
     const nuevo = t.estado === "hecha" ? "pendiente" : "hecha";
     setTareas((p) => p.map((x) => (x.id === t.id ? { ...x, estado: nuevo } : x)));
@@ -70,32 +91,52 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
         <button onClick={() => setAgregar(true)} className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white" style={{ background: "#0C5C46" }}><Plus className="h-4 w-4" /> Agregar</button>
       </div>
 
-      {/* tareas */}
-      <div className="space-y-2">
+      {/* tareas agrupadas por etapa (si tienen etapa asignada) */}
+      <div className="space-y-4">
         {soloTareas.length === 0 && <p className="text-xs text-muted-foreground">Sin tareas todavía. Agrega la primera (ej. "Visita al juzgado a revisar expediente").</p>}
-        {soloTareas.map((t) => {
-          const hecha = t.estado === "hecha";
-          const esEvid = t.tipo === "evidencia";
-          return (
-            <div key={t.id} className={`rounded-lg border p-2.5 ${hecha ? "border-border bg-muted/30" : esEvid ? "border-border bg-background" : "border-amber-200 bg-amber-50"}`}>
-              <div className="flex items-start gap-2">
-                {esEvid ? <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  : <button onClick={() => toggle(t)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-[color:var(--teal)]" title={hecha ? "Marcar pendiente" : "Marcar hecha"}>
-                      {hecha ? <CheckSquare className="h-4 w-4 text-emerald-600" /> : <Square className="h-4 w-4" />}
-                    </button>}
-                <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium ${hecha ? "text-muted-foreground line-through" : ""}`}>{t.titulo}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {t.responsable_nombre ? <><User className="mr-0.5 inline h-3 w-3" />{t.responsable_nombre}{t.responsable_rol ? <span className="text-[color:var(--teal)]"> · {t.responsable_rol}</span> : null}</> : "Sin responsable"}
-                    {t.fecha_limite && !esEvid ? ` · vence ${fmt(t.fecha_limite)}` : ""}
-                  </p>
-                  {esEvid && t.evidencia_url && <BotonVerDoc url={t.evidencia_url} nombre="Evidencia" label="ver evidencia" className="text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />}
-                </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : "tarea"}</span>
+        {gruposEtapa.map((g) => (
+          <div key={g.etapa}>
+            {g.etapa !== "__sin_etapa__" && (
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-xs font-semibold" style={{ color: "#0C5C46" }}>{g.etapa}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  g.estadoEtapa === "hecha" ? "bg-emerald-100 text-emerald-800"
+                  : g.estadoEtapa === "en_proceso" ? "bg-sky-100 text-sky-800"
+                  : "bg-amber-100 text-amber-800"
+                }`}>
+                  {g.estadoEtapa === "hecha" ? "✓ completada" : g.estadoEtapa === "en_proceso" ? "en curso" : "pendiente"}
+                </span>
               </div>
+            )}
+            <div className="space-y-2">
+              {g.items.map((t) => {
+                const hecha = t.estado === "hecha";
+                const enProceso = t.estado === "en_proceso";
+                const esEvid = t.tipo === "evidencia";
+                return (
+                  <div key={t.id} className={`rounded-lg border p-2.5 ${hecha ? "border-border bg-muted/30" : esEvid ? "border-border bg-background" : enProceso ? "border-sky-200 bg-sky-50" : "border-amber-200 bg-amber-50"}`}>
+                    <div className="flex items-start gap-2">
+                      {esEvid ? <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        : <button onClick={() => toggle(t)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-[color:var(--teal)]" title={hecha ? "Marcar pendiente" : "Marcar hecha"}>
+                            {hecha ? <CheckSquare className="h-4 w-4 text-emerald-600" /> : <Square className="h-4 w-4" />}
+                          </button>}
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-medium ${hecha ? "text-muted-foreground line-through" : ""}`}>{t.titulo}</p>
+                        {t.descripcion && <p className="mt-0.5 text-xs text-muted-foreground">{t.descripcion}</p>}
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {t.responsable_nombre ? <><User className="mr-0.5 inline h-3 w-3" />{t.responsable_nombre}{t.responsable_rol ? <span className="text-[color:var(--teal)]"> · {t.responsable_rol}</span> : null}</> : t.responsable_rol ? <span className="text-[color:var(--teal)]"><User className="mr-0.5 inline h-3 w-3" />{t.responsable_rol}</span> : "Sin responsable"}
+                          {t.fecha_limite && !esEvid ? ` · vence ${fmt(t.fecha_limite)}` : ""}
+                        </p>
+                        {esEvid && t.evidencia_url && <BotonVerDoc url={t.evidencia_url} nombre="Evidencia" label="ver evidencia" className="text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />}
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : enProceso ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : enProceso ? "en curso" : "tarea"}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
