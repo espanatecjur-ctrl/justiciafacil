@@ -105,7 +105,7 @@ function UCMFicha() {
       const ds = await fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&caso_id=eq.${dictCasoId}&vigente=eq.true&limit=1`, { headers }).then((r) => (r.ok ? r.json() : []));
       setDict(ds?.[0] || null);
       if (caso?.expediente) {
-        const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&expediente=eq.${encodeURIComponent(caso.expediente.trim())}&order=fecha_acuerdo.desc&limit=200`, { headers });
+        const ra = await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=*&or=(caso_id.eq.${id},expediente.eq.${encodeURIComponent(caso.expediente.trim())})&order=fecha_acuerdo.desc&limit=200`, { headers });
         setAcuerdos(ra.ok ? await ra.json() : []);
       }
     })().finally(() => setCargando(false));
@@ -424,7 +424,7 @@ function UCMFicha() {
 
       {/* ============ BOLETÍN ============ */}
       {modulo === "boletin" && (
-        <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} />
+        <BoletinExpediente acuerdos={acuerdos} expediente={c.expediente} sinJuzgado={sinJuzgado} cargando={cargando} casoId={c.id} />
       )}
 
       {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setC({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_jc_id: cl.id }); setVerVincular(false); }} />}
