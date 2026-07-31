@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, CircleDot, Circle, UploadCloud, Copy, FileText, ExternalLink, Loader2, X, ThumbsUp, ThumbsDown, Minus } from "lucide-react";
+import { Check, CircleDot, Circle, UploadCloud, Copy, FileText, ExternalLink, Loader2, X, ThumbsUp, ThumbsDown, Minus, Gavel } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { tipoJuicioPorClave } from "@/lib/etapas-juicio";
 import { obtenerSeguimiento, type SeguimientoJuicio } from "@/lib/seguimiento-juicio";
 import { subirDocumento } from "@/lib/drive";
 import { listarCopias, firmarCopias, type Copia } from "@/lib/drive-explorar";
+import { SolicitarEscritoModal } from "@/components/solicitar-escrito-modal";
+import { getAuth } from "@/lib/auth";
 
 const TEAL = "#0C5C46";
 const NAVY = "#0B1E3A";
@@ -36,6 +38,8 @@ export function LineaTiempoJuicio({ caso, area = "UCM", onAbrir }: { caso: CasoJ
   const [etapaAbierta, setEtapaAbierta] = useState<string | null>(null);
   const [copiando, setCopiando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [solicitarEscrito, setSolicitarEscrito] = useState(false);
+  const [correoYo, setCorreoYo] = useState<string | null>(null);
 
   const cargarDocs = () => {
     sbSelect<DocEtapa>("documento_garantia", `select=id,nombre,link,drive_id,etapa,postura,nota_corta&caso_id=eq.${caso.id}&en_papelera=eq.false&etapa=not.is.null`).then(setDocs).catch(() => setDocs([]));
@@ -44,6 +48,7 @@ export function LineaTiempoJuicio({ caso, area = "UCM", onAbrir }: { caso: CasoJ
   useEffect(() => {
     obtenerSeguimiento(caso).then(setSeg).finally(() => setCargando(false));
     cargarDocs();
+    (async () => { try { const a = await getAuth(); const { data } = await a.auth.getSession(); setCorreoYo(data.session?.user?.email ?? null); } catch { /* sin sesión */ } })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caso.id]);
 
@@ -157,6 +162,9 @@ export function LineaTiempoJuicio({ caso, area = "UCM", onAbrir }: { caso: CasoJ
               <button onClick={() => setCopiando(true)} className="flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/50">
                 <Copy className="h-3 w-3" /> Copiar de Documentos fijos
               </button>
+              <button onClick={() => setSolicitarEscrito(true)} className="flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/50">
+                <Gavel className="h-3 w-3" /> Solicitar escrito
+              </button>
             </div>
           </div>
         );
@@ -181,6 +189,21 @@ export function LineaTiempoJuicio({ caso, area = "UCM", onAbrir }: { caso: CasoJ
           yaLigados={new Set(docs.map((d) => d.drive_id).filter(Boolean) as string[])}
           onClose={() => setCopiando(false)}
           onCopiado={() => { setCopiando(false); cargarDocs(); }}
+        />
+      )}
+
+      {solicitarEscrito && etapaAbierta && (
+        <SolicitarEscritoModal
+          casoId={caso.id || null}
+          exp={caso.expediente || ""}
+          garantiaId={(caso as any)?.gar_id || (caso as any)?.no_credito || null}
+          etapa={etapaAbierta}
+          etapaNombre={etapas.find((x) => x.clave === etapaAbierta)?.nombre}
+          actor={(caso as any)?.actor}
+          demandado={(caso as any)?.demandado}
+          creadoPor={correoYo}
+          onClose={() => setSolicitarEscrito(false)}
+          onGuardado={() => setSolicitarEscrito(false)}
         />
       )}
     </div>
