@@ -9,6 +9,8 @@ import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
+import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
+import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
 import { PanelSeguimiento } from "@/components/panel-seguimiento";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
@@ -93,6 +95,7 @@ function UCMFicha() {
   const [guardando, setGuardando] = useState(false);
   const [errorDatos, setErrorDatos] = useState<string | null>(null);
   const [recargaCron, setRecargaCron] = useState(0);
+  const [verSeguimientoJuicio, setVerSeguimientoJuicio] = useState(false);
 
   useEffect(() => {
     if (!id) { setCargando(false); return; }
@@ -358,6 +361,7 @@ function UCMFicha() {
       {modulo === "seguimiento" && (
         <div className="space-y-4">
           <LineaVidaAreas caso={c} />
+          <LineaTiempoJuicio caso={c} onAbrir={() => setVerSeguimientoJuicio(true)} />
           <PanelSeguimiento caso={c} />
         </div>
       )}
@@ -428,6 +432,7 @@ function UCMFicha() {
       )}
 
       {verVincular && <VincularClienteModal caso={c} onClose={() => setVerVincular(false)} onVinculado={(cl) => { setC({ ...c, cliente_nombre: cl.nombre, cliente_codigo: cl.codigo, cliente_jc_id: cl.id }); setVerVincular(false); }} />}
+      {verSeguimientoJuicio && <SeguimientoJuicioModal area="UCM" caso={c} onClose={() => setVerSeguimientoJuicio(false)} />}
     </div>
   );
 }
