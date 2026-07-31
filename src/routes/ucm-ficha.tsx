@@ -24,7 +24,7 @@ import { ClientesJuicio } from "@/components/clientes-juicio";
 import { InstruccionesPanel } from "@/components/instrucciones-panel";
 
 export const Route = createFileRoute("/ucm-ficha")({
-  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({ id: typeof s.id === "string" ? s.id : undefined, tab: typeof s.tab === "string" ? s.tab : undefined }),
   head: () => ({ meta: [{ title: "Ficha UCM — JusticiaFácil" }] }),
   component: UCMFicha,
 });
@@ -78,13 +78,13 @@ function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode;
 }
 
 function UCMFicha() {
-  const { id } = Route.useSearch();
+  const { id, tab } = Route.useSearch();
   const navigate = useNavigate();
   const [c, setC] = useState<CasoJuridico | null>(null);
   const [dict, setDict] = useState<any>(null);
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [modulo, setModulo] = useState<Modulo>("general");
+  const [modulo, setModulo] = useState<Modulo>((tab as Modulo) || "general");
 
   // edición (igual que UCM)
   const [editAnt, setEditAnt] = useState(false);
