@@ -164,6 +164,39 @@ export async function tareasJC(clienteId: string): Promise<TareaJC[]> {
   }
 }
 
+// ============================================================
+// Tareas de TODO JurisConecta por mes — para el Calendario de
+// JusticiaFácil. Solo lectura (misma llave anon de siempre); nunca
+// se escribe de vuelta. Se muestran marcadas "JurisConecta" y no
+// se pueden editar desde aquí — solo consultar.
+// ============================================================
+export interface TareaJCAgenda {
+  id: string;
+  titulo: string | null;
+  tipo: string | null;         // 'tarea' | 'cita' | 'llamada' | ...
+  detalle: string | null;
+  cliente_nombre: string | null;
+  a_quien: string | null;       // a quién se le asignó (texto libre)
+  autor_nombre: string | null;  // quién la creó
+  fecha: string | null;         // timestamptz
+  estado: string | null;        // 'pendiente' | 'hecha'
+}
+
+export async function tareasJCDelMes(anio: number, mes: number): Promise<TareaJCAgenda[]> {
+  try {
+    const ini = `${anio}-${String(mes + 1).padStart(2, "0")}-01`;
+    const finDate = new Date(anio, mes + 1, 0);
+    const fin = `${anio}-${String(mes + 1).padStart(2, "0")}-${String(finDate.getDate()).padStart(2, "0")}T23:59:59`;
+    const r = await fetch(
+      `${JC_URL}/rest/v1/tareas?select=id,titulo,tipo,detalle,cliente_nombre,a_quien,autor_nombre,fecha,estado&fecha=gte.${ini}&fecha=lte.${fin}&order=fecha.asc`,
+      { headers: jcHeaders }
+    );
+    return r.ok ? await r.json() : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function llamadasJC(telefono: string | null, telefono2: string | null): Promise<LlamadaJC[]> {
   const t1 = soloDigitos(telefono);
   const t2 = soloDigitos(telefono2);
