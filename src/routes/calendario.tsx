@@ -378,6 +378,15 @@ function ModalEvento({ evento, colabs, onCerrar, onGuardado }: { evento: Evento;
           <button onClick={onCerrar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
         </div>
 
+        {evento.ref_caso_id && (
+          <a
+            href={`/${evento.ref_modulo || "ucm-ficha"}?id=${evento.ref_caso_id}`}
+            className="mb-3 flex items-center justify-center gap-1.5 rounded-md bg-[color:var(--teal)]/10 px-3 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/20"
+          >
+            Ir a elaborar →
+          </a>
+        )}
+
         <div className="space-y-3">
           <div>
             <label className="text-[11px] font-medium text-muted-foreground">Título</label>
