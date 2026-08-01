@@ -110,6 +110,8 @@ function Inicio() {
     const u = a.caso_id ? mapaU[a.caso_id] : "";
     if (u) atrasoUnidad[u] = (atrasoUnidad[u] || 0) + 1;
   }
+  // La tarjeta "Juicios atrasados" del Inicio solo muestra los de UCM.
+  const atrasadasUCM = atrasadas.filter((a) => (a.caso_id ? mapaU[a.caso_id] : "") === "UCM");
 
   return (
     <div className="space-y-6">
@@ -219,19 +221,19 @@ function Inicio() {
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="h-4 w-1 rounded" style={{ background: GOLD }} />
-                <h3 className="font-display text-lg font-semibold">Juicios atrasados</h3>
+                <h3 className="font-display text-lg font-semibold">Juicios atrasados (UCM)</h3>
               </div>
-              {atrasadas.length > 0 && (
+              {atrasadasUCM.length > 0 && (
                 <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> {atrasadas.length} atrasado{atrasadas.length === 1 ? "" : "s"}
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> {atrasadasUCM.length} atrasado{atrasadasUCM.length === 1 ? "" : "s"}
                 </span>
               )}
             </div>
-            {atrasadas.length === 0 ? (
-              <p className="py-4 text-sm text-muted-foreground">Sin actuaciones atrasadas. Todo al día.</p>
+            {atrasadasUCM.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">Sin actuaciones atrasadas en UCM. Todo al día.</p>
             ) : (
               <div className="divide-y divide-border">
-                {atrasadas.slice(0, 8).map((a, i) => (
+                {atrasadasUCM.slice(0, 8).map((a, i) => (
                   <Link key={i} to="/expedientes/$id" params={{ id: a.caso_id || "" }} className="flex gap-3 py-3 hover:bg-muted/30 -mx-2 px-2 rounded">
                     <span className="w-1 rounded bg-red-500" />
                     <div className="min-w-0 flex-1">
