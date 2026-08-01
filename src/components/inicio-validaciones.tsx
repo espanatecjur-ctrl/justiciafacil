@@ -165,11 +165,18 @@ export function InicioValidaciones() {
           ))}
 
           {modulo === "Contratos" && contratos.map((s) => (
-            <div key={s.id} className="rounded-lg border border-border p-2.5">
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{s.estado || "Pendiente"}</span>
-              <p className="mt-1 truncate text-sm font-medium">{s.tipo_documento || "—"}</p>
-              <p className="text-[11px] text-muted-foreground">{s.garantia_ref || "—"} · Área: {s.area || "—"} · {s.created_at ? hace(s.created_at) : ""}</p>
-            </div>
+            <button key={s.id} onClick={() => navigate({ to: "/contratos" })} className="flex w-full items-start justify-between gap-2 rounded-lg border border-border p-2.5 text-left hover:bg-muted/30">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{s.estado || "Pendiente"}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.val_dil ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>{s.val_dil ? "DIL ✓" : "Falta DIL"}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.val_ucm ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"}`}>{s.val_ucm ? "UCM ✓" : "Falta UCM"}</span>
+                </div>
+                <p className="mt-1 truncate text-sm font-medium">{s.tipo_documento || "—"}</p>
+                <p className="text-[11px] text-muted-foreground">{s.garantia_ref || "—"} · Área: {s.area || "—"} · {s.created_at ? hace(s.created_at) : ""}</p>
+              </div>
+              <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
           ))}
 
           {(modulo === "UCP" || modulo === "UCM") && firmas.filter((f) => f.area === modulo).map((v) => (
