@@ -8,10 +8,11 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Link } from "@tanstack/react-router";
-import { Loader2, ClipboardList, AlertTriangle, PenLine } from "lucide-react";
+import { Loader2, ClipboardList, AlertTriangle, PenLine, Check, ShieldCheck } from "lucide-react";
+import { correoActual, rolActual } from "@/lib/auth";
 import {
-  listarSolicitudes, actualizarEstadoSolicitud, ESTADOS_SOLICITUD, MAPA_TIPO_PLANTILLA,
-  type SolicitudContrato,
+  listarSolicitudes, actualizarEstadoSolicitud, validarSolicitud, puedeValidarSolicitud,
+  ESTADOS_SOLICITUD, MAPA_TIPO_PLANTILLA, type SolicitudContrato,
 } from "@/lib/solicitud-contrato";
 
 const tono: Record<string, string> = {
@@ -30,6 +31,8 @@ export function SolicitudesContratoTabla() {
   const [lista, setLista] = useState<SolicitudContrato[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rol, setRol] = useState("");
+  const [correo, setCorreo] = useState("");
 
   const cargar = () => {
     setCargando(true);
@@ -38,11 +41,24 @@ export function SolicitudesContratoTabla() {
       .catch(() => setError("No se pudieron leer las solicitudes (¿corriste el SQL?)"))
       .finally(() => setCargando(false));
   };
-  useEffect(cargar, []);
+  useEffect(() => {
+    cargar();
+    rolActual().then(setRol).catch(() => {});
+    correoActual().then((c) => setCorreo(c || "")).catch(() => {});
+  }, []);
 
   const cambiarEstado = async (id: string, estado: string) => {
     setLista((s) => s.map((x) => (x.id === id ? { ...x, estado } : x))); // optimista
     await actualizarEstadoSolicitud(id, estado);
+  };
+
+  const validar = async (s: SolicitudContrato, quien: "dil" | "ucm") => {
+    if (!s.id) return;
+    const now = new Date().toISOString();
+    setLista((l) => l.map((x) => (x.id === s.id
+      ? { ...x, ...(quien === "dil" ? { val_dil: true, val_dil_fecha: now } : { val_ucm: true, val_ucm_fecha: now }) }
+      : x))); // optimista
+    await validarSolicitud(s.id, quien, correo);
   };
 
   const ahora = Date.now();
@@ -51,7 +67,7 @@ export function SolicitudesContratoTabla() {
     <div>
       <div className="mb-3 flex items-center gap-2">
         <ClipboardList className="h-5 w-5 text-[color:var(--teal)]" />
-        <h2 className="font-display text-lg font-bold">Solicitudes de contrato</h2>
+        <h2 className="font-display text-lg font-bold">Validaciones</h2>
         {!cargando && lista.length > 0 && (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
             {lista.filter((s) => s.estado !== "Entregada").length} pendientes
@@ -79,6 +95,7 @@ export function SolicitudesContratoTabla() {
                   <th className="px-4 py-2.5 text-left">Fecha</th>
                   <th className="px-4 py-2.5 text-left">Límite (24 h)</th>
                   <th className="px-4 py-2.5 text-left">Estado</th>
+                  <th className="px-4 py-2.5 text-left">Validación</th>
                   <th className="px-4 py-2.5 text-left">Elaborar</th>
                 </tr>
               </thead>
@@ -105,6 +122,32 @@ export function SolicitudesContratoTabla() {
                         >
                           {ESTADOS_SOLICITUD.map((es) => <option key={es} value={es}>{es}</option>)}
                         </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.val_dil && s.val_ucm ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                            <ShieldCheck className="h-3.5 w-3.5" /> Validada
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.val_dil ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+                              DIL {s.val_dil ? "✓" : ""}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.val_ucm ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+                              UCM {s.val_ucm ? "✓" : ""}
+                            </span>
+                            {puedeValidarSolicitud(rol, "dil", s) && s.id && (
+                              <button onClick={() => validar(s, "dil")} className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-[11px] font-medium hover:bg-muted">
+                                <Check className="h-3 w-3" /> Validar (DIL)
+                              </button>
+                            )}
+                            {puedeValidarSolicitud(rol, "ucm", s) && s.id && (
+                              <button onClick={() => validar(s, "ucm")} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-white" style={{ background: "var(--teal)" }}>
+                                <Check className="h-3 w-3" /> Validar (UCM)
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {(() => {
