@@ -36,7 +36,7 @@ type TabKey = "plantillas" | "solicitudes" | "generados" | "archivo";
 
 const TABS: { key: TabKey; label: string; icon: typeof LayoutGrid }[] = [
   { key: "plantillas", label: "Plantillas", icon: LayoutGrid },
-  { key: "solicitudes", label: "Solicitudes", icon: Inbox },
+  { key: "solicitudes", label: "Validaciones", icon: Inbox },
   { key: "generados", label: "Generados", icon: FileCheck2 },
   { key: "archivo", label: "Archivo", icon: ArchiveIcon },
 ];
@@ -79,7 +79,7 @@ function ContratosIndex() {
       {/* Indicadores que llevan a su pestaña */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Indicador n={String(nPlant)} l="Plantillas" activo={tab === "plantillas"} onClick={() => setTab("plantillas")} tono="text-[#0B1E3A]" />
-        <Indicador n={String(solPend)} l="Solicitudes pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
+        <Indicador n={String(solPend)} l="Validaciones pendientes" activo={tab === "solicitudes"} onClick={() => setTab("solicitudes")} tono="text-[#8A6E22]" />
         <Indicador n={String(nGen)} l="Contratos generados" activo={tab === "generados"} onClick={() => setTab("generados")} tono="text-emerald-600" />
         <Indicador n={String(nArch)} l="Archivados / papelera" activo={tab === "archivo"} onClick={() => setTab("archivo")} tono="text-slate-600" />
       </div>
