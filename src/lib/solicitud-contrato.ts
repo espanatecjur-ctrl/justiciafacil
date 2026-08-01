@@ -43,6 +43,13 @@ export interface SolicitudContrato {
   fecha_solicitud?: string | null; // cuándo se pidió
   fecha_limite?: string | null;    // fecha tope (24 h hábiles)
   created_at?: string | null;
+  // Validación DIL -> UCM (en ese orden)
+  val_dil?: boolean | null;
+  val_dil_por?: string | null;
+  val_dil_fecha?: string | null;
+  val_ucm?: boolean | null;
+  val_ucm_por?: string | null;
+  val_ucm_fecha?: string | null;
 }
 
 /**
@@ -93,4 +100,43 @@ export async function actualizarEstadoSolicitud(id: string, estado: string): Pro
   } catch {
     return false;
   }
+}
+
+/**
+ * Valida una solicitud de contrato en el orden DIL -> UCM.
+ * `quien` indica quién está validando; UCM solo puede validar
+ * después de que DIL ya lo haya hecho (se controla en la UI con `puedeValidarSolicitud`).
+ */
+export async function validarSolicitud(
+  id: string,
+  quien: "dil" | "ucm",
+  correo: string,
+): Promise<boolean> {
+  try {
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> =
+      quien === "dil"
+        ? { val_dil: true, val_dil_por: correo, val_dil_fecha: now }
+        : { val_ucm: true, val_ucm_por: correo, val_ucm_fecha: now };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitud_contrato?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { ...headers, Prefer: "return=minimal" },
+      body: JSON.stringify(patch),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Regla de permiso: DIL valida primero; UCM solo cuando DIL ya validó. */
+export function puedeValidarSolicitud(
+  rol: string,
+  quien: "dil" | "ucm",
+  s: Pick<SolicitudContrato, "val_dil" | "val_ucm">,
+): boolean {
+  const r = (rol || "").toUpperCase();
+  const esDGE = r.includes("DGE") || r.includes("SUPER");
+  if (quien === "dil") return !s.val_dil && (esDGE || r.includes("DIL"));
+  return !!s.val_dil && !s.val_ucm && (esDGE || r.includes("UCM"));
 }
