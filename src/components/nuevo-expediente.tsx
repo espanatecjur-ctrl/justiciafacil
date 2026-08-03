@@ -215,14 +215,20 @@ export function NuevoExpedienteModal({ onClose, onCreado, caso }: { onClose: () 
         ...jz,
       };
       const url = esEdicion ? `${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso!.id}` : `${SUPABASE_URL}/rest/v1/caso_juridico`;
-      const r = await fetch(url, { method: esEdicion ? "PATCH" : "POST", headers: { ...wHeaders, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+      const r = await fetch(url, {
+        method: esEdicion ? "PATCH" : "POST",
+        headers: { ...wHeaders, Prefer: esEdicion ? "return=minimal" : "return=representation" },
+        body: JSON.stringify(payload),
+      });
       if (!r.ok) throw new Error("No se pudo guardar (" + r.status + ").");
+      const casoIdNuevo = esEdicion ? caso!.id : (await r.json().catch(() => []))?.[0]?.id;
 
       // solo al CREAR (y si confirmamos el robot) guardamos sus actuaciones; al editar el robot ya las trae
       if (!esEdicion && confirmado && res?.acuerdos?.length) {
         const filas = res.acuerdos.map((a) => ({
           expediente: exp, juzgado: jz.nombre_juzgado || "", fecha_acuerdo: a.fecha, tipo_acuerdo: "Boletín",
           entidad, texto: a.texto, urgente: false, leido: false, origen: "robot",
+          caso_id: casoIdNuevo || null,
         }));
         await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, { method: "POST", headers: { ...wHeaders, Prefer: "return=minimal" }, body: JSON.stringify(filas) }).catch(() => {});
       }
