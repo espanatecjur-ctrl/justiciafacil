@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { getAuth, rolActual } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
-import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, contarAudienciasHoy, contarPredictamenes, mapaUnidadPorCaso, type Atrasada, type Cita } from "@/lib/resumen-inicio";
+import { listarAtrasadas, listarAgenda, contarAcuerdosHoy, contarCasos, contarPorUnidad, contarContratosPendientes, contarAudienciasHoy, contarPredictamenes, mapaUnidadPorCaso, listarBoletinesSinLeer, type Atrasada, type Cita, type AcuerdoBoletin } from "@/lib/resumen-inicio";
 import { listarProximos, ESTILO_EVENTO, type Evento } from "@/lib/evento-agenda";
 import { MisTareas } from "@/components/panel-seguimiento";
 import { InicioValidaciones } from "@/components/inicio-validaciones";
@@ -90,11 +90,15 @@ function Inicio() {
   const [agenda, setAgenda] = useState<Cita[]>([]);
   const [proximos, setProximos] = useState<Evento[]>([]);
   const [mapaU, setMapaU] = useState<Record<string, string>>({});
+  const [boletinesUCM, setBoletinesUCM] = useState<AcuerdoBoletin[]>([]);
   useEffect(() => {
     listarAtrasadas().then(setAtrasadas);
     listarAgenda().then(setAgenda);
     listarProximos(6).then(setProximos);
-    mapaUnidadPorCaso().then(setMapaU);
+    mapaUnidadPorCaso().then((m) => {
+      setMapaU(m);
+      listarBoletinesSinLeer("UCM", m).then(setBoletinesUCM);
+    });
     contarAcuerdosHoy().then(setAcuerdosHoy);
     contarAudienciasHoy().then(setAudienciasHoy);
     contarPredictamenes().then(setPredictamenes);
@@ -252,6 +256,41 @@ function Inicio() {
           </Card>
 
           <SolicitudesPendientesHome />
+
+          <Card className="legal-card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-1 rounded" style={{ background: GOLD }} />
+                <h3 className="font-display text-lg font-semibold">Boletines sin leer (UCM)</h3>
+              </div>
+              {boletinesUCM.length > 0 && (
+                <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> {boletinesUCM.length} sin leer
+                </span>
+              )}
+            </div>
+            {boletinesUCM.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">Sin boletines pendientes de UCM. Todo revisado.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {boletinesUCM.slice(0, 8).map((a) => (
+                  <div key={a.id} className="flex gap-3 py-3">
+                    <span className="w-1 rounded bg-amber-500" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{a.tipo_acuerdo || "Boletín"}</span>
+                        <span className="font-mono text-xs">Exp. {a.expediente || "—"}</span>
+                      </div>
+                      <p className="text-sm font-semibold">{a.juzgado || "—"}</p>
+                      <p className="text-xs text-muted-foreground">{a.fecha_acuerdo || "—"}</p>
+                    </div>
+                  </div>
+                ))}
+                {boletinesUCM.length > 8 && <p className="pt-2 text-center text-[11px] text-muted-foreground">y {boletinesUCM.length - 8} más… revísalos en el módulo de UCM.</p>}
+              </div>
+            )}
+          </Card>
+
           <MisTareas />
         </div>
       )}
