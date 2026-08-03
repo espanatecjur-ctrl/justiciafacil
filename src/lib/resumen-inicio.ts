@@ -196,3 +196,27 @@ export async function mapaUnidadPorCaso(): Promise<Record<string, string>> {
     return {};
   }
 }
+
+export interface AcuerdoBoletin {
+  id: string;
+  expediente: string | null;
+  juzgado: string | null;
+  fecha_acuerdo: string | null;
+  tipo_acuerdo: string | null;
+  urgente: boolean | null;
+  caso_id: string | null;
+}
+
+/** Acuerdos de boletín sin leer, de una unidad (URRJ/UCP/UCM/UDP). Requiere el mapa caso_id->unidad. */
+export async function listarBoletinesSinLeer(unidad: string, mapaU: Record<string, string>): Promise<AcuerdoBoletin[]> {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/acuerdo_judicial?select=id,expediente,juzgado,fecha_acuerdo,tipo_acuerdo,urgente,caso_id&leido=eq.false&order=fecha_acuerdo.desc&limit=2000`,
+      { headers },
+    );
+    const d: AcuerdoBoletin[] = r.ok ? await r.json() : [];
+    return d.filter((a) => a.caso_id && mapaU[a.caso_id] === unidad);
+  } catch {
+    return [];
+  }
+}
