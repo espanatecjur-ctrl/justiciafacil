@@ -154,6 +154,17 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
       setErrorGuardado("No hay acuerdos para guardar.");
       return false;
     }
+    // Si no nos pasaron el caso_id por props, lo buscamos por expediente
+    // para que el boletín quede vinculado (y así aparezca en "Juicios
+    // atrasados" / boletines por unidad en el Inicio).
+    let casoIdUsar = casoId || null;
+    if (!casoIdUsar) {
+      try {
+        const expBuscar = party?.expediente || exp;
+        const coincidencias = await sbSelect<{ id: string }>("caso_juridico", `select=id&expediente=eq.${encodeURIComponent(expBuscar)}&limit=1`);
+        casoIdUsar = coincidencias?.[0]?.id || null;
+      } catch { /* si falla, se guarda sin caso_id como antes */ }
+    }
     const filas = acuerdos.map((a) => {
       const fecha = a.fecha ? String(a.fecha).slice(0, 10) : new Date().toISOString().slice(0, 10);
       const hash = `manual:${ent}|${juz}|${a.expediente || exp}|${fecha}|${a.acuerdo || ""}`.toLowerCase().replace(/\s+/g, " ").trim();
@@ -161,7 +172,7 @@ export function BuscadorBoletin({ expedienteInicial = "", estadoInicial, resalta
         entidad: ent, juzgado: juz, expediente: a.expediente || exp, fecha_acuerdo: fecha,
         tipo_acuerdo: a.etapa || null, texto: a.acuerdo || null, fuente: "manual", origen: "manual_buscador",
         hash_acuerdo: hash,
-        caso_id: casoId || null,
+        caso_id: casoIdUsar,
       };
     });
     try {
