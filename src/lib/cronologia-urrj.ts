@@ -7,7 +7,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-export type TipoEvento = "dictamen_juridico" | "dictamen_registral" | "correo_juridico" | "correo_registral";
+export type TipoEvento = "dictamen_juridico" | "dictamen_registral" | "correo_juridico" | "correo_registral" | "dictamen_rechazado";
 
 export interface EventoCronologia {
   id?: string;
