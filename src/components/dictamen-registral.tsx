@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
 import { crearNotificacion } from "@/lib/notificaciones";
+import { avisarTareaPorCorreo } from "@/lib/avisar-tarea";
 import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, ShieldAlert, ShieldCheck, MinusCircle } from "lucide-react";
@@ -404,9 +405,11 @@ export function DictamenRegistral({
       }).catch(() => {});
       await Promise.all([
         tareaPara(dil.correo, dil.nombre || "DIL", "DIL"),
+        avisarTareaPorCorreo({ titulo, descripcion, expediente: d.numeroCredito || null, caso_id: casoId || null, etapa: "URRJ · Registral", responsable_correo: dil.correo }),
         crearNotificacion({ para: dil.correo, texto: `Falta tu firma (Valida) del dictamen registral — ${d.acreditado || d.numeroCredito || ""}`, enlace: "/urrj", importante: true, tipo: "firma" }).catch(() => {}),
         ...(correoPruebas.toLowerCase() !== dil.correo.toLowerCase() ? [
           tareaPara(correoPruebas, "Erika Paola (copia de prueba)", "DGE"),
+          avisarTareaPorCorreo({ titulo: titulo + " (copia de prueba)", descripcion, expediente: d.numeroCredito || null, caso_id: casoId || null, etapa: "URRJ · Registral", responsable_correo: correoPruebas }),
           crearNotificacion({ para: correoPruebas, texto: `(copia de prueba) Falta firma (Valida) del dictamen registral — ${d.acreditado || d.numeroCredito || ""}`, enlace: "/urrj", importante: true, tipo: "firma" }).catch(() => {}),
         ] : []),
       ]);
