@@ -154,16 +154,6 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   fila("Buena fe (título):", sn(dd.buenaFe));
   fila("Demanda de despojo:", sn(dd.demandaDespojo));
   y += 3;
-
-  // ---- 6 · Cargas ocultas (desglose) ----
-  seccion("Cargas ocultas");
-  fila("Predial:", pn(dd.predial));
-  fila("Agua:", pn(dd.agua));
-  fila("Condominio:", pn(dd.condominio));
-  fila("Créditos fiscales:", pn(dd.fiscales));
-  fila("Créditos laborales:", pn(dd.laborales));
-  fila("Otros gravámenes:", pn(dd.otrosGravamenes));
-  y += 3;
   }
 
   // ---- Dictamen ----
