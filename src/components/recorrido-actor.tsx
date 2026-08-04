@@ -186,7 +186,7 @@ export function RecorridoActor({
   // Id del borrador donde se autoguarda EN VIVO todo el formulario (las 8
   // fases completas, no solo Datos básicos). Arranca con el que ya venía del
   // paso anterior (si lo hay); si no, se crea solo en el primer autoguardado.
-  const [borradorIdLocal, setBorradorIdLocal] = useState<string | null>(borradorId ?? null);
+  const [borradorIdLocal, setBorradorIdLocal] = useState<string | null>(borradorId ?? precargar?.antecedenteId ?? null);
   const [guardandoProgreso, setGuardandoProgreso] = useState(false);
   const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
   const primerRenderProgreso = useRef(true);
@@ -320,6 +320,32 @@ export function RecorridoActor({
 
   // precarga (re-dictaminar desde el historial)
   useEffect(() => { if (precargar?.datos) setD((p) => ({ ...p, ...precargar.datos })); }, [precargar]);
+  // Al reabrir un borrador que ya existe, restaura las firmas / etapa /
+  // decisión guardadas — antes esto nunca se leía y por eso el formulario
+  // siempre aparecía "sin firmar", aunque ya se hubiera firmado.
+  useEffect(() => {
+    const id = borradorId ?? precargar?.antecedenteId ?? null;
+    if (!id) return;
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=firma_elabora,firma_elabora_fecha,firma_dil,firma_dil_fecha,firma_valida,firma_valida_fecha,firma_ucm,firma_ucm_fecha,firma_dge,firma_dge_fecha,etapa_firma,dictamen_final,terminado,rechazo_motivo,rechazo_etapa,rechazo_fecha&id=eq.${id}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => {
+        const row = rows?.[0];
+        if (!row) return;
+        if (row.firma_elabora) setFirmaElabora({ nombre: row.firma_elabora, cargo: "Abogado URRJ", fecha: row.firma_elabora_fecha || "", dibujo: null });
+        const dilNombre = row.firma_dil || row.firma_valida;
+        const dilFecha = row.firma_dil_fecha || row.firma_valida_fecha;
+        if (dilNombre) setFirmaValida({ nombre: dilNombre, cargo: "Director Legal (DIL)", fecha: dilFecha || "", dibujo: null });
+        if (row.firma_ucm) setFirmaUCM({ nombre: row.firma_ucm, cargo: "UCM", fecha: row.firma_ucm_fecha || "", dibujo: null });
+        if (row.firma_dge) setFirmaDGE({ nombre: row.firma_dge, cargo: "DGE", fecha: row.firma_dge_fecha || "", dibujo: null });
+        if (row.etapa_firma) setEtapaFirma(row.etapa_firma);
+        if (row.rechazo_motivo) setRechazoInfo({ motivo: row.rechazo_motivo, etapa: row.rechazo_etapa, fecha: row.rechazo_fecha || "" });
+        if (row.terminado && row.dictamen_final) setGuardado(`Pre-dictamen guardado — ${row.dictamen_final}`);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [borradorId, precargar?.antecedenteId]);
   useEffect(() => { if (precargar?.datos?.precio) setPrecio((p) => ({ ...p, ...precargar.datos.precio })); }, [precargar]);
 
   // Robot al inicio: sembrar expediente + hallazgos (una sola vez).
