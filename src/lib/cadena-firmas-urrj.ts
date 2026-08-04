@@ -113,6 +113,19 @@ export async function mandarAEtapa(params: {
 }
 
 /** Avanza la cadena: guarda etapa_firma = siguiente y, si no se completó, crea la solicitud de esa siguiente etapa. */
+const COLUMNA_FIRMA: Record<string, string> = { dil: "firma_dil", ucm: "firma_ucm", dge: "firma_dge" };
+
+/** Guarda la firma de una etapa SIN avanzar la cadena ni mandar nada — el
+ *  envío a la siguiente etapa ahora siempre es un botón aparte ("Mandar a
+ *  validar"), nunca automático, para que quede claro que salió por correo. */
+export async function guardarFirmaSinAvanzar(predictamenId: string, etapa: EtapaFirma, firma: { nombre: string; fecha: string }): Promise<void> {
+  const campo = COLUMNA_FIRMA[etapa];
+  if (!campo || !predictamenId) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${predictamenId}`, {
+    method: "PATCH", headers, body: JSON.stringify({ [campo]: firma.nombre, [campo + "_fecha"]: firma.fecha }),
+  }).catch(() => {});
+}
+
 export async function avanzarCadena(params: {
   predictamenId: string; casoId: string; expedienteTexto: string; etapaQueAcabaDeFirmar: EtapaFirma; dictamenFinal: string | null;
 }): Promise<{ ok: boolean; siguiente: EtapaFirma; correo?: string; link?: string; error?: string }> {
