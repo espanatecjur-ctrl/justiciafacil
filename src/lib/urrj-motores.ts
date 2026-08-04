@@ -278,6 +278,39 @@ export function calculoFinanciero(e: EntradaFinanciera): ResultadoFinanciero {
   return { ordinarios, moratorios, iva, totalDeuda, udis, alertaUsura };
 }
 
+// ---------- Supuesto alterno: Estado de Adeudo ya certificado en UDIS ----------
+// Para créditos denominados en UDIS (típico INFONAVIT/cofinanciamientos) donde
+// el contador ya certificó los montos por rubro EN UDIS — aquí solo se
+// convierten a pesos con el valor de la UDI a la fecha de corte del estado
+// de cuenta. No hay tasas ni días que calcular, ese trabajo ya lo hizo el
+// contador que firmó el documento.
+export interface EntradaFinancieraUDIS {
+  saldoInsolutoUDIS: number;
+  interesesOrdinariosUDIS: number;
+  comisionCoberturaUDIS: number;
+  comisionAdmonUDIS: number;
+  otrosUDIS?: number;
+  valorUDI: number; // valor de la UDI a la fecha de corte del estado de cuenta
+  gastos?: number;  // gastos y costas, ya en pesos (no forman parte del estado de cuenta)
+  aplicarIVA?: boolean;
+}
+export interface ResultadoFinancieroUDIS {
+  totalUDIS: number;
+  ordinarios: number;   // intereses ordinarios ya en pesos (solo ese rubro, para mostrarlo igual que el otro supuesto)
+  moratorios: number;   // este supuesto no distingue moratorios — queda en 0
+  iva: number;
+  totalDeuda: number;   // en pesos
+  udis?: number;
+}
+export function calculoFinancieroUDIS(e: EntradaFinancieraUDIS): ResultadoFinancieroUDIS {
+  const totalUDIS = e.saldoInsolutoUDIS + e.interesesOrdinariosUDIS + e.comisionCoberturaUDIS + e.comisionAdmonUDIS + (e.otrosUDIS || 0);
+  const ordinarios = e.interesesOrdinariosUDIS * e.valorUDI;
+  const baseSinGastos = totalUDIS * e.valorUDI;
+  const iva = e.aplicarIVA ? ordinarios * 0.16 : 0;
+  const totalDeuda = baseSinGastos + iva + (e.gastos || 0);
+  return { totalUDIS, ordinarios, moratorios: 0, iva, totalDeuda, udis: totalUDIS };
+}
+
 // ---------- Viabilidad económica (margen) ----------
 export function viabilidad(valorComercial: number, adeudo: number, costos: number, precioCesion: number, margenObjetivo: number): ResultadoMotor {
   const neto = valorComercial - (adeudo + costos + precioCesion);
