@@ -118,8 +118,12 @@ export default async (req) => {
 
     const accessToken = await obtenerAccessToken(cred.client_email, privateKey);
 
-    // Ruta: Área → "ROL · correo" → garantía. (solicita es opcional)
-    const ruta = [area, solicita, garantia].filter(Boolean).map(String);
+    // Ruta: Área → garantía. UNA sola carpeta por garantía, sin importar
+    // quién la abra o suba documentos — antes se armaba Área → "ROL · correo"
+    // → garantía, y cada persona distinta generaba su propia carpeta
+    // duplicada del mismo expediente (ej. 188/2023). "solicita" ya no se usa
+    // para la ruta; se conserva el parámetro por compatibilidad pero se ignora aquí.
+    const ruta = [area, garantia].filter(Boolean).map(String);
 
     // Modo solo verificar: NO crea nada, solo dice si ya existe.
     if (soloVerificar) {
