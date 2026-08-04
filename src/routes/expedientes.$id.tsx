@@ -1,112 +1,64 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { getExpediente } from "@/lib/mock-data";
-import type { Expediente } from "@/lib/legal-types";
-import { PageHeader } from "@/components/page-header";
-import { EstadoBadge, RiesgoBadge } from "@/components/legal-badges";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Bot, FileText } from "lucide-react";
+// ============================================================
+// /expedientes/$id — antes mostraba una ficha de datos de PRUEBA
+// (mock-data), no la garantía real. Ahora es un redirector: busca
+// la garantía real en Supabase y manda a su ficha de verdad, según
+// en qué unidad esté (UCM, UCP o URRJ) — así "Juicios atrasados",
+// "Mis tareas" y cualquier otro link con el id de la garantía sí
+// llevan a la pantalla donde de verdad se puede trabajar el caso.
+// ============================================================
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 export const Route = createFileRoute("/expedientes/$id")({
-  head: ({ params }) => ({ meta: [{ title: `Expediente ${params.id} — SIGA-DIIPA` }] }),
-  loader: ({ params }) => {
-    const exp = getExpediente(params.id);
-    if (!exp) throw notFound();
-    return exp;
-  },
-  component: ExpedienteDetalle,
-  notFoundComponent: () => (
-    <div className="p-8 text-center text-muted-foreground">Expediente no encontrado.</div>
-  ),
+  component: RedirectorFicha,
 });
 
-function ExpedienteDetalle() {
-  const e = Route.useLoaderData() as Expediente;
+function RedirectorFicha() {
+  const { id } = Route.useParams();
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=id,unidad,expediente&id=eq.${id}&limit=1`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+        });
+        const rows = r.ok ? await r.json() : [];
+        const caso = rows?.[0];
+        if (!vivo) return;
+        if (!caso) { setError("No se encontró esa garantía/expediente en el sistema."); return; }
+        if (caso.unidad === "UCP") {
+          navigate({ to: "/ucp-ficha", search: { id: caso.id } as any });
+        } else if (caso.unidad === "URRJ") {
+          navigate({ to: "/urrj", search: { ficha: caso.expediente || caso.id } as any });
+        } else {
+          // UCM (o sin unidad definida): la ficha de UCM es la más completa,
+          // sirve de destino por defecto.
+          navigate({ to: "/ucm-ficha", search: { id: caso.id } as any });
+        }
+      } catch {
+        if (vivo) setError("No se pudo abrir la ficha — intenta de nuevo.");
+      }
+    })();
+    return () => { vivo = false; };
+  }, [id, navigate]);
+
+  if (error) return (
+    <div className="grid min-h-[40vh] place-items-center text-center">
+      <div>
+        <p className="text-sm font-medium text-red-700">{error}</p>
+        <p className="mt-1 text-xs text-muted-foreground">id: {id}</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <Link to="/expedientes" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-        <ArrowLeft className="h-3.5 w-3.5" /> Volver a expedientes
-      </Link>
-
-      <PageHeader
-        eyebrow={`${e.fuero.toUpperCase()} · ${e.entidad}`}
-        title={`Exp. ${e.numero}`}
-        description={e.tipoJuicio}
-        actions={
-          <div className="flex items-center gap-2">
-            <EstadoBadge estado={e.estado} />
-            <RiesgoBadge riesgo={e.riesgo} />
-            <Link to="/urrj">
-              <Button variant="outline" className="border-[color:var(--legal)]/40 text-[color:var(--legal)] hover:bg-[color:var(--legal)]/10">
-                <Bot className="h-4 w-4 mr-1.5" /> Pre-dictaminar
-              </Button>
-            </Link>
-          </div>
-        }
-      />
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="legal-card lg:col-span-2">
-          <CardHeader><CardTitle className="font-display text-lg">Línea de tiempo procesal</CardTitle></CardHeader>
-          <CardContent>
-            <ol className="relative border-l-2 border-[color:var(--teal)]/30 pl-5 space-y-5">
-              {e.hitos.map((h) => (
-                <li key={h.id} className="relative">
-                  <span className={`absolute -left-[27px] top-1 grid h-4 w-4 place-items-center rounded-full ${h.critico ? "bg-[color:var(--legal)]" : "bg-[color:var(--teal)]"} ring-4 ring-background`}>
-                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                  </span>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="font-medium">{h.titulo}</p>
-                    <time className="text-xs text-muted-foreground tabular-nums">{h.fecha}</time>
-                  </div>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground">{h.tipo}</p>
-                  {h.descripcion && <p className="mt-1 text-sm">{h.descripcion}</p>}
-                  {h.critico && <span className="legal-stamp mt-2">Crítico</span>}
-                </li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-5">
-          <Card className="legal-card">
-            <CardHeader><CardTitle className="font-display text-lg">Resumen</CardTitle></CardHeader>
-            <CardContent className="text-sm space-y-3">
-              <p>{e.resumen}</p>
-              <dl className="grid grid-cols-2 gap-2 text-xs">
-                <dt className="text-muted-foreground">Juzgado</dt><dd>{e.juzgado}</dd>
-                <dt className="text-muted-foreground">Inicio</dt><dd>{e.fechaInicio}</dd>
-                <dt className="text-muted-foreground">Cuantía</dt><dd>{e.cuantia ? `$ ${e.cuantia.toLocaleString("es-MX")}` : "—"}</dd>
-                <dt className="text-muted-foreground">Última actuación</dt><dd>{e.ultimaActuacion}</dd>
-              </dl>
-            </CardContent>
-          </Card>
-
-          <Card className="legal-card">
-            <CardHeader><CardTitle className="font-display text-lg">Partes</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {e.partes.map((p) => (
-                <div key={p.id} className="border-l-2 border-[color:var(--teal)]/40 pl-3">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-sm">{p.nombre}</p>
-                    <Badge variant="outline" className="text-[10px] uppercase">{p.caracter}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{p.rfc ?? p.curp ?? ""}{p.apoderado && ` · Ap. ${p.apoderado}`}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="legal-card">
-            <CardHeader><CardTitle className="font-display text-lg flex items-center gap-2"><FileText className="h-4 w-4" /> Documentos</CardTitle></CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Demanda, contestación, acuerdos y pruebas (módulo de adjuntos próximamente).
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+    <div className="grid min-h-[40vh] place-items-center text-muted-foreground">
+      <Loader2 className="h-5 w-5 animate-spin" />
     </div>
   );
 }
