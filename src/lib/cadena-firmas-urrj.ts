@@ -75,33 +75,40 @@ export async function mandarAEtapa(params: {
     const fuente = params.etapa === "precio" ? "correo_contabilidad (tipo 'para')" : "perfil_usuario";
     return { ok: false, error: `No hay correo configurado para ${ROL_ETAPA[params.etapa]} en ${fuente}.` };
   }
-  const r = await crearYEnviarSolicitudFirma({
-    area: "URRJ",
-    predictamenId: params.predictamenId,
-    casoId: params.casoId,
-    slot: params.etapa,
-    correoEsperado: correo,
-    tituloSlot: TITULO_ETAPA[params.etapa] + (params.motivoRechazoPrevio ? " (corrección solicitada)" : ""),
-    expedienteTexto: params.expedienteTexto,
-  });
   // Copia para pruebas: cuando la etapa es DIL o UCM, además de mandársela a
   // quien le toca, se le manda una copia a Erika (DGE) con su propio correo
   // en el campo esperado — así puede firmar/validar ella misma para probar
   // el flujo completo, sin necesitar la cuenta real de Milton/Primitivo.
-  if (params.etapa === "dil" || params.etapa === "ucm") {
-    const correoPruebas = "erikapaola@diipadesarrollos.com";
-    if (correoPruebas.toLowerCase() !== correo.toLowerCase()) {
-      await crearYEnviarSolicitudFirma({
-        area: "URRJ",
-        predictamenId: params.predictamenId,
-        casoId: params.casoId,
-        slot: params.etapa,
-        correoEsperado: correoPruebas,
-        tituloSlot: TITULO_ETAPA[params.etapa] + " (copia de prueba)",
-        expedienteTexto: params.expedienteTexto,
-      }).catch(() => {});
-    }
-  }
+  // Se dispara EN PARALELO con la real (no antes/después) — si el correo
+  // real cae al modo mailto: (que navega la pestaña), ya no se detiene a la
+  // copia, porque su petición ya salió.
+  const promesaCopia = (params.etapa === "dil" || params.etapa === "ucm")
+    ? (() => {
+        const correoPruebas = "erikapaola@diipadesarrollos.com";
+        if (correoPruebas.toLowerCase() === correo.toLowerCase()) return Promise.resolve();
+        return crearYEnviarSolicitudFirma({
+          area: "URRJ",
+          predictamenId: params.predictamenId,
+          casoId: params.casoId,
+          slot: params.etapa,
+          correoEsperado: correoPruebas,
+          tituloSlot: TITULO_ETAPA[params.etapa] + " (copia de prueba)",
+          expedienteTexto: params.expedienteTexto,
+        }).catch(() => {});
+      })()
+    : Promise.resolve();
+  const [r] = await Promise.all([
+    crearYEnviarSolicitudFirma({
+      area: "URRJ",
+      predictamenId: params.predictamenId,
+      casoId: params.casoId,
+      slot: params.etapa,
+      correoEsperado: correo,
+      tituloSlot: TITULO_ETAPA[params.etapa] + (params.motivoRechazoPrevio ? " (corrección solicitada)" : ""),
+      expedienteTexto: params.expedienteTexto,
+    }),
+    promesaCopia,
+  ]);
   return { ...r, correo };
 }
 
