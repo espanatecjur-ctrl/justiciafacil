@@ -35,7 +35,8 @@ import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, resumenPrecioCorto, type
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Mail } from "lucide-react";
 import { crearYEnviarSolicitudFirma, correoDeRol, rechazarSolicitud } from "@/lib/firma-solicitud";
-import { avanzarCadena, rechazarYRetroceder, siguienteEtapa, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
+import { avanzarCadena, rechazarYRetroceder, siguienteEtapa, mandarAEtapa, correoDelRol, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
+import { crearNotificacion } from "@/lib/notificaciones";
 
 const NAVY = "#0B1E3A";
 
@@ -774,14 +775,23 @@ export function RecorridoActor({
     }
   };
 
+  // Bloqueo de edición: en cuanto se manda a validar (ya no está en "elabora"),
+  // solo puede seguir editando quien tiene el turno actual (DIL cuando le
+  // toca a DIL, UCM cuando le toca a UCM) o DGE/Super_Admin (siempre). Todos
+  // los demás ven los datos y las firmas, pero de solo lectura.
+  const puedeEditarAhora = miRol === "DGE" || miRol === "Super_Admin"
+    || etapaFirma === "elabora"
+    || (etapaFirma === "dil" && miRol === "DIL")
+    || (etapaFirma === "ucm" && miRol === "UCM");
+  const bloqueadoEdicion = !puedeEditarAhora;
+
   const dosFirmas = !!firmaElabora;
   const cadenaCompleta = !!(firmaElabora && firmaValida && firmaUCM);
   const decidido = !!guardado && guardado.startsWith("Pre-dictamen guardado");
-  // Una vez decidido/firmado, solo puede volver a abrirlo (re-dictaminar):
-  // quien lo decidió, DGE/Super_Admin (siempre), o a quien se le haya
-  // autorizado explícitamente en cadena (Elabora habilita a DIL, DIL a UCM,
-  // UCM a DGE — aunque DGE de por sí siempre puede, sin que nadie lo autorice).
-  const puedeRedictaminar = miRol === "DGE" || miRol === "Super_Admin"
+  // Una vez decidido/firmado, solo puede reabrirlo: Super_Admin, DGE, DIL o
+  // UCM (siempre, sin necesitar autorización previa), quien lo decidió, o a
+  // quien se le haya autorizado explícitamente en cadena.
+  const puedeRedictaminar = ["DGE", "Super_Admin", "DIL", "UCM"].includes(miRol)
     || (!!d.decididoPor && miCorreo === d.decididoPor.toLowerCase())
     || (!!d.redictaminarAutorizadoPara && miRol === d.redictaminarAutorizadoPara);
   const autorizarRedictaminar = async (rol: string) => {
@@ -791,6 +801,69 @@ export function RecorridoActor({
         method: "PATCH",
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ datos: { ...d, redictaminarAutorizadoPara: rol } }),
+      }).catch(() => {});
+    }
+  };
+  // Reabrir un dictamen ya bloqueado: quien lo reabre queda registrado como
+  // quien elaboró esta nueva versión, y el flujo sigue según quién fue —
+  // no hace falta rehacer todo desde cero:
+  //  - DIL reabre  -> pasa directo a UCM (DIL ya lo revisó al editarlo).
+  //  - UCM reabre  -> sigue el curso normal (Precio/DGE si quedó Positivo).
+  //  - DGE / Super_Admin / cualquier otro autorizado -> pasa por DIL y UCM otra vez.
+  // DGE siempre se entera de que se reabrió, sin importar quién lo hizo.
+  const reabrirDictamen = async () => {
+    let nuevaEtapa: EtapaFirma;
+    let limpiarDil = false;
+    let limpiarUcm = false;
+    if (miRol === "DIL") { nuevaEtapa = "ucm"; limpiarUcm = true; }
+    else if (miRol === "UCM") { nuevaEtapa = siguienteEtapa("ucm", dictamen.txt); }
+    else { nuevaEtapa = "dil"; limpiarDil = true; limpiarUcm = true; }
+
+    const ahora = new Date().toISOString();
+    const infoQuienReabre = await nombreActual().catch(() => null);
+    const nombreQuienReabre = infoQuienReabre?.nombre || miCorreo || miRol;
+    const nuevaFirmaElabora: DatosFirma = { nombre: nombreQuienReabre, cargo: miRol || "—", fecha: ahora, dibujo: null };
+    setFirmaElabora(nuevaFirmaElabora);
+    if (limpiarDil) setFirmaValida(null);
+    if (limpiarUcm) setFirmaUCM(null);
+    setEtapaFirma(nuevaEtapa);
+    setGuardado(null);
+
+    if (borradorIdLocal) {
+      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${borradorIdLocal}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          etapa_firma: nuevaEtapa, dictamen_final: null, terminado: false,
+          firma_elabora: nuevaFirmaElabora.nombre, firma_elabora_fecha: ahora,
+          ...(limpiarDil ? { firma_dil: null, firma_dil_fecha: null } : {}),
+          ...(limpiarUcm ? { firma_ucm: null, firma_ucm_fecha: null } : {}),
+        }),
+      }).catch(() => {});
+    }
+
+    registrarEvento({
+      caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_rechazado",
+      resultado: `Reabierto por ${miRol || miCorreo}`,
+      detalle: nuevaEtapa === "completo" ? "Vuelve a quedar listo, sin necesidad de nueva validación." : `Vuelve a pasar por: ${TITULO_ETAPA[nuevaEtapa] || nuevaEtapa}.`,
+    });
+
+    // DGE siempre se entera de que se reabrió, sin importar quién lo hizo.
+    correoDelRol("DGE").then(({ correo }) => {
+      if (correo) {
+        crearNotificacion({
+          para: correo,
+          texto: `Se reabrió el dictamen jurídico de ${d.expediente || d.numeroCredito || "un expediente"} (lo reabrió: ${miRol || miCorreo})`,
+          enlace: "/urrj", importante: true, tipo: "reapertura",
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+
+    if (nuevaEtapa !== "completo" && borradorIdLocal) {
+      await mandarAEtapa({
+        etapa: nuevaEtapa as "dil" | "ucm" | "precio" | "dge",
+        predictamenId: borradorIdLocal, casoId: d.caso_id || "",
+        expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
       }).catch(() => {});
     }
   };
@@ -1061,6 +1134,13 @@ export function RecorridoActor({
 
       {/* Contenido de cada fase */}
       <div className="rounded-xl border border-border bg-card p-5">
+        {bloqueadoEdicion && paso !== 6 && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <Lock className="h-3.5 w-3.5 shrink-0" />
+            Solo lectura — le toca editar a {TITULO_ETAPA[etapaFirma] || etapaFirma}. Puedes ver todo lo capturado, pero no cambiarlo desde aquí.
+          </div>
+        )}
+        <div className={bloqueadoEdicion && paso !== 6 ? "pointer-events-none opacity-60 select-none" : undefined} aria-hidden={bloqueadoEdicion && paso !== 6 ? true : undefined}>
         {paso === 0 && (
           <div className="space-y-4">
             <H titulo="0 · Datos mínimos / admisión" sub="Lo básico para abrir el expediente." />
@@ -1339,6 +1419,7 @@ export function RecorridoActor({
             <p className="text-xs text-muted-foreground">La valuación, costos y precio de cesión se llenan en la sección de <b>Administración</b> (al final), solo para los roles autorizados.</p>
           </div>
         )}
+        </div>
 
         {paso === 6 && (
           <div className="space-y-4">
@@ -1423,14 +1504,14 @@ export function RecorridoActor({
               <button onClick={() => guardar("Sí pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> {cadenaCompleta ? "✓ Lista para publicar — Sí pasa" : "Sí pasa"}</button>
               <button onClick={() => guardar("No pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
               {decidido && puedeRedictaminar && (
-                <button onClick={() => setGuardado(null)} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Re-pre-dictaminar</button>
+                <button onClick={reabrirDictamen} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Reabrir para editar</button>
               )}
             </div>
             {decidido && (
               <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                 <Lock className="h-3.5 w-3.5" />
                 {puedeRedictaminar
-                  ? "Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”."
+                  ? "Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Reabrir para editar”."
                   : "Pre-dictamen bloqueado y firmado. Solo quien lo decidió o DGE puede reabrirlo — para todos los demás, es de solo lectura (ver y descargar PDF)."}
               </p>
             )}
