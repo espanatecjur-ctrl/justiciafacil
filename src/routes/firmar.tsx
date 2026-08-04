@@ -42,6 +42,7 @@ function Firmar() {
   const [modoRechazo, setModoRechazo] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [siguienteInfo, setSiguienteInfo] = useState<{ ok: boolean; siguiente: EtapaFirma; correo?: string; link?: string; error?: string } | null>(null);
+  const [faltaMandarEnSistema, setFaltaMandarEnSistema] = useState(false);
   const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
   const [guardandoPrecio, setGuardandoPrecio] = useState(false);
 
@@ -104,14 +105,10 @@ function Firmar() {
         });
         if (!r1.ok) throw new Error(`predictamen ${r1.status}`);
         setDict({ ...dict, [campo]: f.nombre, [campoFecha]: f.fecha });
-        // Encadena sola a la siguiente etapa (DGE se salta si no quedó Positivo).
-        if (sol.slot !== "elabora") {
-          const av = await avanzarCadena({
-            predictamenId: dict.id, casoId: caso?.id, expedienteTexto: caso?.expediente || "el expediente",
-            etapaQueAcabaDeFirmar: sol.slot as EtapaFirma, dictamenFinal: dict.dictamen_final || null,
-          });
-          setSiguienteInfo(av);
-        }
+        // Ya NO se manda solo a la siguiente etapa — eso ahora siempre es un
+        // botón aparte ("Mandar a validar") que alguien aprieta a propósito
+        // desde el sistema, con vista previa del correo antes de enviarlo.
+        if (sol.slot !== "elabora") setFaltaMandarEnSistema(true);
       } else if (sol.registral_id) {
         // URRJ · Registral: solo dos firmas — Elabora y Valida (DIL). No hay
         // más etapas que encadenar después de Valida.
@@ -257,6 +254,9 @@ function Firmar() {
       {ok ? (
         <Aviso icon={CheckCircle2} color="#0C5C46" titulo="Firma registrada ✓">
           Gracias, tu firma quedó guardada.
+          {faltaMandarEnSistema && (
+            <> Falta avisarle a la siguiente etapa — entra a JusticiaFácil → URRJ → abre este expediente y dale <b>"Mandar a validar"</b> para mandarlo por correo (con vista previa antes de enviarlo).</>
+          )}
           {siguienteInfo?.siguiente === "completo" && " La cadena de firmas ya se completó."}
           {siguienteInfo?.siguiente && siguienteInfo.siguiente !== "completo" && (
             <> Le toca ahora a <b>{TITULO_ETAPA[siguienteInfo.siguiente] || siguienteInfo.siguiente}</b>{siguienteInfo.correo ? ` (${siguienteInfo.correo})` : ""} — se preparó su correo con el link.</>
