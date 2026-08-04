@@ -15,13 +15,21 @@ interface Props {
   valor: DatosFirma | null;
   onFirmar: (f: DatosFirma) => void;
   cargoSugerido?: string;
+  nombreSugerido?: string; // se precarga en el campo "Nombre completo" si aún no hay firma
   bloqueado?: boolean;   // true = tu rol no puede firmar esta parte
   rechazado?: { motivo: string; fecha: string; etapa?: string } | null; // si esta etapa fue rechazada y regresada
   onRechazar?: (motivo: string) => void; // si se puede rechazar y regresar esta firma a la etapa anterior
 }
 
-export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado, rechazado, onRechazar }: Props) {
-  const [nombre, setNombre] = useState(valor?.nombre || "");
+export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, nombreSugerido, bloqueado, rechazado, onRechazar }: Props) {
+  const [nombre, setNombre] = useState(valor?.nombre || nombreSugerido || "");
+
+  // Si el nombre sugerido llega después (login async) y el campo sigue
+  // vacío y aún no se ha firmado, lo autollena.
+  useEffect(() => {
+    if (!valor?.fecha && !nombre.trim() && nombreSugerido) setNombre(nombreSugerido);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nombreSugerido]);
   const [cargo, setCargo] = useState(valor?.cargo || cargoSugerido || "");
   const [modoDibujo, setModoDibujo] = useState(false);
   const [hayTrazo, setHayTrazo] = useState(!!valor?.dibujo);
@@ -85,7 +93,7 @@ export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado, 
 
   const fechaBonita = valor?.fecha ? new Date(valor.fecha).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }) : "";
 
-  if (bloqueado) return (
+  if (bloqueado && !firmado) return (
     <div className="rounded-lg border border-border p-3">
       <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Signature className="h-3.5 w-3.5" /> {titulo}
@@ -124,12 +132,14 @@ export function FirmaParte({ titulo, valor, onFirmar, cargoSugerido, bloqueado, 
             {valor!.cargo && <p className="text-xs text-muted-foreground">{valor!.cargo}</p>}
             <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground"><Check className="h-3 w-3 text-emerald-600" /> Firmado · {fechaBonita}</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button onClick={() => onFirmar({ nombre: "", cargo: "", fecha: "", dibujo: null })} className="text-[11px] text-muted-foreground underline">Volver a firmar</button>
-            {onRechazar && (
-              <button onClick={() => setModoRechazo(true)} className="text-[11px] text-red-600 underline">Rechazar y regresar</button>
-            )}
-          </div>
+          {!bloqueado && (
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => onFirmar({ nombre: "", cargo: "", fecha: "", dibujo: null })} className="text-[11px] text-muted-foreground underline">Volver a firmar</button>
+              {onRechazar && (
+                <button onClick={() => setModoRechazo(true)} className="text-[11px] text-red-600 underline">Rechazar y regresar</button>
+              )}
+            </div>
+          )}
           {modoRechazo && (
             <div className="mt-2 space-y-1.5 rounded-md border border-red-200 bg-red-50/50 p-2">
               <textarea
