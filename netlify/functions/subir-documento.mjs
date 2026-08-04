@@ -90,7 +90,10 @@ export default async (req) => {
 
     const accessToken = await obtenerAccessToken(cred.client_email, privateKey);
 
-    const ruta = [area, solicita, garantia].filter(Boolean).map(String);
+    // Igual que en crear-carpeta.mjs: UNA sola carpeta por garantía (Área →
+    // garantía), sin la persona en medio — eso era lo que creaba una carpeta
+    // nueva cada vez que alguien distinto subía un documento al mismo expediente.
+    const ruta = [area, garantia].filter(Boolean).map(String);
     const parentId = usaVinculada ? String(carpetaId).trim() : await carpetaDeRuta(accessToken, folderId, ruta);
 
     const limite = "limite_" + Date.now();
