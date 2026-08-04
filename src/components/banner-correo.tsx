@@ -15,6 +15,8 @@ export interface BannerCorreoProps {
   mensajeInicial?: string;
   ccInicial?: string;
   folio?: string | null;
+  /** PDF/Word ya armados, listos para ir adjuntos desde el primer envío. */
+  adjuntosIniciales?: { nombre: string; tipo: string; base64: string }[];
   /** Contenido extra (ej. campos de Administración/precio) arriba del formulario. */
   extra?: React.ReactNode;
   onCerrar: () => void;
@@ -24,7 +26,7 @@ export interface BannerCorreoProps {
 export function BannerCorreo({
   titulo = "Enviar por correo",
   paraInicial = "", asuntoInicial = "", mensajeInicial = "", ccInicial = "",
-  folio = null, extra, onCerrar, onEnviado,
+  folio = null, adjuntosIniciales, extra, onCerrar, onEnviado,
 }: BannerCorreoProps) {
   const [para, setPara] = useState(paraInicial);
   const [asunto, setAsunto] = useState(asuntoInicial);
@@ -38,7 +40,7 @@ export function BannerCorreo({
   const enviarDesdeSistema = async () => {
     if (!para.trim()) { setResultado("Escribe al menos un correo en 'Para'."); return; }
     setEnviando(true); setResultado(null);
-    const r = await enviarCorreo({ para, cc: cc || undefined, cco: cco || undefined, asunto, mensaje, folio: folio || undefined });
+    const r = await enviarCorreo({ para, cc: cc || undefined, cco: cco || undefined, asunto, mensaje, folio: folio || undefined, adjuntos: adjuntosIniciales });
     setEnviando(false);
     if (r.ok) { setResultado("Enviado ✓"); onEnviado?.(); }
     else setResultado(`No se pudo enviar: ${r.error || "revisa el permiso de Google"}`);
@@ -84,6 +86,9 @@ export function BannerCorreo({
             <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={10} className="mt-0.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </div>
         </div>
+        {!!adjuntosIniciales?.length && (
+          <p className="mt-2 text-[11px] text-muted-foreground">📎 Se va{adjuntosIniciales.length > 1 ? "n" : ""} adjunto{adjuntosIniciales.length > 1 ? "s" : ""}: {adjuntosIniciales.map((a) => a.nombre).join(", ")}</p>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <button onClick={enviarDesdeSistema} disabled={enviando} className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
