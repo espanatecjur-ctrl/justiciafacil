@@ -35,6 +35,21 @@ export function nombreGarantia(caso: { gar_id?: string | null; expediente?: stri
 
 export type ResultadoCarpeta = { ok: boolean; link?: string; carpetaId?: string; error?: string };
 
+// Guarda la carpeta como LA carpeta oficial del expediente (caso_juridico.drive_carpeta_id),
+// solo si el caso no tenía ya una vinculada. Desde ese momento, subirDocumento() usa este
+// id directo y ya no vuelve a buscar/crear por ruta — así se evita que se generen más
+// carpetas duplicadas para la misma garantía.
+async function vincularSiHaceFalta(caso: CasoJuridico, carpetaId?: string, nombre?: string) {
+  if (!carpetaId || !caso?.id || caso.drive_carpeta_id) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${caso.id}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ drive_carpeta_id: carpetaId, drive_carpeta_nombre: nombre || null }),
+    });
+  } catch { /* si falla, no bloquea — solo no se auto-vincula esta vez */ }
+}
+
 export async function crearCarpetaDrive(area: string, caso: CasoJuridico): Promise<ResultadoCarpeta> {
   const solicita = await quienSolicita();
   const garantia = nombreGarantia(caso);
@@ -46,6 +61,7 @@ export async function crearCarpetaDrive(area: string, caso: CasoJuridico): Promi
     });
     const data = await r.json();
     if (!data.ok) return { ok: false, error: data.error || "No se pudo crear la carpeta." };
+    await vincularSiHaceFalta(caso, data.carpetaId, garantia);
     return { ok: true, link: data.link, carpetaId: data.carpetaId };
   } catch (e: any) {
     return { ok: false, error: String(e?.message || e) };
@@ -64,6 +80,7 @@ export async function verificarCarpeta(area: string, caso: CasoJuridico): Promis
     });
     const data = await r.json();
     if (!data.ok) return { existe: false };
+    if (data.existe) await vincularSiHaceFalta(caso, data.carpetaId, garantia); // se autovincula la primera vez que alguien la abre
     return { existe: !!data.existe, link: data.link };
   } catch {
     return { existe: false };
