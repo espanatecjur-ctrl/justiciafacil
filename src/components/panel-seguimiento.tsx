@@ -17,6 +17,7 @@ import { ClipboardList, Plus, Paperclip, Loader2, X, CheckSquare, Square, User, 
 import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
 import { crearEvento, actualizarEvento, eliminarEvento } from "@/lib/evento-agenda";
 import { avisarTareaPorCorreo } from "@/lib/avisar-tarea";
+import { crearNotificacion } from "@/lib/notificaciones";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -305,7 +306,18 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], t
         const filas = await res.json().catch(() => []);
         const guardada = filas?.[0];
         if (guardada?.id) await sincronizarEventoDeTarea(guardada);
-        if (!tareaEditar && guardada) avisarTareaPorCorreo(guardada); // solo al crear, no al editar
+        if (!tareaEditar && guardada) {
+          avisarTareaPorCorreo(guardada); // solo al crear, no al editar
+          if (guardada.responsable_correo) {
+            crearNotificacion({
+              para: guardada.responsable_correo,
+              texto: `Nueva tarea: "${guardada.titulo}"${guardada.expediente ? ` — ${guardada.expediente}` : ""}`,
+              enlace: "/calendario",
+              importante: false,
+              tipo: "tarea",
+            }).catch(() => {});
+          }
+        }
       }
       onGuardado();
     } catch (e: any) { setError(e.message); } finally { setGuardando(false); }
