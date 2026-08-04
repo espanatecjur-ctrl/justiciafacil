@@ -3,6 +3,7 @@
 //  Identidad por CORREO. La app usa su llave pública (como la agenda).
 // ============================================================
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { enviarPush } from "@/lib/push";
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -16,18 +17,25 @@ export interface Notificacion {
   texto: string;
   enlace?: string | null;
   leida: boolean;
+  importante?: boolean | null;
+  tipo?: string | null;
   created_at?: string | null;
 }
 
-/** Crea un aviso para una persona (por su correo). No falla la app si truena. */
-export async function crearNotificacion(n: { para: string; texto: string; enlace?: string | null }): Promise<boolean> {
+/** Crea un aviso para una persona (por su correo). No falla la app si truena.
+ *  `importante` = validación/firma pendiente → aparece resaltado en la
+ *  campanita y manda push con vibración fuerte (si esa persona la activó). */
+export async function crearNotificacion(n: { para: string; texto: string; enlace?: string | null; importante?: boolean; tipo?: string }): Promise<boolean> {
   if (!n.para || !n.texto) return false;
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/notificacion`, {
       method: "POST",
       headers: { ...headers, Prefer: "return=minimal" },
-      body: JSON.stringify({ para: n.para, texto: n.texto, enlace: n.enlace ?? null }),
+      body: JSON.stringify({ para: n.para, texto: n.texto, enlace: n.enlace ?? null, importante: !!n.importante, tipo: n.tipo ?? null }),
     });
+    if (res.ok) {
+      enviarPush(n.para, n.importante ? "⚠️ " + n.texto : n.texto, "", n.enlace || "/", !!n.importante);
+    }
     return res.ok;
   } catch {
     return false;
