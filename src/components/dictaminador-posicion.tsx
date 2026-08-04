@@ -395,35 +395,74 @@ export function DictaminadorPosicion({
         </div>
 
         {!puedeElaborar && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">🔒 Tu rol no puede elaborar pre-dictámenes nuevos. Puedes consultar el historial.</div>}
+        {(() => {
+          const posicionYaElegida = precargar?.datos?.posicion || null;
+          if (!posicionYaElegida) return null;
+          return (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 px-3 py-2 text-sm text-[color:var(--teal)]">
+              ✓ Ya se eligió <b>{posicionYaElegida}</b> para este expediente — las demás posiciones quedan bloqueadas, solo se puede ver.
+            </div>
+          );
+        })()}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <button onClick={() => abrir("Actor")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-            <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
-            <p className="font-semibold">Actor</p>
-            <p className="text-xs text-muted-foreground">DIIPA demanda / recupera (cesión hipotecaria). 8 fases.</p>
-          </button>
-          <button onClick={() => abrir("Demandado")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-            <Scale className="mb-2 h-6 w-6" style={{ color: "#0B1E3A" }} />
-            <p className="font-semibold">Demandado</p>
-            <p className="text-xs text-muted-foreground">DIIPA compra los derechos del demandado-vendedor. 6 fases.</p>
-          </button>
-          <button onClick={() => abrir("Sucesorio")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-            <Scale className="mb-2 h-6 w-6" style={{ color: "#C2A24C" }} />
-            <p className="font-semibold">Sucesorio</p>
-            <p className="text-xs text-muted-foreground">Vía herencia / posesión. Veredicto cruzado. 6 fases.</p>
-          </button>
+          {([
+            { pos: "Actor" as const, color: "#0C5C46", desc: "DIIPA demanda / recupera (cesión hipotecaria). 8 fases." },
+            { pos: "Demandado" as const, color: "#0B1E3A", desc: "DIIPA compra los derechos del demandado-vendedor. 6 fases." },
+            { pos: "Sucesorio" as const, color: "#C2A24C", desc: "Vía herencia / posesión. Veredicto cruzado. 6 fases." },
+          ]).map(({ pos, color, desc }) => {
+            const posicionYaElegida = precargar?.datos?.posicion || null;
+            const esLaElegida = posicionYaElegida === pos;
+            const bloqueadaPorOtra = !!posicionYaElegida && !esLaElegida;
+            return (
+              <button
+                key={pos}
+                onClick={() => { if (!bloqueadaPorOtra) abrir(pos); }}
+                disabled={bloqueadaPorOtra}
+                className={`relative rounded-xl border p-4 text-left ${
+                  esLaElegida ? "border-[color:var(--teal)] bg-[color:var(--teal)]/5"
+                  : bloqueadaPorOtra ? "cursor-not-allowed border-border opacity-50"
+                  : "border-border hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5"
+                }`}
+              >
+                {esLaElegida && <span className="absolute right-3 top-3 rounded-full bg-[color:var(--teal)] px-2 py-0.5 text-[10px] font-semibold text-white">✓ Elegida</span>}
+                {bloqueadaPorOtra && <span className="absolute right-3 top-3 text-muted-foreground">🔒</span>}
+                <Scale className="mb-2 h-6 w-6" style={{ color }} />
+                <p className="font-semibold">{pos}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+                {bloqueadaPorOtra && <p className="mt-1 text-[11px] text-muted-foreground">Solo se puede ver — ya se eligió otra posición.</p>}
+              </button>
+            );
+          })}
         </div>
         <p className="mb-2 mt-5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Otros saneamientos</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <button onClick={() => abrir("Contingencia")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-            <Scale className="mb-2 h-6 w-6" style={{ color: "#0C5C46" }} />
-            <p className="font-semibold">Contingencia inmobiliaria</p>
-            <p className="text-xs text-muted-foreground">Defectos registrales, posesión, copropiedad, doble inscripción, traslapes. 6 fases.</p>
-          </button>
-          <button onClick={() => abrir("Tramites")} className="rounded-xl border border-border p-4 text-left hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5">
-            <Scale className="mb-2 h-6 w-6" style={{ color: "#0B1E3A" }} />
-            <p className="font-semibold">Trámites administrativos</p>
-            <p className="text-xs text-muted-foreground">Amparo, contencioso TFJA, laboral, créditos fiscales. Cuenta el plazo. 6 fases.</p>
-          </button>
+          {([
+            { pos: "Contingencia" as const, color: "#0C5C46", titulo: "Contingencia inmobiliaria", desc: "Defectos registrales, posesión, copropiedad, doble inscripción, traslapes. 6 fases." },
+            { pos: "Tramites" as const, color: "#0B1E3A", titulo: "Trámites administrativos", desc: "Amparo, contencioso TFJA, laboral, créditos fiscales. Cuenta el plazo. 6 fases." },
+          ]).map(({ pos, color, titulo: t, desc }) => {
+            const posicionYaElegida = precargar?.datos?.posicion || null;
+            const esLaElegida = posicionYaElegida === pos;
+            const bloqueadaPorOtra = !!posicionYaElegida && !esLaElegida;
+            return (
+              <button
+                key={pos}
+                onClick={() => { if (!bloqueadaPorOtra) abrir(pos); }}
+                disabled={bloqueadaPorOtra}
+                className={`relative rounded-xl border p-4 text-left ${
+                  esLaElegida ? "border-[color:var(--teal)] bg-[color:var(--teal)]/5"
+                  : bloqueadaPorOtra ? "cursor-not-allowed border-border opacity-50"
+                  : "border-border hover:border-[color:var(--teal)] hover:bg-[color:var(--teal)]/5"
+                }`}
+              >
+                {esLaElegida && <span className="absolute right-3 top-3 rounded-full bg-[color:var(--teal)] px-2 py-0.5 text-[10px] font-semibold text-white">✓ Elegida</span>}
+                {bloqueadaPorOtra && <span className="absolute right-3 top-3 text-muted-foreground">🔒</span>}
+                <Scale className="mb-2 h-6 w-6" style={{ color }} />
+                <p className="font-semibold">{t}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+                {bloqueadaPorOtra && <p className="mt-1 text-[11px] text-muted-foreground">Solo se puede ver — ya se eligió otra posición.</p>}
+              </button>
+            );
+          })}
         </div>
       </div>
     );
