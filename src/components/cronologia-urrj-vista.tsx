@@ -5,13 +5,14 @@
 // ============================================================
 import { useEffect, useState } from "react";
 import { leerCronologia, type EventoCronologia, type TipoEvento } from "@/lib/cronologia-urrj";
-import { Scale, Landmark, Mail, ChevronRight, ChevronDown, History } from "lucide-react";
+import { Scale, Landmark, Mail, ChevronRight, ChevronDown, History, Undo2 } from "lucide-react";
 
 const META: Record<TipoEvento, { icon: typeof Scale; etiqueta: string; cls: string }> = {
   dictamen_juridico:  { icon: Scale,    etiqueta: "Dictamen jurídico firmado",  cls: "bg-emerald-50 text-emerald-700" },
   dictamen_registral: { icon: Landmark, etiqueta: "Dictamen registral firmado", cls: "bg-emerald-50 text-emerald-700" },
   correo_juridico:    { icon: Mail,     etiqueta: "Correo jurídico preparado",  cls: "bg-[color:var(--teal)]/10 text-[color:var(--teal)]" },
   correo_registral:   { icon: Mail,     etiqueta: "Correo registral preparado", cls: "bg-[color:var(--teal)]/10 text-[color:var(--teal)]" },
+  dictamen_rechazado: { icon: Undo2,    etiqueta: "Dictamen devuelto",          cls: "bg-amber-50 text-amber-700" },
 };
 
 function fecha(iso?: string) {
