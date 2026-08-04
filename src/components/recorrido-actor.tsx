@@ -55,7 +55,7 @@ const QUE_CEDE = [
 ];
 const FASES = [
   "Datos mínimos", "Verificación registral", "Estado procesal", "Prescripción y caducidad",
-  "Posesión y ocupantes", "Cargas ocultas", "Cálculo de intereses", "Dictamen y firmas",
+  "Posesión y ocupantes", "Cálculo de intereses", "Dictamen y firmas",
 ];
 
 interface Datos {
@@ -481,15 +481,6 @@ export function RecorridoActor({
       if (dj.hay_demanda_despojo === "sí" || dj.hay_demanda_despojo === "si" || dj.hay_demanda_despojo === "no") {
         c.demandaDespojo = /^s/i.test(dj.hay_demanda_despojo) ? "si" : "no";
       }
-      // Fase 5 · Cargas ocultas (solo texto, si el documento lo menciona)
-      const cg = dj.cargas;
-      if (cg) {
-        if (!p.predial && cg.predial_al_corriente && cg.predial_al_corriente !== "no determinado") c.predial = cg.predial_al_corriente === "sí" || cg.predial_al_corriente === "si" ? "Al corriente (según documentos)" : "Con adeudo (según documentos)";
-        if (!p.agua && cg.agua_al_corriente && cg.agua_al_corriente !== "no determinado") c.agua = cg.agua_al_corriente === "sí" || cg.agua_al_corriente === "si" ? "Al corriente (según documentos)" : "Con adeudo (según documentos)";
-        if (!p.condominio && cg.condominio_al_corriente && cg.condominio_al_corriente !== "no determinado") c.condominio = cg.condominio_al_corriente === "sí" || cg.condominio_al_corriente === "si" ? "Al corriente (según documentos)" : "Con adeudo (según documentos)";
-        if (!p.fiscales && cg.adeudos_fiscales) c.fiscales = cg.adeudos_fiscales;
-        if (!p.laborales && cg.adeudos_laborales) c.laborales = cg.adeudos_laborales;
-      }
       return Object.keys(c).length ? { ...p, ...c } : p;
     });
   }, [analisisParaPDF]);
@@ -548,9 +539,8 @@ export function RecorridoActor({
     ["Demanda", "Auto Judicial", "Emplazamiento", "Contestación de Demanda", "Acuerdo", "Notificación"], // 2 Estado procesal
     ["Acuerdo", "Auto Judicial", "Demanda"],                                            // 3 Prescripción y caducidad
     ["Otro", "Notificación"],                                                           // 4 Posesión y ocupantes
-    ["Verificación", "Comprobante"],                                                    // 5 Cargas ocultas
-    ["Comprobante", "Contrato"],                                                        // 6 Cálculo de intereses
-    ["Dictamen"],                                                                       // 7 Dictamen y firmas
+    ["Comprobante", "Contrato"],                                                        // 5 Cálculo de intereses
+    ["Dictamen"],                                                                       // 6 Dictamen y firmas
   ];
   const tiposDeEstaFase = TIPOS_POR_FASE[paso] || [];
   const docsDeEstaFase = (resumenParaPDF || []).filter((r) => tiposDeEstaFase.includes(r.tipo));
@@ -695,7 +685,7 @@ export function RecorridoActor({
   };
   useEffect(() => {
     // al llegar a la fase de intereses, si no hay fecha de corte, poner hoy
-    if (paso === 6 && !d.fechaCorte) setD((p) => ({ ...p, fechaCorte: hoyISO() }));
+    if (paso === 5 && !d.fechaCorte) setD((p) => ({ ...p, fechaCorte: hoyISO() }));
   }, [paso]);
   useEffect(() => {
     const dd = diasEntre(d.ultimoPago, d.fechaCorte);
@@ -882,7 +872,7 @@ export function RecorridoActor({
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
           <span>{d.tipoJuicio} · {d.posicion} · {d.estado}</span>
-          <span>Fase {paso + 1} de {FASES.length}: {modoFicha && paso === 7 ? "Administración / Viabilidad" : FASES[paso]}</span>
+          <span>Fase {paso + 1} de {FASES.length}: {modoFicha && paso === 6 ? "Administración / Viabilidad" : FASES[paso]}</span>
         </div>
         <div className="flex gap-1">
           {FASES.map((_, i) => (
@@ -1272,25 +1262,7 @@ export function RecorridoActor({
 
         {paso === 5 && (
           <div className="space-y-4">
-            <H titulo="5 · Cargas ocultas" sub="Todo esto se hereda con el inmueble y se come el margen. En pesos." />
-            {!!analisisParaPDF?.datos_juicio_adicionales?.cargas && <p className="text-[11px] font-medium text-purple-700">✨ Autollenado con lo que la IA leyó en los documentos — revisa y corrige si hace falta (solo llena lo que el documento sí menciona explícitamente).</p>}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Campo label="Predial atrasado"><input type="number" className={inp} value={d.predial} onChange={(e) => set("predial", e.target.value)} /></Campo>
-              <Campo label="Agua"><input type="number" className={inp} value={d.agua} onChange={(e) => set("agua", e.target.value)} /></Campo>
-              <Campo label="Cuotas de condominio"><input type="number" className={inp} value={d.condominio} onChange={(e) => set("condominio", e.target.value)} /></Campo>
-              <Campo label="Créditos fiscales"><input type="number" className={inp} value={d.fiscales} onChange={(e) => set("fiscales", e.target.value)} /></Campo>
-              <Campo label="Créditos laborales"><input type="number" className={inp} value={d.laborales} onChange={(e) => set("laborales", e.target.value)} /></Campo>
-              <Campo label="Otros gravámenes"><input type="number" className={inp} value={d.otrosGravamenes} onChange={(e) => set("otrosGravamenes", e.target.value)} /></Campo>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">Total de cargas ocultas: <b>{fmt(cargas)}</b></div>
-            {hayLaboral && <Aviso r={{ semaforo: "rojo", etiqueta: "Crédito laboral (kill switch)", detalle: "Los créditos laborales tienen preferencia sobre la hipoteca y el fisco (Art. 113 LFT). Pueden vaciar la garantía aunque ganes el juicio." }} />}
-            {hayFiscal && <Aviso r={{ semaforo: "naranja", etiqueta: "Crédito fiscal", detalle: "El crédito fiscal tiene preferencia (Art. 149 CFF): puede cobrarse antes que la hipoteca." }} />}
-          </div>
-        )}
-
-        {paso === 6 && (
-          <div className="space-y-4">
-            <H titulo="6 · Cálculo de intereses" sub="Solo intereses de la deuda. La valuación y el precio los hace Administración." />
+            <H titulo="5 · Cálculo de intereses" sub="Solo intereses de la deuda. La valuación y el precio los hace Administración." />
             <p className="text-xs font-medium text-muted-foreground">Cálculo de la deuda (año comercial 360 días, Art. 362 CCom)</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Campo label="Capital"><input type="number" className={inp} value={d.capital} onChange={(e) => set("capital", e.target.value)} /></Campo>
@@ -1315,12 +1287,12 @@ export function RecorridoActor({
           </div>
         )}
 
-        {paso === 7 && (
+        {paso === 6 && (
           <div className="space-y-4">
             {modoFicha ? (
               <H titulo="Administración · valuación y precio" sub="De aquí sale el hito 10 (Viabilidad económica)." />
             ) : (<>
-            <H titulo="7 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
+            <H titulo="6 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
               <Aviso r={rPresc} />
               {(rPresc.semaforo === "rojo" || rPresc.semaforo === "naranja") && d.sentenciaFirme === "si" && (
