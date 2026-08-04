@@ -280,7 +280,14 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
 
   const precargaJuridico: Precarga = {
     datos: {
-      caso_id: garantia.id || "",
+      // Primero TODO lo que ya está guardado en el pre-dictamen (todas las
+      // fases, no solo un subconjunto) — antes solo se restauraban ~10
+      // campos y el resto se reseteaba a su valor por defecto cada vez que
+      // se reabría "Abrir en Jurídico", perdiendo lo ya capturado en cuanto
+      // el autoguardado volvía a escribir.
+      ...(predJur?.datos || {}),
+      // Y encima, lo más fresco que tenga la ficha (por si cambió afuera).
+      caso_id: garantia.id || predJur?.datos?.caso_id || "",
       expediente: garantia.expediente || predJur?.expediente || predJur?.datos?.expediente || "",
       juzgado: garantia.juzgado || predJur?.datos?.juzgado || "",
       deudor: garantia.deudor || garantia.cliente_nombre || predJur?.datos?.deudor || "",
