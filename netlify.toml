@@ -9,3 +9,9 @@
 
 [functions."resumir-documentos"]
   timeout = 60
+
+# Subir a Drive (PDFs/imágenes en base64) también puede tardar más de 10s
+# con archivos grandes — antes se cortaba a la mitad ("Unexpected end of
+# JSON input" en el navegador) porque Netlify mataba la función sin avisar.
+[functions."subir-documento"]
+  timeout = 30
