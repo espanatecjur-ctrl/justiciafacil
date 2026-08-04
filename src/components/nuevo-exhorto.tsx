@@ -127,13 +127,15 @@ export function NuevoExhortoModal({ onClose, onCreado }: { onClose: () => void; 
         actor: res?.actor || null, demandado: res?.demandado || null,
         unidad: "Exhortos", archivado: false, ...jz,
       };
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, { method: "POST", headers: { ...wHeaders, Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, { method: "POST", headers: { ...wHeaders, Prefer: "return=representation" }, body: JSON.stringify(payload) });
       if (!r.ok) throw new Error("No se pudo crear (" + r.status + ").");
+      const casoIdNuevo = (await r.json().catch(() => []))?.[0]?.id;
 
       if (res?.acuerdos?.length) {
         const filas = res.acuerdos.map((a) => ({
           expediente: exp, juzgado: jz.nombre_juzgado || "", fecha_acuerdo: a.fecha, tipo_acuerdo: "Boletín",
           entidad, texto: a.texto, urgente: false, leido: false, origen: "robot",
+          caso_id: casoIdNuevo || null,
         }));
         await fetch(`${SUPABASE_URL}/rest/v1/acuerdo_judicial`, { method: "POST", headers: { ...wHeaders, Prefer: "return=minimal" }, body: JSON.stringify(filas) }).catch(() => {});
       }
