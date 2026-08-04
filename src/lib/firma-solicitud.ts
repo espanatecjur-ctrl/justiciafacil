@@ -18,11 +18,15 @@ export interface CrearSolicitudInput {
   area: Area;
   predictamenId?: string;   // URRJ (tabla predictamen)
   dictamenId?: string;      // UCP/UCM (tabla dictamen)
+  registralId?: string;     // URRJ · Registral (tabla dictamen_registral)
   casoId: string;
   slot: string;             // "elabora" | "dil" | "ucm" | "gad" | "dgc" | "dge"
   correoEsperado: string;
   tituloSlot: string;       // para el asunto/cuerpo del correo
   expedienteTexto: string;  // para el asunto/cuerpo del correo
+  /** Si viene, en vez de mandar el correo automático, solo crea el token/link
+   *  y lo regresa — para armarlo a mano en un BannerCorreo (vista previa). */
+  soloCrearLink?: boolean;
 }
 
 /** Correo del colaborador dueño de un rol (para autocompletar el destinatario). */
@@ -43,12 +47,14 @@ export async function crearYEnviarSolicitudFirma(input: CrearSolicitudInput): Pr
     };
     if (input.predictamenId) body.predictamen_id = input.predictamenId;
     if (input.dictamenId) body.dictamen_id = input.dictamenId;
+    if (input.registralId) body.registral_id = input.registralId;
     const res = await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud`, {
       method: "POST", headers: { ...headers, Prefer: "return=representation" }, body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: `Supabase ${res.status}` };
     const row = (await res.json())?.[0];
     const link = `${window.location.origin}/firmar?token=${row.token}`;
+    if (input.soloCrearLink) return { ok: true, link, enviado: false };
     const asunto = `Firma/validación requerida · ${input.expedienteTexto} · ${input.tituloSlot}`;
     const cuerpo = `Hola,\n\nSe requiere tu firma/validación (${input.tituloSlot}) en el dictamen de ${input.expedienteTexto}.\n\nEntra a este link con tu cuenta de DIIPA para revisar los documentos, el PDF, y firmar o rechazar:\n${link}\n\nSi tienes usuario en JusticiaFácil, también lo vas a ver en "Mis validaciones" al entrar.\n\nGracias.`;
     let enviado = false;
