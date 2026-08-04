@@ -310,6 +310,78 @@ const hipotecarioEscrita: TipoJuicio = {
 };
 
 // =====================================================================
+// 4.5) ORDINARIO MERCANTIL — ESCRITA (Código de Comercio, tramitación tradicional)
+// Igual que Ejecutivo Mercantil en el tramo de ejecución (avalúo, remate,
+// adjudicación, escrituración), pero con la vía y los actos de postulación
+// propios del ordinario mercantil (contestación con excepciones, período de
+// pruebas separado de la demanda, etc.)
+// =====================================================================
+const ordinarioMercantilEscrita: TipoJuicio = {
+  clave: "ordinario_mercantil_escrita",
+  tipo: "Ordinario Mercantil",
+  via: "escrita",
+  ley: "Código de Comercio (juicio ordinario mercantil, sistema escrito tradicional)",
+  etapas: [
+    { clave: "demanda", nombre: "Presentación de la demanda", fase: "Postulatoria",
+      resumen: "Escrito inicial con prestaciones, hechos y derecho.",
+      docs: [
+        { nombre: "Escrito inicial de demanda", acto: "promocion", obligatorio: true },
+        { nombre: "Documento(s) base de la acción", acto: "promocion", obligatorio: true },
+      ] },
+    { clave: "admision", nombre: "Auto admisorio / radicación", fase: "Postulatoria",
+      resumen: "El juzgado admite y radica el asunto.",
+      docs: [{ nombre: "Auto admisorio", acto: "acuerdo", obligatorio: true }] },
+    { clave: "emplazamiento", nombre: "Emplazamiento", fase: "Postulatoria",
+      resumen: "Notificación personal al demandado.",
+      docs: [{ nombre: "Razón / acta de emplazamiento", acto: "acta", obligatorio: true }] },
+    { clave: "contestacion", nombre: "Contestación (o rebeldía)", fase: "Postulatoria",
+      resumen: "Contestación con excepciones; o acuse de rebeldía.",
+      docs: [{ nombre: "Contestación o acuse de rebeldía", acto: "promocion", obligatorio: true }] },
+    { clave: "ofrecimiento_pruebas", nombre: "Ofrecimiento de pruebas", fase: "Probatoria",
+      resumen: "Periodo para ofrecer pruebas, posterior a la litis.",
+      docs: [
+        { nombre: "Escrito de ofrecimiento de pruebas (actor)", acto: "promocion" },
+        { nombre: "Escrito de ofrecimiento de pruebas (demandado)", acto: "promocion" },
+        { nombre: "Auto de admisión de pruebas", acto: "acuerdo" },
+      ] },
+    { clave: "desahogo", nombre: "Desahogo de pruebas", fase: "Probatoria",
+      resumen: "Se desahogan testimoniales, periciales, confesional, etc.",
+      docs: [{ nombre: "Constancias de desahogo", acto: "acta" }] },
+    { clave: "alegatos", nombre: "Alegatos", fase: "Conclusiva",
+      resumen: "Las partes presentan sus alegatos por escrito.",
+      docs: [{ nombre: "Escrito de alegatos", acto: "promocion" }] },
+    { clave: "sentencia", nombre: "Sentencia definitiva", fase: "Conclusiva",
+      resumen: "Resolución de primera instancia.",
+      docs: [{ nombre: "Sentencia definitiva", acto: "resolucion", obligatorio: true }] },
+    { clave: "apelacion", nombre: "Apelación (si la hay)", fase: "Recursos",
+      resumen: "Recurso ante el superior.",
+      docs: [{ nombre: "Escrito de apelación", acto: "promocion" }, { nombre: "Resolución de apelación", acto: "resolucion" }] },
+    { clave: "amparo", nombre: "Amparo (si lo hay)", fase: "Recursos",
+      resumen: "Amparo (indirecto o en revisión) contra actuaciones o resoluciones del juicio.",
+      docs: [{ nombre: "Demanda de amparo / recurso de revisión", acto: "promocion" }, { nombre: "Ejecutoria de amparo o resolución del recurso", acto: "resolucion" }] },
+    { clave: "ejecucion", nombre: "Ejecución de sentencia", fase: "Ejecución",
+      resumen: "Cumplimiento forzoso: requerimiento de pago y vía de apremio (embargo).",
+      docs: [{ nombre: "Solicitud de ejecución", acto: "promocion" }, { nombre: "Auto que ordena la ejecución / embargo", acto: "acuerdo" }] },
+    { clave: "avaluo", nombre: "Avalúo", fase: "Ejecución",
+      resumen: "Avalúo del bien embargado.",
+      docs: [{ nombre: "Avalúo (perito)", acto: "promocion" }, { nombre: "Acuerdo que tiene por rendido el avalúo", acto: "acuerdo" }] },
+    { clave: "remate", nombre: "Remate / almoneda", fase: "Ejecución",
+      resumen: "Convocatoria y celebración de la almoneda.",
+      docs: [{ nombre: "Convocatoria / edictos", acto: "acuerdo" }, { nombre: "Acta de remate", acto: "acta" }] },
+    { clave: "adjudicacion", nombre: "Adjudicación", fase: "Ejecución",
+      resumen: "Adjudicación a favor del postor / actor.",
+      docs: [{ nombre: "Auto de adjudicación", acto: "acuerdo", obligatorio: true }] },
+    { clave: "escrituracion", nombre: "Escrituración y entrega", fase: "Ejecución",
+      resumen: "Otorgamiento de escritura (en rebeldía si aplica) y entrega del inmueble.",
+      docs: [
+        { nombre: "Solicitud de escrituración / firma en rebeldía", acto: "promocion" },
+        { nombre: "Escritura", acto: "resolucion" },
+        { nombre: "Acta de entrega del inmueble", acto: "acta" },
+      ] },
+  ],
+};
+
+// =====================================================================
 // 5) ORDINARIO MERCANTIL — ORAL (Código de Comercio, juicio oral mercantil)
 // =====================================================================
 const ordinarioMercantilOral: TipoJuicio = {
@@ -541,6 +613,7 @@ export const CATALOGO_ETAPAS: TipoJuicio[] = [
   ejecutivoMercantilEscrita,
   ejecutivoCivilEscrita,
   hipotecarioEscrita,
+  ordinarioMercantilEscrita,
   ordinarioMercantilOral,
   oralMercantilEscrita,
   sucesorioIntestamentario,
