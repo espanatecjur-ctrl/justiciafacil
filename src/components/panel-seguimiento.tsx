@@ -9,6 +9,7 @@
 // Acepta `caso` completo o solo `expediente` (reusable en cualquier módulo).
 // ============================================================
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { BotonVerDoc } from "@/components/visor-documento";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
@@ -18,8 +19,6 @@ import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
 import { crearEvento, actualizarEvento, eliminarEvento } from "@/lib/evento-agenda";
 import { avisarTareaPorCorreo } from "@/lib/avisar-tarea";
 import { crearNotificacion } from "@/lib/notificaciones";
-import { clienteJCPorNombre, type ClienteJC } from "@/lib/juris-clientes";
-import { crearTareaEspejoJC, crearSolicitudClienteJF } from "@/lib/tareas-jc";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -57,10 +56,6 @@ export interface Tarea {
   fecha_limite: string | null; estado: string; evidencia_url: string | null;
   creado_por: string | null; created_at: string;
   etapa?: string | null; orden_etapa?: number | null; nota_cierre?: string | null;
-  // Enlace real al documento que resolvió la tarea (no una copia, la misma fila
-  // que vive en la Carpeta de Drive / Documentos). Se llena al "Elaborar" con archivo.
-  documento_id?: string | null;
-  documento?: { nombre: string | null; link: string | null; drive_id: string | null } | null;
 }
 interface Colaborador { id: string; nombre: string; rol: string | null; correo: string | null; }
 
@@ -84,9 +79,8 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
 
   const cargarTareas = () => {
     if (!exp) { setTareas([]); setPapelera([]); return; }
-    const selectConDoc = "select=*,documento:documento_garantia!documento_id(nombre,link,drive_id)";
-    sbSelect<Tarea>("tarea", `${selectConDoc}&expediente=eq.${encodeURIComponent(exp)}&estado=neq.papelera&order=estado.desc,created_at.desc`).then(setTareas).catch(() => setTareas([]));
-    sbSelect<Tarea>("tarea", `${selectConDoc}&expediente=eq.${encodeURIComponent(exp)}&estado=eq.papelera&order=created_at.desc`).then(setPapelera).catch(() => setPapelera([]));
+    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&estado=neq.papelera&order=estado.desc,created_at.desc`).then(setTareas).catch(() => setTareas([]));
+    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&estado=eq.papelera&order=created_at.desc`).then(setPapelera).catch(() => setPapelera([]));
   };
   useEffect(() => {
     cargarTareas();
@@ -213,9 +207,6 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
                           {t.fecha_limite && !esEvid ? ` · vence ${fmt(t.fecha_limite)}` : ""}
                         </p>
                         {esEvid && t.evidencia_url && <BotonVerDoc url={t.evidencia_url} nombre="Evidencia" label="ver evidencia" className="text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />}
-                        {hecha && t.documento && (
-                          <BotonVerDoc url={t.documento.link || ""} driveId={t.documento.drive_id} nombre={t.documento.nombre} label={`ver documento${t.documento.nombre ? `: ${t.documento.nombre}` : ""}`} className="mt-1 text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />
-                        )}
                       </div>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : enProceso ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : enProceso ? "en curso" : "tarea"}</span>
                       {!esEvid && (
@@ -256,8 +247,8 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
         </div>
       )}
 
-      {agregar && <AgregarModal casoId={casoId} exp={exp} clienteNombre={caso?.cliente_nombre ?? null} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
-      {editando && <AgregarModal casoId={casoId} exp={exp} clienteNombre={caso?.cliente_nombre ?? null} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} tareaEditar={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargarTareas(); }} />}
+      {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
+      {editando && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} tareaEditar={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargarTareas(); }} />}
       {cerrarTarea && (
         <ElaborarTareaModal
           tarea={cerrarTarea}
@@ -267,7 +258,6 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
             setTareas((p) => p.map((x) => (x.id === cerrarTarea.id ? { ...x, estado: nuevoEstado, nota_cierre: notaCierre ?? x.nota_cierre } : x)));
             sincronizarEventoDeTarea({ ...cerrarTarea, estado: nuevoEstado });
             setCerrarTarea(null);
-            cargarTareas(); // vuelve a traer con el documento enlazado (join a documento_garantia)
           }}
         />
       )}
@@ -275,7 +265,7 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   );
 }
 
-function AgregarModal({ casoId, exp, clienteNombre, colabs, creadoPor, etapasExistentes = [], tareaEditar, onClose, onGuardado }: { casoId: string | null; exp: string; clienteNombre?: string | null; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; tareaEditar?: Tarea; onClose: () => void; onGuardado: () => void }) {
+function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], tareaEditar, onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; tareaEditar?: Tarea; onClose: () => void; onGuardado: () => void }) {
   const [tipo, setTipo] = useState<"tarea" | "evidencia">(tareaEditar?.tipo === "evidencia" ? "evidencia" : "tarea");
   const [titulo, setTitulo] = useState(tareaEditar?.titulo ?? "");
   const [descripcion, setDescripcion] = useState(tareaEditar?.descripcion ?? "");
@@ -326,31 +316,6 @@ function AgregarModal({ casoId, exp, clienteNombre, colabs, creadoPor, etapasExi
               enlace: "/calendario",
               importante: false,
               tipo: "tarea",
-            }).catch(() => {});
-          }
-        }
-
-        // ---- Espejo hacia JurisConecta (mismo puente que usa Calendario) ----
-        // Solo si hay cliente (viene de la ficha del expediente) + responsable, y
-        // todavía no se había espejado (para no duplicar tareas allá en cada edición).
-        if (guardada?.id && clienteNombre && guardada.responsable_correo && !guardada.jc_tarea_id && !guardada.jc_solicitud_id) {
-          const datos = {
-            tipo: "tarea", titulo: guardada.titulo, detalle: guardada.descripcion || null,
-            fecha: guardada.fecha_limite || null, asignadoCorreo: guardada.responsable_correo,
-            asignadoNombre: guardada.responsable_nombre || null, autorCorreo: creadoPor || null,
-          };
-          const match: ClienteJC | null = await clienteJCPorNombre(clienteNombre);
-          if (match) {
-            const espejo = await crearTareaEspejoJC(match, datos);
-            await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${guardada.id}`, {
-              method: "PATCH", headers: { ...headers, Prefer: "return=minimal" },
-              body: JSON.stringify({ cliente_estado: "vinculado", cliente_jc_id: match.id, jc_tarea_id: espejo.tareaId || null }),
-            }).catch(() => {});
-          } else {
-            const sol = await crearSolicitudClienteJF({ ...datos, nombreCliente: clienteNombre, jfEventoId: guardada.id });
-            await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${guardada.id}`, {
-              method: "PATCH", headers: { ...headers, Prefer: "return=minimal" },
-              body: JSON.stringify({ cliente_estado: "no_encontrado", jc_solicitud_id: sol.solicitudId || null }),
             }).catch(() => {});
           }
         }
@@ -447,9 +412,6 @@ function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea;
   const [archivos, setArchivos] = useState<File[]>([]);
   const [subiendo, setSubiendo] = useState(false);
   const [subidos, setSubidos] = useState<string[]>([]);
-  // id real del documento en documento_garantia — es la liga que se guarda en
-  // tarea.documento_id (Paso 2). Si se suben varios, se queda con el último.
-  const [documentoIdSubido, setDocumentoIdSubido] = useState<string | null>(tarea.documento_id ?? null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -463,10 +425,8 @@ function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea;
         if (r.ok && r.doc?.id && tarea.etapa) {
           await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${r.doc.id}`, { method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify({ etapa: tarea.etapa }) });
         }
-        if (r.ok) {
-          setSubidos((p) => [...p, f.name]);
-          if (r.doc?.id) setDocumentoIdSubido(r.doc.id); // liga real, no solo el nombre en texto
-        } else setError(`No se pudo subir "${f.name}": ${r.error || "error desconocido"}`);
+        if (r.ok) setSubidos((p) => [...p, f.name]);
+        else setError(`No se pudo subir "${f.name}": ${r.error || "error desconocido"}`);
       }
       setArchivos([]);
     } finally { setSubiendo(false); }
@@ -480,10 +440,7 @@ function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea;
     const nuevoEstado = comoQueda === "avance" ? "en_proceso" : "hecha";
     try {
       const cambios: Record<string, unknown> = { estado: nuevoEstado, updated_at: new Date().toISOString() };
-      if (nuevoEstado === "hecha") {
-        cambios.nota_cierre = notaCompleta;
-        if (documentoIdSubido) cambios.documento_id = documentoIdSubido; // Paso 2: enlace real tarea → documento
-      }
+      if (nuevoEstado === "hecha") cambios.nota_cierre = notaCompleta;
       const r = await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${tarea.id}`, {
         method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify(cambios),
       });
@@ -600,13 +557,19 @@ export function MisTareas() {
             return (
               <div key={t.id} className="flex items-start gap-2.5 py-2.5">
                 <button onClick={() => marcarHecha(t)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-600" title="Elaborar / marcar hecha"><Square className="h-4 w-4" /></button>
-                <div className="min-w-0 flex-1">
+                <Link
+                  to={t.caso_id ? "/expedientes/$id" : t.expediente ? "/urrj" : "/calendario"}
+                  params={t.caso_id ? { id: t.caso_id } : undefined}
+                  search={!t.caso_id && t.expediente ? ({ ficha: t.expediente } as any) : undefined}
+                  className="min-w-0 flex-1 rounded hover:bg-muted/30"
+                  title="Ir a hacer esta tarea"
+                >
                   <p className="text-sm font-medium">{t.titulo}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {t.expediente ? `Exp. ${t.expediente}` : "Sin expediente"}
                     {t.fecha_limite ? ` · ${vencida ? "venció" : hoy ? "vence hoy" : "vence"} ${fmt(t.fecha_limite)}` : ""}
                   </p>
-                </div>
+                </Link>
                 {(vencida || hoy) && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${vencida ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{vencida ? "vencida" : "hoy"}</span>}
               </div>
             );
