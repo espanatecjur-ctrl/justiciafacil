@@ -1056,7 +1056,23 @@ export function RecorridoActor({
             <Campo label="Caso de la cartera (opcional)">
               <select className={inp} value={d.caso_id} onChange={(e) => {
                 const c = casos.find((x) => String(x.id) === e.target.value);
-                setD((p) => ({ ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: c?.juzgado || p.juzgado, ubicacion: c?.direccion_garantia || p.ubicacion, deudor: c?.cliente_nombre || p.deudor, estado: ESTADOS_URRJ.includes(c?.entidad) ? c.entidad : p.estado }));
+                setD((p) => {
+                  const juz = c?.juzgado || p.juzgado || "";
+                  // El "Estado del juicio" es la jurisdicción del JUZGADO (para elegir
+                  // la ley de caducidad correcta) — NO la "Entidad" de origen del crédito
+                  // (esa es la oficina de DIIPA que originó el crédito, puede ser otro estado).
+                  const estadoDetectado = /jalisco/i.test(juz) ? "Jalisco"
+                    : /baja california sur|bcs/i.test(juz) ? "Baja California Sur"
+                    : /sinaloa/i.test(juz) ? "Sinaloa"
+                    : /ciudad de m[eé]xico|cdmx/i.test(juz) ? "CDMX"
+                    : /federal/i.test(juz) ? "Federal"
+                    : null;
+                  return {
+                    ...p, caso_id: e.target.value, expediente: c?.expediente || p.expediente, juzgado: juz,
+                    ubicacion: c?.direccion_garantia || p.ubicacion, deudor: c?.cliente_nombre || p.deudor,
+                    estado: estadoDetectado || p.estado,
+                  };
+                });
                 checarExiste(c?.expediente || d.expediente, e.target.value);
               }}>
                 <option value="">— Escribir a mano —</option>
@@ -1225,6 +1241,13 @@ export function RecorridoActor({
               </div>
             </details>
             <Aviso r={rPresc} />
+            {(rPresc.semaforo === "rojo" || rPresc.semaforo === "naranja") && d.sentenciaFirme === "si" && (
+              <Aviso r={{
+                semaforo: "verde",
+                etiqueta: "Ya es cosa juzgada",
+                detalle: "El cálculo de arriba muestra riesgo de prescripción, pero ya hay sentencia firme a favor (capturada en \"Estado procesal real\") y nadie la opuso como defensa — legalmente ya no se puede volver a alegar. Es solo referencia histórica, no cambia el resultado del caso.",
+              }} />
+            )}
             <Aviso r={rCaduc} />
           </div>
         )}
@@ -1296,7 +1319,15 @@ export function RecorridoActor({
             ) : (<>
             <H titulo="7 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
-              <Aviso r={rPresc} /><Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
+              <Aviso r={rPresc} />
+              {(rPresc.semaforo === "rojo" || rPresc.semaforo === "naranja") && d.sentenciaFirme === "si" && (
+                <Aviso r={{
+                  semaforo: "verde",
+                  etiqueta: "Ya es cosa juzgada",
+                  detalle: "El cálculo muestra riesgo de prescripción, pero ya hay sentencia firme a favor y nadie la opuso como defensa — ya no se puede volver a alegar. Es solo referencia histórica.",
+                }} />
+              )}
+              <Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
               {avisoJV && <Aviso r={avisoJV} />}
               {registralRojo && <Aviso r={{ semaforo: "rojo", etiqueta: "Registral", detalle: "Hipoteca no inscrita/vigente." }} />}
               {prelacionRiesgo && <Aviso r={{ semaforo: "naranja", etiqueta: "Prelación", detalle: "Hay acreedores anteriores (no primer lugar)." }} />}
