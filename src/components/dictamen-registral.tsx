@@ -9,6 +9,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { registrarEvento } from "@/lib/cronologia-urrj";
+import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
 import { crearNotificacion } from "@/lib/notificaciones";
 import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
@@ -662,7 +663,7 @@ export function DictamenRegistral({
       </div>
 
       <div className="no-print flex flex-wrap items-center gap-2">
-        <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">
+        <button onClick={guardar} disabled={guardando || guardado === "Dictamen registral guardado ✓"} title={guardado === "Dictamen registral guardado ✓" ? "Ya está guardado — usa \"Reabrir para editar\" si necesitas cambiar algo." : ""} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60 disabled:cursor-not-allowed">
           {guardado?.includes("✓") ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar dictamen registral"}
         </button>
         {!firmaValida && (
@@ -680,6 +681,11 @@ export function DictamenRegistral({
           </button>
         )}
         {guardado && <span className={`text-sm ${guardado.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{guardado}</span>}
+      </div>
+
+      <div className="rounded-lg border border-border p-4">
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-medium"><ScrollText className="h-4 w-4" style={{ color: "#C2A24C" }} /> Cronograma de correos y firmas</p>
+        <CronologiaURRJ casoId={casoId} expediente={d.numeroCredito} />
       </div>
 
       {guardado?.includes("✓") && (
