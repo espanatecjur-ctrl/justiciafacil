@@ -28,7 +28,7 @@ const FILTROS = [
 const fmt = (s: string | null | undefined) => {
   if (!s) return "—";
   const d = new Date(s);
-  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
+  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 function iconoArchivo(mime: string | null, nombre: string | null) {
