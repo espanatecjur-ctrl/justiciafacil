@@ -98,6 +98,29 @@ export function DictamenRegistral({
   const [guardandoProgreso, setGuardandoProgreso] = useState(false);
   const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
   const primerRenderProgreso = useRef(true);
+  // Al abrir, si ya existe un dictamen registral guardado para este número de
+  // crédito, lo retoma (adopta su id como draftId y precarga sus datos) en vez
+  // de crear una fila nueva — antes cada vez que se volvía a abrir se armaba
+  // un duplicado.
+  useEffect(() => {
+    const numCred = (precarga?.numeroCredito || "").trim();
+    if (!numCred) return;
+    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=*&expediente=eq.${encodeURIComponent(numCred)}&en_papelera=eq.false&order=created_at.desc&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => {
+        const row = rows?.[0];
+        if (!row) return;
+        setDraftId(row.id);
+        if (row.datos) setD((p) => ({ ...p, ...row.datos }));
+        if (typeof row.hay_adicional === "boolean") setHayAdicional(row.hay_adicional);
+        if (row.firma_elabora) setFirmaElabora(row.firma_elabora);
+        if (row.firma_valida) setFirmaValida(row.firma_valida);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (primerRenderProgreso.current) { primerRenderProgreso.current = false; return; }
     const t = setTimeout(() => {
@@ -349,6 +372,36 @@ export function DictamenRegistral({
             }
           }
         } catch { /* el PDF se puede archivar luego */ }
+
+        // Avisar a quien valida (DIL) que hay un dictamen registral esperando su
+        // firma — antes esto no se avisaba a nadie y se quedaba invisible.
+        if (!firmaValida) {
+          try {
+            const yaHayTarea = await fetch(
+              `${SUPABASE_URL}/rest/v1/tarea?select=id&expediente=eq.${encodeURIComponent(d.numeroCredito || "")}&titulo=ilike.*dictamen registral*&estado=neq.hecha&limit=1`,
+              { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
+            ).then((r) => (r.ok ? r.json() : []));
+            if (!yaHayTarea?.length) {
+              const dilRows = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=nombre,correo&rol=eq.DIL&activo=eq.true&limit=1`, {
+                headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+              }).then((r) => (r.ok ? r.json() : []));
+              const dil = dilRows?.[0];
+              if (dil?.correo) {
+                await fetch(`${SUPABASE_URL}/rest/v1/tarea`, {
+                  method: "POST",
+                  headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "tarea",
+                    titulo: `Firmar (Valida) dictamen registral — ${d.acreditado || d.numeroCredito || ""}`,
+                    descripcion: `El dictamen registral (RPPC) quedó elaborado con resultado ${d.resultado}. Falta tu firma de validación.`,
+                    responsable_correo: dil.correo, responsable_nombre: dil.nombre || "DIL", responsable_rol: "DIL",
+                    estado: "pendiente", etapa: "URRJ · Registral",
+                  }),
+                }).catch(() => {});
+              }
+            }
+          } catch { /* si falla el aviso, no bloquea el guardado del dictamen */ }
+        }
       }
       else setGuardado("No se pudo guardar (¿corriste el SQL de dictamen_registral?).");
     } catch (e: any) {
