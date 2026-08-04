@@ -16,7 +16,7 @@ import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, Shield
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { reflejarDictamen } from "@/lib/recorrido";
-import { nombreActual } from "@/lib/auth";
+import { nombreActual, rolActual, correoActual } from "@/lib/auth";
 import { obtenerAnalisisCacheado, claveAnalisis } from "@/lib/analisis-ia";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 
@@ -100,6 +100,9 @@ export function DictamenRegistral({
   const [draftId, setDraftId] = useState<string | null>(null);
   const [nombreYo, setNombreYo] = useState("");
   useEffect(() => { nombreActual().then((n) => setNombreYo(n?.nombre || "")).catch(() => {}); }, []);
+  const [miRol, setMiRol] = useState("");
+  const [miCorreo, setMiCorreo] = useState("");
+  useEffect(() => { rolActual().then(setMiRol).catch(() => {}); correoActual().then((c) => setMiCorreo((c || "").toLowerCase())).catch(() => {}); }, []);
   const [guardandoProgreso, setGuardandoProgreso] = useState(false);
   const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
   const primerRenderProgreso = useRef(true);
@@ -328,6 +331,48 @@ export function DictamenRegistral({
     `Conclusión: ${d.conclusion || "—"}`,
   ].join("\n");
 
+  // Avisa a DIL que hay un registral esperando su firma (tarea + campanita +
+  // push) y le manda una copia igual a Erika (DGE) para poder probar el
+  // flujo sin necesitar la cuenta real de Milton. `forzar=true` lo manda
+  // aunque ya exista una tarea pendiente (para el botón manual "Reenviar").
+  const avisarDIL = async (forzar: boolean) => {
+    try {
+      if (!forzar) {
+        const yaHayTarea = await fetch(
+          `${SUPABASE_URL}/rest/v1/tarea?select=id&expediente=eq.${encodeURIComponent(d.numeroCredito || "")}&titulo=ilike.*dictamen registral*&estado=neq.hecha&limit=1`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
+        ).then((r) => (r.ok ? r.json() : []));
+        if (yaHayTarea?.length) { setAvisoValidacion("📧 DIL ya tenía la validación pendiente — no se volvió a mandar (usa \"Reenviar\" si hace falta)."); return; }
+      }
+      const dilRows = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=nombre,correo&rol=eq.DIL&activo=eq.true&limit=1`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      }).then((r) => (r.ok ? r.json() : []));
+      const dil = dilRows?.[0];
+      if (!dil?.correo) { setAvisoValidacion("⚠️ No se encontró a DIL en colaboradores — avísale a mano."); return; }
+      const titulo = `Firmar (Valida) dictamen registral — ${d.acreditado || d.numeroCredito || ""}`;
+      const descripcion = `El dictamen registral (RPPC) quedó elaborado con resultado ${d.resultado}. Falta tu firma de validación.`;
+      const correoPruebas = "erikapaola@diipadesarrollos.com";
+      const tareaPara = (correo: string, nombre: string, rol: string) => fetch(`${SUPABASE_URL}/rest/v1/tarea`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "tarea",
+          titulo, descripcion, responsable_correo: correo, responsable_nombre: nombre, responsable_rol: rol,
+          estado: "pendiente", etapa: "URRJ · Registral",
+        }),
+      }).catch(() => {});
+      await Promise.all([
+        tareaPara(dil.correo, dil.nombre || "DIL", "DIL"),
+        crearNotificacion({ para: dil.correo, texto: `Falta tu firma (Valida) del dictamen registral — ${d.acreditado || d.numeroCredito || ""}`, enlace: "/urrj", importante: true, tipo: "firma" }).catch(() => {}),
+        ...(correoPruebas.toLowerCase() !== dil.correo.toLowerCase() ? [
+          tareaPara(correoPruebas, "Erika Paola (copia de prueba)", "DGE"),
+          crearNotificacion({ para: correoPruebas, texto: `(copia de prueba) Falta firma (Valida) del dictamen registral — ${d.acreditado || d.numeroCredito || ""}`, enlace: "/urrj", importante: true, tipo: "firma" }).catch(() => {}),
+        ] : []),
+      ]);
+      setAvisoValidacion(`📧 Se avisó a ${dil.nombre || "DIL"} (${dil.correo}) — y te llegó copia a ti para probar.`);
+    } catch { setAvisoValidacion("⚠️ No se pudo avisar, intenta de nuevo."); }
+  };
+
   const guardar = async () => {
     if (!d.resultado) { setGuardado("Falta elegir el RESULTADO (POSITIVO/NEGATIVO)."); return; }
     setGuardando(true); setGuardado(null);
@@ -380,52 +425,44 @@ export function DictamenRegistral({
 
         // Avisar a quien valida (DIL) que hay un dictamen registral esperando su
         // firma — antes esto no se avisaba a nadie y se quedaba invisible.
-        if (!firmaValida) {
-          try {
-            const yaHayTarea = await fetch(
-              `${SUPABASE_URL}/rest/v1/tarea?select=id&expediente=eq.${encodeURIComponent(d.numeroCredito || "")}&titulo=ilike.*dictamen registral*&estado=neq.hecha&limit=1`,
-              { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
-            ).then((r) => (r.ok ? r.json() : []));
-            if (yaHayTarea?.length) {
-              setAvisoValidacion("📧 DIL ya tenía la validación pendiente — no se volvió a mandar.");
-            } else {
-              const dilRows = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=nombre,correo&rol=eq.DIL&activo=eq.true&limit=1`, {
-                headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-              }).then((r) => (r.ok ? r.json() : []));
-              const dil = dilRows?.[0];
-              if (dil?.correo) {
-                await fetch(`${SUPABASE_URL}/rest/v1/tarea`, {
-                  method: "POST",
-                  headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "tarea",
-                    titulo: `Firmar (Valida) dictamen registral — ${d.acreditado || d.numeroCredito || ""}`,
-                    descripcion: `El dictamen registral (RPPC) quedó elaborado con resultado ${d.resultado}. Falta tu firma de validación.`,
-                    responsable_correo: dil.correo, responsable_nombre: dil.nombre || "DIL", responsable_rol: "DIL",
-                    estado: "pendiente", etapa: "URRJ · Registral",
-                  }),
-                }).catch(() => {});
-                crearNotificacion({
-                  para: dil.correo,
-                  texto: `Falta tu firma (Valida) del dictamen registral — ${d.acreditado || d.numeroCredito || ""}`,
-                  enlace: "/urrj",
-                  importante: true,
-                  tipo: "firma",
-                }).catch(() => {});
-                setAvisoValidacion(`📧 Se avisó a ${dil.nombre || "DIL"} (${dil.correo}) para validar.`);
-              } else {
-                setAvisoValidacion("⚠️ No se encontró a DIL en colaboradores — avísale a mano.");
-              }
-            }
-          } catch { /* si falla el aviso, no bloquea el guardado del dictamen */ }
-        } else {
-          setAvisoValidacion(null);
-        }
+        if (!firmaValida) { await avisarDIL(false); } else { setAvisoValidacion(null); }
       }
       else setGuardado("No se pudo guardar (¿corriste el SQL de dictamen_registral?).");
     } catch (e: any) {
       setGuardado("Error: " + (e?.message || ""));
     } finally { setGuardando(false); }
+  };
+
+  // Bloqueo de edición: en cuanto Elabora ya firmó, los campos quedan de
+  // solo lectura para todos salvo quien puede validar en este momento (DIL,
+  // o quien tenga ese permiso) — nadie se salta esto automáticamente.
+  const bloqueadoEdicionRegistral = !!firmaElabora?.fecha && !puedeValidar;
+  // Igual que en Jurídico: Super_Admin, DGE o DIL siempre pueden reabrirlo,
+  // sin necesitar autorización previa.
+  const puedeReabrirRegistral = ["DGE", "Super_Admin", "DIL"].includes(miRol);
+  const reabrirRegistral = async () => {
+    const ahora = new Date().toISOString();
+    const soyDIL = miRol === "DIL";
+    const nuevaFirmaElabora: DatosFirma = { nombre: nombreYo || miCorreo || miRol, cargo: miRol || "—", fecha: ahora, dibujo: null };
+    setFirmaElabora(nuevaFirmaElabora);
+    // Si quien reabre es DIL, su propia corrección ya cuenta como revisada
+    // (no hace falta que se re-valide a sí mismo). Si es DGE/Super_Admin,
+    // sí se limpia la firma de Valida — DIL tiene que volver a revisarlo.
+    if (!soyDIL) setFirmaValida(null);
+    setGuardado(null);
+    if (draftId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?id=eq.${draftId}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          terminado: false,
+          firma_elabora: nuevaFirmaElabora,
+          ...(soyDIL ? {} : { firma_valida: null }),
+        }),
+      }).catch(() => {});
+    }
+    registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "dictamen_rechazado", resultado: `Registral reabierto por ${miRol || miCorreo}`, detalle: soyDIL ? "Corrección de DIL, no necesita re-validación." : "Vuelve a necesitar la firma de Valida (DIL)." });
+    if (!soyDIL) await avisarDIL(true);
   };
 
   return (
@@ -451,6 +488,16 @@ export function DictamenRegistral({
         {estadoJuridicoTexto.ok ? "✅" : "⏳"} {estadoJuridicoTexto.texto}
       </p>
 
+      {bloqueadoEdicionRegistral && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+          <span>Solo lectura — ya está elaborado, le toca validar a DIL. Puedes ver todo lo capturado, pero no cambiarlo desde aquí.</span>
+          {puedeReabrirRegistral && (
+            <button onClick={reabrirRegistral} className="ml-auto flex items-center gap-1 rounded-md border border-amber-400 bg-white px-2 py-1 font-medium text-amber-800 hover:bg-amber-100">🔓 Reabrir para editar</button>
+          )}
+        </div>
+      )}
+      <div className={bloqueadoEdicionRegistral ? "pointer-events-none opacity-60 select-none space-y-4" : "space-y-4"} aria-hidden={bloqueadoEdicionRegistral || undefined}>
       <Bloque titulo="Verificación registral">
         <Campo label="Fecha de verificación"><input type="date" className={inp} value={d.fechaVerificacion} onChange={(e) => set("fechaVerificacion", e.target.value)} /></Campo>
         <Campo label="Número de crédito"><input className={inp} value={d.numeroCredito} onChange={(e) => set("numeroCredito", e.target.value)} /></Campo>
@@ -564,6 +611,7 @@ export function DictamenRegistral({
           ))}
         </div>
       </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora} />
@@ -574,8 +622,13 @@ export function DictamenRegistral({
         <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">
           {guardado?.includes("✓") ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar dictamen registral"}
         </button>
+        {!firmaValida && (
+          <button onClick={() => avisarDIL(true)} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
+            <Mail className="h-4 w-4" /> 📧 Mandar a validar (DIL)
+          </button>
+        )}
         {avisoValidacion && <span className="text-xs text-[color:var(--teal)]">{avisoValidacion}</span>}
-        <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-semibold hover:bg-muted">
+        <button onClick={async () => { const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf"); await descargarPredictamenPDF(construirDatosPDF(), "ver"); }} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-semibold hover:bg-muted">
           <Printer className="h-4 w-4" /> Imprimir
         </button>
         {juridico && (
