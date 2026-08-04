@@ -61,10 +61,11 @@ function Firmar() {
         if (s.rechazado) setYaRechazado(true);
 
         const proms: Promise<any>[] = [
-          fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${s.caso_id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])),
+          s.caso_id ? fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?select=*&id=eq.${s.caso_id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])) : Promise.resolve([]),
         ];
         if (s.dictamen_id) proms.push(fetch(`${SUPABASE_URL}/rest/v1/dictamen?select=*&id=eq.${s.dictamen_id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])));
         else if (s.predictamen_id) proms.push(fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=*&id=eq.${s.predictamen_id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])));
+        else if (s.registral_id) proms.push(fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=*&id=eq.${s.registral_id}&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])));
         else proms.push(Promise.resolve([]));
         const [cres, dres] = await Promise.all(proms);
         setCaso(cres?.[0] || null);
@@ -111,6 +112,15 @@ function Firmar() {
           });
           setSiguienteInfo(av);
         }
+      } else if (sol.registral_id) {
+        // URRJ · Registral: solo dos firmas — Elabora y Valida (DIL). No hay
+        // más etapas que encadenar después de Valida.
+        const campo = sol.slot === "elabora" ? "firma_elabora" : "firma_valida";
+        const r1 = await fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?id=eq.${dict.id}`, {
+          method: "PATCH", headers, body: JSON.stringify({ [campo]: f, terminado: true }),
+        });
+        if (!r1.ok) throw new Error(`dictamen_registral ${r1.status}`);
+        setDict({ ...dict, [campo]: f });
       }
       await fetch(`${SUPABASE_URL}/rest/v1/firma_solicitud?token=eq.${encodeURIComponent(token)}`, {
         method: "PATCH", headers, body: JSON.stringify({ firmado: true, firmado_por: correo, firmado_at: new Date().toISOString() }),
@@ -189,6 +199,7 @@ function Firmar() {
   }
 
   const esURRJ = !!sol?.predictamen_id;
+  const esRegistral = !!sol?.registral_id;
   const titulo = TITULO_ETAPA[sol?.slot] || SLOT_TITULO[sol?.slot] || sol?.slot || "Firma";
   const vReg = typeof dict?.registral?.veredicto === "string" ? dict.registral.veredicto : "—";
   const COLUMNA_URRJ: Record<string, string> = { elabora: "firma_elabora", dil: "firma_dil", ucm: "firma_ucm", dge: "firma_dge" };
@@ -198,6 +209,8 @@ function Firmar() {
         const nombre = dict?.[campo];
         return nombre ? { nombre, cargo: "", fecha: dict?.[campo + "_fecha"] || "", dibujo: null } : null;
       })()
+    : esRegistral
+    ? (dict?.[sol?.slot === "elabora" ? "firma_elabora" : "firma_valida"] || null)
     : (dict?.firmas?.[sol?.slot] || null);
 
   if (yaRechazado) return (
@@ -217,7 +230,7 @@ function Firmar() {
   return (
     <Wrap>
       <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${AZUL})` }}>
-        <p className="text-xs uppercase tracking-wide text-white/60">Firma / validación de dictamen · {esURRJ ? "URRJ" : sol?.area === "UCM" ? "UCM" : "UCP"}</p>
+        <p className="text-xs uppercase tracking-wide text-white/60">Firma / validación de dictamen · {esURRJ ? "URRJ" : esRegistral ? "URRJ · Registral" : sol?.area === "UCM" ? "UCM" : "UCP"}</p>
         <p className="text-xl font-bold">{caso?.expediente || "Sin expediente"}</p>
         <p className="text-sm text-white/80">{caso?.direccion_garantia || caso?.cliente_nombre || "—"}</p>
       </div>
