@@ -55,6 +55,10 @@ export interface Tarea {
   fecha_limite: string | null; estado: string; evidencia_url: string | null;
   creado_por: string | null; created_at: string;
   etapa?: string | null; orden_etapa?: number | null; nota_cierre?: string | null;
+  // Enlace real al documento que resolvió la tarea (no una copia, la misma fila
+  // que vive en la Carpeta de Drive / Documentos). Se llena al "Elaborar" con archivo.
+  documento_id?: string | null;
+  documento?: { nombre: string | null; link: string | null; drive_id: string | null } | null;
 }
 interface Colaborador { id: string; nombre: string; rol: string | null; correo: string | null; }
 
@@ -78,8 +82,9 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
 
   const cargarTareas = () => {
     if (!exp) { setTareas([]); setPapelera([]); return; }
-    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&estado=neq.papelera&order=estado.desc,created_at.desc`).then(setTareas).catch(() => setTareas([]));
-    sbSelect<Tarea>("tarea", `select=*&expediente=eq.${encodeURIComponent(exp)}&estado=eq.papelera&order=created_at.desc`).then(setPapelera).catch(() => setPapelera([]));
+    const selectConDoc = "select=*,documento:documento_garantia!documento_id(nombre,link,drive_id)";
+    sbSelect<Tarea>("tarea", `${selectConDoc}&expediente=eq.${encodeURIComponent(exp)}&estado=neq.papelera&order=estado.desc,created_at.desc`).then(setTareas).catch(() => setTareas([]));
+    sbSelect<Tarea>("tarea", `${selectConDoc}&expediente=eq.${encodeURIComponent(exp)}&estado=eq.papelera&order=created_at.desc`).then(setPapelera).catch(() => setPapelera([]));
   };
   useEffect(() => {
     cargarTareas();
@@ -206,6 +211,9 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
                           {t.fecha_limite && !esEvid ? ` · vence ${fmt(t.fecha_limite)}` : ""}
                         </p>
                         {esEvid && t.evidencia_url && <BotonVerDoc url={t.evidencia_url} nombre="Evidencia" label="ver evidencia" className="text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />}
+                        {hecha && t.documento && (
+                          <BotonVerDoc url={t.documento.link || ""} driveId={t.documento.drive_id} nombre={t.documento.nombre} label={`ver documento${t.documento.nombre ? `: ${t.documento.nombre}` : ""}`} className="mt-1 text-[11px] text-[color:var(--teal)] hover:underline inline-flex items-center gap-1" />
+                        )}
                       </div>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${esEvid ? "bg-muted text-muted-foreground" : hecha ? "bg-emerald-100 text-emerald-800" : enProceso ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"}`}>{esEvid ? "evidencia" : hecha ? "hecha" : enProceso ? "en curso" : "tarea"}</span>
                       {!esEvid && (
@@ -257,6 +265,7 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
             setTareas((p) => p.map((x) => (x.id === cerrarTarea.id ? { ...x, estado: nuevoEstado, nota_cierre: notaCierre ?? x.nota_cierre } : x)));
             sincronizarEventoDeTarea({ ...cerrarTarea, estado: nuevoEstado });
             setCerrarTarea(null);
+            cargarTareas(); // vuelve a traer con el documento enlazado (join a documento_garantia)
           }}
         />
       )}
@@ -411,6 +420,9 @@ function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea;
   const [archivos, setArchivos] = useState<File[]>([]);
   const [subiendo, setSubiendo] = useState(false);
   const [subidos, setSubidos] = useState<string[]>([]);
+  // id real del documento en documento_garantia — es la liga que se guarda en
+  // tarea.documento_id (Paso 2). Si se suben varios, se queda con el último.
+  const [documentoIdSubido, setDocumentoIdSubido] = useState<string | null>(tarea.documento_id ?? null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -424,8 +436,10 @@ function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea;
         if (r.ok && r.doc?.id && tarea.etapa) {
           await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${r.doc.id}`, { method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify({ etapa: tarea.etapa }) });
         }
-        if (r.ok) setSubidos((p) => [...p, f.name]);
-        else setError(`No se pudo subir "${f.name}": ${r.error || "error desconocido"}`);
+        if (r.ok) {
+          setSubidos((p) => [...p, f.name]);
+          if (r.doc?.id) setDocumentoIdSubido(r.doc.id); // liga real, no solo el nombre en texto
+        } else setError(`No se pudo subir "${f.name}": ${r.error || "error desconocido"}`);
       }
       setArchivos([]);
     } finally { setSubiendo(false); }
@@ -439,7 +453,10 @@ function ElaborarTareaModal({ tarea, caso, onClose, onCerrada }: { tarea: Tarea;
     const nuevoEstado = comoQueda === "avance" ? "en_proceso" : "hecha";
     try {
       const cambios: Record<string, unknown> = { estado: nuevoEstado, updated_at: new Date().toISOString() };
-      if (nuevoEstado === "hecha") cambios.nota_cierre = notaCompleta;
+      if (nuevoEstado === "hecha") {
+        cambios.nota_cierre = notaCompleta;
+        if (documentoIdSubido) cambios.documento_id = documentoIdSubido; // Paso 2: enlace real tarea → documento
+      }
       const r = await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${tarea.id}`, {
         method: "PATCH", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify(cambios),
       });
