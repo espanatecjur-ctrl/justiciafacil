@@ -16,7 +16,7 @@ import { subirDocPredictamen } from "@/lib/solicitud-predictamen";
 import { generarResumenIA, guardarResumenEnCache } from "@/lib/resumen-documentos";
 import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import { enviarCorreo } from "@/lib/enviar-correo";
-import { nombreActual } from "@/lib/auth";
+import { nombreActual, correoActual, rolActual } from "@/lib/auth";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
   calculoFinanciero, calculoFinancieroUDIS, type ResultadoMotor, type Semaforo,
@@ -82,6 +82,10 @@ interface Datos {
   // H7 firmas
   firmaElabora: string; firmaValida: string;
   anotacionesHumanas: string;
+  // Bloqueo tras decidir/firmar — quién decidió, y a quién se le autorizó
+  // re-dictaminar (delegación en cadena: Elabora habilita a DIL, DIL a UCM,
+  // UCM a DGE — DGE siempre puede, sin que nadie se lo autorice).
+  decididoPor: string; redictaminarAutorizadoPara: string;
 }
 
 const VACIO: Datos = {
@@ -101,6 +105,7 @@ const VACIO: Datos = {
   supuestoIntereses: "formula", udiSaldoInsoluto: "", udiInteresesOrd: "", udiComisionCobertura: "", udiComisionAdmon: "", udiOtros: "",
   firmaElabora: "", firmaValida: "",
   anotacionesHumanas: "",
+  decididoPor: "", redictaminarAutorizadoPara: "",
 };
 
 const n = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v; };
@@ -185,6 +190,9 @@ export function RecorridoActor({
   const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
   const primerRenderProgreso = useRef(true);
   const [precio, setPrecio] = useState<PrecioURRJ>(PRECIO_VACIO);
+  const [miCorreo, setMiCorreo] = useState("");
+  const [miRol, setMiRol] = useState("");
+  useEffect(() => { correoActual().then((c) => setMiCorreo((c || "").toLowerCase())).catch(() => {}); rolActual().then(setMiRol).catch(() => {}); }, []);
   // Autoguardado EN VIVO: cada vez que cambia cualquier campo del formulario
   // (cualquier fase), se guarda solo unos segundos después de dejar de
   // escribir — así no se manda una petición por cada tecla, pero nada se
@@ -290,13 +298,20 @@ export function RecorridoActor({
     if (etapa === "ucm") setFirmaUCM(null);
     if (etapa === "dge") setFirmaDGE(null);
     setRechazoInfo({ motivo, fecha: new Date().toISOString(), etapa });
-    if (!borradorIdLocal) { setEtapaFirma("elabora"); setFirmaElabora(null); return; }
+    // Deja registro en la cronología del expediente de por qué se devolvió —
+    // se ve en "Línea de avance" / actuaciones, no solo en el aviso amarillo.
+    registrarEvento({
+      caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "dictamen_rechazado",
+      resultado: `Devuelto por ${TITULO_ETAPA[etapa]}`, detalle: motivo,
+    });
+    if (!borradorIdLocal) { setEtapaFirma("elabora"); return; }
     const rb = await rechazarYRetroceder({
       predictamenId: borradorIdLocal, casoId: d.caso_id || "", expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
       etapaQueRechaza: etapa, motivo,
     });
     setEtapaFirma(rb.anterior);
-    if (rb.anterior === "elabora") { setFirmaElabora(null); setFirmaValida(null); }
+    // Al regresar a Elabora, la firma de quien elaboró NO se borra — solo
+    // corrige lo que falló y lo vuelve a mandar, sin tener que volver a firmar.
     if (rb.anterior === "dil") setFirmaValida(null);
     if (rb.anterior === "ucm") setFirmaUCM(null);
   };
@@ -699,10 +714,13 @@ export function RecorridoActor({
       const ex = await buscarPredictamenVigente(d.expediente, d.caso_id);
       if (ex) { setYaExiste(ex); setGuardando(false); return; }
     }
+    const correo = miCorreo || (await correoActual().catch(() => "")) || "";
+    const dConDecisor: Datos = { ...d, decididoPor: correo, redictaminarAutorizadoPara: "" };
+    setD(dConDecisor);
     const payload = {
       caso_id: d.caso_id || null, expediente: d.expediente || null, juzgado: d.juzgado || null, estado: d.estado,
       tipo_juicio: d.tipoJuicio, posicion: d.posicion,
-      datos: d,
+      datos: dConDecisor,
       resultados: { prescripcion: rPresc, caducidad: rCaduc, usucapion: usaUsucapion ? rUsuc : null, financiero: fin, firmas: { elabora: firmaElabora, valida: firmaValida } },
       dictamen_sugerido: dictamen.txt, dictamen_final: decision,
       firma_elabora: firmaElabora?.nombre || null, firma_elabora_fecha: firmaElabora?.fecha || null,
@@ -759,6 +777,23 @@ export function RecorridoActor({
   const dosFirmas = !!firmaElabora;
   const cadenaCompleta = !!(firmaElabora && firmaValida && firmaUCM);
   const decidido = !!guardado && guardado.startsWith("Pre-dictamen guardado");
+  // Una vez decidido/firmado, solo puede volver a abrirlo (re-dictaminar):
+  // quien lo decidió, DGE/Super_Admin (siempre), o a quien se le haya
+  // autorizado explícitamente en cadena (Elabora habilita a DIL, DIL a UCM,
+  // UCM a DGE — aunque DGE de por sí siempre puede, sin que nadie lo autorice).
+  const puedeRedictaminar = miRol === "DGE" || miRol === "Super_Admin"
+    || (!!d.decididoPor && miCorreo === d.decididoPor.toLowerCase())
+    || (!!d.redictaminarAutorizadoPara && miRol === d.redictaminarAutorizadoPara);
+  const autorizarRedictaminar = async (rol: string) => {
+    setD((p) => ({ ...p, redictaminarAutorizadoPara: rol }));
+    if (borradorIdLocal) {
+      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${borradorIdLocal}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ datos: { ...d, redictaminarAutorizadoPara: rol } }),
+      }).catch(() => {});
+    }
+  };
 
   const checarExiste = async (exp?: string | null, caso?: string | null) => {
     if (precargar) return; // en re-dictaminar no aplica
@@ -1387,12 +1422,27 @@ export function RecorridoActor({
             <div className="flex flex-wrap gap-2">
               <button onClick={() => guardar("Sí pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> {cadenaCompleta ? "✓ Lista para publicar — Sí pasa" : "Sí pasa"}</button>
               <button onClick={() => guardar("No pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
-              {decidido && (
+              {decidido && puedeRedictaminar && (
                 <button onClick={() => setGuardado(null)} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Re-pre-dictaminar</button>
               )}
             </div>
             {decidido && (
-              <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><Lock className="h-3.5 w-3.5" /> Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”.</p>
+              <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <Lock className="h-3.5 w-3.5" />
+                {puedeRedictaminar
+                  ? "Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Re-pre-dictaminar”."
+                  : "Pre-dictamen bloqueado y firmado. Solo quien lo decidió o DGE puede reabrirlo — para todos los demás, es de solo lectura (ver y descargar PDF)."}
+              </p>
+            )}
+            {decidido && puedeRedictaminar && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs">
+                <span className="text-muted-foreground">Autorizar que la siguiente persona en la cadena también pueda re-dictaminar, si hiciera falta:</span>
+                {(["DIL", "UCM", "DGE"] as const).map((rol) => (
+                  <button key={rol} onClick={() => autorizarRedictaminar(rol)} className={`rounded-md border px-2 py-1 font-medium ${d.redictaminarAutorizadoPara === rol ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input hover:bg-muted"}`}>
+                    {d.redictaminarAutorizadoPara === rol ? "✓ " : ""}{rol}
+                  </button>
+                ))}
+              </div>
             )}
             {decidido && !/no pasa/i.test(guardado || "") && (
               <Link to="/urrj" search={{ registral: true, exp: d.expediente || "", cliente: d.deudor || "", caso: d.caso_id || "" } as any} className="inline-flex w-fit items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0B1E3A" }}>
