@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { type Precarga, type PredictamenExistente, buscarPredictamenPorCredito, guardarBorrador, actualizarBorrador, descartarBorrador, sincronizarSolicitud, guardarDatosBasicos } from "@/lib/predictamen-guardar";
+import { rolActual } from "@/lib/auth";
 import { Scale, Bot } from "lucide-react";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { RecorridoActor, type ResultadosActor } from "@/components/recorrido-actor";
@@ -93,6 +94,15 @@ export function DictaminadorPosicion({
   const [borradorGuardado, setBorradorGuardado] = useState(false);
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [datosGuardadosEn, setDatosGuardadosEn] = useState<number | null>(null);
+  // Una vez guardados, los "Datos básicos de la garantía" quedan bloqueados
+  // — solo DGE o Super_Admin (el rol se consulta directo en Supabase, tabla
+  // colaboradores/perfil_usuario, no se asume nada del lado del navegador)
+  // pueden habilitarlos de nuevo para editarlos.
+  const [miRolBasicos, setMiRolBasicos] = useState("");
+  useEffect(() => { rolActual().then(setMiRolBasicos).catch(() => {}); }, []);
+  const [datosBasicosDesbloqueados, setDatosBasicosDesbloqueados] = useState(false);
+  const puedeHabilitarDatosBasicos = miRolBasicos === "DGE" || miRolBasicos === "Super_Admin";
+  const datosBasicosBloqueados = borradorGuardado && !datosBasicosDesbloqueados;
   // Clave para el candado compartido: usa lo primero que haya disponible
   // (crédito, expediente, o el id de la solicitud) — así dos instancias
   // trabajando el MISMO caso comparten la misma espera, sin importar si
@@ -318,23 +328,31 @@ export function DictaminadorPosicion({
           {!datosDetectadosIA && !!precargar?.datos && (precargar.datos.numeroCredito || precargar.datos.quienCede || precargar.datos.ubicacion) && (
             <p className="mb-2 text-[11px] font-medium text-[color:var(--teal)]">🔄 Recuperado de lo que ya se había guardado antes — revisa y valida.</p>
           )}
+          {datosBasicosBloqueados && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              🔒 Ya se guardaron estos datos — quedan de solo lectura.
+              {puedeHabilitarDatosBasicos && (
+                <button type="button" onClick={() => setDatosBasicosDesbloqueados(true)} className="ml-auto rounded-md border border-amber-400 bg-white px-2 py-1 font-medium text-amber-800 hover:bg-amber-100">🔓 Habilitar edición</button>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium">Administradora / banco</label>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={administradoraIni} onChange={(e) => setAdministradoraIni(e.target.value)} onBlur={guardarDatos} placeholder="Ej. Pendulum, Zendere…" />
+              <input disabled={datosBasicosBloqueados} className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60" value={administradoraIni} onChange={(e) => setAdministradoraIni(e.target.value)} onBlur={guardarDatos} placeholder="Ej. Pendulum, Zendere…" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Número de crédito</label>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={numeroCreditoIni} onChange={(e) => setNumeroCreditoIni(e.target.value)} onBlur={revisarCredito} placeholder="No es el expediente" />
+              <input disabled={datosBasicosBloqueados} className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60" value={numeroCreditoIni} onChange={(e) => setNumeroCreditoIni(e.target.value)} onBlur={revisarCredito} placeholder="No es el expediente" />
               {revisandoCredito && <p className="mt-1 text-[11px] text-muted-foreground">Revisando si ya existe…</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium">Dirección de la garantía</label>
-              <input className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm" value={direccionIni} onChange={(e) => setDireccionIni(e.target.value)} onBlur={guardarDatos} />
+              <input disabled={datosBasicosBloqueados} className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60" value={direccionIni} onChange={(e) => setDireccionIni(e.target.value)} onBlur={guardarDatos} />
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <button type="button" onClick={guardarDatos} disabled={guardandoDatos}
+            <button type="button" onClick={guardarDatos} disabled={guardandoDatos || datosBasicosBloqueados}
               className="inline-flex items-center gap-1.5 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
               {guardandoDatos ? "Guardando…" : borradorGuardado ? "✏️ Editar y validar datos" : "💾 Guardar datos básicos"}
             </button>
