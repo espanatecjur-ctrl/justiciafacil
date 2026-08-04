@@ -16,6 +16,7 @@ import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, Shield
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { reflejarDictamen } from "@/lib/recorrido";
+import { nombreActual } from "@/lib/auth";
 import { obtenerAnalisisCacheado, claveAnalisis } from "@/lib/analisis-ia";
 import type { DatosPDF } from "@/lib/predictamen-pdf";
 
@@ -91,11 +92,14 @@ export function DictamenRegistral({
 
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState<string | null>(null);
+  const [avisoValidacion, setAvisoValidacion] = useState<string | null>(null);
   // Autoguardado EN VIVO del avance (borrador con resultado=null, terminado=false)
   // — independiente del guardado final (que exige elegir RESULTADO). Así no se
   // pierde nada si se cierra a medias, y el guardado final de más abajo, si ya
   // hay un draft, lo actualiza en vez de crear una fila repetida.
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [nombreYo, setNombreYo] = useState("");
+  useEffect(() => { nombreActual().then((n) => setNombreYo(n?.nombre || "")).catch(() => {}); }, []);
   const [guardandoProgreso, setGuardandoProgreso] = useState(false);
   const [progresoGuardadoEn, setProgresoGuardadoEn] = useState<number | null>(null);
   const primerRenderProgreso = useRef(true);
@@ -382,7 +386,9 @@ export function DictamenRegistral({
               `${SUPABASE_URL}/rest/v1/tarea?select=id&expediente=eq.${encodeURIComponent(d.numeroCredito || "")}&titulo=ilike.*dictamen registral*&estado=neq.hecha&limit=1`,
               { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } },
             ).then((r) => (r.ok ? r.json() : []));
-            if (!yaHayTarea?.length) {
+            if (yaHayTarea?.length) {
+              setAvisoValidacion("📧 DIL ya tenía la validación pendiente — no se volvió a mandar.");
+            } else {
               const dilRows = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=nombre,correo&rol=eq.DIL&activo=eq.true&limit=1`, {
                 headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
               }).then((r) => (r.ok ? r.json() : []));
@@ -406,9 +412,14 @@ export function DictamenRegistral({
                   importante: true,
                   tipo: "firma",
                 }).catch(() => {});
+                setAvisoValidacion(`📧 Se avisó a ${dil.nombre || "DIL"} (${dil.correo}) para validar.`);
+              } else {
+                setAvisoValidacion("⚠️ No se encontró a DIL en colaboradores — avísale a mano.");
               }
             }
           } catch { /* si falla el aviso, no bloquea el guardado del dictamen */ }
+        } else {
+          setAvisoValidacion(null);
         }
       }
       else setGuardado("No se pudo guardar (¿corriste el SQL de dictamen_registral?).");
@@ -555,7 +566,7 @@ export function DictamenRegistral({
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora} />
+        <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora} />
         <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
       </div>
 
@@ -563,6 +574,7 @@ export function DictamenRegistral({
         <button onClick={guardar} disabled={guardando} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60">
           {guardado?.includes("✓") ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar dictamen registral"}
         </button>
+        {avisoValidacion && <span className="text-xs text-[color:var(--teal)]">{avisoValidacion}</span>}
         <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-semibold hover:bg-muted">
           <Printer className="h-4 w-4" /> Imprimir
         </button>
