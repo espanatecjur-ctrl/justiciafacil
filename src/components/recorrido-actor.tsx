@@ -18,7 +18,7 @@ import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import { enviarCorreo } from "@/lib/enviar-correo";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
-  calculoFinanciero, viabilidad, type ResultadoMotor, type Semaforo,
+  calculoFinanciero, calculoFinancieroUDIS, viabilidad, type ResultadoMotor, type Semaforo,
 } from "@/lib/urrj-motores";
 import {
   ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
@@ -80,6 +80,7 @@ interface Datos {
   predial: string; agua: string; condominio: string; fiscales: string; laborales: string; otrosGravamenes: string;
   // H6 financiero/viabilidad
   capital: string; tasaOrd: string; tasaMor: string; dias: string; aplicarIVA: string; gastos: string; valorUDI: string; fechaCorte: string;
+  supuestoIntereses: string; udiSaldoInsoluto: string; udiInteresesOrd: string; udiComisionCobertura: string; udiComisionAdmon: string; udiOtros: string;
   valorComercial: string; precioCesion: string; costosOperativos: string; margenObjetivo: string;
   // H7 firmas
   firmaElabora: string; firmaValida: string;
@@ -101,6 +102,7 @@ const VACIO: Datos = {
   interpelacionTipo: "", interpelacionExpediente: "", interpelacionJuzgado: "",
   predial: "", agua: "", condominio: "", fiscales: "", laborales: "", otrosGravamenes: "",
   capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "", fechaCorte: "",
+  supuestoIntereses: "formula", udiSaldoInsoluto: "", udiInteresesOrd: "", udiComisionCobertura: "", udiComisionAdmon: "", udiOtros: "",
   valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
   firmaElabora: "", firmaValida: "",
   anotacionesHumanas: "",
@@ -627,10 +629,19 @@ export function RecorridoActor({
     dato: d.interpelacionExpediente ? `exp. ${d.interpelacionExpediente}` : undefined,
     detalle: `${d.interpelacionTipo || "Interpelación judicial"}${d.interpelacionJVFecha ? ` notificada el ${d.interpelacionJVFecha}` : ""}. Interrumpe la prescripción y la usucapión (Art. 1168 CCF).`,
   } : null;
-  const fin = useMemo(() => calculoFinanciero({
-    capital: n(d.capital), tasaOrdinariaAnual: n(d.tasaOrd), tasaMoratoriaAnual: n(d.tasaMor),
-    dias: n(d.dias), aplicarIVA: d.aplicarIVA === "si", gastos: n(d.gastos), valorUDI: n(d.valorUDI) || undefined,
-  }), [d.capital, d.tasaOrd, d.tasaMor, d.dias, d.aplicarIVA, d.gastos, d.valorUDI]);
+  const fin = useMemo(() => {
+    if (d.supuestoIntereses === "udis") {
+      return calculoFinancieroUDIS({
+        saldoInsolutoUDIS: n(d.udiSaldoInsoluto), interesesOrdinariosUDIS: n(d.udiInteresesOrd),
+        comisionCoberturaUDIS: n(d.udiComisionCobertura), comisionAdmonUDIS: n(d.udiComisionAdmon),
+        otrosUDIS: n(d.udiOtros), valorUDI: n(d.valorUDI), gastos: n(d.gastos), aplicarIVA: d.aplicarIVA === "si",
+      }) as unknown as ReturnType<typeof calculoFinanciero>;
+    }
+    return calculoFinanciero({
+      capital: n(d.capital), tasaOrdinariaAnual: n(d.tasaOrd), tasaMoratoriaAnual: n(d.tasaMor),
+      dias: n(d.dias), aplicarIVA: d.aplicarIVA === "si", gastos: n(d.gastos), valorUDI: n(d.valorUDI) || undefined,
+    });
+  }, [d.supuestoIntereses, d.capital, d.tasaOrd, d.tasaMor, d.dias, d.aplicarIVA, d.gastos, d.valorUDI, d.udiSaldoInsoluto, d.udiInteresesOrd, d.udiComisionCobertura, d.udiComisionAdmon, d.udiOtros]);
   const adeudoTotal = fin.totalDeuda;
   const rViab = useMemo(() => viabilidad(n(d.valorComercial), adeudoTotal, cargas + n(d.costosOperativos), n(d.precioCesion), n(d.margenObjetivo)),
     [d.valorComercial, adeudoTotal, cargas, d.costosOperativos, d.precioCesion, d.margenObjetivo]);
@@ -1263,6 +1274,27 @@ export function RecorridoActor({
         {paso === 5 && (
           <div className="space-y-4">
             <H titulo="5 · Cálculo de intereses" sub="Solo intereses de la deuda. La valuación y el precio los hace Administración." />
+            <Campo label="Supuesto de cálculo">
+              <select className={inp} value={d.supuestoIntereses} onChange={(e) => set("supuestoIntereses", e.target.value)}>
+                <option value="formula">Fórmula (capital + tasas + días)</option>
+                <option value="udis">Estado de cuenta ya certificado en UDIS (INFONAVIT, cofinanciamientos)</option>
+              </select>
+            </Campo>
+            {d.supuestoIntereses === "udis" ? (
+              <>
+                <p className="text-xs font-medium text-muted-foreground">Montos EN UDIS tal como los certificó el contador en el Estado de Adeudo — el sistema solo los convierte a pesos con el Valor UDI que captures.</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Campo label="Saldo insoluto (UDIS)"><input type="number" className={inp} value={d.udiSaldoInsoluto} onChange={(e) => set("udiSaldoInsoluto", e.target.value)} /></Campo>
+                  <Campo label="Intereses ordinarios (UDIS)"><input type="number" className={inp} value={d.udiInteresesOrd} onChange={(e) => set("udiInteresesOrd", e.target.value)} /></Campo>
+                  <Campo label="Comisión por cobertura (UDIS)"><input type="number" className={inp} value={d.udiComisionCobertura} onChange={(e) => set("udiComisionCobertura", e.target.value)} /></Campo>
+                  <Campo label="Comisión por admón. y seguros (UDIS)"><input type="number" className={inp} value={d.udiComisionAdmon} onChange={(e) => set("udiComisionAdmon", e.target.value)} /></Campo>
+                  <Campo label="Otros conceptos (UDIS, opcional)"><input type="number" className={inp} value={d.udiOtros} onChange={(e) => set("udiOtros", e.target.value)} /></Campo>
+                  <Campo label="Valor UDI a la fecha del corte"><input type="number" step="0.000001" className={inp} value={d.valorUDI} onChange={(e) => set("valorUDI", e.target.value)} /></Campo>
+                  <Campo label="Gastos y costas (en pesos, aparte)"><input type="number" className={inp} value={d.gastos} onChange={(e) => set("gastos", e.target.value)} /></Campo>
+                  <Campo label="¿Aplicar IVA 16% a intereses?"><SiNo v={d.aplicarIVA} on={(x) => set("aplicarIVA", x)} /></Campo>
+                </div>
+              </>
+            ) : (<>
             <p className="text-xs font-medium text-muted-foreground">Cálculo de la deuda (año comercial 360 días, Art. 362 CCom)</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Campo label="Capital"><input type="number" className={inp} value={d.capital} onChange={(e) => set("capital", e.target.value)} /></Campo>
@@ -1276,11 +1308,12 @@ export function RecorridoActor({
               <Campo label="Valor UDI (opcional)"><input type="number" className={inp} value={d.valorUDI} onChange={(e) => set("valorUDI", e.target.value)} /></Campo>
             </div>
             <p className="text-[11px] text-muted-foreground">Los <b>días de cómputo</b> se calculan solos: de la <b>fecha del último pago</b> a la <b>fecha de corte</b> (por defecto hoy). Cambia la fecha de corte para calcular a otra fecha, o edita los días a mano.</p>
+            </>)}
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm space-y-0.5">
               <div>Intereses ordinarios: <b>{fmt(fin.ordinarios)}</b></div>
-              <div>Intereses moratorios: <b>{fmt(fin.moratorios)}</b></div>
+              {d.supuestoIntereses !== "udis" && <div>Intereses moratorios: <b>{fmt(fin.moratorios)}</b></div>}
               {fin.iva > 0 && <div>IVA: <b>{fmt(fin.iva)}</b></div>}
-              <div>Total deuda: <b>{fmt(fin.totalDeuda)}</b>{fin.udis ? <span className="text-muted-foreground"> · {fin.udis.toLocaleString("es-MX", { maximumFractionDigits: 0 })} UDIs</span> : null}</div>
+              <div>Total deuda: <b>{fmt(fin.totalDeuda)}</b>{fin.udis ? <span className="text-muted-foreground"> · {fin.udis.toLocaleString("es-MX", { maximumFractionDigits: 2 })} UDIs</span> : null}</div>
               {fin.alertaUsura && <div className="text-red-700 font-medium">⚠ Posible usura: la tasa moratoria está muy alta.</div>}
             </div>
             <p className="text-xs text-muted-foreground">La valuación, costos y precio de cesión se llenan en la sección de <b>Administración</b> (al final), solo para los roles autorizados.</p>
