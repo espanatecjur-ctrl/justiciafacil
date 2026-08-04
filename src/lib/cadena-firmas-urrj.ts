@@ -84,6 +84,24 @@ export async function mandarAEtapa(params: {
     tituloSlot: TITULO_ETAPA[params.etapa] + (params.motivoRechazoPrevio ? " (corrección solicitada)" : ""),
     expedienteTexto: params.expedienteTexto,
   });
+  // Copia para pruebas: cuando la etapa es DIL o UCM, además de mandársela a
+  // quien le toca, se le manda una copia a Erika (DGE) con su propio correo
+  // en el campo esperado — así puede firmar/validar ella misma para probar
+  // el flujo completo, sin necesitar la cuenta real de Milton/Primitivo.
+  if (params.etapa === "dil" || params.etapa === "ucm") {
+    const correoPruebas = "erikapaola@diipadesarrollos.com";
+    if (correoPruebas.toLowerCase() !== correo.toLowerCase()) {
+      await crearYEnviarSolicitudFirma({
+        area: "URRJ",
+        predictamenId: params.predictamenId,
+        casoId: params.casoId,
+        slot: params.etapa,
+        correoEsperado: correoPruebas,
+        tituloSlot: TITULO_ETAPA[params.etapa] + " (copia de prueba)",
+        expedienteTexto: params.expedienteTexto,
+      }).catch(() => {});
+    }
+  }
   return { ...r, correo };
 }
 
