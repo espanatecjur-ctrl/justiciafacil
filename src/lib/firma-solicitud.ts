@@ -8,6 +8,7 @@
 // ============================================================
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { enviarGmail } from "@/lib/enviar-gmail";
+import { crearNotificacion } from "@/lib/notificaciones";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
@@ -56,6 +57,15 @@ export async function crearYEnviarSolicitudFirma(input: CrearSolicitudInput): Pr
       enviado = r.ok;
       if (!r.ok) window.location.href = `mailto:${input.correoEsperado}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
     }
+    // Aviso IMPORTANTE en la campanita (+ push con vibración fuerte si la
+    // persona activó las notificaciones) — así no depende solo del correo.
+    crearNotificacion({
+      para: input.correoEsperado,
+      texto: `Falta tu firma/validación (${input.tituloSlot}) — ${input.expedienteTexto}`,
+      enlace: `/firmar?token=${row.token}`,
+      importante: true,
+      tipo: "firma",
+    }).catch(() => {});
     return { ok: true, link, enviado };
   } catch (e: any) {
     return { ok: false, error: String(e?.message || e) };
