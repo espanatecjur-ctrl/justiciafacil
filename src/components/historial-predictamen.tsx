@@ -18,6 +18,8 @@ export interface Fila {
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
   datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number; terminado?: boolean;
   abogado_id?: string | null; abogado_nombre?: string | null; caso_id?: string | null;
+  firma_elabora?: string | null; firma_dil?: string | null; firma_valida?: string | null;
+  firma_ucm?: string | null; firma_dge?: string | null; etapa_firma?: string | null;
 }
 
 const POS_COLOR: Record<string, string> = {
@@ -40,6 +42,17 @@ function situacion(f: Fila): { label: string; cls: string } {
 }
 function semColor(s: Semaforo) {
   return s === "verde" ? "#0C5C46" : s === "amarillo" ? "#C2A24C" : s === "naranja" ? "#D97706" : s === "rojo" ? "#DC2626" : "#9CA3AF";
+}
+function firmasBadge(f: Fila): { letra: string; hecha: boolean; activa: boolean }[] {
+  const etapa = f.etapa_firma || "elabora";
+  const dilFirmado = !!(f.firma_dil || f.firma_valida);
+  const pasos: { clave: string; letra: string; hecha: boolean }[] = [
+    { clave: "elabora", letra: "E", hecha: !!f.firma_elabora },
+    { clave: "dil", letra: "D", hecha: dilFirmado },
+    { clave: "ucm", letra: "U", hecha: !!f.firma_ucm },
+  ];
+  if (f.dictamen_final || f.firma_dge) pasos.push({ clave: "dge", letra: "G", hecha: !!f.firma_dge });
+  return pasos.map((p) => ({ ...p, activa: p.clave === etapa && !p.hecha }));
 }
 
 export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, onVerFichaVieja }: { onReDictaminar?: (f: Fila) => void; onReDictaminarRegistral?: (f: Fila) => void; onVerFichaVieja?: (f: Fila) => void }) {
@@ -141,14 +154,15 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
               <Th col="folio">Folio</Th><Th col="posicion">Posición</Th><Th col="ubicacion">Garantía / dirección</Th>
               <Th col="expediente">Expediente</Th><th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Núm. crédito</th><Th col="estado">Entidad</Th><Th col="abogado_nombre">Abogado</Th><Th col="dictamen_sugerido">Dictamen</Th><th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-3 py-2 text-left text-[11px] font-medium text-muted-foreground">Estado</th>
               <Th col="dictamen_final">Decisión</Th><Th col="created_at">Fecha</Th>
+              <th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-3 py-2 text-left text-[11px] font-medium text-muted-foreground">Firmas</th>
               <th className="sticky top-0 z-10 border-b border-border bg-muted/70 px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">Cargando…</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">Cargando…</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">{q ? "Sin resultados." : "Aún no hay pre-dictámenes guardados."}</td></tr>
             ) : filtradas.map((f) => (
               <tr key={f.id} className="border-b border-border/60 hover:bg-muted/40">
                 <td className="cursor-pointer px-3 py-2 font-mono text-[12px] font-medium text-[color:var(--teal)] hover:underline" onClick={() => (onVerFichaVieja ? onVerFichaVieja(f) : abrirFicha(f))}>{f.folio || "—"}</td>
@@ -162,6 +176,20 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
                 <td className="px-3 py-2">{(() => { const st = situacion(f); return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>{st.label}</span>; })()}</td>
                 <td className="px-3 py-2 text-[12px]">{f.dictamen_final || "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{fecha(f.created_at)}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-1" title="Elabora · Valida DIL · Valida UCM · Autoriza DGE">
+                    {firmasBadge(f).map((p) => (
+                      <span
+                        key={p.letra}
+                        className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold ${
+                          p.hecha ? "bg-emerald-100 text-emerald-800" : p.activa ? "bg-amber-100 text-amber-800 ring-1 ring-amber-400" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {p.letra}
+                      </span>
+                    ))}
+                  </div>
+                </td>
                 <td className="relative px-2 py-2 text-right">
                   <button data-menu-predictamen onClick={(e) => { e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu(menu?.id === f.id ? null : { id: f.id, x: r.right, y: r.bottom }); }} className="rounded-md p-1 hover:bg-muted"><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
                 </td>
