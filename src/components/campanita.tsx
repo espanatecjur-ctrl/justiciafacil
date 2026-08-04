@@ -3,9 +3,10 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell, Check } from "lucide-react";
+import { Bell, Check, BellRing, AlertTriangle } from "lucide-react";
 import { correoActual } from "@/lib/auth";
 import { listarMisNotificaciones, marcarLeida, marcarTodasLeidas, type Notificacion } from "@/lib/notificaciones";
+import { activarNotificaciones, pushSoportado, yaEstaSuscrito } from "@/lib/push";
 
 function haceCuanto(fecha?: string | null): string {
   if (!fecha) return "";
@@ -23,9 +24,24 @@ export function Campanita() {
   const [correo, setCorreo] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
+  const [suscrito, setSuscrito] = useState(true); // empieza en true para no parpadear el botón mientras carga
+  const [activando, setActivando] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { correoActual().then(setCorreo); }, []);
+  useEffect(() => {
+    correoActual().then(setCorreo);
+    if (pushSoportado()) yaEstaSuscrito().then(setSuscrito);
+    else setSuscrito(true); // no soportado (ej. Safari viejo) -> no insistir con el botón
+  }, []);
+
+  const activarPush = async () => {
+    if (!correo) return;
+    setActivando(true);
+    const r = await activarNotificaciones(correo.split("@")[0], correo);
+    setActivando(false);
+    if (r.ok) setSuscrito(true);
+    alert(r.msg);
+  };
 
   const recargar = () => {
     if (!correo) return;
@@ -48,6 +64,7 @@ export function Campanita() {
   }, []);
 
   const noLeidas = avisos.filter((a) => !a.leida).length;
+  const importantesSinLeer = avisos.filter((a) => !a.leida && a.importante).length;
 
   const abrirAviso = async (a: Notificacion) => {
     setAbierto(false);
@@ -65,12 +82,12 @@ export function Campanita() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setAbierto((v) => !v)}
-        className="relative grid h-9 w-9 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        className={`relative grid h-9 w-9 place-items-center rounded-md hover:bg-accent hover:text-accent-foreground ${importantesSinLeer > 0 ? "text-red-600 animate-pulse" : "text-muted-foreground"}`}
         title="Avisos"
       >
-        <Bell className="h-4 w-4" />
+        {importantesSinLeer > 0 ? <BellRing className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
         {noLeidas > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 grid min-h-[16px] min-w-[16px] place-items-center rounded-full bg-[color:var(--legal)] px-1 text-[10px] font-bold text-white">
+          <span className={`absolute -top-0.5 -right-0.5 grid min-h-[16px] min-w-[16px] place-items-center rounded-full px-1 text-[10px] font-bold text-white ${importantesSinLeer > 0 ? "bg-red-600" : "bg-[color:var(--legal)]"}`}>
             {noLeidas > 9 ? "9+" : noLeidas}
           </span>
         )}
@@ -86,6 +103,16 @@ export function Campanita() {
               </button>
             )}
           </div>
+          {!suscrito && (
+            <button
+              onClick={activarPush}
+              disabled={activando}
+              className="flex w-full items-center gap-2 border-b border-border bg-amber-50 px-3 py-2 text-left text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              <BellRing className="h-3.5 w-3.5 shrink-0" />
+              {activando ? "Activando…" : "Activar notificaciones en este celular/navegador"}
+            </button>
+          )}
           <div className="max-h-96 overflow-y-auto">
             {avisos.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">No tienes avisos.</p>
@@ -94,10 +121,11 @@ export function Campanita() {
                 <button
                   key={a.id}
                   onClick={() => abrirAviso(a)}
-                  className={`flex w-full items-start gap-2 border-b border-border px-3 py-2.5 text-left hover:bg-muted/50 ${a.leida ? "opacity-70" : ""}`}
+                  className={`flex w-full items-start gap-2 border-b border-border px-3 py-2.5 text-left hover:bg-muted/50 ${a.leida ? "opacity-70" : ""} ${a.importante && !a.leida ? "border-l-4 border-l-red-500 bg-red-50/60" : ""}`}
                 >
-                  {!a.leida && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[color:var(--teal)]" />}
+                  {!a.leida && (a.importante ? <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-red-600" /> : <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[color:var(--teal)]" />)}
                   <span className={`min-w-0 flex-1 ${a.leida ? "pl-4" : ""}`}>
+                    {a.importante && <span className="mb-0.5 inline-block rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700">Importante</span>}
                     <span className="block text-sm text-foreground">{a.texto}</span>
                     <span className="mt-0.5 block text-[11px] text-muted-foreground">{haceCuanto(a.created_at)}</span>
                   </span>
