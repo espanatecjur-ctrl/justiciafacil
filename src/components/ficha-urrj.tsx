@@ -170,12 +170,21 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       : garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
-      .then((rows: any[]) => { const pr = rows?.[0] || null; setPredJur(pr); setFolio(pr?.folio || ""); setDecision(pr?.dictamen_final || ""); })
-      .catch(() => {});
-    const filtroReg = garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,terminado,pdf_url,created_at&${filtroReg}&order=created_at.desc&limit=1`, { headers })
-      .then((r) => r.ok ? r.json() : [])
-      .then((rows: any[]) => setPredReg(rows?.[0] || null))
+      .then((rows: any[]) => {
+        const pr = rows?.[0] || null;
+        setPredJur(pr);
+        setFolio(pr?.folio || "");
+        setDecision(pr?.dictamen_final || "");
+        // El registral se guarda con el NÚMERO DE CRÉDITO (no el expediente judicial),
+        // porque el RPPC se consulta por folio/crédito. Por eso se busca aquí, ya con
+        // el número de crédito del jurídico a la mano (o el que venga en la garantía).
+        const numCred = pr?.datos?.numeroCredito || (garantia as any).no_credito || (garantia as any).credito || garantia.numeroCredito || "";
+        const filtroReg = numCred ? `expediente=eq.${encodeURIComponent(numCred)}` : "id=eq.0";
+        fetch(`${SUPABASE_URL}/rest/v1/dictamen_registral?select=resultado,acreditado,hay_adicional,firma_elabora,firma_valida,terminado,pdf_url,created_at&${filtroReg}&en_papelera=eq.false&order=created_at.desc&limit=1`, { headers })
+          .then((r) => r.ok ? r.json() : [])
+          .then((rows2: any[]) => setPredReg(rows2?.[0] || null))
+          .catch(() => {});
+      })
       .catch(() => {});
   };
   useEffect(recargarEstado, [garantia.id, garantia.expediente, garantia.predictamenId]);
