@@ -35,7 +35,7 @@ import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, resumenPrecioCorto, type
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 import { Mail } from "lucide-react";
 import { crearYEnviarSolicitudFirma, correoDeRol, rechazarSolicitud } from "@/lib/firma-solicitud";
-import { avanzarCadena, rechazarYRetroceder, siguienteEtapa, mandarAEtapa, correoDelRol, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
+import { avanzarCadena, rechazarYRetroceder, siguienteEtapa, mandarAEtapa, correoDelRol, guardarFirmaSinAvanzar, ROL_ETAPA, TITULO_ETAPA, type EtapaFirma } from "@/lib/cadena-firmas-urrj";
 import { crearNotificacion } from "@/lib/notificaciones";
 
 const NAVY = "#0B1E3A";
@@ -293,12 +293,48 @@ export function RecorridoActor({
     if (etapa === "ucm") setFirmaUCM(f.fecha ? f : null);
     if (etapa === "dge") setFirmaDGE(f.fecha ? f : null);
     if (!f.fecha || !borradorIdLocal) return;
-    const av = await avanzarCadena({
-      predictamenId: borradorIdLocal, casoId: d.caso_id || "", expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
-      etapaQueAcabaDeFirmar: etapa, dictamenFinal: dictamen?.txt || null,
-    });
-    setEtapaFirma(av.siguiente);
-    setValidacionMsg(av.siguiente === "completo" ? "✅ Cadena de firmas completa." : `Le toca ahora a ${TITULO_ETAPA[av.siguiente] || av.siguiente}${av.correo ? ` (${av.correo})` : ""}.`);
+    // Ya NO manda nada solo — únicamente guarda la firma. Mandarlo a la
+    // siguiente etapa es siempre un botón aparte ("Mandar a validar"), con
+    // vista previa y por correo, para que quede claro qué se envió y a quién.
+    await guardarFirmaSinAvanzar(borradorIdLocal, etapa, f);
+    const siguiente = siguienteEtapa(etapa, dictamen?.txt || null);
+    setValidacionMsg(siguiente === "completo" ? "✅ Firma guardada. Ya no falta ninguna más." : `✅ Firma guardada. Dale "Mandar a validar (${TITULO_ETAPA[siguiente] || siguiente})" para avisarle.`);
+  };
+  // Botón genérico "Mandar a validar" para cualquier etapa que ya firmó y
+  // falta avisar a la siguiente (DIL→UCM, UCM→Precio/DGE) — mismo patrón que
+  // "Mandar a validar (DIL)" de Elabora: vista previa, link y PDF adjunto.
+  const [preparandoSiguiente, setPreparandoSiguiente] = useState(false);
+  const mandarASiguienteEtapa = async (etapaQueYaFirmo: "dil" | "ucm") => {
+    if (!borradorIdLocal) return;
+    const siguiente = siguienteEtapa(etapaQueYaFirmo, dictamen?.txt || null);
+    if (siguiente === "completo") { setValidacionMsg("✅ Ya no falta ninguna firma más."); return; }
+    setPreparandoSiguiente(true); setValidacionMsg(null);
+    try {
+      const { correo } = await correoDelRol(ROL_ETAPA[siguiente]);
+      const destino = correo || window.prompt(`¿A qué correo mando el link de validación (${TITULO_ETAPA[siguiente] || siguiente})?`) || "";
+      if (!destino) { setPreparandoSiguiente(false); return; }
+      const r = await crearYEnviarSolicitudFirma({
+        area: "URRJ", predictamenId: borradorIdLocal, casoId: d.caso_id || "", slot: siguiente,
+        correoEsperado: destino, tituloSlot: TITULO_ETAPA[siguiente] || siguiente,
+        expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+        soloCrearLink: true,
+      });
+      if (!r.ok || !r.link) { setValidacionMsg(`⚠️ ${r.error || "No se pudo generar el link."}`); return; }
+      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${borradorIdLocal}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ etapa_firma: siguiente }),
+      });
+      setEtapaFirma(siguiente);
+      const base64 = await descargarPredictamenPDF(construirDatosPDF("(borrador)"), "base64") as string;
+      setBannerValidarInfo({
+        para: destino,
+        asunto: `Firma/validación requerida · ${d.expediente || d.numeroCredito || ""} · ${TITULO_ETAPA[siguiente] || siguiente}`,
+        mensaje: `Hola,\n\nSe requiere tu firma/validación (${TITULO_ETAPA[siguiente] || siguiente}) en el dictamen de ${d.expediente || d.numeroCredito || ""}.\n\nEntra a este link con tu cuenta de DIIPA para revisar los documentos, el PDF, y firmar o rechazar:\n${r.link}\n\nTambién va adjunto el PDF del pre-dictamen.\n\nSi tienes usuario en JusticiaFácil, también lo vas a ver en "Mis validaciones" al entrar.\n\nGracias.`,
+        adjuntos: base64 ? [{ nombre: `predictamen_${d.expediente || d.numeroCredito || "urrj"}.pdf`, tipo: "application/pdf", base64 }] : [],
+      });
+      setVerBannerValidar(true);
+    } finally { setPreparandoSiguiente(false); }
   };
   const rechazarEtapa = async (etapa: "dil" | "ucm" | "dge", motivo: string) => {
     if (etapa === "dil") setFirmaValida(null);
@@ -1515,7 +1551,17 @@ export function RecorridoActor({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa === "elabora" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.dil} valor={firmaValida} onFirmar={(f) => firmarEtapa("dil", f)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar || etapaFirma !== "dil"} onRechazar={puedeValidar && etapaFirma === "dil" ? (m) => rechazarEtapa("dil", m) : undefined} rechazado={rechazoInfo?.etapa === "dil" ? rechazoInfo : undefined} />
+              {firmaValida?.fecha && etapaFirma === "dil" && (
+                <button onClick={() => mandarASiguienteEtapa("dil")} disabled={preparandoSiguiente} className="col-span-full flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                  <Mail className="h-4 w-4" /> {preparandoSiguiente ? "Preparando…" : `📧 Mandar a validar (${TITULO_ETAPA.ucm})`}
+                </button>
+              )}
               <FirmaParte titulo={TITULO_ETAPA.ucm} valor={firmaUCM} onFirmar={(f) => firmarEtapa("ucm", f)} cargoSugerido="UCM" bloqueado={etapaFirma !== "ucm"} onRechazar={etapaFirma === "ucm" ? (m) => rechazarEtapa("ucm", m) : undefined} rechazado={rechazoInfo?.etapa === "ucm" ? rechazoInfo : undefined} />
+              {firmaUCM?.fecha && etapaFirma === "ucm" && siguienteEtapa("ucm", dictamen?.txt || null) !== "completo" && (
+                <button onClick={() => mandarASiguienteEtapa("ucm")} disabled={preparandoSiguiente} className="col-span-full flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+                  <Mail className="h-4 w-4" /> {preparandoSiguiente ? "Preparando…" : `📧 Mandar a validar (${TITULO_ETAPA[siguienteEtapa("ucm", dictamen?.txt || null)]})`}
+                </button>
+              )}
               {(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") && (
                 <div className="rounded-lg border border-border p-3 text-xs">
                   <p className="font-semibold">Calcula precio · Contabilidad</p>
