@@ -18,6 +18,8 @@ import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
 import { crearEvento, actualizarEvento, eliminarEvento } from "@/lib/evento-agenda";
 import { avisarTareaPorCorreo } from "@/lib/avisar-tarea";
 import { crearNotificacion } from "@/lib/notificaciones";
+import { clienteJCPorNombre, type ClienteJC } from "@/lib/juris-clientes";
+import { crearTareaEspejoJC, crearSolicitudClienteJF } from "@/lib/tareas-jc";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
@@ -254,8 +256,8 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
         </div>
       )}
 
-      {agregar && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
-      {editando && <AgregarModal casoId={casoId} exp={exp} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} tareaEditar={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargarTareas(); }} />}
+      {agregar && <AgregarModal casoId={casoId} exp={exp} clienteNombre={caso?.cliente_nombre ?? null} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} onClose={() => setAgregar(false)} onGuardado={() => { setAgregar(false); cargarTareas(); }} />}
+      {editando && <AgregarModal casoId={casoId} exp={exp} clienteNombre={caso?.cliente_nombre ?? null} colabs={colabs} creadoPor={correoYo} etapasExistentes={Array.from(new Set(tareas.map((t) => t.etapa).filter(Boolean) as string[]))} tareaEditar={editando} onClose={() => setEditando(null)} onGuardado={() => { setEditando(null); cargarTareas(); }} />}
       {cerrarTarea && (
         <ElaborarTareaModal
           tarea={cerrarTarea}
@@ -273,7 +275,7 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   );
 }
 
-function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], tareaEditar, onClose, onGuardado }: { casoId: string | null; exp: string; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; tareaEditar?: Tarea; onClose: () => void; onGuardado: () => void }) {
+function AgregarModal({ casoId, exp, clienteNombre, colabs, creadoPor, etapasExistentes = [], tareaEditar, onClose, onGuardado }: { casoId: string | null; exp: string; clienteNombre?: string | null; colabs: Colaborador[]; creadoPor: string | null; etapasExistentes?: string[]; tareaEditar?: Tarea; onClose: () => void; onGuardado: () => void }) {
   const [tipo, setTipo] = useState<"tarea" | "evidencia">(tareaEditar?.tipo === "evidencia" ? "evidencia" : "tarea");
   const [titulo, setTitulo] = useState(tareaEditar?.titulo ?? "");
   const [descripcion, setDescripcion] = useState(tareaEditar?.descripcion ?? "");
@@ -324,6 +326,31 @@ function AgregarModal({ casoId, exp, colabs, creadoPor, etapasExistentes = [], t
               enlace: "/calendario",
               importante: false,
               tipo: "tarea",
+            }).catch(() => {});
+          }
+        }
+
+        // ---- Espejo hacia JurisConecta (mismo puente que usa Calendario) ----
+        // Solo si hay cliente (viene de la ficha del expediente) + responsable, y
+        // todavía no se había espejado (para no duplicar tareas allá en cada edición).
+        if (guardada?.id && clienteNombre && guardada.responsable_correo && !guardada.jc_tarea_id && !guardada.jc_solicitud_id) {
+          const datos = {
+            tipo: "tarea", titulo: guardada.titulo, detalle: guardada.descripcion || null,
+            fecha: guardada.fecha_limite || null, asignadoCorreo: guardada.responsable_correo,
+            asignadoNombre: guardada.responsable_nombre || null, autorCorreo: creadoPor || null,
+          };
+          const match: ClienteJC | null = await clienteJCPorNombre(clienteNombre);
+          if (match) {
+            const espejo = await crearTareaEspejoJC(match, datos);
+            await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${guardada.id}`, {
+              method: "PATCH", headers: { ...headers, Prefer: "return=minimal" },
+              body: JSON.stringify({ cliente_estado: "vinculado", cliente_jc_id: match.id, jc_tarea_id: espejo.tareaId || null }),
+            }).catch(() => {});
+          } else {
+            const sol = await crearSolicitudClienteJF({ ...datos, nombreCliente: clienteNombre, jfEventoId: guardada.id });
+            await fetch(`${SUPABASE_URL}/rest/v1/tarea?id=eq.${guardada.id}`, {
+              method: "PATCH", headers: { ...headers, Prefer: "return=minimal" },
+              body: JSON.stringify({ cliente_estado: "no_encontrado", jc_solicitud_id: sol.solicitudId || null }),
             }).catch(() => {});
           }
         }
