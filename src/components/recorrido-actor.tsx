@@ -1323,7 +1323,12 @@ export function RecorridoActor({
         {paso === 6 && (
           <div className="space-y-4">
             {modoFicha ? (
-              <H titulo="Administración · valuación y precio" sub="De aquí sale el hito 10 (Viabilidad económica)." />
+              <div className="space-y-3">
+                <H titulo="Administración · valuación y precio" sub="Esto ya no se captura aquí." />
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  <Lock className="h-4 w-4" /> La valuación y el precio de cesión los captura Contabilidad en la etapa "Calcula precio", dentro de la cadena de firmas del dictamen — no en esta pantalla.
+                </div>
+              </div>
             ) : (<>
             <H titulo="6 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
@@ -1448,31 +1453,6 @@ export function RecorridoActor({
               </button>
             )}
             </>)}
-
-            {/* ---- Sección de Administración (valuación y precio) ---- */}
-            <div className="mt-2 rounded-xl border border-dashed border-border p-4">
-              <div className="mb-3 flex items-center gap-2">
-                {puedeAdmin ? <Calculator className="h-4 w-4" style={{ color: "#C2A24C" }} /> : <Lock className="h-4 w-4 text-muted-foreground" />}
-                <p className="text-sm font-semibold">Administración · valuación y precio</p>
-                <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Solo GAD · Super_Admin · DGE</span>
-              </div>
-              {!puedeAdmin ? (
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                  <Lock className="h-4 w-4" /> Esta sección la llena Administración. No tienes permiso para editarla.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {!!analisisParaPDF?.estado_procesal_detalle?.monto_adjudicacion_o_avaluo && <p className="text-[11px] font-medium text-purple-700">✨ "Valor comercial" autollenado con el monto de adjudicación/avalúo que la IA encontró en los documentos — revísalo, puede no ser el valor comercial real de mercado.</p>}
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Campo label="Valor comercial del inmueble"><input type="number" className={inp} value={d.valorComercial} onChange={(e) => set("valorComercial", e.target.value)} /></Campo>
-                    <Campo label="Costos (litigio/desalojo/regularización)"><input type="number" className={inp} value={d.costosOperativos} onChange={(e) => set("costosOperativos", e.target.value)} /></Campo>
-                    <Campo label="Precio de la cesión"><input type="number" className={inp} value={d.precioCesion} onChange={(e) => set("precioCesion", e.target.value)} /></Campo>
-                    <Campo label="Margen objetivo"><input type="number" className={inp} value={d.margenObjetivo} onChange={(e) => set("margenObjetivo", e.target.value)} /></Campo>
-                  </div>
-                  <Aviso r={rViab} />
-                </div>
-              )}
-            </div>
           </div>
         )}
       </div>
