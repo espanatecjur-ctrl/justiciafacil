@@ -39,7 +39,7 @@ export async function correoDeRol(rol: string): Promise<string> {
 export async function crearYEnviarSolicitudFirma(input: CrearSolicitudInput): Promise<{ ok: boolean; link?: string; enviado?: boolean; error?: string }> {
   try {
     const body: any = {
-      caso_id: input.casoId, slot: input.slot, correo_esperado: input.correoEsperado, area: input.area,
+      caso_id: input.casoId || null, slot: input.slot, correo_esperado: input.correoEsperado, area: input.area,
     };
     if (input.predictamenId) body.predictamen_id = input.predictamenId;
     if (input.dictamenId) body.dictamen_id = input.dictamenId;
