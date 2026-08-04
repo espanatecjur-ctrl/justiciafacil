@@ -802,11 +802,11 @@ export function RecorridoActor({
   };
 
   // Bloqueo de edición: en cuanto se manda a validar (ya no está en "elabora"),
-  // solo puede seguir editando quien tiene el turno actual (DIL cuando le
-  // toca a DIL, UCM cuando le toca a UCM) o DGE/Super_Admin (siempre). Todos
-  // los demás ven los datos y las firmas, pero de solo lectura.
-  const puedeEditarAhora = miRol === "DGE" || miRol === "Super_Admin"
-    || etapaFirma === "elabora"
+  // NADIE puede seguir editando los campos directamente — ni siquiera DGE —
+  // salvo quien tiene el turno actual (DIL cuando le toca a DIL, UCM cuando
+  // le toca a UCM). Para cualquier otro caso (incluido DGE), la única forma
+  // de volver a editar es el botón explícito "Reabrir para editar" de abajo.
+  const puedeEditarAhora = etapaFirma === "elabora"
     || (etapaFirma === "dil" && miRol === "DIL")
     || (etapaFirma === "ucm" && miRol === "UCM");
   const bloqueadoEdicion = !puedeEditarAhora;
@@ -1161,9 +1161,12 @@ export function RecorridoActor({
       {/* Contenido de cada fase */}
       <div className="rounded-xl border border-border bg-card p-5">
         {bloqueadoEdicion && paso !== 6 && (
-          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <Lock className="h-3.5 w-3.5 shrink-0" />
-            Solo lectura — le toca editar a {TITULO_ETAPA[etapaFirma] || etapaFirma}. Puedes ver todo lo capturado, pero no cambiarlo desde aquí.
+            <span>Solo lectura — le toca editar a {TITULO_ETAPA[etapaFirma] || etapaFirma}. Puedes ver todo lo capturado, pero no cambiarlo desde aquí.</span>
+            {puedeRedictaminar && (
+              <button onClick={reabrirDictamen} className="ml-auto flex items-center gap-1 rounded-md border border-amber-400 bg-white px-2 py-1 font-medium text-amber-800 hover:bg-amber-100"><RefreshCw className="h-3 w-3" /> Reabrir para editar</button>
+            )}
           </div>
         )}
         <div className={bloqueadoEdicion && paso !== 6 ? "pointer-events-none opacity-60 select-none" : undefined} aria-hidden={bloqueadoEdicion && paso !== 6 ? true : undefined}>
@@ -1529,19 +1532,19 @@ export function RecorridoActor({
             <div className="flex flex-wrap gap-2">
               <button onClick={() => guardar("Sí pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> {cadenaCompleta ? "✓ Lista para publicar — Sí pasa" : "Sí pasa"}</button>
               <button onClick={() => guardar("No pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
-              {decidido && puedeRedictaminar && (
+              {(decidido || bloqueadoEdicion) && puedeRedictaminar && (
                 <button onClick={reabrirDictamen} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Reabrir para editar</button>
               )}
             </div>
-            {decidido && (
+            {(decidido || bloqueadoEdicion) && (
               <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                 <Lock className="h-3.5 w-3.5" />
                 {puedeRedictaminar
-                  ? "Pre-dictamen bloqueado. Solo queda enviar el correo y continuar con el registral. Para cambiarlo, toca “Reabrir para editar”."
-                  : "Pre-dictamen bloqueado y firmado. Solo quien lo decidió o DGE puede reabrirlo — para todos los demás, es de solo lectura (ver y descargar PDF)."}
+                  ? "Bloqueado para edición. Toca “Reabrir para editar” si necesitas corregir algo."
+                  : "Bloqueado y de solo lectura para tu rol — solo Super_Admin, DGE, DIL o UCM (o quien tenga el turno actual) puede reabrirlo."}
               </p>
             )}
-            {decidido && puedeRedictaminar && (
+            {(decidido || bloqueadoEdicion) && puedeRedictaminar && (
               <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs">
                 <span className="text-muted-foreground">Autorizar que la siguiente persona en la cadena también pueda re-dictaminar, si hiciera falta:</span>
                 {(["DIL", "UCM", "DGE"] as const).map((rol) => (
