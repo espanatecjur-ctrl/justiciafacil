@@ -19,10 +19,14 @@ export interface AvisoTarea {
 }
 
 export async function avisarTareaPorCorreo(t: AvisoTarea): Promise<void> {
-  if (!t.responsable_correo || !t.caso_id) return;
+  // Antes esto exigía un caso_id para mandar el correo — la mayoría de las
+  // tareas (las que no vienen de una ficha UCM formal) no tienen caso_id, y
+  // por eso nunca avisaban a nadie. Ahora solo hace falta el correo del
+  // responsable; el link se arma con lo que sí haya disponible.
+  if (!t.responsable_correo) return;
 
   let nDocs = 0;
-  if (t.etapa) {
+  if (t.etapa && t.caso_id) {
     try {
       const docs = await sbSelect<{ id: string }>(
         "documento_garantia",
@@ -32,7 +36,14 @@ export async function avisarTareaPorCorreo(t: AvisoTarea): Promise<void> {
     } catch { /* si falla el conteo, se manda el correo igual sin ese dato */ }
   }
 
-  const link = `${window.location.origin}/ucm-ficha?id=${t.caso_id}&tab=seguimiento`;
+  // Link a donde de verdad se puede trabajar la tarea: si hay caso_id, a su
+  // ficha UCM; si no pero hay expediente, directo a esa ficha en URRJ; si no
+  // hay ninguno, a "Mis tareas" (calendario) para que la ubique ahí.
+  const link = t.caso_id
+    ? `${window.location.origin}/ucm-ficha?id=${t.caso_id}&tab=seguimiento`
+    : t.expediente
+    ? `${window.location.origin}/urrj?ficha=${encodeURIComponent(t.expediente)}`
+    : `${window.location.origin}/calendario`;
   const mensaje = [
     t.esEscrito ? `Se solicitó un escrito: "${t.titulo}".` : `Se te asignó una tarea: "${t.titulo}".`,
     t.descripcion ? `\n${t.descripcion}` : "",
