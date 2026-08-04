@@ -9,6 +9,7 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { registrarEvento } from "@/lib/cronologia-urrj";
+import { crearNotificacion } from "@/lib/notificaciones";
 import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { ArrowLeft, ScrollText, Plus, Trash2, Save, Check, Printer, Mail, ShieldAlert, ShieldCheck, MinusCircle } from "lucide-react";
@@ -397,6 +398,13 @@ export function DictamenRegistral({
                     responsable_correo: dil.correo, responsable_nombre: dil.nombre || "DIL", responsable_rol: "DIL",
                     estado: "pendiente", etapa: "URRJ · Registral",
                   }),
+                }).catch(() => {});
+                crearNotificacion({
+                  para: dil.correo,
+                  texto: `Falta tu firma (Valida) del dictamen registral — ${d.acreditado || d.numeroCredito || ""}`,
+                  enlace: "/urrj",
+                  importante: true,
+                  tipo: "firma",
                 }).catch(() => {});
               }
             }
