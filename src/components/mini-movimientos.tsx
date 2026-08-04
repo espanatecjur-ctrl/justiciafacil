@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Folder, Eye, FileText, Image as ImageIcon, File as FileIcon, Gavel, Camera, ClipboardList } from "lucide-react";
 import { type CasoJuridico } from "@/lib/supabase";
@@ -14,7 +15,7 @@ const tipoDe = (t: string | null) => TIPOS[t || "otro"] || TIPOS.otro;
 const fmt = (s: string | null | undefined) => {
   if (!s) return "—";
   const d = new Date(s);
-  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
+  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 function urlPreview(link: string, driveId: string | null): string {
