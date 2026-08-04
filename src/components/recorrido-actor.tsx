@@ -883,7 +883,7 @@ export function RecorridoActor({
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
           <span>{d.tipoJuicio} · {d.posicion} · {d.estado}</span>
-          <span>Fase {paso + 1} de {FASES.length}: {modoFicha && paso === 6 ? "Administración / Viabilidad" : FASES[paso]}</span>
+          <span>Fase {paso + 1} de {FASES.length}: {FASES[paso]}</span>
         </div>
         <div className="flex gap-1">
           {FASES.map((_, i) => (
@@ -1322,14 +1322,6 @@ export function RecorridoActor({
 
         {paso === 6 && (
           <div className="space-y-4">
-            {modoFicha ? (
-              <div className="space-y-3">
-                <H titulo="Administración · valuación y precio" sub="Esto ya no se captura aquí." />
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                  <Lock className="h-4 w-4" /> La valuación y el precio de cesión los captura Contabilidad en la etapa "Calcula precio", dentro de la cadena de firmas del dictamen — no en esta pantalla.
-                </div>
-              </div>
-            ) : (<>
             <H titulo="6 · Dictamen y firmas" sub="Riesgos, pre-dictamen del sistema, firmas y decisión humana." />
             <div className="space-y-2">
               <Aviso r={rPresc} />
@@ -1452,7 +1444,6 @@ export function RecorridoActor({
                 <ArrowRight className="h-4 w-4" /> Continuar al registral
               </button>
             )}
-            </>)}
           </div>
         )}
       </div>
