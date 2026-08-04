@@ -16,13 +16,14 @@ import { subirDocPredictamen } from "@/lib/solicitud-predictamen";
 import { generarResumenIA, guardarResumenEnCache } from "@/lib/resumen-documentos";
 import { obtenerResumenPorClaveCaso } from "@/lib/resumen-documentos";
 import { enviarCorreo } from "@/lib/enviar-correo";
+import { nombreActual } from "@/lib/auth";
 import {
   ESTADOS_URRJ, TIPOS_ACCION, motorPrescripcion, motorCaducidad, motorUsucapion,
-  calculoFinanciero, calculoFinancieroUDIS, viabilidad, type ResultadoMotor, type Semaforo,
+  calculoFinanciero, calculoFinancieroUDIS, type ResultadoMotor, type Semaforo,
 } from "@/lib/urrj-motores";
 import {
   ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
-  Check, X, ClipboardCheck, Lock, Calculator, Download, Eye, RefreshCw } from "lucide-react";
+  Check, X, ClipboardCheck, Lock, Download, Eye, RefreshCw, CheckCircle2 } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF, type DatosPDF } from "@/lib/predictamen-pdf";
@@ -44,7 +45,6 @@ export interface ResultadosActor {
   prescripcion: ResultadoMotor;
   caducidad: ResultadoMotor;
   usucapion: ResultadoMotor;
-  viabilidad_economica: ResultadoMotor;
 }
 
 const TIPOS_JUICIO = ["Hipotecario", "Mercantil ejecutivo", "Penal", "Familiar"] as const;
@@ -76,12 +76,9 @@ interface Datos {
   actoDirigidoContraElPoseedor: string;
   interpelacionJV: string; interpelacionJVFecha: string;
   interpelacionTipo: string; interpelacionExpediente: string; interpelacionJuzgado: string;
-  // H5 cargas
-  predial: string; agua: string; condominio: string; fiscales: string; laborales: string; otrosGravamenes: string;
-  // H6 financiero/viabilidad
+  // H6 financiero
   capital: string; tasaOrd: string; tasaMor: string; dias: string; aplicarIVA: string; gastos: string; valorUDI: string; fechaCorte: string;
   supuestoIntereses: string; udiSaldoInsoluto: string; udiInteresesOrd: string; udiComisionCobertura: string; udiComisionAdmon: string; udiOtros: string;
-  valorComercial: string; precioCesion: string; costosOperativos: string; margenObjetivo: string;
   // H7 firmas
   firmaElabora: string; firmaValida: string;
   anotacionesHumanas: string;
@@ -100,10 +97,8 @@ const VACIO: Datos = {
   actoDirigidoContraElPoseedor: "",
   interpelacionJV: "no", interpelacionJVFecha: "",
   interpelacionTipo: "", interpelacionExpediente: "", interpelacionJuzgado: "",
-  predial: "", agua: "", condominio: "", fiscales: "", laborales: "", otrosGravamenes: "",
   capital: "", tasaOrd: "", tasaMor: "", dias: "", aplicarIVA: "no", gastos: "", valorUDI: "", fechaCorte: "",
   supuestoIntereses: "formula", udiSaldoInsoluto: "", udiInteresesOrd: "", udiComisionCobertura: "", udiComisionAdmon: "", udiOtros: "",
-  valorComercial: "", precioCesion: "", costosOperativos: "", margenObjetivo: "",
   firmaElabora: "", firmaValida: "",
   anotacionesHumanas: "",
 };
@@ -232,6 +227,8 @@ export function RecorridoActor({
   const [ignorarBoletin, setIgnorarBoletin] = useState(false);
   const [hallazgos, setHallazgos] = useState<string[]>([]);
   const [firmaElabora, setFirmaElabora] = useState<DatosFirma | null>(null);
+  const [nombreYo, setNombreYo] = useState("");
+  useEffect(() => { nombreActual().then((n) => setNombreYo(n?.nombre || "")).catch(() => {}); }, []);
   const [firmaValida, setFirmaValida] = useState<DatosFirma | null>(null);
   const [firmaUCM, setFirmaUCM] = useState<DatosFirma | null>(null);
   const [firmaDGE, setFirmaDGE] = useState<DatosFirma | null>(null);
@@ -498,7 +495,6 @@ export function RecorridoActor({
       if (!p.declaradoRebeldia && siNo(ep.declarado_rebeldia)) c.declaradoRebeldia = siNo(ep.declarado_rebeldia)!;
       if (!p.hayAdjudicacionDirecta && siNo(ep.hay_adjudicacion_directa)) c.hayAdjudicacionDirecta = siNo(ep.hay_adjudicacion_directa)!;
       if (!p.adjudicacionFirme && siNo(ep.adjudicacion_firme)) c.adjudicacionFirme = siNo(ep.adjudicacion_firme)!;
-      if (!p.valorComercial && ep.monto_adjudicacion_o_avaluo) c.valorComercial = String(ep.monto_adjudicacion_o_avaluo).replace(/[^0-9.]/g, "");
       if (!p.hayIncidenteNulidad && siNo(ep.hay_incidente_nulidad)) c.hayIncidenteNulidad = siNo(ep.hay_incidente_nulidad)!;
       if (!p.sentenciaEjecutoria && siNo(ep.sentencia_ejecutoria)) c.sentenciaEjecutoria = siNo(ep.sentencia_ejecutoria)!;
       if (!p.hayCaducidadDeclarada && siNo(ep.hay_caducidad_declarada)) c.hayCaducidadDeclarada = siNo(ep.hay_caducidad_declarada)!;
@@ -620,9 +616,6 @@ export function RecorridoActor({
     hayCaducidadDeclarada: d.hayCaducidadDeclarada === "si",
   }), [d.inicioPosesion, d.buenaFe, d.demandaDespojo, d.interpelacionJV, d.actoDirigidoContraElPoseedor, d.hayCaducidadDeclarada]);
 
-  const cargas = n(d.predial) + n(d.agua) + n(d.condominio) + n(d.fiscales) + n(d.laborales) + n(d.otrosGravamenes);
-  const hayLaboral = n(d.laborales) > 0;
-  const hayFiscal = n(d.fiscales) > 0;
   const avisoJV: ResultadoMotor | null = d.interpelacionJV === "si" ? {
     semaforo: "verde",
     etiqueta: "Interpelación (jurisdicción voluntaria)",
@@ -643,8 +636,6 @@ export function RecorridoActor({
     });
   }, [d.supuestoIntereses, d.capital, d.tasaOrd, d.tasaMor, d.dias, d.aplicarIVA, d.gastos, d.valorUDI, d.udiSaldoInsoluto, d.udiInteresesOrd, d.udiComisionCobertura, d.udiComisionAdmon, d.udiOtros]);
   const adeudoTotal = fin.totalDeuda;
-  const rViab = useMemo(() => viabilidad(n(d.valorComercial), adeudoTotal, cargas + n(d.costosOperativos), n(d.precioCesion), n(d.margenObjetivo)),
-    [d.valorComercial, adeudoTotal, cargas, d.costosOperativos, d.precioCesion, d.margenObjetivo]);
 
   const registralRojo = d.hipotecaInscrita === "no";
   const prelacionRiesgo = d.prelacion === "Hay acreedores anteriores";
@@ -666,13 +657,11 @@ export function RecorridoActor({
     if (anotacionesRiesgo) sems.push("amarillo");
     if (enAmparo || suspendido) sems.push("naranja");
     if (etapaTemprana) sems.push("amarillo");
-    if (hayLaboral) sems.push("rojo");
-    if (hayFiscal) sems.push("naranja");
     if (sems.includes("rojo")) return { txt: "NEGATIVO", color: "bg-red-50 text-red-800 border-red-200" };
     if (sems.includes("naranja") || sems.includes("amarillo")) return { txt: "CONDICIONADO", color: "bg-amber-50 text-amber-800 border-amber-200" };
     if (sems.includes("gris")) return { txt: "FALTAN DATOS", color: "bg-muted text-muted-foreground border-border" };
     return { txt: "POSITIVO", color: "bg-emerald-50 text-emerald-800 border-emerald-200" };
-  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo, enAmparo, suspendido, etapaTemprana, hayLaboral, hayFiscal]);
+  }, [rPresc, rCaduc, rUsuc, usaUsucapion, registralRojo, prelacionRiesgo, anotacionesRiesgo, enAmparo, suspendido, etapaTemprana]);
 
   // avisa los resultados de motor hacia afuera (para la ficha UCP)
   useEffect(() => {
@@ -681,9 +670,8 @@ export function RecorridoActor({
       prescripcion: rPresc,
       caducidad: rCaduc,
       usucapion: usaUsucapion ? rUsuc : { semaforo: "verde", etiqueta: "No aplica", detalle: "No hay tercero poseyendo; la usucapión no aplica en este caso." },
-      viabilidad_economica: rViab,
     });
-  }, [onResultados, rPresc, rCaduc, rUsuc, usaUsucapion, rViab]);
+  }, [onResultados, rPresc, rCaduc, rUsuc, usaUsucapion]);
 
   // Días de cómputo automáticos: del último pago a la fecha de corte (por defecto hoy).
   const hoyISO = () => new Date().toISOString().slice(0, 10);
@@ -715,7 +703,7 @@ export function RecorridoActor({
       caso_id: d.caso_id || null, expediente: d.expediente || null, juzgado: d.juzgado || null, estado: d.estado,
       tipo_juicio: d.tipoJuicio, posicion: d.posicion,
       datos: d,
-      resultados: { prescripcion: rPresc, caducidad: rCaduc, usucapion: usaUsucapion ? rUsuc : null, viabilidad: rViab, financiero: fin, cargas, firmas: { elabora: firmaElabora, valida: firmaValida } },
+      resultados: { prescripcion: rPresc, caducidad: rCaduc, usucapion: usaUsucapion ? rUsuc : null, financiero: fin, firmas: { elabora: firmaElabora, valida: firmaValida } },
       dictamen_sugerido: dictamen.txt, dictamen_final: decision,
       firma_elabora: firmaElabora?.nombre || null, firma_elabora_fecha: firmaElabora?.fecha || null,
       firma_valida: firmaValida?.nombre || null, firma_valida_fecha: firmaValida?.fecha || null,
@@ -742,7 +730,6 @@ export function RecorridoActor({
       ubicacion: d.ubicacion, deudor: d.deudor, quienCede: d.quienCede, queCede: d.queCede,
       dictamen: dictamen.txt, riesgos,
       intereses: { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura },
-      admin: puedeAdmin && (n(d.valorComercial) || n(d.precioCesion)) ? { valorComercial: n(d.valorComercial), costos: cargas + n(d.costosOperativos), precioCesion: n(d.precioCesion), viab: rViab } : null,
       anotaciones: d.anotacionesHumanas,
       firmaElabora, firmaValida, decision,
       cambios: precargar ? { campos: diffDatos(precargar.datos || {}, d), nota: precargar.cambios } : null,
@@ -753,8 +740,6 @@ export function RecorridoActor({
         convenioRatificado: d.convenioRatificado, convenioFecha: d.convenioFecha,
         interpelacionJV: d.interpelacionJV, interpelacionJVFecha: d.interpelacionJVFecha, interpelacionTipo: d.interpelacionTipo, interpelacionExpediente: d.interpelacionExpediente,
         quienPosee: d.quienPosee, inicioPosesion: d.inicioPosesion, buenaFe: d.buenaFe, demandaDespojo: d.demandaDespojo,
-        predial: d.predial, agua: d.agua, condominio: d.condominio, fiscales: d.fiscales, laborales: d.laborales, otrosGravamenes: d.otrosGravamenes,
-        margenObjetivo: d.margenObjetivo,
       },
       boletines: hallazgos,
       resumenDocumentos: resumenParaPDF,
@@ -1339,8 +1324,6 @@ export function RecorridoActor({
               {anotacionesRiesgo && <Aviso r={{ semaforo: "amarillo", etiqueta: "Anotaciones / gravámenes", detalle: "Hay embargos, anotaciones o fideicomisos registrados." }} />}
               {enAmparo && <Aviso r={{ semaforo: "naranja", etiqueta: "En amparo", detalle: "El juicio está en amparo: puede revertir lo ganado." }} />}
               {suspendido && <Aviso r={{ semaforo: "naranja", etiqueta: "Suspendido", detalle: "El juicio está detenido." }} />}
-              {hayLaboral && <Aviso r={{ semaforo: "rojo", etiqueta: "Crédito laboral", detalle: "Preferencia sobre la hipoteca (Art. 113 LFT). Kill switch." }} />}
-              {hayFiscal && <Aviso r={{ semaforo: "naranja", etiqueta: "Crédito fiscal", detalle: "Preferencia (Art. 149 CFF)." }} />}
             </div>
             <div className={`rounded-lg border p-4 ${dictamen.color}`}>
               <p className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck className="h-4 w-4" /> Pre-dictamen del sistema (sugerido): {dictamen.txt}</p>
@@ -1362,7 +1345,7 @@ export function RecorridoActor({
               )}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa === "elabora" ? rechazoInfo : undefined} />
+              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa === "elabora" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.dil} valor={firmaValida} onFirmar={(f) => firmarEtapa("dil", f)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar || etapaFirma !== "dil"} onRechazar={puedeValidar && etapaFirma === "dil" ? (m) => rechazarEtapa("dil", m) : undefined} rechazado={rechazoInfo?.etapa === "dil" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.ucm} valor={firmaUCM} onFirmar={(f) => firmarEtapa("ucm", f)} cargoSugerido="UCM" bloqueado={etapaFirma !== "ucm"} onRechazar={etapaFirma === "ucm" ? (m) => rechazarEtapa("ucm", m) : undefined} rechazado={rechazoInfo?.etapa === "ucm" ? rechazoInfo : undefined} />
               {(dictamen.txt || "").toLowerCase().includes("pasa") && !(dictamen.txt || "").toLowerCase().includes("no pasa") && (
@@ -1395,13 +1378,15 @@ export function RecorridoActor({
             )}
             {validacionMsg && <p className="text-xs text-[color:var(--teal)]">{validacionMsg}</p>}
             <p className="text-sm font-medium">Decisión humana · ¿pasa para la compra de la cesión de la garantía?</p>
-            {!dosFirmas && !decidido && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Faltan las dos firmas (Elabora + Valida) para poder decidir y para el PDF.</p>
+            {!cadenaCompleta && !decidido && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Faltan firmas (Elabora + {TITULO_ETAPA.dil} + {TITULO_ETAPA.ucm}) para poder decidir y publicar.</p>
+            )}
+            {cadenaCompleta && !decidido && (
+              <p className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" /> Todas las firmas están completas — ya se puede decidir y publicar.</p>
             )}
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => guardar("Sí pasa")} disabled={guardando || !dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> Sí pasa</button>
-              <button onClick={() => guardar("No pasa")} disabled={guardando || !dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
-              <button onClick={() => guardar("Pasa a UCP (dictamen formal)")} disabled={guardando || !dosFirmas || decidido} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed">Pasa a UCP (dictamen formal)</button>
+              <button onClick={() => guardar("Sí pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><Check className="h-4 w-4" /> {cadenaCompleta ? "✓ Lista para publicar — Sí pasa" : "Sí pasa"}</button>
+              <button onClick={() => guardar("No pasa")} disabled={guardando || !cadenaCompleta || decidido} className="flex items-center gap-1.5 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"><X className="h-4 w-4" /> No pasa</button>
               {decidido && (
                 <button onClick={() => setGuardado(null)} className="flex items-center gap-1.5 rounded-md border border-[color:var(--teal)] px-4 py-2 text-sm font-medium text-[color:var(--teal)] hover:bg-[color:var(--teal)]/10"><RefreshCw className="h-4 w-4" /> Re-pre-dictaminar</button>
               )}
@@ -1436,9 +1421,6 @@ export function RecorridoActor({
                 </div>
               </div>
             )}
-            <button onClick={() => abrirDestino("contabilidad")} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "var(--teal)" }}>
-              <Mail className="h-4 w-4" /> Solicitar precio / enviar
-            </button>
             {guardado && !/no pasa/i.test(guardado) && (
               <button onClick={() => setVerRegistral(true)} className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white" style={{ background: "#B26B00" }}>
                 <ArrowRight className="h-4 w-4" /> Continuar al registral
