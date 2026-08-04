@@ -250,6 +250,8 @@ export function RecorridoActor({
   const [enviandoValidacion, setEnviandoValidacion] = useState(false);
   const [validacionMsg, setValidacionMsg] = useState<string | null>(null);
   const [rechazoInfo, setRechazoInfo] = useState<{ motivo: string; fecha: string; etapa?: string } | null>(null);
+  const [verBannerValidar, setVerBannerValidar] = useState(false);
+  const [bannerValidarInfo, setBannerValidarInfo] = useState<{ para: string; asunto: string; mensaje: string; adjuntos: { nombre: string; tipo: string; base64: string }[] } | null>(null);
   const mandarAValidar = async () => {
     if (!firmaElabora) return;
     if (!borradorIdLocal) { setValidacionMsg("⚠️ Espera a que se guarde el borrador (unos segundos) e intenta de nuevo."); return; }
@@ -258,26 +260,30 @@ export function RecorridoActor({
     const correo = await correoDeRol("DIL");
     const destino = correo || window.prompt("¿A qué correo mando el link de validación (DIL)?") || "";
     if (!destino) { setEnviandoValidacion(false); return; }
+    // Vista previa antes de mandar (con el link de firma y el PDF adjunto) —
+    // igual que en Editor de Contratos, en vez de mandarlo en silencio.
     const r = await crearYEnviarSolicitudFirma({
       area: "URRJ", predictamenId: borradorIdLocal, casoId: d.caso_id || "", slot: "dil",
       correoEsperado: destino, tituloSlot: TITULO_ETAPA.dil,
       expedienteTexto: d.expediente || d.numeroCredito || "pre-dictamen URRJ",
+      soloCrearLink: true,
     });
-    // Antes esto solo cambiaba la pantalla (memoria del navegador) y nunca se
-    // guardaba en la base — si alguien recargaba la página antes de que DIL
-    // firmara, se veía como si nunca se hubiera mandado a validar. Ahora se
-    // guarda de una vez en predictamen, igual que hace avanzarCadena en los
-    // siguientes pasos (DIL → UCM → Precio → DGE).
-    if (r.ok) {
-      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${borradorIdLocal}`, {
-        method: "PATCH",
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ etapa_firma: "dil", firma_elabora: firmaElabora?.nombre || null, firma_elabora_fecha: firmaElabora?.fecha || null }),
-      });
-    }
     setEnviandoValidacion(false);
+    if (!r.ok || !r.link) { setValidacionMsg(`⚠️ ${r.error || "No se pudo generar el link."}`); return; }
+    await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${borradorIdLocal}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ etapa_firma: "dil", firma_elabora: firmaElabora?.nombre || null, firma_elabora_fecha: firmaElabora?.fecha || null }),
+    });
     setEtapaFirma("dil");
-    setValidacionMsg(r.ok ? (r.enviado ? `✅ Enviado a ${destino} — y ya aparece en "Mis validaciones" si tiene usuario.` : `Link generado — se abrió tu correo para mandarlo a ${destino} a mano.`) : `⚠️ ${r.error || "No se pudo mandar a validar."}`);
+    const base64 = await descargarPredictamenPDF(construirDatosPDF("(borrador)"), "base64") as string;
+    setBannerValidarInfo({
+      para: destino,
+      asunto: `Firma/validación requerida · ${d.expediente || d.numeroCredito || ""} · ${TITULO_ETAPA.dil}`,
+      mensaje: `Hola,\n\nSe requiere tu firma/validación (${TITULO_ETAPA.dil}) en el dictamen de ${d.expediente || d.numeroCredito || ""}.\n\nEntra a este link con tu cuenta de DIIPA para revisar los documentos, el PDF, y firmar o rechazar:\n${r.link}\n\nTambién va adjunto el PDF del pre-dictamen.\n\nSi tienes usuario en JusticiaFácil, también lo vas a ver en "Mis validaciones" al entrar.\n\nGracias.`,
+      adjuntos: base64 ? [{ nombre: `predictamen_${d.expediente || d.numeroCredito || "urrj"}.pdf`, tipo: "application/pdf", base64 }] : [],
+    });
+    setVerBannerValidar(true);
   };
   // Simula (dentro de la misma pantalla, para quien ya tiene sesión y está
   // viendo el caso) el firmar/rechazar de DIL/UCM/DGE — el mismo efecto que
@@ -977,6 +983,23 @@ export function RecorridoActor({
           }
           onCerrar={() => setVerBanner(false)}
           onEnviado={() => registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "correo_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `A ${destino} · Asunto: ${asuntoBanner}\n\n${mensajeBanner}`, detalle: `Enviado a ${destino}` })}
+        />
+      )}
+
+      {verBannerValidar && bannerValidarInfo && (
+        <BannerCorreo
+          titulo="Mandar a validar (DIL) — dictamen jurídico"
+          paraInicial={bannerValidarInfo.para}
+          asuntoInicial={bannerValidarInfo.asunto}
+          mensajeInicial={bannerValidarInfo.mensaje}
+          adjuntosIniciales={bannerValidarInfo.adjuntos}
+          folio={d.expediente}
+          extra={<p className="text-[11px] text-muted-foreground">Este correo incluye el <b>link para firmar/validar</b> y el <b>PDF del pre-dictamen</b> adjunto — revisa antes de mandarlo.</p>}
+          onCerrar={() => setVerBannerValidar(false)}
+          onEnviado={() => {
+            setValidacionMsg(`✅ Enviado a ${bannerValidarInfo.para} — y ya aparece en "Mis validaciones" si tiene usuario.`);
+            registrarEvento({ caso_id: d.caso_id || null, expediente: d.expediente || null, tipo: "correo_juridico", resultado: dictamen.txt, firma_elabora: firmaElabora?.nombre || null, detalle: `Mandado a validar (${TITULO_ETAPA.dil}), con link de firma y PDF adjunto.` });
+          }}
         />
       )}
 
