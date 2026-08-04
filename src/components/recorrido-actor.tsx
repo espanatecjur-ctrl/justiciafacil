@@ -64,7 +64,7 @@ interface Datos {
   // H1 registral
   hipotecaInscrita: string; prelacion: string; propietario: string; anotaciones: string;
   // H2 procesal
-  etapa: string; sentenciaFirme: string; situacion: string; ultimaActuacion: string;
+  etapa: string; sentenciaFirme: string; fechaSentenciaFirme: string; situacion: string; ultimaActuacion: string;
   declaradoRebeldia: string; hayAdjudicacionDirecta: string; adjudicacionFirme: string; hayIncidenteNulidad: string; sentenciaEjecutoria: string; detalleProcesal: string;
   // Cascada · caducidad → prescripción/usucapión
   hayCaducidadDeclarada: string; fechaCaducidadDeclarada: string; nuevoJuicioFecha: string; enEjecucionSentenciaFirme: string;
@@ -90,7 +90,7 @@ const VACIO: Datos = {
   caso_id: "", expediente: "", numeroCredito: "", juzgado: "", ubicacion: "", deudor: "",
   quienCede: "", queCede: QUE_CEDE[0], tipoJuicio: "Hipotecario", posicion: "Actor", estado: "Sinaloa",
   hipotecaInscrita: "", prelacion: "", propietario: "", anotaciones: "",
-  etapa: "", sentenciaFirme: "", situacion: "", ultimaActuacion: "",
+  etapa: "", sentenciaFirme: "", fechaSentenciaFirme: "", situacion: "", ultimaActuacion: "",
   declaradoRebeldia: "", hayAdjudicacionDirecta: "", adjudicacionFirme: "", hayIncidenteNulidad: "", sentenciaEjecutoria: "", detalleProcesal: "",
   hayCaducidadDeclarada: "no", fechaCaducidadDeclarada: "", nuevoJuicioFecha: "", enEjecucionSentenciaFirme: "no",
   ultimoPago: "", emplazado: "no", fechaEmplazamiento: "", tipoAccion: "hipotecaria",
@@ -1118,6 +1118,9 @@ export function RecorridoActor({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Campo label="Etapa del juicio"><select className={inp} value={d.etapa} onChange={(e) => set("etapa", e.target.value)}><option value="">—</option><option>Admisión</option><option>Emplazamiento</option><option>Contestación</option><option>Pruebas</option><option>Sentencia interlocutoria</option><option>Sentencia</option><option>En apelación</option><option>Sentencia firme (ejecutoriada)</option><option>Ejecución</option><option>Remate</option></select></Campo>
               <Campo label="¿Sentencia firme a favor?"><SiNo v={d.sentenciaFirme} on={(x) => set("sentenciaFirme", x)} /></Campo>
+              {d.sentenciaFirme === "si" && (
+                <Campo label="Fecha en que quedó firme (causó estado / ejecutoria)"><input type="date" className={inp} value={d.fechaSentenciaFirme} onChange={(e) => set("fechaSentenciaFirme", e.target.value)} /></Campo>
+              )}
               <Campo label="Situación"><select className={inp} value={d.situacion} onChange={(e) => set("situacion", e.target.value)}><option value="">—</option><option>En trámite</option><option>En ejecución</option><option>En amparo</option><option>Suspendido</option></select></Campo>
               <Campo label="Fecha de última actuación procesal"><input type="date" className={inp} value={d.ultimaActuacion} onChange={(e) => set("ultimaActuacion", e.target.value)} /></Campo>
               <Campo label="¿Demandado declarado en rebeldía?"><SiNo v={d.declaradoRebeldia} on={(x) => set("declaradoRebeldia", x)} /></Campo>
@@ -1245,7 +1248,7 @@ export function RecorridoActor({
               <Aviso r={{
                 semaforo: "verde",
                 etiqueta: "Ya es cosa juzgada",
-                detalle: "El cálculo de arriba muestra riesgo de prescripción, pero ya hay sentencia firme a favor (capturada en \"Estado procesal real\") y nadie la opuso como defensa — legalmente ya no se puede volver a alegar. Es solo referencia histórica, no cambia el resultado del caso.",
+                detalle: `El cálculo de arriba muestra riesgo de prescripción, pero ya hay sentencia firme a favor${d.fechaSentenciaFirme ? ` (quedó firme el ${d.fechaSentenciaFirme})` : ""} y nadie la opuso como defensa — legalmente ya no se puede volver a alegar. Es solo referencia histórica, no cambia el resultado del caso.`,
               }} />
             )}
             <Aviso r={rCaduc} />
@@ -1324,7 +1327,7 @@ export function RecorridoActor({
                 <Aviso r={{
                   semaforo: "verde",
                   etiqueta: "Ya es cosa juzgada",
-                  detalle: "El cálculo muestra riesgo de prescripción, pero ya hay sentencia firme a favor y nadie la opuso como defensa — ya no se puede volver a alegar. Es solo referencia histórica.",
+                  detalle: `El cálculo muestra riesgo de prescripción, pero ya hay sentencia firme a favor${d.fechaSentenciaFirme ? ` (quedó firme el ${d.fechaSentenciaFirme})` : ""} y nadie la opuso como defensa — ya no se puede volver a alegar. Es solo referencia histórica.`,
                 }} />
               )}
               <Aviso r={rCaduc} />{usaUsucapion && <Aviso r={rUsuc} />}
