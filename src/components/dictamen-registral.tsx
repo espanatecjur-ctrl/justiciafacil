@@ -163,12 +163,52 @@ export function DictamenRegistral({
   const [seed, setSeed] = useState(0);
   const abrirBanner = () => { setSeed((x) => x + 1); setVerBanner(true); };
 
+  // ---- Banner de "Mandar a validar (DIL)" — vista previa antes de enviar,
+  // con el link de firma y el PDF ya adjunto (igual que el editor de
+  // contratos: revisa y edita antes de darle "Enviar").
+  const [verBannerValidar, setVerBannerValidar] = useState(false);
+  const [preparandoValidar, setPreparandoValidar] = useState(false);
+  const [bannerValidarInfo, setBannerValidarInfo] = useState<{ para: string; asunto: string; mensaje: string; adjuntos: { nombre: string; tipo: string; base64: string }[] } | null>(null);
+  const prepararBannerValidar = async () => {
+    setPreparandoValidar(true);
+    try {
+      const dilRows = await fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=nombre,correo&rol=eq.DIL&activo=eq.true&limit=1`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      }).then((r) => (r.ok ? r.json() : []));
+      const dil = dilRows?.[0];
+      if (!dil?.correo) { setAvisoValidacion("⚠️ No se encontró a DIL en colaboradores — avísale a mano."); return; }
+      if (!draftId) { setAvisoValidacion("⚠️ Guarda primero el dictamen registral para poder generar el link."); return; }
+      const { crearYEnviarSolicitudFirma } = await import("@/lib/firma-solicitud");
+      const r = await crearYEnviarSolicitudFirma({
+        area: "URRJ", registralId: draftId, casoId: casoId || "", slot: "dil",
+        correoEsperado: dil.correo, tituloSlot: "Valida registral (RPPC) · DIL",
+        expedienteTexto: `${d.numeroCredito || ""} (${d.acreditado || ""})`,
+        soloCrearLink: true,
+      });
+      if (!r.ok || !r.link) { setAvisoValidacion("⚠️ No se pudo generar el link, intenta de nuevo."); return; }
+      const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+      const base64 = await descargarPredictamenPDF(construirDatosPDF(), "base64") as string;
+      const asunto = `Firma/validación requerida · ${d.numeroCredito || ""} · Valida registral (RPPC) · DIL`;
+      const mensaje = `Hola,\n\nSe requiere tu firma/validación (Valida registral · DIL) en el dictamen registral de ${d.numeroCredito || ""} (${d.acreditado || "—"}).\n\nEntra a este link con tu cuenta de DIIPA para revisar los documentos, el PDF, y firmar o rechazar:\n${r.link}\n\nTambién va adjunto el PDF del dictamen registral.\n\nSi tienes usuario en JusticiaFácil, también lo vas a ver en "Mis validaciones" al entrar.\n\nGracias.`;
+      setBannerValidarInfo({
+        para: dil.correo, asunto, mensaje,
+        adjuntos: base64 ? [{ nombre: `dictamen_registral_${d.numeroCredito || "urrj"}.pdf`, tipo: "application/pdf", base64 }] : [],
+      });
+      setVerBannerValidar(true);
+    } catch { setAvisoValidacion("⚠️ No se pudo preparar el correo, intenta de nuevo."); }
+    finally { setPreparandoValidar(false); }
+  };
+
   // ---- Cotejo con el pre-dictamen JURÍDICO (RPPC vs jurídico) ----
   const [juridico, setJuridico] = useState<{ datos: any; resultados: any; dictamen_final: string | null; folio: string | null; etapa_firma: string | null; firma_elabora: any; firma_dil: any } | null>(null);
   useEffect(() => {
     const conds: string[] = [];
     if (casoId) conds.push(`caso_id.eq.${casoId}`);
-    if (d.numeroCredito && d.numeroCredito.trim()) conds.push(`expediente.eq.${encodeURIComponent(d.numeroCredito.trim())}`);
+    // El número de crédito NO vive en la columna "expediente" del jurídico
+    // (esa es el expediente judicial, ej. 188/2023) — vive dentro de
+    // datos->>numeroCredito. Antes esto comparaba contra la columna
+    // equivocada y nunca encontraba el jurídico, aunque sí existiera.
+    if (d.numeroCredito && d.numeroCredito.trim()) conds.push(`datos->>numeroCredito.eq.${encodeURIComponent(d.numeroCredito.trim())}`);
     if (conds.length === 0) { setJuridico(null); return; }
     const filtro = conds.length === 1 ? conds[0].replace(".eq.", "=eq.") : `or=(${conds.join(",")})`;
     fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=datos,resultados,dictamen_final,folio,etapa_firma,firma_elabora,firma_dil&vigente=eq.true&en_papelera=eq.false&${filtro}&limit=1`, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
@@ -589,6 +629,9 @@ export function DictamenRegistral({
                   </div>
                   <p className="text-[11px] text-muted-foreground">Jurídico: <b className="text-foreground">{c.jur}</b></p>
                   <p className="text-[11px] text-muted-foreground">Registral: <b className="text-foreground">{c.reg}</b></p>
+                  {c.campo === "Titular / propietario" && c.estado === "anomalia" && (
+                    <p className="mt-1 text-[11px] font-medium text-red-700">⚠ El deudor original ya no es el dueño registral — la garantía se vendió a un tercero. Por ley (Art. 11 CPC Jalisco / Art. 12 CPC Sinaloa), la acción hipotecaria sigue contra quien hoy posea el inmueble a título de dueño, y hay jurisprudencia de la SCJN que dice que NO es válido ordenar la ejecución de la hipoteca en una sentencia que resolvió una acción personal — se necesita demandar al nuevo propietario aparte. Verifica esto con el abogado antes de ejecutar.</p>
+                  )}
                 </div>
               );
             })}
@@ -623,8 +666,8 @@ export function DictamenRegistral({
           {guardado?.includes("✓") ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar dictamen registral"}
         </button>
         {!firmaValida && (
-          <button onClick={() => avisarDIL(true)} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white" style={{ background: "#0C5C46" }}>
-            <Mail className="h-4 w-4" /> 📧 Mandar a validar (DIL)
+          <button onClick={prepararBannerValidar} disabled={preparandoValidar} className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
+            <Mail className="h-4 w-4" /> {preparandoValidar ? "Preparando…" : "📧 Mandar a validar (DIL)"}
           </button>
         )}
         {avisoValidacion && <span className="text-xs text-[color:var(--teal)]">{avisoValidacion}</span>}
@@ -657,6 +700,25 @@ export function DictamenRegistral({
           }
           onCerrar={() => setVerBanner(false)}
           onEnviado={() => registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, vista_previa: `Estado registral · Asunto: ${asuntoBanner}\n\n${mensajeBanner}`, detalle: "Informado estado registral" })}
+        />
+      )}
+
+      {verBannerValidar && bannerValidarInfo && (
+        <BannerCorreo
+          titulo="Mandar a validar (DIL) — dictamen registral"
+          paraInicial={bannerValidarInfo.para}
+          asuntoInicial={bannerValidarInfo.asunto}
+          mensajeInicial={bannerValidarInfo.mensaje}
+          adjuntosIniciales={bannerValidarInfo.adjuntos}
+          folio={d.numeroCredito}
+          extra={
+            <p className="text-[11px] text-muted-foreground">Este correo incluye el <b>link para firmar/validar</b> y el <b>PDF del dictamen registral</b> adjunto — revisa antes de mandarlo.</p>
+          }
+          onCerrar={() => setVerBannerValidar(false)}
+          onEnviado={() => {
+            setAvisoValidacion(`📧 Se avisó a ${bannerValidarInfo.para} para validar.`);
+            registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "correo_registral", resultado: d.resultado || null, firma_elabora: firmaElabora?.nombre || null, detalle: "Mandado a validar (DIL), con link de firma y PDF adjunto." });
+          }}
         />
       )}
     </div>
