@@ -18,7 +18,9 @@ export interface Fila {
   dictamen_sugerido: string | null; dictamen_final: string | null; created_at: string;
   datos: any; resultados: any; vigente?: boolean; cambios?: string | null; version?: number; terminado?: boolean;
   abogado_id?: string | null; abogado_nombre?: string | null; caso_id?: string | null;
-  firma_elabora?: string | null; firma_dil?: string | null; firma_valida?: string | null;
+  firma_elabora?: string | null; firma_elabora_fecha?: string | null;
+  firma_dil?: string | null; firma_dil_fecha?: string | null;
+  firma_valida?: string | null; firma_valida_fecha?: string | null;
   firma_ucm?: string | null; firma_dge?: string | null; etapa_firma?: string | null;
 }
 
@@ -350,12 +352,23 @@ export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }
 
   const descargar = async () => {
     const { descargarPredictamenPDF } = await import("@/lib/predictamen-pdf");
+    // Las columnas firma_elabora/firma_dil son las que SIEMPRE se actualizan
+    // en cuanto alguien firma (aunque todavía no se haya decidido el
+    // dictamen) — resultados.firmas solo se llena hasta la decisión final,
+    // así que si se usaba solo eso, el PDF salía sin firmas mientras el
+    // expediente seguía en trámite, aunque ya estuviera firmado de verdad.
+    const firmaElaboraPDF = f.firma_elabora
+      ? { nombre: f.firma_elabora, cargo: "Abogado URRJ", fecha: f.firma_elabora_fecha || "", dibujo: null }
+      : firmas.elabora || null;
+    const firmaValidaPDF = (f.firma_dil || f.firma_valida)
+      ? { nombre: f.firma_dil || f.firma_valida, cargo: "Director Legal (DIL)", fecha: f.firma_dil_fecha || f.firma_valida_fecha || "", dibujo: null }
+      : firmas.valida || null;
     await descargarPredictamenPDF({
       expediente: f.expediente || "", juzgado: f.juzgado || "", estado: f.estado || "", tipoJuicio: f.tipo_juicio || "", posicion: f.posicion || "",
       ubicacion: d.ubicacion || "", deudor: d.deudor || d.deCujus || "", quienCede: d.quienCede || d.acreedor || d.heredero || "", queCede: d.queCede || "Derechos",
       dictamen: f.dictamen_sugerido || "", riesgos: riesgos.map((r) => ({ nombre: r.k, r: r.v })),
       intereses: fin ? { ordinarios: fin.ordinarios, moratorios: fin.moratorios, iva: fin.iva, total: fin.totalDeuda, udis: fin.udis, usura: fin.alertaUsura } : { ordinarios: 0, moratorios: 0, iva: 0, total: vaae?.vaae || 0, usura: false },
-      admin: null, anotaciones: d.anotacionesHumanas || d.anotaciones || "", firmaElabora: firmas.elabora || null, firmaValida: firmas.valida || null, decision: f.dictamen_final || "",
+      admin: null, anotaciones: d.anotacionesHumanas || d.anotaciones || "", firmaElabora: firmaElaboraPDF, firmaValida: firmaValidaPDF, decision: f.dictamen_final || "",
       noValido: f.vigente === false,
       cambios: (() => { try { return f.cambios ? JSON.parse(f.cambios) : null; } catch { return null; } })(),
     });
