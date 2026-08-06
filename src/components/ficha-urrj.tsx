@@ -168,7 +168,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
     }).catch(() => {});
     const filtro = garantia.predictamenId ? `id=eq.${garantia.predictamenId}`
       : garantia.id ? `caso_id=eq.${garantia.id}` : garantia.expediente ? `expediente=eq.${encodeURIComponent(garantia.expediente)}` : "id=eq.0";
-    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_valida,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
+    fetch(`${SUPABASE_URL}/rest/v1/predictamen?select=id,folio,posicion,version,dictamen_sugerido,dictamen_final,pasa_a_ucp,firma_elabora,firma_elabora_fecha,firma_dil,firma_dil_fecha,firma_ucm,firma_ucm_fecha,firma_dge,firma_dge_fecha,etapa_firma,rechazo_motivo,rechazo_etapa,rechazo_fecha,terminado,datos,pdf_url,created_at&${filtro}&vigente=eq.true&order=created_at.desc&limit=1`, { headers })
       .then((r) => r.ok ? r.json() : [])
       .then((rows: any[]) => {
         const pr = rows?.[0] || null;
@@ -753,7 +753,26 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${predJur.terminado ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-800"}`}>{predJur.terminado ? "Dictamen jurídico terminado" : "Pre-dictamen abierto"}</span>
               </div>
               <p className="mt-1.5 text-xs text-emerald-800">Resultado: <b>{predJur.dictamen_sugerido || "—"}</b> · versión {predJur.version || 1}</p>
-              <p className="text-xs text-emerald-800">Firmas: Elabora {predJur.firma_elabora ? "✓" : "—"} · Valida {predJur.firma_valida ? "✓" : "—"}</p>
+              <p className="text-xs text-emerald-800">
+                Firmas: Elabora {predJur.firma_elabora ? "✓" : "—"} · DIL {predJur.firma_dil ? "✓" : "—"} · UCM {predJur.firma_ucm ? "✓" : "—"} · DGE {predJur.firma_dge ? "✓" : "—"}
+              </p>
+              {/* Mini banner: a quién le toca ahora, o por qué se devolvió. */}
+              {predJur.rechazo_motivo ? (
+                <div className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-800">
+                  🔴 Devuelto a reelaborar en <b>{predJur.rechazo_etapa || "—"}</b>: {predJur.rechazo_motivo}
+                </div>
+              ) : predJur.terminado ? (
+                <div className="mt-1.5 rounded-md border border-emerald-300 bg-emerald-100 px-2 py-1 text-[11px] text-emerald-800">
+                  ✅ Las 4 firmas completas — dictamen cerrado.
+                </div>
+              ) : (
+                <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                  {!predJur.firma_dil ? "🟡 Falta mandar a firmar y validar con DIL." :
+                   !predJur.firma_ucm ? "🟡 Falta mandar a firmar y validar con UCM." :
+                   "🟡 Falta mandar a firmar y validar con DGE."}
+                  {" "}Cada firmante puede aprobar y avanzar, o devolverlo con sus anotaciones si no procede.
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 <button onClick={() => setPreview(preview === "juridico" ? null : "juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
                 {predJur.pdf_url
@@ -817,7 +836,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               <div>Dictamen sistema: <b className="text-foreground">{predJur.dictamen_sugerido || "—"}</b></div>
               <div>Decisión: <b className="text-foreground">{predJur.dictamen_final || "—"}</b></div>
               <div>Elabora: <b className="text-foreground">{predJur.firma_elabora ? "✓ firmado" : "— sin firmar"}</b></div>
-              <div>Valida (DIL): <b className="text-foreground">{predJur.firma_valida ? "✓ firmado" : "— sin firmar"}</b></div>
+              <div>DIL: <b className="text-foreground">{predJur.firma_dil ? "✓ firmado" : "— sin firmar"}</b></div>
+              <div>UCM: <b className="text-foreground">{predJur.firma_ucm ? "✓ firmado" : "— sin firmar"}</b></div>
+              <div>DGE: <b className="text-foreground">{predJur.firma_dge ? "✓ firmado" : "— sin firmar"}</b></div>
             </div>
             <VistaPreviaRespuestas datos={predJur.datos} />
           </div>
