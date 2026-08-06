@@ -18,6 +18,7 @@ import { ClipboardList, Plus, Paperclip, Loader2, X, CheckSquare, Square, User, 
 import { recomendacionParaEtapa } from "@/lib/recomendaciones-juridicas";
 import { crearEvento, actualizarEvento, eliminarEvento } from "@/lib/evento-agenda";
 import { avisarTareaPorCorreo } from "@/lib/avisar-tarea";
+import { listarColaboradoresJC, plataformaDeAreaJC } from "@/lib/tareas-jc";
 import { crearNotificacion } from "@/lib/notificaciones";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
@@ -85,6 +86,21 @@ export function PanelSeguimiento({ caso, expediente }: { caso?: CasoJuridico; ex
   useEffect(() => {
     cargarTareas();
     sbSelect<Colaborador>("colaboradores", "select=id,nombre,rol,correo&activo=eq.true&order=nombre").then(setColabs).catch(() => setColabs([]));
+    // Además de los colaboradores de JusticiaFácil, se agregan los de JurisConecta
+    // (ej. RAC, Comercial) para poder asignarles tareas directo desde aquí.
+    listarColaboradoresJC().then((jc) => {
+      if (!jc.length) return;
+      const extra: Colaborador[] = jc.map((c) => ({
+        id: "jc:" + c.correo,
+        nombre: `${c.nombre} (${plataformaDeAreaJC(c.area)})`,
+        rol: c.rol || c.area || null,
+        correo: c.correo,
+      }));
+      setColabs((prev) => {
+        const yaHay = new Set(prev.map((p) => p.correo));
+        return [...prev, ...extra.filter((e) => !yaHay.has(e.correo))];
+      });
+    }).catch(() => {});
     (async () => { try { const a = await getAuth(); const { data } = await a.auth.getSession(); setCorreoYo(data.session?.user?.email ?? null); } catch { /* sin sesión */ } })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exp]);
