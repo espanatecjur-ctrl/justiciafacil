@@ -51,7 +51,6 @@ function detalleDe(d: DocumentoGarantia): string {
   if (d.nota) partes.push(d.nota);
   if (d.tipo === "tarea" && d.asignado_a) partes.push(`asignada a ${d.asignado_a}`);
   if (d.tipo === "actuacion" && d.proxima_actuacion) partes.push(`sigue: ${d.proxima_actuacion}`);
-  if (d.nombre) partes.push(d.nombre);
   return partes.join(" · ") || "—";
 }
 
@@ -215,7 +214,19 @@ export function DocumentosGarantia({ area, caso }: { area: string; caso: CasoJur
                       <div className="flex items-start gap-1.5">
                         {d.link && iconoArchivo(d.mime, d.nombre)}
                         <div className="min-w-0">
-                          <span className="whitespace-normal break-words" title={detalleDe(d)}>{detalleDe(d)}</span>
+                          {/* Nombre del documento, visible de primero y clicable directo (sin entrar al menú de 3 puntos). */}
+                          {d.nombre && (
+                            d.link ? (
+                              <a href={d.link} target="_blank" rel="noreferrer" className="font-medium text-[color:var(--teal)] hover:underline break-words">
+                                {d.nombre}
+                              </a>
+                            ) : (
+                              <span className="font-medium break-words">{d.nombre}</span>
+                            )
+                          )}
+                          {detalleDe(d) !== "—" && (
+                            <div><span className="whitespace-normal break-words text-muted-foreground" title={detalleDe(d)}>{detalleDe(d)}</span></div>
+                          )}
                           {d.drive_copia ? (
                             <a
                               href={urlsRelacionados[d.drive_copia.storage_path] || "#"}
