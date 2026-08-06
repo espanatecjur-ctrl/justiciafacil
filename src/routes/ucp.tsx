@@ -376,13 +376,15 @@ function UCP() {
   }, [baseUCP, predPorCaso, dictPorCaso]);
 
   const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    // Sin acentos ni mayúsculas, para que "ramon" encuentre "Ramón" y viceversa.
+    const nzBusca = (s: any) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const q = nzBusca(busca);
     let lista = baseUCP.filter((c) => {
       if (modo === "dictaminables" && !(c.id && predPorCaso[c.id])) return false;
       if (modo === "recientes" && dictPorCaso[c.id]?.estado === "etapa_b") return false; // las que ya están en UCM no
       if (!q) return true;
       return [c.expediente, c.cliente_nombre, c.direccion_garantia, c.juzgado, (c as any).gar_id, (c as any).no_credito, c.cliente_codigo]
-        .some((v) => (v || "").toString().toLowerCase().includes(q));
+        .some((v) => nzBusca(v).includes(q));
     });
     if (modo === "recientes") {
       lista = [...lista].sort((a, b) => String((b as any).created_at || "").localeCompare(String((a as any).created_at || "")));
