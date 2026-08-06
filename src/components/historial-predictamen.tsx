@@ -360,7 +360,16 @@ export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }
     const firmaElaboraPDF = f.firma_elabora
       ? { nombre: f.firma_elabora, cargo: "Abogado URRJ", fecha: f.firma_elabora_fecha || "", dibujo: null }
       : firmas.elabora || null;
-    const firmaValidaPDF = (f.firma_dil || f.firma_valida)
+    // La plantilla del PDF solo tiene espacio para 2 firmas (Elabora + una
+    // segunda). Como la cadena real tiene 4 pasos (Elabora → DIL → UCM →
+    // DGE), la segunda casilla muestra siempre la MÁS AVANZADA que ya se
+    // haya firmado, para que el PDF refleje el avance real según se van
+    // haciendo las firmas, sin esperar a que esté 100% terminado.
+    const firmaValidaPDF = f.firma_dge
+      ? { nombre: f.firma_dge, cargo: "Dirección General (DGE)", fecha: f.firma_dge_fecha || "", dibujo: null }
+      : f.firma_ucm
+      ? { nombre: f.firma_ucm, cargo: "Abogado UCM", fecha: f.firma_ucm_fecha || "", dibujo: null }
+      : (f.firma_dil || f.firma_valida)
       ? { nombre: f.firma_dil || f.firma_valida, cargo: "Director Legal (DIL)", fecha: f.firma_dil_fecha || f.firma_valida_fecha || "", dibujo: null }
       : firmas.valida || null;
     await descargarPredictamenPDF({
