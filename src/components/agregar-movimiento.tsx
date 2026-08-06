@@ -4,6 +4,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { guardarMovimiento, type DatosMovimiento, type DocumentoGarantia } from "@/lib/drive";
 import { tipoJuicioPorClave } from "@/lib/etapas-juicio";
 import { obtenerSeguimiento } from "@/lib/seguimiento-juicio";
+import { listarColaboradoresJC, plataformaDeAreaJC } from "@/lib/tareas-jc";
 
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
@@ -45,6 +46,15 @@ export function AgregarMovimientoModal({ area, caso, onClose, onCreado }: {
   useEffect(() => {
     fetch(`${SUPABASE_URL}/rest/v1/colaboradores?select=id,nombre,rol,correo&activo=eq.true&order=nombre`, { headers: wHeaders })
       .then((r) => (r.ok ? r.json() : [])).then(setColabs).catch(() => {});
+    // También los de JurisConecta (RAC, Comercial, etc.) para poder asignarles la tarea directo desde aquí.
+    listarColaboradoresJC().then((jc) => {
+      if (!jc.length) return;
+      const extra: Colab[] = jc.map((c) => ({ id: "jc:" + c.correo, nombre: c.nombre, rol: plataformaDeAreaJC(c.area) + (c.rol ? " · " + c.rol : ""), correo: c.correo }));
+      setColabs((prev) => {
+        const yaHay = new Set(prev.map((p) => p.nombre + "|" + p.correo));
+        return [...prev, ...extra.filter((e) => !yaHay.has(e.nombre + "|" + e.correo))];
+      });
+    }).catch(() => {});
   }, []);
 
   // carga las etapas del juicio si ya está configurado el seguimiento
