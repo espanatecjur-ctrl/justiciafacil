@@ -18,6 +18,14 @@ const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` 
 
 export type FuenteDocumento = "digital" | "fisico";
 export type EstadoBaja = "activo" | "baja_solicitada" | "baja_autorizada" | "baja_rechazada";
+export type TipoCopia = "original" | "copia_certificada" | "copia_simple" | "digital_nativo";
+
+export const TIPOS_COPIA: { value: TipoCopia; label: string }[] = [
+  { value: "original", label: "Original" },
+  { value: "copia_certificada", label: "Copia certificada" },
+  { value: "copia_simple", label: "Copia simple" },
+  { value: "digital_nativo", label: "Digital (nunca tuvo papel)" },
+];
 
 export interface DocumentoArchivo {
   id: string;
@@ -45,6 +53,8 @@ export interface DocumentoArchivo {
   es_fisico: boolean;
   digitalizado: boolean;
   ubicacion: UbicacionJudicial | null;
+  tipo_copia: TipoCopia | null;
+  copiaPendiente: boolean; // viene de drive_copia sin fila propia todavía en documento_garantia — se formaliza al usarla
 
   // estado del ciclo de vida (baja documental)
   estado_baja: EstadoBaja;
@@ -128,6 +138,8 @@ export async function buscarArchivoGeneral(termino: string): Promise<DocumentoAr
       es_fisico: !!d.es_fisico,
       digitalizado: true,
       ubicacion: ubicacionPropia || ubicacionCaso || null,
+      tipo_copia: (d.tipo_copia as TipoCopia) ?? null,
+      copiaPendiente: false,
       estado_baja: (d.estado_baja as EstadoBaja) || "activo",
       baja_motivo: d.baja_motivo ?? null,
       baja_solicitado_por: d.baja_solicitado_por ?? null,
@@ -162,6 +174,8 @@ export async function buscarArchivoGeneral(termino: string): Promise<DocumentoAr
       es_fisico: true,
       digitalizado: !!f.digitalizado,
       ubicacion: ubicacionPropia || ubicacionCaso || null,
+      tipo_copia: (f.tipo_copia as TipoCopia) ?? null,
+      copiaPendiente: false,
       estado_baja: (f.estado_baja as EstadoBaja) || "activo",
       baja_motivo: f.baja_motivo ?? null,
       baja_solicitado_por: f.baja_solicitado_por ?? null,
@@ -213,7 +227,87 @@ async function correoActual(): Promise<string | null> {
 const writeHeaders = { ...headers, "Content-Type": "application/json", Prefer: "return=representation" };
 const tablaDe = (doc: DocumentoArchivo) => (doc.fuente === "digital" ? "documento_garantia" : "documento_fisico");
 
-/** Cualquiera puede solicitar la baja de un documento — queda pendiente de que DIL/DGE la resuelva. */
+/** Todos los documentos de UN solo asunto — digitales, copiados del Drive sin formalizar,
+ *  y físicos — para la ficha completa (vista en vivo). No busca por texto: trae todo. */
+export async function documentosDeAsunto(asunto: {
+  unidad: string;
+  id: string;
+  casoJuridicoId: string | null;
+}): Promise<DocumentoArchivo[]> {
+  const { listarCopias, firmarCopias } = await import("@/lib/drive-explorar");
+  const resultado: DocumentoArchivo[] = [];
+
+  let caso: any = null;
+  let ubicacionCaso: UbicacionJudicial | null = null;
+  if (asunto.casoJuridicoId) {
+    const c = await sb<any>("caso_juridico", `select=*&id=eq.${asunto.casoJuridicoId}`);
+    caso = c[0] ?? null;
+    if (caso) ubicacionCaso = detectarUbicacion(caso);
+  }
+
+  const driveIdYaVistos = new Set<string>();
+
+  if (asunto.casoJuridicoId) {
+    const digitales = await sb<any>("documento_garantia", `select=*&caso_id=eq.${asunto.casoJuridicoId}&en_papelera=eq.false&order=created_at.desc`);
+    for (const d of digitales) {
+      if (d.drive_id) driveIdYaVistos.add(d.drive_id);
+      resultado.push({
+        id: d.id, fuente: "digital", nombre: d.nombre, cliente: caso?.cliente_nombre ?? null,
+        expediente: d.expediente ?? caso?.expediente ?? null, folio: caso?.folio ?? null, gar_id: caso?.gar_id ?? null,
+        no_credito: caso?.no_credito ?? null, unidad: caso?.unidad ?? asunto.unidad, link: d.link, drive_id: d.drive_id,
+        subido_por: d.subido_por, registrado_por: null, tipo_asunto: null, carpeta_fisica: d.carpeta_fisica ?? null,
+        resguardo_de: d.resguardo_de ?? d.asignado_a ?? null, es_fisico: !!d.es_fisico, digitalizado: true,
+        ubicacion: (d.es_fisico && d.sede ? detectarUbicacion({ distrito_judicial: d.sede }) : null) || ubicacionCaso,
+        tipo_copia: (d.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
+        estado_baja: (d.estado_baja as EstadoBaja) || "activo", baja_motivo: d.baja_motivo ?? null,
+        baja_solicitado_por: d.baja_solicitado_por ?? null, baja_resuelto_por: d.baja_resuelto_por ?? null,
+        caso_juridico_id: asunto.casoJuridicoId, created_at: d.created_at ?? null,
+      });
+    }
+
+    // Copias del Drive que aún no tienen su propio movimiento en documento_garantia.
+    const copiasMapa = await listarCopias(asunto.casoJuridicoId);
+    const copiasSueltas = Object.values(copiasMapa).filter((cp) => !driveIdYaVistos.has(cp.drive_id));
+    const urls = copiasSueltas.length > 0 ? await firmarCopias(copiasSueltas.map((cp) => cp.storage_path)) : {};
+    for (const cp of copiasSueltas) {
+      resultado.push({
+        id: `copia:${cp.drive_id}`, fuente: "digital", nombre: cp.nombre, cliente: caso?.cliente_nombre ?? null,
+        expediente: caso?.expediente ?? null, folio: caso?.folio ?? null, gar_id: caso?.gar_id ?? null,
+        no_credito: caso?.no_credito ?? null, unidad: caso?.unidad ?? asunto.unidad, link: urls[cp.storage_path] || null,
+        drive_id: cp.drive_id, subido_por: null, registrado_por: null, tipo_asunto: null, carpeta_fisica: null,
+        resguardo_de: null, es_fisico: false, digitalizado: true, ubicacion: ubicacionCaso,
+        tipo_copia: null, copiaPendiente: true,
+        estado_baja: "activo", baja_motivo: null, baja_solicitado_por: null, baja_resuelto_por: null,
+        caso_juridico_id: asunto.casoJuridicoId, created_at: null,
+      });
+    }
+  }
+
+  // Inventario físico — según a qué tabla base pertenece la unidad.
+  const campoId = asunto.unidad === "UDP" ? "caso_udp_id" : asunto.unidad === "UFC" ? "formalizacion_id" : "caso_juridico_id";
+  const idParaFisico = asunto.unidad === "UDP" || asunto.unidad === "UFC" ? asunto.id : asunto.casoJuridicoId;
+  if (idParaFisico) {
+    const fisicos = await sb<any>("documento_fisico", `select=*&${campoId}=eq.${idParaFisico}&en_papelera=eq.false&order=fecha_registro.desc`);
+    for (const f of fisicos) {
+      if (f.digitalizado && f.documento_garantia_id) continue; // ya se ve como digital arriba
+      resultado.push({
+        id: f.id, fuente: "fisico", nombre: f.nombre_documento, cliente: f.cliente_nombre ?? caso?.cliente_nombre ?? null,
+        expediente: f.expediente ?? caso?.expediente ?? null, folio: caso?.folio ?? null, gar_id: caso?.gar_id ?? null,
+        no_credito: caso?.no_credito ?? null, unidad: f.unidad, link: null, drive_id: null, subido_por: null,
+        registrado_por: f.registrado_por, tipo_asunto: f.tipo_asunto, carpeta_fisica: f.carpeta_fisica,
+        resguardo_de: f.resguardo_de, es_fisico: true, digitalizado: !!f.digitalizado,
+        ubicacion: (f.ubicacion ? detectarUbicacion({ distrito_judicial: f.ubicacion }) : null) || ubicacionCaso,
+        tipo_copia: (f.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
+        estado_baja: (f.estado_baja as EstadoBaja) || "activo", baja_motivo: f.baja_motivo ?? null,
+        baja_solicitado_por: f.baja_solicitado_por ?? null, baja_resuelto_por: f.baja_resuelto_por ?? null,
+        caso_juridico_id: f.caso_juridico_id ?? null, created_at: f.fecha_registro ?? null,
+      });
+    }
+  }
+
+  resultado.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  return resultado;
+}
 export async function solicitarBaja(doc: DocumentoArchivo, motivo: string): Promise<boolean> {
   const correo = await correoActual();
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${tablaDe(doc)}?id=eq.${doc.id}`, {
@@ -273,6 +367,7 @@ export async function listarBajasPendientes(): Promise<DocumentoArchivo[]> {
       no_credito: caso?.no_credito ?? null, unidad: caso?.unidad ?? null, link: d.link, drive_id: d.drive_id,
       subido_por: d.subido_por, registrado_por: null, tipo_asunto: null, carpeta_fisica: d.carpeta_fisica ?? null,
       resguardo_de: d.resguardo_de ?? d.asignado_a ?? null, es_fisico: !!d.es_fisico, digitalizado: true, ubicacion: null,
+      tipo_copia: (d.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
       estado_baja: d.estado_baja, baja_motivo: d.baja_motivo, baja_solicitado_por: d.baja_solicitado_por,
       baja_resuelto_por: d.baja_resuelto_por, caso_juridico_id: d.caso_id, created_at: d.baja_solicitado_en ?? d.created_at,
     });
@@ -285,6 +380,7 @@ export async function listarBajasPendientes(): Promise<DocumentoArchivo[]> {
       no_credito: caso?.no_credito ?? null, unidad: f.unidad, link: null, drive_id: null, subido_por: null,
       registrado_por: f.registrado_por, tipo_asunto: f.tipo_asunto, carpeta_fisica: f.carpeta_fisica,
       resguardo_de: f.resguardo_de, es_fisico: true, digitalizado: !!f.digitalizado, ubicacion: null,
+      tipo_copia: (f.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
       estado_baja: f.estado_baja, baja_motivo: f.baja_motivo, baja_solicitado_por: f.baja_solicitado_por,
       baja_resuelto_por: f.baja_resuelto_por, caso_juridico_id: f.caso_juridico_id, created_at: f.baja_solicitado_en ?? f.fecha_registro,
     });
