@@ -10,6 +10,7 @@ import { usuarioActualEtiqueta } from "@/lib/auth";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
+import { PanelDocumentosAsunto } from "@/components/panel-documentos-asunto";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
@@ -320,6 +321,25 @@ function UFCFicha() {
       {/* ============ DOCUMENTOS (carpeta de Drive propia de UFC + vista en vivo del expediente UCP/UCM) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-semibold">Inventario completo — digital y físico</h3>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Vista en vivo: junta lo del expediente de origen (si está vinculado) y lo propio de formalización — original/copia, resguardo, anotaciones y baja documental.</p>
+            <PanelDocumentosAsunto
+              asunto={{
+                id: f.id!,
+                unidad: "UFC",
+                cliente: f.nombre_cesionario ?? null,
+                expediente: f.expediente ?? null,
+                no_credito: f.id_interno ?? null,
+                direccion: f.direccion_garantia ?? null,
+                detalle: f.estado_tramite ?? null,
+                casoJuridicoId: f.caso_id ?? null,
+              }}
+            />
+          </div>
+
           {/* Vista en vivo de lo que ya se llenó en el expediente jurídico de origen (UCP/UCM) — mismo caso_id, tiempo real */}
           {casoReal ? (
             <div className="space-y-2">
