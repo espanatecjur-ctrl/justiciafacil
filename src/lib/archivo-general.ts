@@ -95,9 +95,9 @@ export async function buscarArchivoGeneral(termino: string): Promise<DocumentoAr
   const [fisicosDirecto, fisicosPorCaso] = await Promise.all([
     sb<any>(
       "documento_fisico",
-      `select=*&or=(cliente_nombre.ilike.${like},expediente.ilike.${like},nombre_documento.ilike.${like},carpeta_fisica.ilike.${like})&limit=40`
+      `select=*&or=(cliente_nombre.ilike.${like},expediente.ilike.${like},nombre_documento.ilike.${like},carpeta_fisica.ilike.${like})&en_papelera=eq.false&limit=40`
     ),
-    casoIds.length > 0 ? sb<any>("documento_fisico", `select=*&caso_juridico_id=in.(${casoIds.join(",")})&limit=40`) : Promise.resolve([]),
+    casoIds.length > 0 ? sb<any>("documento_fisico", `select=*&caso_juridico_id=in.(${casoIds.join(",")})&en_papelera=eq.false&limit=40`) : Promise.resolve([]),
   ]);
   const fisicosMap = new Map<string, any>();
   for (const f of [...fisicosDirecto, ...fisicosPorCaso]) fisicosMap.set(f.id, f);
@@ -172,6 +172,123 @@ export async function buscarArchivoGeneral(termino: string): Promise<DocumentoAr
   }
 
   // más reciente primero
+  resultado.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  return resultado;
+}
+
+// ===== Rol del usuario en sesión (mismo patrón que permisos-acciones.ts) =====
+
+import { getAuth } from "@/lib/auth";
+
+const ROLES_APRUEBAN_BAJA = ["DIL", "DGE", "Super_Admin"];
+
+/** Rol del correo en sesión, según `colaboradores`. null si no hay sesión o no está dado de alta. */
+export async function rolActual(): Promise<string | null> {
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    const correo = data?.session?.user?.email ?? null;
+    if (!correo) return null;
+    const r = await sb<any>("colaboradores", `select=rol&correo=eq.${encodeURIComponent(correo)}`);
+    return r?.[0]?.rol ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function puedeAprobarBajas(rol: string | null): boolean {
+  return !!rol && ROLES_APRUEBAN_BAJA.includes(rol);
+}
+
+async function correoActual(): Promise<string | null> {
+  try {
+    const auth = await getAuth();
+    const { data } = await auth.auth.getSession();
+    return data?.session?.user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const writeHeaders = { ...headers, "Content-Type": "application/json", Prefer: "return=representation" };
+const tablaDe = (doc: DocumentoArchivo) => (doc.fuente === "digital" ? "documento_garantia" : "documento_fisico");
+
+/** Cualquiera puede solicitar la baja de un documento — queda pendiente de que DIL/DGE la resuelva. */
+export async function solicitarBaja(doc: DocumentoArchivo, motivo: string): Promise<boolean> {
+  const correo = await correoActual();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${tablaDe(doc)}?id=eq.${doc.id}`, {
+    method: "PATCH",
+    headers: writeHeaders,
+    body: JSON.stringify({
+      estado_baja: "baja_solicitada",
+      baja_motivo: motivo,
+      baja_solicitado_por: correo,
+      baja_solicitado_en: new Date().toISOString(),
+      baja_resuelto_por: null,
+      baja_resuelto_en: null,
+      baja_motivo_rechazo: null,
+    }),
+  });
+  return r.ok;
+}
+
+/** Solo DIL/DGE deberían llamar esto (la pantalla ya oculta el botón a quien no puede). */
+export async function resolverBaja(doc: DocumentoArchivo, autorizar: boolean, motivoRechazo?: string): Promise<boolean> {
+  const correo = await correoActual();
+  const cambios: Record<string, any> = {
+    estado_baja: autorizar ? "baja_autorizada" : "activo", // rechazada → vuelve a estar activo y disponible
+    baja_resuelto_por: correo,
+    baja_resuelto_en: new Date().toISOString(),
+    baja_motivo_rechazo: autorizar ? null : (motivoRechazo || "Rechazada sin motivo especificado"),
+  };
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${tablaDe(doc)}?id=eq.${doc.id}`, { method: "PATCH", headers: writeHeaders, body: JSON.stringify(cambios) });
+  if (!r.ok) return false;
+  // Si se autorizó, de una vez se manda a papelera (nunca se borra duro).
+  if (autorizar) {
+    await fetch(`${SUPABASE_URL}/rest/v1/${tablaDe(doc)}?id=eq.${doc.id}`, {
+      method: "PATCH",
+      headers: writeHeaders,
+      body: JSON.stringify({ en_papelera: true, papelera_fecha: new Date().toISOString() }),
+    });
+  }
+  return true;
+}
+
+/** Lista las solicitudes de baja pendientes (para el panel que solo ve DIL/DGE). */
+export async function listarBajasPendientes(): Promise<DocumentoArchivo[]> {
+  const [dg, df] = await Promise.all([
+    sb<any>("documento_garantia", `select=*&estado_baja=eq.baja_solicitada&en_papelera=eq.false&order=baja_solicitado_en.desc`),
+    sb<any>("documento_fisico", `select=*&estado_baja=eq.baja_solicitada&en_papelera=eq.false&order=baja_solicitado_en.desc`),
+  ]);
+  const casoIds = [...new Set([...dg.map((d: any) => d.caso_id), ...df.map((d: any) => d.caso_juridico_id)].filter(Boolean))];
+  const casos = casoIds.length > 0 ? await sb<any>("caso_juridico", `select=id,cliente_nombre,expediente,folio,gar_id,no_credito&id=in.(${casoIds.join(",")})`) : [];
+  const casoPorId = new Map(casos.map((c: any) => [c.id, c]));
+
+  const resultado: DocumentoArchivo[] = [];
+  for (const d of dg) {
+    const caso = d.caso_id ? casoPorId.get(d.caso_id) : null;
+    resultado.push({
+      id: d.id, fuente: "digital", nombre: d.nombre, cliente: caso?.cliente_nombre ?? null,
+      expediente: d.expediente ?? caso?.expediente ?? null, folio: caso?.folio ?? null, gar_id: caso?.gar_id ?? null,
+      no_credito: caso?.no_credito ?? null, unidad: caso?.unidad ?? null, link: d.link, drive_id: d.drive_id,
+      subido_por: d.subido_por, registrado_por: null, tipo_asunto: null, carpeta_fisica: d.carpeta_fisica ?? null,
+      resguardo_de: d.resguardo_de ?? d.asignado_a ?? null, es_fisico: !!d.es_fisico, digitalizado: true, ubicacion: null,
+      estado_baja: d.estado_baja, baja_motivo: d.baja_motivo, baja_solicitado_por: d.baja_solicitado_por,
+      baja_resuelto_por: d.baja_resuelto_por, caso_juridico_id: d.caso_id, created_at: d.baja_solicitado_en ?? d.created_at,
+    });
+  }
+  for (const f of df) {
+    const caso = f.caso_juridico_id ? casoPorId.get(f.caso_juridico_id) : null;
+    resultado.push({
+      id: f.id, fuente: "fisico", nombre: f.nombre_documento, cliente: f.cliente_nombre ?? caso?.cliente_nombre ?? null,
+      expediente: f.expediente ?? caso?.expediente ?? null, folio: caso?.folio ?? null, gar_id: caso?.gar_id ?? null,
+      no_credito: caso?.no_credito ?? null, unidad: f.unidad, link: null, drive_id: null, subido_por: null,
+      registrado_por: f.registrado_por, tipo_asunto: f.tipo_asunto, carpeta_fisica: f.carpeta_fisica,
+      resguardo_de: f.resguardo_de, es_fisico: true, digitalizado: !!f.digitalizado, ubicacion: null,
+      estado_baja: f.estado_baja, baja_motivo: f.baja_motivo, baja_solicitado_por: f.baja_solicitado_por,
+      baja_resuelto_por: f.baja_resuelto_por, caso_juridico_id: f.caso_juridico_id, created_at: f.baja_solicitado_en ?? f.fecha_registro,
+    });
+  }
   resultado.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
   return resultado;
 }
