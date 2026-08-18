@@ -11,6 +11,7 @@ import { NuevoExpedienteModal } from "@/components/nuevo-expediente";
 import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import { ValidarJuzgado } from "@/components/validar-juzgado";
 import { ValidarExpediente } from "@/components/validar-expediente";
+import { detectarUbicacion, estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 export const Route = createFileRoute("/ucm")({
   head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
@@ -43,6 +44,13 @@ function esDeUCM(c: CasoJuridico): boolean {
   return !(u.includes("UCP") || u.includes("UDP") || u.includes("URRJ"));
 }
 
+// Texto corto de ubicación real (ciudad · estado) ya normalizado, para mostrar en la lista.
+function ubicacionLabel(c: CasoJuridico): string {
+  const u = detectarUbicacion(c);
+  if (!u) return c.entidad ? ` · ${c.entidad}` : "";
+  return u.ciudad ? ` · ${u.ciudad}, ${u.estado}` : ` · ${u.estado}`;
+}
+
 // Indica si esta fila es una "vista en vivo" — el registro sigue siendo de UCP
 // (unidad no cambió) pero ya se marcó como avanzado a seguimiento en UCM.
 function esVistaEnVivoDeUCP(c: CasoJuridico): boolean {
@@ -59,7 +67,12 @@ function UcmPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
-  const [entidad, setEntidad] = useState("todas");
+  // Filtro geográfico en cascada: primero Estado, luego Ciudad/distrito judicial de ese Estado.
+  // No compara el texto de `entidad` directo (viene con variantes: "CULIACAN"/"Culiacán"/"MAZATLAN"…);
+  // usa detectarUbicacion() de @/lib/ciudad-judicial para normalizar antes de comparar.
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
   const [prioridad, setPrioridad] = useState("todas");
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [dictPorCaso, setDictPorCaso] = useState<Record<string, { ver: string; jur: string; reg: string }>>({});
@@ -139,18 +152,22 @@ function UcmPage() {
   const filtrados = useMemo(() => {
     return casosUCM.filter((c) => {
       if (verArchivados ? !c.archivado : !!c.archivado) return false;
-      if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
+      if (filtroEstado !== "todas") {
+        const u = detectarUbicacion(c);
+        if (!u || u.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && u.ciudad !== filtroCiudad) return false;
+      }
       if (prioridad !== "todas" && (c.prioridad || "").toUpperCase() !== prioridad) return false;
       if (!q) return true;
       const blob = `${c.expediente || ""} ${c.cliente_nombre || ""} ${c.juzgado || ""} ${c.proveedor || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [casosUCM, q, entidad, prioridad, verArchivados]);
+  }, [casosUCM, q, filtroEstado, filtroCiudad, prioridad, verArchivados]);
 
   // paginación: máximo 20 por página (web y cel)
   const PAGE = 20;
   const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [q, entidad, prioridad, verArchivados]);
+  useEffect(() => { setPagina(0); }, [q, filtroEstado, filtroCiudad, prioridad, verArchivados]);
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
   const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
@@ -194,17 +211,27 @@ function UcmPage() {
       </div>
 
       <Card className="legal-card p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Expediente, cliente, juzgado…" className="pl-8" />
           </div>
-          <select value={entidad} onChange={(e) => setEntidad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <select
+            value={filtroEstado}
+            onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); }}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
             <option value="todas">Todos los estados</option>
-            <option value="Sinaloa">Sinaloa</option>
-            <option value="CDMX">CDMX</option>
-            <option value="BCS">BCS</option>
-            <option value="Jalisco">Jalisco</option>
+            {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select
+            value={filtroCiudad}
+            onChange={(e) => setFiltroCiudad(e.target.value)}
+            disabled={filtroEstado === "todas"}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+            {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
             <option value="todas">Toda prioridad</option>
@@ -261,7 +288,7 @@ function UcmPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="max-w-[260px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{c.distrito_judicial || ""}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">{c.distrito_judicial || ""}{ubicacionLabel(c)}</p>
                     <div className="mt-1"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
                   </td>
                   <td className="px-4 py-3">
@@ -315,7 +342,7 @@ function UcmPage() {
               {dictamenBadge(c)}
               {origenUcpBadge(c)}
               <div className="mt-1"><ValidarExpediente caso={c} onActualizado={cargar} compacto /></div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{c.entidad ? ` · ${c.entidad}` : ""}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.juzgado || "—"}{ubicacionLabel(c)}</p>
               <div className="mt-1.5"><ValidarJuzgado caso={c} onActualizado={cargar} compacto /></div>
               <p className="mt-0.5 text-xs"><span className="font-medium">{c.materia || "—"}</span>{c.via_procesal ? ` · ${c.via_procesal}` : ""}{c.etapa_actual ? ` · ${c.etapa_actual}` : ""}</p>
               {c.nota_adicional && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{c.nota_adicional}</p>}
