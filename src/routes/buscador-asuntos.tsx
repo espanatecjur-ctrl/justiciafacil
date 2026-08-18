@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Loader2, MapPin, Gavel, Building2, ShieldHalf, FileSignature, ArrowRight, FolderOpen } from "lucide-react";
+import { Search, Loader2, MapPin, Gavel, Building2, ShieldHalf, FileSignature, ArrowRight, Eye, FileText, ChevronDown, ChevronUp } from "lucide-react";
 import { buscarAsuntos, type AsuntoUnificado, type UnidadAsunto } from "@/lib/asuntos-busqueda";
-import { RegistrarDocumentoFisico } from "@/components/registrar-documento-fisico";
+import { BotonVerDoc } from "@/components/visor-documento";
+import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
 
 export const Route = createFileRoute("/buscador-asuntos")({
   head: () => ({ meta: [{ title: "Buscador de Asuntos — JusticiaFácil" }] }),
@@ -19,6 +20,31 @@ const UNIDAD_UI: Record<UnidadAsunto, { label: string; icon: typeof Gavel; cls: 
   UFC: { label: "UFC", icon: FileSignature, cls: "bg-amber-50 text-amber-800 border-amber-200" },
 };
 
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+
+interface DocAsunto {
+  id: string;
+  nombre: string | null;
+  link: string | null;
+  drive_id: string | null;
+  fuente: "digital" | "fisico";
+}
+
+// Trae los documentos ya existentes de un asunto — digitales (documento_garantia, vía
+// caso_id) y físicos sin digitalizar (documento_fisico). Solo para VER, no para subir.
+async function documentosDe(a: AsuntoUnificado): Promise<DocAsunto[]> {
+  const resultado: DocAsunto[] = [];
+  if (a.casoJuridicoId) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?select=id,nombre,link,drive_id&caso_id=eq.${a.casoJuridicoId}&en_papelera=eq.false&order=created_at.desc`, { headers });
+    const d = r.ok ? await r.json() : [];
+    for (const x of d) resultado.push({ ...x, fuente: "digital" });
+  }
+  const campoId = a.unidad === "UDP" ? "caso_udp_id" : a.unidad === "UFC" ? "formalizacion_id" : "caso_juridico_id";
+  const rf = await fetch(`${SUPABASE_URL}/rest/v1/documento_fisico?select=id,nombre_documento,documento_garantia_id&${campoId}=eq.${a.id}&digitalizado=eq.false`, { headers });
+  const df = rf.ok ? await rf.json() : [];
+  for (const x of df) resultado.push({ id: x.id, nombre: x.nombre_documento, link: null, drive_id: null, fuente: "fisico" });
+  return resultado;
+}
 // A dónde navegar al tocar un resultado. UDP no tiene ficha individual todavía,
 // así que manda a la lista general de UDP (ahí se puede buscar por cliente/folio).
 function rutaDe(a: AsuntoUnificado): { to: string; search: Record<string, unknown> } {
@@ -35,7 +61,19 @@ function BuscadorAsuntosPage() {
   const [buscando, setBuscando] = useState(false);
   const [buscadoAlgunaVez, setBuscadoAlgunaVez] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [docFisico, setDocFisico] = useState<AsuntoUnificado | null>(null);
+  const [expandido, setExpandido] = useState<string | null>(null); // "unidad-id" del asunto con panel de documentos abierto
+  const [docsCache, setDocsCache] = useState<Record<string, DocAsunto[]>>({});
+  const [cargandoDocs, setCargandoDocs] = useState<string | null>(null);
+
+  const toggleDocs = (a: AsuntoUnificado) => {
+    const clave = `${a.unidad}-${a.id}`;
+    if (expandido === clave) { setExpandido(null); return; }
+    setExpandido(clave);
+    if (!docsCache[clave]) {
+      setCargandoDocs(clave);
+      documentosDe(a).then((d) => setDocsCache((p) => ({ ...p, [clave]: d }))).finally(() => setCargandoDocs(null));
+    }
+  };
 
   // Búsqueda con debounce — espera 350ms de pausa antes de consultar, para no
   // disparar una consulta por cada letra que se escribe.
@@ -124,30 +162,58 @@ function BuscadorAsuntosPage() {
               {g.items.map((a) => {
                 const ui = UNIDAD_UI[a.unidad];
                 const ruta = rutaDe(a);
+                const clave = `${a.unidad}-${a.id}`;
+                const abierto = expandido === clave;
                 return (
-                  <div key={`${a.unidad}-${a.id}`} className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => navigate(ruta as any)}
-                      className="flex flex-1 items-center justify-between gap-2 rounded-md border border-border p-2 text-left text-sm hover:bg-muted/40"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${ui.cls}`}>
-                          <ui.icon className="h-3 w-3" /> {ui.label}
-                        </span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {a.expediente ? `Exp. ${a.expediente}` : "Sin expediente"}
-                          {a.detalle ? ` · ${a.detalle}` : ""}
-                        </span>
+                  <div key={clave}>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => navigate(ruta as any)}
+                        className="flex flex-1 items-center justify-between gap-2 rounded-md border border-border p-2 text-left text-sm hover:bg-muted/40"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${ui.cls}`}>
+                            <ui.icon className="h-3 w-3" /> {ui.label}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {a.expediente ? `Exp. ${a.expediente}` : "Sin expediente"}
+                            {a.detalle ? ` · ${a.detalle}` : ""}
+                          </span>
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={() => toggleDocs(a)}
+                        title="Ver documentos de este asunto"
+                        className="shrink-0 rounded-md border border-input p-2 text-muted-foreground hover:bg-muted"
+                      >
+                        {abierto ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+
+                    {abierto && (
+                      <div className="ml-1 mt-1 space-y-1 border-l-2 border-border pl-3">
+                        {cargandoDocs === clave ? (
+                          <p className="flex items-center gap-1.5 py-1.5 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Buscando documentos…</p>
+                        ) : (docsCache[clave]?.length ?? 0) === 0 ? (
+                          <p className="py-1.5 text-xs text-muted-foreground">Sin documentos registrados para este asunto todavía.</p>
+                        ) : (
+                          docsCache[clave].map((d) => (
+                            <div key={d.id} className="flex items-center justify-between gap-2 py-1 text-xs">
+                              <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
+                                <FileText className="h-3 w-3 shrink-0" /> {d.nombre || "(sin nombre)"}
+                                {d.fuente === "fisico" && <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">solo físico</span>}
+                              </span>
+                              {d.fuente === "digital" ? (
+                                <BotonVerDoc url={d.link} driveId={d.drive_id} nombre={d.nombre} label="Ver" className="shrink-0 inline-flex items-center gap-1 text-[color:var(--teal)] hover:underline" />
+                              ) : (
+                                <span className="shrink-0 text-muted-foreground">sin digitalizar</span>
+                              )}
+                            </div>
+                          ))
+                        )}
                       </div>
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => setDocFisico(a)}
-                      title="Registrar documento físico (Mazatlán)"
-                      className="shrink-0 rounded-md border border-input p-2 text-muted-foreground hover:bg-muted"
-                    >
-                      <FolderOpen className="h-4 w-4" />
-                    </button>
+                    )}
                   </div>
                 );
               })}
@@ -155,10 +221,6 @@ function BuscadorAsuntosPage() {
           </Card>
         ))}
       </div>
-
-      {docFisico && (
-        <RegistrarDocumentoFisico asunto={docFisico} onClose={() => setDocFisico(null)} />
-      )}
     </div>
   );
 }
