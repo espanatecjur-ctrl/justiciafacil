@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
@@ -80,6 +80,11 @@ function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode;
 function UCMFicha() {
   const { id, tab } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
+  // "Volver" regresa a donde sea que estuviera antes (lista de UCM, Buscador de Asuntos,
+  // Archivo General…) usando el historial real, no una ruta fija. Si no hay historial de
+  // sesión (ej. entraron directo por un link), cae a la lista de UCM como respaldo.
+  const volver = () => { if (window.history.length > 1) router.history.back(); else navigate({ to: "/ucm" }); };
   const [c, setC] = useState<CasoJuridico | null>(null);
   const [dict, setDict] = useState<any>(null);
   const [acuerdos, setAcuerdos] = useState<Acuerdo[]>([]);
@@ -164,7 +169,7 @@ function UCMFicha() {
   };
 
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
-  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucm" })} className="underline">Volver a UCM</button></div>;
+  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={volver} className="underline">Volver</button></div>;
 
   const firmasN = ["elabora", "dil", "gad", "dgc", "dge"].filter((k) => (dict?.firmas as any)?.[k]?.fecha).length;
   const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
@@ -196,7 +201,7 @@ function UCMFicha() {
     <div className="space-y-4">
       {/* barra superior */}
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate({ to: "/ucm" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UCM</button>
+        <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver</button>
         <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: AZUL }}>UCM</span>
         <button onClick={descargarPDF} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
           <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF
