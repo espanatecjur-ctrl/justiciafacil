@@ -8,6 +8,7 @@ import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
+import { PanelDocumentosAsunto } from "@/components/panel-documentos-asunto";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { LineaTiempoJuicio } from "@/components/linea-tiempo-juicio";
 import { SeguimientoJuicioModal } from "@/components/seguimiento-juicio-modal";
@@ -414,6 +415,25 @@ function UCMFicha() {
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <FolderOpen className="h-5 w-5 text-[color:var(--teal)]" />
+              <h3 className="text-sm font-semibold">Inventario completo — digital y físico</h3>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Vista en vivo: todo lo subido en esta ficha, lo copiado del Drive, y lo físico registrado — con original/copia, resguardo, anotaciones y baja documental.</p>
+            <PanelDocumentosAsunto
+              asunto={{
+                id: c.id,
+                unidad: "UCM",
+                cliente: c.cliente_nombre ?? null,
+                expediente: c.expediente ?? null,
+                no_credito: c.no_credito ?? null,
+                direccion: c.direccion_garantia ?? null,
+                detalle: c.etapa_actual ?? null,
+                casoJuridicoId: c.id,
+              }}
+            />
+          </div>
           <CarpetaDriveVinculada caso={c} area="UCM" modulo="ucm" onGuardar={guardarCampos} />
           <DocumentosFijos caso={c} area="UCM" />
           <div className="rounded-xl border border-border bg-card p-4">
