@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { FilaAcciones } from "@/components/fila-acciones";
 import { Search, Shield, AlertTriangle, ShieldPlus, Archive } from "lucide-react";
+import { detectarUbicacion, estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 export const Route = createFileRoute("/amparos")({
   head: () => ({ meta: [{ title: "Amparos — JusticiaFácil" }] }),
@@ -29,6 +30,13 @@ function leFalta(c: CasoJuridico): boolean {
   return sinJuzgado || !c.expediente;
 }
 
+// Texto corto de ubicación real (ciudad · estado) ya normalizado, para mostrar en la lista.
+function ubicacionLabel(c: CasoJuridico): string {
+  const u = detectarUbicacion(c);
+  if (!u) return c.entidad ? ` · ${c.entidad}` : "";
+  return u.ciudad ? ` · ${u.ciudad}, ${u.estado}` : ` · ${u.estado}`;
+}
+
 function AmparosPage() {
   const navigate = useNavigate();
   const [nuevoOpen, setNuevoOpen] = useState(false);
@@ -36,7 +44,10 @@ function AmparosPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [entidad, setEntidad] = useState("todas");
+  // Filtro geográfico en cascada: primero Estado, luego Ciudad/distrito judicial de ese Estado.
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
   const [verArchivados, setVerArchivados] = useState(false);
 
   const cargar = () => {
@@ -70,16 +81,20 @@ function AmparosPage() {
   const filtrados = useMemo(() => {
     return casos.filter((c) => {
       if (verArchivados ? !c.archivado : !!c.archivado) return false;
-      if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
+      if (filtroEstado !== "todas") {
+        const u = detectarUbicacion(c);
+        if (!u || u.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && u.ciudad !== filtroCiudad) return false;
+      }
       if (!q) return true;
       const blob = `${c.expediente || ""} ${c.quejoso || ""} ${c.autoridad_responsable || ""} ${c.acto_reclamado || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [casos, q, entidad, verArchivados]);
+  }, [casos, q, filtroEstado, filtroCiudad, verArchivados]);
 
   const PAGE = 20;
   const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [q, entidad, verArchivados]);
+  useEffect(() => { setPagina(0); }, [q, filtroEstado, filtroCiudad, verArchivados]);
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
   const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
@@ -118,17 +133,27 @@ function AmparosPage() {
       </div>
 
       <Card className="legal-card p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Amparo, quejoso, autoridad, acto…" className="pl-8" />
           </div>
-          <select value={entidad} onChange={(e) => setEntidad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <select
+            value={filtroEstado}
+            onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); }}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
             <option value="todas">Todos los estados</option>
-            <option value="Sinaloa">Sinaloa</option>
-            <option value="CDMX">CDMX</option>
-            <option value="BCS">BCS</option>
-            <option value="Jalisco">Jalisco</option>
+            {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select
+            value={filtroCiudad}
+            onChange={(e) => setFiltroCiudad(e.target.value)}
+            disabled={filtroEstado === "todas"}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+            {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <button onClick={() => setVerArchivados((v) => !v)} className={`mt-2 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs ${verArchivados ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}>
@@ -165,7 +190,7 @@ function AmparosPage() {
                   <td className="px-4 py-3"><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{c.tipo_amparo || "—"}</span></td>
                   <td className="px-4 py-3"><p className="max-w-[220px] truncate" title={c.autoridad_responsable || ""}>{c.autoridad_responsable || "—"}</p></td>
                   <td className="px-4 py-3"><p className="max-w-[220px] truncate" title={c.acto_reclamado || ""}>{c.acto_reclamado || "—"}</p></td>
-                  <td className="px-4 py-3"><p className="max-w-[220px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p><p className="text-xs text-muted-foreground">{c.entidad || ""}</p></td>
+                  <td className="px-4 py-3"><p className="max-w-[220px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p><p className="text-xs text-muted-foreground">{ubicacionLabel(c).replace(/^ · /, "")}</p></td>
                   <td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span></td>
                   <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <FilaAcciones archivado={!!c.archivado} onEvidencia={() => irEvidencia(c)} onArchivar={() => archivar(c)} onBorrar={() => borrar(c)} />
@@ -199,7 +224,7 @@ function AmparosPage() {
                 </div>
               </div>
               {c.quejoso && <p className="truncate text-xs text-muted-foreground">Quejoso: {c.quejoso}</p>}
-              <p className="mt-0.5 text-xs"><span className="font-medium">{c.tipo_amparo || "—"}</span>{c.entidad ? ` · ${c.entidad}` : ""}{c.juzgado ? ` · ${c.juzgado}` : ""}</p>
+              <p className="mt-0.5 text-xs"><span className="font-medium">{c.tipo_amparo || "—"}</span>{ubicacionLabel(c)}{c.juzgado ? ` · ${c.juzgado}` : ""}</p>
               {c.acto_reclamado && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">Acto: {c.acto_reclamado}</p>}
             </Card>
           ))
