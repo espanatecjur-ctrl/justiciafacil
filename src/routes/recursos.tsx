@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { FilaAcciones } from "@/components/fila-acciones";
 import { Search, Layers, AlertTriangle, Plus, Archive } from "lucide-react";
+import { detectarUbicacion, estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 export const Route = createFileRoute("/recursos")({
   head: () => ({ meta: [{ title: "Recursos — JusticiaFácil" }] }),
@@ -26,6 +27,12 @@ function leFalta(c: CasoJuridico): boolean {
   const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
   return sinJuzgado || !c.expediente;
 }
+// Texto corto de ubicación real (ciudad · estado) ya normalizado, para mostrar en la lista.
+function ubicacionLabel(c: CasoJuridico): string {
+  const u = detectarUbicacion(c);
+  if (!u) return c.entidad ? ` · ${c.entidad}` : "";
+  return u.ciudad ? ` · ${u.ciudad}, ${u.estado}` : ` · ${u.estado}`;
+}
 const fmt = (s: string | null | undefined) => {
   if (!s) return "—";
   const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -39,7 +46,9 @@ function RecursosPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [entidad, setEntidad] = useState("todas");
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
   const [verArchivados, setVerArchivados] = useState(false);
 
   const cargar = () => {
@@ -71,16 +80,20 @@ function RecursosPage() {
   const filtrados = useMemo(() => {
     return casos.filter((c) => {
       if (verArchivados ? !c.archivado : !!c.archivado) return false;
-      if (entidad !== "todas" && (c.entidad || "") !== entidad) return false;
+      if (filtroEstado !== "todas") {
+        const u = detectarUbicacion(c);
+        if (!u || u.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && u.ciudad !== filtroCiudad) return false;
+      }
       if (!q) return true;
       const blob = `${c.expediente || ""} ${c.promovente || ""} ${c.tipo_recurso || ""} ${c.resolucion || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [casos, q, entidad, verArchivados]);
+  }, [casos, q, filtroEstado, filtroCiudad, verArchivados]);
 
   const PAGE = 20;
   const [pagina, setPagina] = useState(0);
-  useEffect(() => { setPagina(0); }, [q, entidad, verArchivados]);
+  useEffect(() => { setPagina(0); }, [q, filtroEstado, filtroCiudad, verArchivados]);
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
   const paginados = filtrados.slice(pag * PAGE, pag * PAGE + PAGE);
@@ -101,17 +114,27 @@ function RecursosPage() {
       {nuevoOpen && <NuevoRecursoModal onClose={() => setNuevoOpen(false)} onCreado={() => { setNuevoOpen(false); cargar(); }} />}
 
       <Card className="legal-card p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Expediente, promovente, tipo…" className="pl-8" />
           </div>
-          <select value={entidad} onChange={(e) => setEntidad(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <select
+            value={filtroEstado}
+            onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); }}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
             <option value="todas">Todos los estados</option>
-            <option value="Sinaloa">Sinaloa</option>
-            <option value="CDMX">CDMX</option>
-            <option value="BCS">BCS</option>
-            <option value="Jalisco">Jalisco</option>
+            {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select
+            value={filtroCiudad}
+            onChange={(e) => setFiltroCiudad(e.target.value)}
+            disabled={filtroEstado === "todas"}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+            {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <button onClick={() => setVerArchivados((v) => !v)} className={`mt-2 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs ${verArchivados ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}>
@@ -147,7 +170,7 @@ function RecursosPage() {
                   </td>
                   <td className="px-4 py-3"><p className="max-w-[200px] truncate" title={c.promovente || ""}>{c.promovente || "—"}</p></td>
                   <td className="px-4 py-3 tabular-nums">{fmt(c.fecha_interposicion)}</td>
-                  <td className="px-4 py-3"><p className="max-w-[200px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p><p className="text-xs text-muted-foreground">{c.entidad || ""}</p></td>
+                  <td className="px-4 py-3"><p className="max-w-[200px] truncate" title={c.juzgado || ""}>{c.juzgado || "—"}</p><p className="text-xs text-muted-foreground">{ubicacionLabel(c).replace(/^ · /, "")}</p></td>
                   <td className="px-4 py-3 text-muted-foreground"><p className="max-w-[180px] truncate" title={c.resolucion || ""}>{c.resolucion || "—"}</p></td>
                   <td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${prioridadClase(c.prioridad)}`}>{c.prioridad || "—"}</span></td>
                   <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -182,7 +205,7 @@ function RecursosPage() {
                 </div>
               </div>
               {c.promovente && <p className="truncate text-xs text-muted-foreground">Promovente: {c.promovente}</p>}
-              <p className="mt-0.5 text-xs">{c.entidad ? `${c.entidad}` : ""}{c.juzgado ? ` · ${c.juzgado}` : ""}{c.fecha_interposicion ? ` · ${fmt(c.fecha_interposicion)}` : ""}</p>
+              <p className="mt-0.5 text-xs">{ubicacionLabel(c).replace(/^ · /, "")}{c.juzgado ? ` · ${c.juzgado}` : ""}{c.fecha_interposicion ? ` · ${fmt(c.fecha_interposicion)}` : ""}</p>
               {c.resolucion && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">Resolución: {c.resolucion}</p>}
             </Card>
           ))
