@@ -9,6 +9,7 @@ import { correoActual } from "@/lib/auth";
 import { DocumentosGarantia } from "@/components/documentos-garantia";
 import { CarpetaDriveVinculada } from "@/components/carpeta-drive-vinculada";
 import { DocumentosFijos } from "@/components/documentos-fijos";
+import { PanelDocumentosAsunto } from "@/components/panel-documentos-asunto";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
 import { SubJuicios } from "@/components/sub-juicios";
 import { BoletinExpediente } from "@/components/boletin-expediente";
@@ -498,6 +499,24 @@ function UCPFicha() {
       {/* ============ DOCUMENTOS (escoger carpeta de Drive + lista) ============ */}
       {modulo === "documentos" && (
         <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-semibold">Inventario completo — digital y físico</h3>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Vista en vivo: original/copia, resguardo, anotaciones y baja documental.</p>
+            <PanelDocumentosAsunto
+              asunto={{
+                id: c.id,
+                unidad: "UCP",
+                cliente: c.cliente_nombre ?? null,
+                expediente: c.expediente ?? null,
+                no_credito: c.no_credito ?? null,
+                direccion: c.direccion_garantia ?? null,
+                detalle: c.etapa_actual ?? null,
+                casoJuridicoId: c.id,
+              }}
+            />
+          </div>
           <ChecklistDocumentosUCP caso={c} area="UCP" />
           <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
           <DocumentosFijos caso={c} area="UCP" />
