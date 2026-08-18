@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, FileSignature, Loader2, Save, X, Send, LayoutGrid, Stamp, GitBranch,
@@ -45,6 +45,8 @@ const DOCUMENTOS_REQUERIDOS = [
 function UFCFicha() {
   const { id } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
+  const volver = () => { if (window.history.length > 1) router.history.back(); else navigate({ to: "/ufc" }); };
   const [f, setF] = useState<Formalizacion | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -148,7 +150,7 @@ function UFCFicha() {
     <div className="space-y-4">
       {/* barra superior */}
       <div className="flex items-center justify-between gap-2">
-        <button onClick={() => navigate({ to: "/ufc" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UFC</button>
+        <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver</button>
         <div className="flex items-center gap-2">
           <button onClick={() => setPidiendo(true)} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-medium" style={{ borderColor: ROJO, color: ROJO }}>
             <FileSignature className="h-4 w-4" /> Solicitar a Contratos
