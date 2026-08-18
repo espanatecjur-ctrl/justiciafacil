@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { X, FileText, FolderOpen, Upload, Link2, Loader2, CheckCircle2, MapPin } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { listarDocumentos, subirDocumento, type DocumentoGarantia } from "@/lib/drive";
+import { listarCopias, firmarCopias, type Copia } from "@/lib/drive-explorar";
+import { BotonVerDoc } from "@/components/visor-documento";
 import { getAuth } from "@/lib/auth";
 import type { AsuntoUnificado } from "@/lib/asuntos-busqueda";
 
@@ -22,9 +24,24 @@ interface Props {
   onGuardado?: () => void;
 }
 
-// Modal para: 1) ver si el documento ya existe digitalizado (documentos fijos) y
-// relacionarlo, o 2) subirlo si no existe, y en cualquier caso 3) registrar dónde
-// vive físicamente (Mazatlán, qué carpeta) y de qué tipo de asunto se trata.
+// Una fila de la lista "¿ya existe digitalizado?" — puede venir de dos fuentes distintas:
+// - documento_garantia: algo que se subió/registró como movimiento desde alguna ficha.
+// - drive_copia ("documentos fijos"): todo lo que ya está copiado del Drive al sistema,
+//   tenga o no un movimiento propio en documento_garantia.
+// Un mismo archivo real (mismo drive_id) puede vivir en ambas tablas — aquí se combinan
+// y se muestra UNA sola vez, para que la lista esté completa y no haya duplicados.
+interface FilaDigitalizado {
+  clave: string;             // identificador único dentro de esta lista (id real o "copia:driveId")
+  garantiaId: string | null; // id real en documento_garantia, si ya existe
+  nombre: string | null;
+  link: string | null;       // url visible/firmada, para el visor
+  driveId: string | null;
+  copiaPendiente: Copia | null; // si viene solo de drive_copia (sin fila en documento_garantia todavía)
+}
+
+// Modal para: 1) ver si el documento ya existe digitalizado (documentos fijos, subidos
+// o copiados del Drive) y relacionarlo, o 2) subirlo si no existe, y en cualquier caso
+// 3) registrar dónde vive físicamente (Mazatlán, qué carpeta) y de qué tipo de asunto se trata.
 export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props) {
   const [tipoAsunto, setTipoAsunto] = useState("demanda_civil");
   const [nombreDocumento, setNombreDocumento] = useState("");
@@ -32,9 +49,9 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
   const [carpetaFisica, setCarpetaFisica] = useState("");
   const [ubicacion, setUbicacion] = useState("Mazatlán");
 
-  const [digitalizados, setDigitalizados] = useState<DocumentoGarantia[]>([]);
+  const [filas, setFilas] = useState<FilaDigitalizado[]>([]);
   const [cargandoDigitalizados, setCargandoDigitalizados] = useState(false);
-  const [relacionadoId, setRelacionadoId] = useState<string | null>(null);
+  const [relacionadaClave, setRelacionadaClave] = useState<string | null>(null);
 
   const [casoCompleto, setCasoCompleto] = useState<CasoJuridico | null>(null);
   const [subiendo, setSubiendo] = useState(false);
@@ -50,18 +67,37 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
     if (!puedeDigitalizar || !asunto.casoJuridicoId) return;
     setCargandoDigitalizados(true);
     sbSelect<CasoJuridico>("caso_juridico", `select=*&id=eq.${asunto.casoJuridicoId}`)
-      .then((d) => {
+      .then(async (d) => {
         const c = d[0] || null;
         setCasoCompleto(c);
-        if (c) return listarDocumentos(c);
-        return [] as DocumentoGarantia[];
+        if (!c) return;
+
+        const [movimientos, copiasMapa] = await Promise.all([
+          listarDocumentos(c),
+          listarCopias(c.id!),
+        ]);
+
+        // driveId -> fila de documento_garantia que ya lo representa (para no duplicar).
+        const driveIdYaRepresentado = new Set(movimientos.filter((m) => m.drive_id).map((m) => m.drive_id as string));
+
+        const filasMovimientos: FilaDigitalizado[] = movimientos.map((m) => ({
+          clave: m.id, garantiaId: m.id, nombre: m.nombre, link: m.link, driveId: m.drive_id, copiaPendiente: null,
+        }));
+
+        // Copias del Drive que NO tienen todavía su propio movimiento en documento_garantia.
+        const copiasSueltas = Object.values(copiasMapa).filter((cp) => !driveIdYaRepresentado.has(cp.drive_id));
+        const urls = copiasSueltas.length > 0 ? await firmarCopias(copiasSueltas.map((cp) => cp.storage_path)) : {};
+        const filasCopias: FilaDigitalizado[] = copiasSueltas.map((cp) => ({
+          clave: `copia:${cp.drive_id}`, garantiaId: null, nombre: cp.nombre, link: urls[cp.storage_path] || null, driveId: cp.drive_id, copiaPendiente: cp,
+        }));
+
+        setFilas([...filasMovimientos, ...filasCopias]);
       })
-      .then(setDigitalizados)
       .catch(() => {})
       .finally(() => setCargandoDigitalizados(false));
   }, [asunto.casoJuridicoId, puedeDigitalizar]);
 
-  const docRelacionado = useMemo(() => digitalizados.find((d) => d.id === relacionadoId) || null, [digitalizados, relacionadoId]);
+  const filaRelacionada = useMemo(() => filas.find((f) => f.clave === relacionadaClave) || null, [filas, relacionadaClave]);
 
   async function subirYRelacionar(file: File) {
     if (!casoCompleto) return;
@@ -70,12 +106,17 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
     try {
       const r = await subirDocumento("UCM", casoCompleto, file, "evidencia");
       if (!r.ok || !r.doc) { setError(r.error || "No se pudo subir el archivo."); return; }
-      setDigitalizados((p) => [r.doc!, ...p]);
-      setRelacionadoId(r.doc.id);
+      const nueva: FilaDigitalizado = { clave: r.doc.id, garantiaId: r.doc.id, nombre: r.doc.nombre, link: r.doc.link, driveId: r.doc.drive_id, copiaPendiente: null };
+      setFilas((p) => [nueva, ...p]);
+      setRelacionadaClave(nueva.clave);
       if (!nombreDocumento) setNombreDocumento(r.doc.nombre || file.name);
     } finally {
       setSubiendo(false);
     }
+  }
+
+  async function correoActual(): Promise<string | null> {
+    try { const a = await getAuth(); const { data } = await a.auth.getSession(); return data.session?.user?.email || null; } catch { return null; }
   }
 
   async function guardar() {
@@ -83,7 +124,32 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
     setGuardando(true);
     setError(null);
     try {
-      const solicita = await (async () => { try { const a = await getAuth(); const { data } = await a.auth.getSession(); return data.session?.user?.email || null; } catch { return null; } })();
+      const solicita = await correoActual();
+
+      // Si eligieron una "copia suelta" (existe en Drive/documentos fijos pero nunca se
+      // registró como movimiento), se formaliza aquí mismo: se crea su fila en
+      // documento_garantia para que quede vinculada al asunto, y de ahí sale el id real.
+      let garantiaId = filaRelacionada?.garantiaId ?? null;
+      if (filaRelacionada?.copiaPendiente && !garantiaId && casoCompleto) {
+        const cp = filaRelacionada.copiaPendiente;
+        const ins = await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia`, {
+          method: "POST",
+          headers: { ...headers, Prefer: "return=representation" },
+          body: JSON.stringify({
+            caso_id: casoCompleto.id,
+            expediente: casoCompleto.expediente || null,
+            nombre: cp.nombre || nombreDocumento.trim(),
+            link: filaRelacionada.link,
+            drive_id: cp.drive_id,
+            mime: cp.mime,
+            tipo: "otro",
+            subido_por: solicita,
+            nota: "Formalizado desde Archivo General a partir de una copia ya existente en documentos fijos.",
+          }),
+        });
+        const filasIns = ins.ok ? await ins.json() : [];
+        garantiaId = filasIns?.[0]?.id ?? null;
+      }
 
       const fila: Record<string, any> = {
         unidad: asunto.unidad,
@@ -97,8 +163,8 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
         descripcion: descripcion.trim() || null,
         ubicacion: ubicacion.trim() || "Mazatlán",
         carpeta_fisica: carpetaFisica.trim() || null,
-        documento_garantia_id: relacionadoId,
-        digitalizado: !!relacionadoId,
+        documento_garantia_id: garantiaId,
+        digitalizado: !!garantiaId,
         registrado_por: solicita,
       };
 
@@ -134,7 +200,7 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
         </div>
 
         <div className="space-y-4 overflow-y-auto p-4">
-          {/* Paso 1: ¿ya existe digitalizado? */}
+          {/* Paso 1: ¿ya existe digitalizado? — une lo subido en la ficha y lo copiado del Drive */}
           {puedeDigitalizar && (
             <div className="rounded-md border border-[color:var(--teal,#0C5C46)]/30 bg-[color:var(--teal,#0C5C46)]/5 p-3">
               <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold" style={{ color: TEAL }}>
@@ -142,24 +208,26 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
               </p>
               {cargandoDigitalizados ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Buscando…</p>
-              ) : digitalizados.length === 0 ? (
+              ) : filas.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No hay documentos digitalizados todavía para este expediente.</p>
               ) : (
-                <div className="max-h-32 space-y-1 overflow-y-auto">
-                  {digitalizados.map((d) => (
-                    <label key={d.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50">
+                <div className="max-h-48 space-y-1 overflow-y-auto">
+                  {filas.map((f) => (
+                    <div key={f.clave} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50">
                       <input
                         type="radio"
                         name="relacionar"
-                        checked={relacionadoId === d.id}
-                        onChange={() => { setRelacionadoId(d.id); if (!nombreDocumento) setNombreDocumento(d.nombre || ""); }}
+                        checked={relacionadaClave === f.clave}
+                        onChange={() => { setRelacionadaClave(f.clave); if (!nombreDocumento) setNombreDocumento(f.nombre || ""); }}
                       />
                       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{d.nombre || "(sin nombre)"}</span>
-                    </label>
+                      <span className="min-w-0 flex-1 truncate">{f.nombre || "(sin nombre)"}</span>
+                      {f.copiaPendiente && <span className="shrink-0 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">copiado del Drive</span>}
+                      <BotonVerDoc url={f.link} driveId={f.driveId} nombre={f.nombre} label="Ver" className="shrink-0 inline-flex items-center gap-1 text-[color:var(--teal)] hover:underline" />
+                    </div>
                   ))}
-                  {relacionadoId && (
-                    <button onClick={() => setRelacionadoId(null)} className="mt-1 text-[11px] text-muted-foreground underline">Quitar relación</button>
+                  {relacionadaClave && (
+                    <button onClick={() => setRelacionadaClave(null)} className="mt-1 text-[11px] text-muted-foreground underline">Quitar relación</button>
                   )}
                 </div>
               )}
@@ -206,8 +274,11 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
             <div><label className={lbl}>Carpeta física</label><input className={inp} value={carpetaFisica} onChange={(e) => setCarpetaFisica(e.target.value)} placeholder="Ej. Archivero 2, caja 5" /></div>
           </div>
 
-          {docRelacionado && (
-            <p className="flex items-center gap-1.5 text-xs text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Se relacionará con "{docRelacionado.nombre}" (ya digitalizado)</p>
+          {filaRelacionada && (
+            <p className="flex items-center gap-1.5 text-xs text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Se relacionará con "{filaRelacionada.nombre}"
+              {filaRelacionada.copiaPendiente ? " (se formalizará como movimiento del expediente al guardar)" : " (ya digitalizado)"}
+            </p>
           )}
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
