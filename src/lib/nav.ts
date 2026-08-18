@@ -2,7 +2,7 @@ import {
   Home, FolderOpen, Newspaper, Send, Shield, GitBranch, Bot,
   FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, ShieldHalf, Settings,
   CalendarDays, Briefcase, Users, MessageCircle,
-  Calculator,
+  Calculator, SearchCheck,
   type LucideIcon,
 } from "lucide-react";
 export interface NavItem {
@@ -20,6 +20,7 @@ export const navItems: NavItem[] = [
   { label: "Calendario", to: "/calendario", icon: CalendarDays, group: "Núcleo" },
   { label: "Chat interno", sub: "Conectado con JurisConecta", to: "/chat", icon: MessageCircle, group: "Núcleo" },
   { label: "Expedientes", to: "/expedientes", icon: FolderOpen, group: "Núcleo" },
+  { label: "Buscador de Asuntos", sub: "Busca en UCM, UCP, UDP y UFC a la vez", to: "/buscador-asuntos", icon: SearchCheck, group: "Núcleo" },
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "UDP · Defensa y Protección", to: "/udp", icon: ShieldHalf, group: "Procesal" },
   { label: "UFC · Formalizaciones", to: "/ufc", icon: FileSignature, group: "Procesal" },
