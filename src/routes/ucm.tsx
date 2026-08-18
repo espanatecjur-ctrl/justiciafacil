@@ -12,6 +12,8 @@ import { diasSinAvanceLote, DIAS_ALERTA } from "@/lib/alerta-avance";
 import { ValidarJuzgado } from "@/components/validar-juzgado";
 import { ValidarExpediente } from "@/components/validar-expediente";
 import { detectarUbicacion, estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
+import { esRolRegionalMazatlan, permiteVerAsunto, puedeConcluirAsunto } from "@/lib/permisos-regional";
+import { rolActual } from "@/lib/archivo-general";
 
 export const Route = createFileRoute("/ucm")({
   head: () => ({ meta: [{ title: "UCM · Seguimiento a juicios — JusticiaFácil" }] }),
@@ -77,10 +79,16 @@ function UcmPage() {
   const [diasAvance, setDiasAvance] = useState<Record<string, number>>({});
   const [dictPorCaso, setDictPorCaso] = useState<Record<string, { ver: string; jur: string; reg: string }>>({});
   const [verArchivados, setVerArchivados] = useState(false);
+  const [rol, setRol] = useState<string | null>(null);
+  useEffect(() => { rolActual().then(setRol); }, []);
 
   const abrirFicha = (c: CasoJuridico) => { navigate({ to: "/ucm-ficha", search: { id: c.id } as any }); };
   const irEvidencia = (c: CasoJuridico) => { navigate({ to: "/expediente", search: { id: c.id, nueva: true, origen: "ucm" } as any }); };
   const archivar = async (c: CasoJuridico) => {
+    if (esRolRegionalMazatlan(rol) && !puedeConcluirAsunto(rol, detectarUbicacion(c))) {
+      alert("Como ayudante en Culiacán no puedes cerrar/archivar este asunto — solo el titular puede concluirlo.");
+      return;
+    }
     const nuevo = !c.archivado;
     try {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico?id=eq.${c.id}`, { method: "PATCH", headers: wHeaders, body: JSON.stringify({ archivado: nuevo }) });
@@ -152,6 +160,7 @@ function UcmPage() {
   const filtrados = useMemo(() => {
     return casosUCM.filter((c) => {
       if (verArchivados ? !c.archivado : !!c.archivado) return false;
+      if (!permiteVerAsunto(rol, detectarUbicacion(c))) return false; // ABG_MZT: solo Mazatlán/Culiacán
       if (filtroEstado !== "todas") {
         const u = detectarUbicacion(c);
         if (!u || u.estado !== filtroEstado) return false;
@@ -162,7 +171,7 @@ function UcmPage() {
       const blob = `${c.expediente || ""} ${c.cliente_nombre || ""} ${c.juzgado || ""} ${c.proveedor || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [casosUCM, q, filtroEstado, filtroCiudad, prioridad, verArchivados]);
+  }, [casosUCM, q, filtroEstado, filtroCiudad, prioridad, verArchivados, rol]);
 
   // paginación: máximo 20 por página (web y cel)
   const PAGE = 20;
