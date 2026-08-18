@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
@@ -118,6 +118,8 @@ function SeccionUCP({ icon, titulo, accion, children }: { icon: React.ReactNode;
 function UCPFicha() {
   const { id } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
+  const volver = () => { if (window.history.length > 1) router.history.back(); else navigate({ to: "/ucp" }); };
   const [c, setC] = useState<CasoJuridico | null>(null);
   const [dict, setDict] = useState<any>(null);
   const [pred, setPred] = useState<any>(null);
@@ -226,7 +228,7 @@ function UCPFicha() {
   };
 
   if (cargando) return <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando ficha…</div>;
-  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={() => navigate({ to: "/ucp" })} className="underline">Volver a UCP</button></div>;
+  if (!c) return <div className="p-8 text-sm text-muted-foreground">No se encontró el caso. <button onClick={volver} className="underline">Volver</button></div>;
 
   const firmasN = ["elabora", "dil", "gad", "dgc", "dge"].filter((k) => (dict?.firmas as any)?.[k]?.fecha).length;
   const sinJuzgado = !(c.nombre_juzgado || c.cve_juzgado || c.juzgado);
@@ -255,7 +257,7 @@ function UCPFicha() {
     <div className="space-y-4">
       {/* barra superior */}
       <div className="flex items-center gap-2">
-        <button onClick={() => navigate({ to: "/ucp" })} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver a UCP</button>
+        <button onClick={volver} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Volver</button>
         <span className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: AZUL }}>UCP</span>
         <button onClick={descargarPDF} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted" style={{ borderColor: "#C2A24C" }}>
           <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF
