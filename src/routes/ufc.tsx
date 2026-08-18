@@ -7,6 +7,7 @@ import { Search, FileSignature, FilePlus, Loader2, MapPin, MoreVertical, Eye, Ar
 import { listarFormalizaciones, crearFormalizacion, listarCasosVinculables, moverPapeleraFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, type Formalizacion } from "@/lib/formalizacion";
 import type { CasoJuridico } from "@/lib/supabase";
 import { SUPABASE_URL, SUPABASE_KEY } from "@/lib/supabase";
+import { detectarUbicacion, estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 export const Route = createFileRoute("/ufc")({
   head: () => ({ meta: [{ title: "UFC · Formalizaciones — JusticiaFácil" }] }),
@@ -16,12 +17,20 @@ export const Route = createFileRoute("/ufc")({
 const NAVY = "#0B1E3A";
 const TEAL = "#0C5C46";
 
+// Ubicación real de la formalización, ya normalizada (lee distrito_judicial y juzgado).
+function ubicacionDe(f: Formalizacion) {
+  return detectarUbicacion({ juzgado: f.juzgado, distrito_judicial: f.distrito_judicial });
+}
+
 function UFC() {
   const navigate = useNavigate();
   const [filas, setFilas] = useState<Formalizacion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [q, setQ] = useState("");
   const [nuevoOpen, setNuevoOpen] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
 
   const cargar = () => {
     setCargando(true);
@@ -54,12 +63,17 @@ function UFC() {
 
   const filtradas = useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return filas;
-    return filas.filter((f) =>
-      [f.id_interno, f.direccion_garantia, f.expediente, f.tipo_proceso, f.estado_tramite, f.nombre_cesionario]
-        .some((v) => (v || "").toLowerCase().includes(t))
-    );
-  }, [filas, q]);
+    return filas.filter((f) => {
+      if (filtroEstado !== "todas") {
+        const u = ubicacionDe(f);
+        if (!u || u.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && u.ciudad !== filtroCiudad) return false;
+      }
+      if (!t) return true;
+      return [f.id_interno, f.direccion_garantia, f.expediente, f.tipo_proceso, f.estado_tramite, f.nombre_cesionario]
+        .some((v) => (v || "").toLowerCase().includes(t));
+    });
+  }, [filas, q, filtroEstado, filtroCiudad]);
 
   // Agrupar por cliente (conecta UCM ↔ UFC)
   const grupos = useMemo(() => {
@@ -95,9 +109,28 @@ function UFC() {
       </div>
 
       {/* buscador */}
-      <div className="relative">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por ID, dirección, expediente…" className="pl-9" />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por ID, dirección, expediente…" className="pl-9" />
+        </div>
+        <select
+          value={filtroEstado}
+          onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); }}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          <option value="todas">Todos los estados</option>
+          {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+        </select>
+        <select
+          value={filtroCiudad}
+          onChange={(e) => setFiltroCiudad(e.target.value)}
+          disabled={filtroEstado === "todas"}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+        >
+          <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+          {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       {/* lista */}
@@ -130,7 +163,7 @@ function UFC() {
                     <p className="text-xs text-muted-foreground">{f.tipo_proceso || ""}</p>
                   </td>
                   <td className="px-4 py-3"><p className="flex max-w-[260px] items-center gap-1"><MapPin className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="truncate">{f.direccion_garantia || "—"}</span></p></td>
-                  <td className="px-4 py-3">{f.expediente || "—"}<p className="text-xs text-muted-foreground">{f.juzgado ? f.juzgado.slice(0, 30) + "…" : ""}</p></td>
+                  <td className="px-4 py-3">{f.expediente || "—"}<p className="text-xs text-muted-foreground">{f.juzgado ? f.juzgado.slice(0, 30) + "…" : ""}{(() => { const u = ubicacionDe(f); return u ? (u.ciudad ? ` · ${u.ciudad}, ${u.estado}` : ` · ${u.estado}`) : ""; })()}</p></td>
                   <td className="px-4 py-3"><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{f.estado_tramite || "—"}</span></td>
                   <td className="px-4 py-3 text-muted-foreground">{f.etapa_a_seguir || "—"}</td>
                   <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
