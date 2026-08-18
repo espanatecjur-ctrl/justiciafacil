@@ -6,6 +6,7 @@ import { RobotBoletines } from "@/components/robot-boletines";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Search, ShieldAlert, Scale, Handshake } from "lucide-react";
+import { detectarUbicacion, estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 export const Route = createFileRoute("/udp")({
   head: () => ({ meta: [{ title: "UDP · Defensa y Protección — JusticiaFácil" }] }),
@@ -17,6 +18,7 @@ interface CasoUdp {
   tipo: string | null;
   folio: string | null;
   sede: string | null;
+  domicilio: string | null;
   cliente: string | null;
   contraparte: string | null;
   cantidad: string | null;
@@ -46,6 +48,17 @@ function posClase(p: string | null) {
   return "bg-muted text-muted-foreground";
 }
 
+// Ubicación real del caso UDP: `sede` ya trae la ciudad directa ("CULIACÁN", "MAZATLÁN",
+// "LA PAZ, B.C.S."...); `domicilio` sirve de respaldo si sede viniera vacío.
+function ubicacionDe(d: CasoUdp) {
+  return detectarUbicacion({ juzgado: d.sede, distrito_judicial: d.domicilio });
+}
+function ubicacionLabel(d: CasoUdp): string {
+  const u = ubicacionDe(d);
+  if (!u) return d.sede ? ` · ${d.sede}` : "";
+  return u.ciudad ? ` · ${u.ciudad}, ${u.estado}` : ` · ${u.estado}`;
+}
+
 function UdpPage() {
   const [datos, setDatos] = useState<CasoUdp[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -53,6 +66,9 @@ function UdpPage() {
   const [tab, setTab] = useState("DENUNCIA_PENAL");
   const [q, setQ] = useState("");
   const [soloApoderado, setSoloApoderado] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
 
   useEffect(() => {
     sbSelect<CasoUdp>("caso_udp", "select=*&order=folio.asc")
@@ -66,11 +82,16 @@ function UdpPage() {
   const filtrados = useMemo(() => {
     return delTab.filter((d) => {
       if (soloApoderado && (d.posicion || "").toLowerCase() !== "apoderado") return false;
+      if (filtroEstado !== "todas") {
+        const u = ubicacionDe(d);
+        if (!u || u.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && u.ciudad !== filtroCiudad) return false;
+      }
       if (!q) return true;
       const blob = `${d.folio || ""} ${d.cliente || ""} ${d.contraparte || ""} ${d.expediente || ""}`.toLowerCase();
       return blob.includes(q.toLowerCase());
     });
-  }, [delTab, q, soloApoderado]);
+  }, [delTab, q, soloApoderado, filtroEstado, filtroCiudad]);
 
   const cuenta = (k: string) => datos.filter((d) => d.tipo === k).length;
   const expedientes = datos.map((d) => d.expediente);
@@ -107,11 +128,28 @@ function UdpPage() {
 
       {/* Filtros */}
       <Card className="legal-card p-4">
-        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Folio, cliente, contraparte, expediente…" className="pl-8" />
           </div>
+          <select
+            value={filtroEstado}
+            onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); }}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="todas">Todos los estados</option>
+            {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select
+            value={filtroCiudad}
+            onChange={(e) => setFiltroCiudad(e.target.value)}
+            disabled={filtroEstado === "todas"}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+            {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           {!esConvenio && (
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input type="checkbox" checked={soloApoderado} onChange={(e) => setSoloApoderado(e.target.checked)} />
@@ -144,7 +182,7 @@ function UdpPage() {
                 <tr key={d.id} className="hover:bg-muted/30">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-[color:var(--teal)]">{d.folio || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{d.cliente || ""}{d.sede ? ` · ${d.sede}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">{d.cliente || ""}{ubicacionLabel(d)}</p>
                   </td>
                   {!esConvenio && (
                     <td className="px-4 py-3">
