@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Loader2, MapPin, Gavel, Building2, ShieldHalf, FileSignature, ArrowRight } from "lucide-react";
+import { Search, Loader2, MapPin, Gavel, Building2, ShieldHalf, FileSignature, ArrowRight, FolderOpen } from "lucide-react";
 import { buscarAsuntos, type AsuntoUnificado, type UnidadAsunto } from "@/lib/asuntos-busqueda";
+import { RegistrarDocumentoFisico } from "@/components/registrar-documento-fisico";
 
 export const Route = createFileRoute("/buscador-asuntos")({
   head: () => ({ meta: [{ title: "Buscador de Asuntos — JusticiaFácil" }] }),
@@ -34,6 +35,7 @@ function BuscadorAsuntosPage() {
   const [buscando, setBuscando] = useState(false);
   const [buscadoAlgunaVez, setBuscadoAlgunaVez] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [docFisico, setDocFisico] = useState<AsuntoUnificado | null>(null);
 
   // Búsqueda con debounce — espera 350ms de pausa antes de consultar, para no
   // disparar una consulta por cada letra que se escribe.
@@ -123,28 +125,40 @@ function BuscadorAsuntosPage() {
                 const ui = UNIDAD_UI[a.unidad];
                 const ruta = rutaDe(a);
                 return (
-                  <button
-                    key={`${a.unidad}-${a.id}`}
-                    onClick={() => navigate(ruta as any)}
-                    className="flex w-full items-center justify-between gap-2 rounded-md border border-border p-2 text-left text-sm hover:bg-muted/40"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${ui.cls}`}>
-                        <ui.icon className="h-3 w-3" /> {ui.label}
-                      </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {a.expediente ? `Exp. ${a.expediente}` : "Sin expediente"}
-                        {a.detalle ? ` · ${a.detalle}` : ""}
-                      </span>
-                    </div>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  </button>
+                  <div key={`${a.unidad}-${a.id}`} className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => navigate(ruta as any)}
+                      className="flex flex-1 items-center justify-between gap-2 rounded-md border border-border p-2 text-left text-sm hover:bg-muted/40"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${ui.cls}`}>
+                          <ui.icon className="h-3 w-3" /> {ui.label}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {a.expediente ? `Exp. ${a.expediente}` : "Sin expediente"}
+                          {a.detalle ? ` · ${a.detalle}` : ""}
+                        </span>
+                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => setDocFisico(a)}
+                      title="Registrar documento físico (Mazatlán)"
+                      className="shrink-0 rounded-md border border-input p-2 text-muted-foreground hover:bg-muted"
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
           </Card>
         ))}
       </div>
+
+      {docFisico && (
+        <RegistrarDocumentoFisico asunto={docFisico} onClose={() => setDocFisico(null)} />
+      )}
     </div>
   );
 }
