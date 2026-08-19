@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, FileSignature, Loader2, Save, X, Send, LayoutGrid, Stamp, GitBranch,
-  FolderOpen, Megaphone, AlertTriangle, CheckCircle2, History,
+  FolderOpen, Megaphone, AlertTriangle, CheckCircle2, History, Activity,
 } from "lucide-react";
 import { obtenerFormalizacion, actualizarFormalizacion, TIPOS_PROCESO, TIPOS_CONTRATO, ESTADOS_TRAMITE, type Formalizacion } from "@/lib/formalizacion";
 import { crearSolicitud, TIPOS_DOCUMENTO_SOLICITUD, limite24hHabiles } from "@/lib/solicitud-contrato";
@@ -27,7 +27,7 @@ const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` 
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const lbl = "mb-1 block text-xs font-medium text-muted-foreground";
 
-type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "boletin";
+type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "movimientos" | "boletin";
 
 interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
 
@@ -144,6 +144,7 @@ function UFCFicha() {
     { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
     { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
     { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
+    { id: "movimientos", label: "Movimientos y Notas", icon: <Activity className="h-4 w-4" /> },
     { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
   ];
 
@@ -340,21 +341,6 @@ function UFCFicha() {
             />
           </div>
 
-          {/* Vista en vivo de lo que ya se llenó en el expediente jurídico de origen (UCP/UCM) — mismo caso_id, tiempo real */}
-          {casoReal ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: ROJO, color: ROJO, background: "#FBEAEA" }}>
-                <History className="h-4 w-4 shrink-0" />
-                Esto se llenó en el expediente jurídico (UCP/UCM) — vista en vivo, se actualiza en tiempo real. Puedes agregar notas y actuaciones aquí mismo; quedan guardadas en el mismo expediente.
-              </div>
-              <DocumentosGarantia area="UFC" caso={casoReal} />
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-              Esta formalización no tiene un expediente jurídico (UCP/UCM) vinculado — sin ese vínculo no hay documentos/actuaciones de origen que mostrar aquí. Vincúlalo desde la pestaña General si corresponde.
-            </div>
-          )}
-
           {/* Carpeta y documentos fijos propios de UFC (independiente del expediente de origen) */}
           <CarpetaDriveVinculada caso={casoVirtual} area="UFC" modulo="ufc" onGuardar={guardarCarpeta} />
           <DocumentosFijos caso={casoVirtual} area="UFC" />
@@ -375,6 +361,23 @@ function UFCFicha() {
             </ul>
           </div>
         </div>
+      )}
+
+      {/* ============ MOVIMIENTOS Y NOTAS (actuaciones, evidencias, tareas, documentos del expediente de origen UCP/UCM) ============ */}
+      {modulo === "movimientos" && (
+        casoReal ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: ROJO, color: ROJO, background: "#FBEAEA" }}>
+              <History className="h-4 w-4 shrink-0" />
+              Esto se llenó en el expediente jurídico (UCP/UCM) — vista en vivo, se actualiza en tiempo real. Puedes agregar notas y actuaciones aquí mismo; quedan guardadas en el mismo expediente.
+            </div>
+            <DocumentosGarantia area="UFC" caso={casoReal} />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+            Esta formalización no tiene un expediente jurídico (UCP/UCM) vinculado — sin ese vínculo no hay documentos/actuaciones de origen que mostrar aquí. Vincúlalo desde la pestaña General si corresponde.
+          </div>
+        )
       )}
 
       {/* ============ BOLETÍN ============ */}
