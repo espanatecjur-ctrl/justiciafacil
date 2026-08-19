@@ -60,6 +60,10 @@ export interface DatosPDF {
   } | null;
   /** Cotejo jurídico vs registral (indicadores de anomalías). */
   cotejos?: { campo: string; jur: string; reg: string; estado: string }[];
+  /** Lista GENÉRICA de preguntas/respuestas del cuestionario del recorrido (Demandado,
+   *  Trámites, Sucesorio, Contingencia…). Se imprime agrupada por sección, en el orden
+   *  en que se entrega. Úsese cuando el recorrido no tenga su propio bloque fijo (`datos`). */
+  preguntas?: { seccion?: string; label: string; valor: string }[];
   /** Resumen por documento (IA) — se imprime al final del PDF. */
   resumenDocumentos?: { nombre: string; tipo: string; resumen: string }[] | null;
   /** Análisis de documentos con IA (cuestionario de estado actual) — al final del PDF. */
@@ -175,6 +179,19 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   fila("Demanda de despojo:", sn(dd.demandaDespojo));
   if (dd.demandaDespojo === "si") fila("Dirigida contra el poseedor actual:", sn(dd.actoDirigidoContraElPoseedor));
   y += 3;
+  }
+
+  // ---- Cuestionario genérico (recorridos sin bloque fijo: Demandado, Trámites, Sucesorio, Contingencia) ----
+  if (d.preguntas && d.preguntas.length) {
+    let seccionActual: string | undefined = undefined;
+    for (const p of d.preguntas) {
+      if (p.seccion && p.seccion !== seccionActual) {
+        seccionActual = p.seccion;
+        seccion(seccionActual);
+      }
+      fila(`${p.label}:`, p.valor || "—");
+    }
+    y += 3;
   }
 
   // ---- Dictamen ----
