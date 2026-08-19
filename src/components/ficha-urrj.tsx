@@ -529,22 +529,30 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   // cuando el dictamen quede firmado por completo; esto es solo una copia
   // de trabajo con el estado actual, para revisar sin esperar.
   const [generandoPdfBorrador, setGenerandoPdfBorrador] = useState<null | "juridico" | "registral" | "general">(null);
+  const veredictoCorto = (txt: string) => {
+    const t = (txt || "").trim().toUpperCase();
+    if (t.startsWith("POSITIV")) return "POSITIVO";
+    if (t.startsWith("NEGATIV")) return "NEGATIVO";
+    if (t.startsWith("CONDICIONAD")) return "CONDICIONADO";
+    return t.split(/[\s.,]/)[0] || "SIN MARCAR";
+  };
   const descargarBorradorPDF = async (tipo: "juridico" | "registral" | "general") => {
     setGenerandoPdfBorrador(tipo);
     try {
       if ((tipo === "juridico" || tipo === "general") && predJur) {
+        const textoDictamen = predJur.dictamen_final || predJur.dictamen_sugerido || "";
         const datosPDF: DatosPDF = {
           expediente: garantia.expediente || "", juzgado: garantia.juzgado || "", estado: "", tipoJuicio: "", posicion: predJur.posicion || "",
           ubicacion: garantia.direccion_garantia || predJur.datos?.direccion_garantia || predJur.datos?.garantia || "",
           deudor: garantia.deudor || garantia.demandado || predJur.datos?.acreditado_demandado || predJur.datos?.deudor || "",
           quienCede: "", queCede: "",
-          dictamen: predJur.dictamen_final || predJur.dictamen_sugerido || "",
+          dictamen: veredictoCorto(textoDictamen),
           riesgos: [],
           intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: 0, usura: false },
           anotaciones: "",
           firmaElabora: predJur.firma_elabora ? { nombre: predJur.firma_elabora, fecha: predJur.firma_elabora_fecha } as any : null,
           firmaValida: predJur.firma_dil ? { nombre: predJur.firma_dil, fecha: predJur.firma_dil_fecha } as any : null,
-          decision: predJur.dictamen_final || predJur.dictamen_sugerido || "",
+          decision: textoDictamen,
           datos: predJur.datos || null,
           // En el PDF "general" se anexa también el registral (si ya existe), en el mismo documento.
           registral: (tipo === "general" && predReg) ? {
