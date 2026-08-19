@@ -38,11 +38,15 @@ export interface DatosPDF {
   /** Datos capturados del recorrido (todas las fases) para el PDF completo. */
   datos?: {
     hipotecaInscrita?: string; prelacion?: string; propietario?: string; anotaciones?: string;
-    etapa?: string; sentenciaFirme?: string; situacion?: string; ultimaActuacion?: string;
+    etapa?: string; sentenciaFirme?: string; fechaSentenciaFirme?: string; situacion?: string; ultimaActuacion?: string;
+    declaradoRebeldia?: string; hayAdjudicacionDirecta?: string; adjudicacionFirme?: string;
+    hayIncidenteNulidad?: string; sentenciaEjecutoria?: string;
+    hayCaducidadDeclarada?: string; fechaCaducidadDeclarada?: string; nuevoJuicioFecha?: string; enEjecucionSentenciaFirme?: string;
+    detalleProcesal?: string;
     ultimoPago?: string; tipoAccion?: string; emplazado?: string; fechaEmplazamiento?: string;
     convenioRatificado?: string; convenioFecha?: string;
     interpelacionJV?: string; interpelacionJVFecha?: string; interpelacionTipo?: string; interpelacionExpediente?: string;
-    quienPosee?: string; inicioPosesion?: string; buenaFe?: string; demandaDespojo?: string;
+    quienPosee?: string; inicioPosesion?: string; buenaFe?: string; demandaDespojo?: string; actoDirigidoContraElPoseedor?: string;
     predial?: string; agua?: string; condominio?: string; fiscales?: string; laborales?: string; otrosGravamenes?: string;
     margenObjetivo?: string;
   } | null;
@@ -130,9 +134,25 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   // ---- 3 · Estado procesal ----
   seccion("Estado procesal");
   fila("Etapa:", oDash(dd.etapa));
-  fila("Sentencia firme a favor:", sn(dd.sentenciaFirme));
+  fila("Sentencia firme a favor:", `${sn(dd.sentenciaFirme)}${dd.fechaSentenciaFirme ? ` · quedó firme el ${dd.fechaSentenciaFirme}` : ""}`);
   fila("Situación:", oDash(dd.situacion));
   fila("Última actuación:", oDash(dd.ultimaActuacion));
+  fila("Demandado en rebeldía:", sn(dd.declaradoRebeldia));
+  fila("Adjudicación directa (sin remate):", sn(dd.hayAdjudicacionDirecta));
+  fila("Adjudicación firme (no impugnable):", sn(dd.adjudicacionFirme));
+  fila("Incidente de nulidad de notificaciones:", sn(dd.hayIncidenteNulidad));
+  fila("Sentencia declarada ejecutoria:", sn(dd.sentenciaEjecutoria));
+  y += 3;
+
+  // ---- 3b · Caducidad de la instancia ----
+  seccion("Caducidad de la instancia");
+  fila("Caducidad declarada en el expediente:", sn(dd.hayCaducidadDeclarada));
+  if (dd.hayCaducidadDeclarada === "si") {
+    fila("Fecha de la declaración de caducidad:", oDash(dd.fechaCaducidadDeclarada));
+    fila("Demanda nueva tras la caducidad:", oDash(dd.nuevoJuicioFecha));
+  }
+  fila("Ya en ejecución de sentencia firme (excepción a caducidad):", sn(dd.enEjecucionSentenciaFirme));
+  if (dd.detalleProcesal?.trim()) fila("Detalle procesal adicional:", oDash(dd.detalleProcesal));
   y += 3;
 
   // ---- 4 · Prescripción y caducidad (datos capturados) ----
@@ -153,6 +173,7 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   fila("Posesión desde:", oDash(dd.inicioPosesion));
   fila("Buena fe (título):", sn(dd.buenaFe));
   fila("Demanda de despojo:", sn(dd.demandaDespojo));
+  if (dd.demandaDespojo === "si") fila("Dirigida contra el poseedor actual:", sn(dd.actoDirigidoContraElPoseedor));
   y += 3;
   }
 
