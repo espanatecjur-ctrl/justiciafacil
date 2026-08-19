@@ -176,6 +176,13 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         setPredJur(pr);
         setFolio(pr?.folio || "");
         setDecision(pr?.dictamen_final || "");
+        // Si ya se eligió una posición (Actor/Demandado/…) y el dictamen sigue
+        // abierto, salta directo a ese recorrido — así quien elabora no tiene
+        // que volver a pasar por "elegir posición" cada vez que regresa.
+        const posicionesValidas = ["Actor", "Demandado", "Sucesorio", "Contingencia", "Tramites"];
+        if (pr?.posicion && !pr?.terminado && posicionesValidas.includes(pr.posicion)) {
+          setVista(pr.posicion as VistaPosicion);
+        }
         // El registral se guarda con el NÚMERO DE CRÉDITO (no el expediente judicial),
         // porque el RPPC se consulta por folio/crédito. Por eso se busca aquí, ya con
         // el número de crédito del jurídico a la mano (o el que venga en la garantía).
