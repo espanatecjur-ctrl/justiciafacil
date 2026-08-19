@@ -36,7 +36,7 @@ const AZUL = "#0F6E56"; // color de UCM (teal)
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
 
-type Modulo = "general" | "seguimiento" | "proceso" | "subjuicios" | "clientes" | "instrucciones" | "documentos" | "boletin";
+type Modulo = "general" | "seguimiento" | "proceso" | "subjuicios" | "clientes" | "instrucciones" | "documentos" | "movimientos" | "boletin";
 
 interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
 
@@ -184,6 +184,7 @@ function UCMFicha() {
     { id: "clientes", label: "Clientes", icon: <Users className="h-4 w-4" /> },
     { id: "instrucciones", label: "Instrucciones", icon: <ScrollText className="h-4 w-4" /> },
     { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
+    { id: "movimientos", label: "Movimientos y Notas", icon: <Activity className="h-4 w-4" /> },
     { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
   ];
 
@@ -447,8 +448,12 @@ function UCMFicha() {
               <p className="mt-0.5">Se conectará y copiará en la próxima etapa, ligando cada PDF a su cliente en el CRM.</p>
             </div>
           </div>
-          <DocumentosGarantia area="UCM" caso={c} />
         </div>
+      )}
+
+      {/* ============ MOVIMIENTOS Y NOTAS (actuaciones, evidencias, tareas, documentos) ============ */}
+      {modulo === "movimientos" && (
+        <DocumentosGarantia area="UCM" caso={c} />
       )}
 
       {/* ============ BOLETÍN ============ */}
