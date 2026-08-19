@@ -18,13 +18,14 @@ import { BannerCorreo } from "@/components/banner-correo";
 import { BloquePrecioURRJ, PRECIO_VACIO, resumenPrecio, type PrecioURRJ } from "@/components/bloque-precio-urrj";
 import { registrarEvento } from "@/lib/cronologia-urrj";
 import { CronologiaURRJ } from "@/components/cronologia-urrj-vista";
-import { Mail, Eye } from "lucide-react";
-import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Download, Scale, Lock, Calculator, Search, Bot, RefreshCw } from "lucide-react";
+import { Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCheck, Check, X, Scale, Lock, Calculator, Search, Bot, RefreshCw } from "lucide-react";
 
 const NAVY = "#0B1E3A";
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const inp = "w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
 const n = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v; };
+const siNo = (v?: string) => (v === "si" ? "Sí" : v === "no" ? "No" : "—");
 
 const FASES = ["Datos básicos", "Extracción del expediente", "Legalidad procesal", "Carta saldo", "Bloqueo legal", "Dictamen y firmas"];
 
@@ -300,6 +301,39 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
     boletines: hallazgos,
     resumenDocumentos: resumenParaPDF,
     analisisIA: analisisParaPDF,
+    preguntas: [
+      { seccion: "Datos generales", label: "Demandado-vendedor", valor: x.deudor },
+      { seccion: "Datos generales", label: "RFC del demandado", valor: x.rfc },
+      { seccion: "Datos generales", label: "Acreedor original (demandante)", valor: x.acreedor },
+      { seccion: "Datos generales", label: "Tipo de acreedor", valor: x.tipoAcreedor },
+      { seccion: "Datos generales", label: "¿Hay copropietarios NO demandados?", valor: siNo(x.copropietarios) },
+      { seccion: "Expediente", label: "Etapa del juicio", valor: x.etapa },
+      { seccion: "Expediente", label: "Fecha del último auto", valor: x.fechaUltimoAuto },
+      { seccion: "Expediente", label: "¿La descripción del inmueble coincide (demanda/escritura/CLG)?", valor: siNo(x.descripcionCoincide) },
+      { seccion: "Expediente", label: "Tipo de emplazamiento", valor: x.tipoEmplazamiento },
+      { seccion: "Estado procesal", label: "¿Sentencia ya ejecutoriada?", valor: siNo(x.sentenciaEjecutoriada) },
+      { seccion: "Estado procesal", label: "¿Embargo de tercería (SAT/IMSS/INFONAVIT/laboral)?", valor: siNo(x.tercosFiscalLaboral) },
+      { seccion: "Estado procesal", label: "¿La almoneda/subasta ya está convocada?", valor: siNo(x.almonedaConvocada) },
+      { seccion: "Estado procesal", label: "¿El remate ya se ejecutó?", valor: siNo(x.remateEjecutado) },
+      { seccion: "Estado procesal", label: "¿Hay adjudicación a favor del acreedor?", valor: siNo(x.adjudicacion) },
+      ...(x.adjudicacion === "si" ? [
+        { seccion: "Estado procesal", label: "¿La adjudicación quedó firme?", valor: siNo(x.adjudicacionFirme) },
+        { seccion: "Estado procesal", label: "¿A favor de quién quedó?", valor: x.adjudicacionAFavor || "—" },
+        { seccion: "Estado procesal", label: "¿Hay amparo pendiente o promovible contra el remate/adjudicación?", valor: siNo(x.amparoRemate) },
+        { seccion: "Estado procesal", label: "¿Ya se escrituró y entregó posesión (lanzamiento)?", valor: siNo(x.escrituradoPosesion) },
+      ] : []),
+      { seccion: "Estado procesal", label: "¿Sospecha de anatocismo/usura?", valor: siNo(x.sospechaUsura) },
+      { seccion: "Carta saldo", label: "Estado de la Carta Saldo", valor: x.estadoCartaSaldo },
+      { seccion: "Carta saldo", label: "Fecha de caducidad de la carta", valor: x.fechaCaducidad },
+      { seccion: "Carta saldo", label: "¿Hay otros acreedores formados?", valor: siNo(x.otrosAcreedores) },
+      { seccion: "Carta saldo", label: "¿Quita sin condiciones?", valor: siNo(x.quitaSinCondiciones) },
+      { seccion: "Instrumentación legal", label: "¿El vendedor acepta firmar el Poder Irrevocable?", valor: siNo(x.vendedorAceptaPoder) },
+      { seccion: "Instrumentación legal", label: "¿Promesa con cláusula suspensiva (Art. 1938)?", valor: siNo(x.promesaSuspensiva) },
+      { seccion: "Instrumentación legal", label: "¿Escrow (cuenta de custodia)?", valor: siNo(x.escrow) },
+      { seccion: "Instrumentación legal", label: "¿Poder General Irrevocable (Art. 2596)?", valor: siNo(x.poderIrrevocable) },
+      { seccion: "Instrumentación legal", label: "¿El dinero ya se entregó al vendedor?", valor: siNo(x.dineroYaEntregado) },
+      { seccion: "Instrumentación legal", label: "¿Ratificado ante notario?", valor: siNo(x.ratificadoNotario) },
+    ],
   });
 
   const descargarPDF = async (decision: string, modo: "descargar" | "ver" = "descargar") => {
@@ -611,7 +645,6 @@ export function RecorridoDemandado({ casos, onVolver, precargar, puedeFirmarElab
                 <ArrowRight className="h-4 w-4" /> Continuar con el registral
               </Link>
             )}
-            <div className="flex flex-wrap gap-2"><button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF</button><button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible cuando estén las dos firmas" : ""} className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}><Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF</button></div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
             {yaExiste && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
