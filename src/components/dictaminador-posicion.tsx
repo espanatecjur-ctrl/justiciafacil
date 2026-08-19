@@ -311,9 +311,19 @@ export function DictaminadorPosicion({
           const datosVP = datosPreviewCompleto || precargar?.datos;
           const tieneAlgo = datosVP && (datosVP.numeroCredito || datosVP.quienCede || datosVP.ubicacion || datosVP.etapa || datosVP.deudor);
           if (!tieneAlgo) return null;
+          const posicionesConocidas: VistaPosicion[] = ["Actor", "Demandado", "Sucesorio", "Contingencia", "Tramites"];
+          const posicionGuardada = precargar?.datos?.posicion || "";
+          const posicionParaContinuar = posicionesConocidas.find((p) => posicionGuardada.startsWith(p));
           return (
             <div className="mb-4 rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/5 p-3">
-              <p className="mb-2 text-sm font-semibold text-[color:var(--teal)]">🔄 Ya hay respuestas guardadas de antes para este crédito — esto es lo que se llenó:</p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-[color:var(--teal)]">🔄 Ya hay respuestas guardadas de antes para este crédito — esto es lo que se llenó:</p>
+                {posicionParaContinuar && (
+                  <button type="button" onClick={() => abrir(posicionParaContinuar)} className="shrink-0 rounded-md bg-[color:var(--teal)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                    ▶ Continuar donde me quedé ({posicionParaContinuar})
+                  </button>
+                )}
+              </div>
               <VistaPreviaRespuestas datos={datosVP} />
             </div>
           );
