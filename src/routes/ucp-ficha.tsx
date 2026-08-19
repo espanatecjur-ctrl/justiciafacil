@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useEffect, useState } from "react";
 import {
   ArrowLeft, Loader2, ScrollText, Landmark, CheckCircle2, XCircle, Clock, PenLine, Download, Eye,
-  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, DollarSign,
+  LayoutGrid, GitBranch, FolderOpen, Megaphone, Stamp, Scale, AlertTriangle, Send, DollarSign, Activity,
 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { correoActual } from "@/lib/auth";
@@ -35,7 +35,7 @@ const AZUL = "#0C447C"; // color de UCP
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const inp = "w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm";
 
-type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "boletin";
+type Modulo = "general" | "proceso" | "subjuicios" | "documentos" | "movimientos" | "boletin";
 
 interface Acuerdo { id: string; expediente: string | null; fecha_acuerdo: string | null; texto: string | null; tipo_acuerdo: string | null; urgente: boolean | null; }
 
@@ -240,6 +240,7 @@ function UCPFicha() {
     { id: "proceso", label: "Proceso", icon: <Stamp className="h-4 w-4" /> },
     { id: "subjuicios", label: "Sub-juicios", icon: <GitBranch className="h-4 w-4" /> },
     { id: "documentos", label: "Documentos", icon: <FolderOpen className="h-4 w-4" /> },
+    { id: "movimientos", label: "Movimientos y Notas", icon: <Activity className="h-4 w-4" /> },
     { id: "boletin", label: "Boletín", icon: <Megaphone className="h-4 w-4" /> },
   ];
 
@@ -520,8 +521,12 @@ function UCPFicha() {
           <ChecklistDocumentosUCP caso={c} area="UCP" />
           <CarpetaDriveVinculada caso={c} area="UCP" modulo="ucp" onGuardar={guardarCampos} />
           <DocumentosFijos caso={c} area="UCP" />
-          <DocumentosGarantia area="UCP" caso={c} />
         </div>
+      )}
+
+      {/* ============ MOVIMIENTOS Y NOTAS (actuaciones, evidencias, tareas, documentos) ============ */}
+      {modulo === "movimientos" && (
+        <DocumentosGarantia area="UCP" caso={c} />
       )}
 
       {/* ============ BOLETÍN ============ */}
