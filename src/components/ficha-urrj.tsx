@@ -9,6 +9,7 @@
 // ============================================================
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BotonVerDoc } from "@/components/visor-documento";
+import { descargarPredictamenPDF, type DatosPDF } from "@/lib/predictamen-pdf";
 import { SUPABASE_URL, SUPABASE_KEY, type CasoJuridico } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineaVidaAreas } from "@/components/linea-vida-areas";
@@ -523,6 +524,53 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   // -------------------- MODO FICHA (overview, mismo esqueleto que expediente) --------------------
   const abrirProceso = (t: string) => { setTab(t); setModo("dictaminar"); };
 
+  // Descarga un PDF con lo que ya está guardado (aunque no tenga las 4 firmas
+  // todavía). El PDF oficial archivado (pdf_url) sigue reservándose para
+  // cuando el dictamen quede firmado por completo; esto es solo una copia
+  // de trabajo con el estado actual, para revisar sin esperar.
+  const [generandoPdfBorrador, setGenerandoPdfBorrador] = useState<null | "juridico" | "registral" | "general">(null);
+  const descargarBorradorPDF = async (tipo: "juridico" | "registral" | "general") => {
+    setGenerandoPdfBorrador(tipo);
+    try {
+      if ((tipo === "juridico" || tipo === "general") && predJur) {
+        const datosPDF: DatosPDF = {
+          expediente: garantia.expediente || "", juzgado: garantia.juzgado || "", estado: "", tipoJuicio: "", posicion: predJur.posicion || "",
+          ubicacion: garantia.direccion_garantia || "", deudor: garantia.deudor || garantia.demandado || "", quienCede: "", queCede: "",
+          dictamen: predJur.dictamen_final || predJur.dictamen_sugerido || "",
+          riesgos: [],
+          intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: 0, usura: false },
+          anotaciones: "",
+          firmaElabora: predJur.firma_elabora ? { nombre: predJur.firma_elabora, fecha: predJur.firma_elabora_fecha } as any : null,
+          firmaValida: predJur.firma_dil ? { nombre: predJur.firma_dil, fecha: predJur.firma_dil_fecha } as any : null,
+          decision: predJur.dictamen_final || predJur.dictamen_sugerido || "",
+          datos: predJur.datos || null,
+          // En el PDF "general" se anexa también el registral (si ya existe), en el mismo documento.
+          registral: (tipo === "general" && predReg) ? {
+            resultado: predReg.resultado || "", titular: predReg.datos?.propietario, deudor: predReg.acreditado,
+            hayAdicional: predReg.hay_adicional, anotaciones: predReg.datos?.anotaciones,
+            firmaElabora: predReg.firma_elabora?.nombre ? predReg.firma_elabora : null,
+            firmaValida: predReg.firma_valida?.nombre ? predReg.firma_valida : null,
+          } : null,
+        };
+        await descargarPredictamenPDF(datosPDF, "descargar");
+      } else if (tipo === "registral" && predReg) {
+        const datosPDF: DatosPDF = {
+          expediente: garantia.expediente || "", juzgado: garantia.juzgado || "", estado: "", tipoJuicio: "", posicion: "",
+          ubicacion: garantia.direccion_garantia || "", deudor: predReg.acreditado || garantia.deudor || "", quienCede: "", queCede: "",
+          dictamen: predReg.resultado || "", riesgos: [],
+          intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: 0, usura: false },
+          anotaciones: "", firmaElabora: null, firmaValida: null, decision: predReg.resultado || "",
+          datos: predReg.datos || null,
+        };
+        await descargarPredictamenPDF(datosPDF, "descargar");
+      }
+    } catch (e: any) {
+      alert("No se pudo generar el PDF: " + e.message);
+    } finally {
+      setGenerandoPdfBorrador(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Barra superior: volver + área + fase + carpeta Drive */}
@@ -722,9 +770,14 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         icon={<Gavel className="h-4 w-4" style={{ color: PURPLE }} />}
         titulo="Dictamen de la garantía · URRJ"
         accion={
-          <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ background: NAVY }}>
-            <Gavel className="h-3.5 w-3.5" /> Abrir proceso de dictaminación
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => descargarBorradorPDF("general")} disabled={generandoPdfBorrador === "general" || !predJur} title="Descarga un solo PDF con el jurídico y el registral juntos, con lo que ya esté guardado" className="inline-flex items-center gap-1.5 rounded-md border border-input bg-white px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50" style={{ color: NAVY }}>
+              {generandoPdfBorrador === "general" ? "Generando…" : "📄 PDF general"}
+            </button>
+            <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ background: NAVY }}>
+              <Gavel className="h-3.5 w-3.5" /> Abrir proceso de dictaminación
+            </button>
+          </div>
         }
       >
         {/* Veredictos + cronómetro + folio */}
@@ -777,7 +830,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
                 <button onClick={() => setPreview(preview === "juridico" ? null : "juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
                 {predJur.pdf_url
                   ? <BotonVerDoc url={predJur.pdf_url} nombre={`Pre-dictamen jurídico ${folio || garantia.expediente || ""}.pdf`} label="Ver PDF" className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" />
-                  : <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" title="El PDF se archiva al firmar el dictamen">PDF (en el proceso)</button>}
+                  : <button onClick={() => descargarBorradorPDF("juridico")} disabled={generandoPdfBorrador === "juridico"} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60" title="Descarga un PDF con lo que ya está guardado; el PDF oficial se archiva aparte al completar las 4 firmas">{generandoPdfBorrador === "juridico" ? "Generando…" : "Descargar PDF (borrador)"}</button>}
                 <button onClick={() => abrirProceso("juridico")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Jurídico</button>
               </div>
             </div>
@@ -805,7 +858,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
                 <button onClick={() => setPreview(preview === "registral" ? null : "registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">👁 Vista previa</button>
                 {predReg.pdf_url
                   ? <BotonVerDoc url={predReg.pdf_url} nombre={`Dictamen registral ${garantia.expediente || ""}.pdf`} label="Ver PDF" className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" />
-                  : <button onClick={() => abrirProceso("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted" title="El PDF se archiva al firmar el dictamen">PDF (en el proceso)</button>}
+                  : <button onClick={() => descargarBorradorPDF("registral")} disabled={generandoPdfBorrador === "registral"} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60" title="Descarga un PDF con lo que ya está guardado; el PDF oficial se archiva aparte al completar las firmas">{generandoPdfBorrador === "registral" ? "Generando…" : "Descargar PDF (borrador)"}</button>}
                 <button onClick={() => abrirProceso("registral")} className="inline-flex items-center gap-1 rounded-md border border-input bg-white px-3 py-1.5 text-xs hover:bg-muted">Abrir en Registral</button>
               </div>
             </div>
