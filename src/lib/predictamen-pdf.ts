@@ -195,12 +195,18 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   }
 
   // ---- Dictamen ----
-  nuevaPaginaSiHace(16);
-  const dc: [number, number, number] = d.dictamen === "POSITIVO" ? TEAL : d.dictamen === "NEGATIVO" ? [220, 38, 38] : [194, 162, 76];
-  doc.setFillColor(...dc); doc.roundedRect(M, y, W - 2 * M, 11, 1.5, 1.5, "F");
-  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
-  doc.text(`Pre-dictamen del sistema: ${d.dictamen}`, M + 4, y + 7);
-  y += 16;
+  nuevaPaginaSiHace(20);
+  const veredictoTxt = (d.dictamen || "").trim();
+  const veredictoPalabra = veredictoTxt.split(/[\s.,]/)[0].toUpperCase();
+  const dc: [number, number, number] = veredictoPalabra.startsWith("POSITIV") ? TEAL : veredictoPalabra.startsWith("NEGATIV") ? [220, 38, 38] : [194, 162, 76];
+  doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  const veredictoLines = doc.splitTextToSize(`Pre-dictamen del sistema: ${veredictoTxt}`, W - 2 * M - 8);
+  const veredictoAlto = Math.max(11, veredictoLines.length * 5.6 + 6);
+  nuevaPaginaSiHace(veredictoAlto + 4);
+  doc.setFillColor(...dc); doc.roundedRect(M, y, W - 2 * M, veredictoAlto, 1.5, 1.5, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.text(veredictoLines, M + 4, y + 7);
+  y += veredictoAlto + 5;
 
   // ---- Riesgos ----
   nuevaPaginaSiHace(10);
@@ -283,7 +289,9 @@ export async function descargarPredictamenPDF(d: DatosPDF, modo: "descargar" | "
   // ---- Decisión ----
   nuevaPaginaSiHace(10);
   doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-  doc.text(`Decisión humana: ${d.decision || "—"}`, M, y); y += 8;
+  const decisionLines = doc.splitTextToSize(`Decisión humana: ${d.decision || "—"}`, W - 2 * M);
+  nuevaPaginaSiHace(decisionLines.length * 5.2 + 4);
+  doc.text(decisionLines, M, y); y += decisionLines.length * 5.2 + 4;
 
   // ---- Firmas ----
   nuevaPaginaSiHace(40);
