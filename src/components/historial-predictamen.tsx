@@ -308,7 +308,7 @@ export function FichaGarantia({ f, onVolver }: { f: Fila; onVolver: () => void }
       f.expediente ? `expediente.eq.${encodeURIComponent(f.expediente)}` : null,
       numeroCredito ? `numero_credito.eq.${encodeURIComponent(numeroCredito)}` : null,
     ].filter(Boolean) as string[];
-    const filtro = condiciones.length === 0 ? "id=eq.0" : condiciones.length === 1 ? condiciones[0].replace(".eq.", "=eq.") : `or=(${condiciones.join(",")})`;
+    const filtro = condiciones.length === 0 ? "id=is.null" : condiciones.length === 1 ? condiciones[0].replace(".eq.", "=eq.") : `or=(${condiciones.join(",")})`;
     fetch(`${SUPABASE_URL}/rest/v1/solicitud_predictamen?select=documentos&${filtro}&area=eq.URRJ&order=created_at.desc&limit=50`, { headers })
       .then((r) => (r.ok ? r.json() : []))
       .then((rows: any[]) => {
