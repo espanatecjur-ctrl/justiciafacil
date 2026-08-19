@@ -185,8 +185,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         // abierto, salta directo a ese recorrido — así quien elabora no tiene
         // que volver a pasar por "elegir posición" cada vez que regresa.
         const posicionesValidas = ["Actor", "Demandado", "Sucesorio", "Contingencia", "Tramites"];
-        if (pr?.posicion && !pr?.terminado && posicionesValidas.includes(pr.posicion)) {
-          setVista(pr.posicion as VistaPosicion);
+        const posicionBase = posicionesValidas.find((p) => (pr?.posicion || "").startsWith(p));
+        if (posicionBase && !pr?.terminado) {
+          setVista(posicionBase as VistaPosicion);
         }
         // El registral se guarda con el NÚMERO DE CRÉDITO (no el expediente judicial),
         // porque el RPPC se consulta por folio/crédito. Por eso se busca aquí, ya con
