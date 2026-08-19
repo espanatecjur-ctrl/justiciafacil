@@ -147,6 +147,11 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   const [acuerdos, setAcuerdos] = useState<any[]>([]);
   const [cargandoAc, setCargandoAc] = useState(false);
   const [refrescoAc, setRefrescoAc] = useState(0);
+  // Para "Descargar PDF (borrador)" — declarado aquí arriba (con los demás
+  // hooks) para que SIEMPRE se ejecute sin importar el modo/return que
+  // siga más abajo. Un hook después de un return condicional revienta
+  // React con el error #300 ("Rendered fewer hooks than expected").
+  const [generandoPdfBorrador, setGenerandoPdfBorrador] = useState<null | "juridico" | "registral" | "general">(null);
   useEffect(() => {
     if (!garantia.expediente) { setAcuerdos([]); return; }
     setCargandoAc(true);
@@ -535,7 +540,6 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   // todavía). El PDF oficial archivado (pdf_url) sigue reservándose para
   // cuando el dictamen quede firmado por completo; esto es solo una copia
   // de trabajo con el estado actual, para revisar sin esperar.
-  const [generandoPdfBorrador, setGenerandoPdfBorrador] = useState<null | "juridico" | "registral" | "general">(null);
   const veredictoCorto = (txt: string) => {
     const t = (txt || "").trim().toUpperCase();
     if (t.startsWith("POSITIV")) return "POSITIVO";
