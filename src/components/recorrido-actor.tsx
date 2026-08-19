@@ -23,7 +23,7 @@ import {
 } from "@/lib/urrj-motores";
 import {
   ArrowLeft, ArrowRight, Bot, Search, Newspaper, ShieldHalf, Building2,
-  Check, X, ClipboardCheck, Lock, Download, Eye, RefreshCw, CheckCircle2 } from "lucide-react";
+  Check, X, ClipboardCheck, Lock, RefreshCw, CheckCircle2 } from "lucide-react";
 import { FirmaParte, type DatosFirma } from "@/components/firma-parte";
 import { BuscadorBoletin } from "@/components/buscador-boletin";
 import { descargarPredictamenPDF, type DatosPDF } from "@/lib/predictamen-pdf";
@@ -1632,14 +1632,6 @@ export function RecorridoActor({
                 <ArrowRight className="h-4 w-4" /> Continuar con el registral
               </Link>
             )}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <button onClick={() => descargarPDF("(borrador)", "ver")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible en cuanto firmes como elabora" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
-                <Eye className="h-4 w-4" style={{ color: "#C2A24C" }} /> Ver PDF
-              </button>
-              <button onClick={() => descargarPDF("(borrador)")} disabled={!dosFirmas} title={!dosFirmas ? "Disponible en cuanto firmes como elabora" : ""} className="flex items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed" style={{ borderColor: "#C2A24C" }}>
-                <Download className="h-4 w-4" style={{ color: "#C2A24C" }} /> Descargar PDF del pre-dictamen
-              </button>
-            </div>
             {guardado && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{guardado}</div>}
             {yaExiste && (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
