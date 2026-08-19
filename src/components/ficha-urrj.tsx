@@ -535,7 +535,9 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
       if ((tipo === "juridico" || tipo === "general") && predJur) {
         const datosPDF: DatosPDF = {
           expediente: garantia.expediente || "", juzgado: garantia.juzgado || "", estado: "", tipoJuicio: "", posicion: predJur.posicion || "",
-          ubicacion: garantia.direccion_garantia || "", deudor: garantia.deudor || garantia.demandado || "", quienCede: "", queCede: "",
+          ubicacion: garantia.direccion_garantia || predJur.datos?.direccion_garantia || predJur.datos?.garantia || "",
+          deudor: garantia.deudor || garantia.demandado || predJur.datos?.acreditado_demandado || predJur.datos?.deudor || "",
+          quienCede: "", queCede: "",
           dictamen: predJur.dictamen_final || predJur.dictamen_sugerido || "",
           riesgos: [],
           intereses: { ordinarios: 0, moratorios: 0, iva: 0, total: 0, usura: false },
