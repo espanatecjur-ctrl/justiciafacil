@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  FileText, Loader2, Upload, Trash2, Pencil, Check, X, MapPin, AlertTriangle,
+  FileText, Loader2, Upload, Trash2, Pencil, Check, X, MapPin, AlertTriangle, Lock,
 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { subirDocumento } from "@/lib/drive";
@@ -11,6 +11,7 @@ import {
   documentosDeAsunto, rolActual, puedeAprobarBajas, solicitarBaja, resolverBaja,
   TIPOS_COPIA, type DocumentoArchivo, type TipoCopia,
 } from "@/lib/archivo-general";
+import { infoUsuarioEstado, puedeAbrirContenido, type InfoUsuarioEstado } from "@/lib/permisos-estado";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const TEAL = "#0C5C46";
@@ -42,12 +43,13 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
   const [cargando, setCargando] = useState(true);
   const [rol, setRol] = useState<string | null>(null);
   const puedeAprobar = puedeAprobarBajas(rol);
+  const [usuario, setUsuario] = useState<InfoUsuarioEstado | null>(null);
 
   const cargar = () => {
     setCargando(true);
     documentosDeAsunto(asunto).then(setDocumentos).finally(() => setCargando(false));
   };
-  useEffect(() => { cargar(); rolActual().then(setRol); }, [asunto.id, asunto.unidad]);
+  useEffect(() => { cargar(); rolActual().then(setRol); infoUsuarioEstado().then(setUsuario); }, [asunto.id, asunto.unidad]);
 
   const puedeSubirDigital = asunto.unidad === "UCM" || asunto.unidad === "UCP";
   const [casoCompleto, setCasoCompleto] = useState<CasoJuridico | null>(null);
@@ -130,6 +132,7 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
             const clave = `${d.fuente}-${d.id}`;
             const eb = ESTADO_BAJA_UI[d.estado_baja] || ESTADO_BAJA_UI.activo;
             const cp = d.tipo_copia ? COPIA_UI[d.tipo_copia] : null;
+            const abrir = usuario ? puedeAbrirContenido(usuario, d.ubicacion?.estado ?? null) : true;
             return (
               <div key={clave} className="rounded-md border border-border p-2.5 text-xs">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -150,36 +153,44 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
                   {d.es_fisico && (d as any).carpeta_fisica ? ` · Carpeta: ${(d as any).carpeta_fisica}` : ""}
                 </p>
 
-                {anotando === clave ? (
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <input value={textoAnotacion} onChange={(e) => setTextoAnotacion(e.target.value)} className={`${inp} flex-1`} placeholder="Anotación…" autoFocus />
-                    <button onClick={() => guardarAnotacion(d)} className="text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => setAnotando(null)} className="text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
-                  </div>
+                {!abrir ? (
+                  <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Lock className="h-3 w-3" /> Es de {d.ubicacion?.estado || "otro Estado"} — solo puedes ver que existe. No puedes abrirlo, editarlo ni borrarlo.
+                  </p>
                 ) : (
-                  <button onClick={() => abrirAnotar(d, "")} className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
-                    <Pencil className="h-3 w-3" /> Agregar anotación
-                  </button>
-                )}
+                  <>
+                    {anotando === clave ? (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <input value={textoAnotacion} onChange={(e) => setTextoAnotacion(e.target.value)} className={`${inp} flex-1`} placeholder="Anotación…" autoFocus />
+                        <button onClick={() => guardarAnotacion(d)} className="text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setAnotando(null)} className="text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ) : (
+                      <button onClick={() => abrirAnotar(d, "")} className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                        <Pencil className="h-3 w-3" /> Agregar anotación
+                      </button>
+                    )}
 
-                <div className="mt-1.5 flex flex-wrap items-center gap-3">
-                  {d.fuente === "digital" && <BotonVerDoc url={d.link} driveId={d.drive_id} nombre={d.nombre} label="Ver" className="inline-flex items-center gap-1 text-[color:var(--teal)] hover:underline" />}
-                  {!d.copiaPendiente && (
-                    <select value={d.tipo_copia || ""} onChange={(e) => cambiarTipoCopia(d, e.target.value as TipoCopia)} className="rounded border border-input bg-background px-1.5 py-0.5 text-[11px]">
-                      <option value="">Sin marcar — original/copia</option>
-                      {TIPOS_COPIA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  )}
-                  {!d.copiaPendiente && d.estado_baja === "activo" && (
-                    <button onClick={() => setBajaModal(d)} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-red-600"><Trash2 className="h-3 w-3" /> Solicitar baja</button>
-                  )}
-                  {!d.copiaPendiente && d.estado_baja === "baja_solicitada" && puedeAprobar && (
-                    <>
-                      <button onClick={async () => { if (await resolverBaja(d, true)) cargar(); }} className="text-[11px] font-medium text-red-700">Autorizar baja</button>
-                      <button onClick={() => setRechazoModal(d)} className="text-[11px] text-muted-foreground">Rechazar</button>
-                    </>
-                  )}
-                </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                      {d.fuente === "digital" && <BotonVerDoc url={d.link} driveId={d.drive_id} nombre={d.nombre} label="Ver" className="inline-flex items-center gap-1 text-[color:var(--teal)] hover:underline" />}
+                      {!d.copiaPendiente && (
+                        <select value={d.tipo_copia || ""} onChange={(e) => cambiarTipoCopia(d, e.target.value as TipoCopia)} className="rounded border border-input bg-background px-1.5 py-0.5 text-[11px]">
+                          <option value="">Sin marcar — original/copia</option>
+                          {TIPOS_COPIA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      )}
+                      {!d.copiaPendiente && d.estado_baja === "activo" && (
+                        <button onClick={() => setBajaModal(d)} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-red-600"><Trash2 className="h-3 w-3" /> Solicitar baja</button>
+                      )}
+                      {!d.copiaPendiente && d.estado_baja === "baja_solicitada" && puedeAprobar && (
+                        <>
+                          <button onClick={async () => { if (await resolverBaja(d, true)) cargar(); }} className="text-[11px] font-medium text-red-700">Autorizar baja</button>
+                          <button onClick={() => setRechazoModal(d)} className="text-[11px] text-muted-foreground">Rechazar</button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
                 {d.estado_baja === "baja_solicitada" && (
                   <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-800"><AlertTriangle className="h-3 w-3" /> Solicitada por {d.baja_solicitado_por || "—"}: "{d.baja_motivo}"</p>
                 )}
