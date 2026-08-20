@@ -13,7 +13,9 @@ export interface AsuntoConDocs {
   cliente: string | null;
   expediente: string | null;
   folio: string | null;
+  gar_id: string | null;
   no_credito: string | null;
+  direccion: string | null;
   ubicacion: UbicacionJudicial | null;
   numDigitales: number;
   numFisicos: number;
@@ -29,7 +31,7 @@ async function sb<T = any>(tabla: string, query: string): Promise<T[]> {
 /** Trae todos los asuntos de UCM+UCP con su conteo de documentos digitales y físicos. */
 export async function listarAsuntosConDocs(): Promise<AsuntoConDocs[]> {
   const [casos, digitales, fisicos] = await Promise.all([
-    sb<any>("caso_juridico", `select=id,unidad,tipo_registro,pasa_a_ucm,cliente_nombre,expediente,folio,no_credito,entidad,juzgado,distrito_judicial,updated_at&archivado=eq.false&order=updated_at.desc&limit=2000`),
+    sb<any>("caso_juridico", `select=id,unidad,tipo_registro,pasa_a_ucm,cliente_nombre,expediente,folio,gar_id,no_credito,direccion_garantia,entidad,juzgado,distrito_judicial,updated_at&archivado=eq.false&order=updated_at.desc&limit=2000`),
     sb<any>("documento_garantia", `select=caso_id&en_papelera=eq.false&limit=20000`),
     sb<any>("documento_fisico", `select=caso_juridico_id&en_papelera=eq.false&limit=20000`),
   ]);
@@ -49,7 +51,9 @@ export async function listarAsuntosConDocs(): Promise<AsuntoConDocs[]> {
       cliente: c.cliente_nombre,
       expediente: c.expediente,
       folio: c.folio,
+      gar_id: c.gar_id,
       no_credito: c.no_credito,
+      direccion: c.direccion_garantia,
       ubicacion: detectarUbicacion(c),
       numDigitales: conteoDigital.get(c.id) || 0,
       numFisicos: conteoFisico.get(c.id) || 0,
