@@ -27,6 +27,53 @@ export const TIPOS_COPIA: { value: TipoCopia; label: string }[] = [
   { value: "digital_nativo", label: "Digital (nunca tuvo papel)" },
 ];
 
+// Las 9 sucursales/áreas reales de DIIPA. Cada una tiene un responsable —
+// quien puede abrir carpeta física ahí, y a quien se le envían los originales
+// si un documento de su plaza termina físicamente en otro lado.
+export const SUCURSALES = [
+  "Ventas Culiacán", "Jurídico Culiacán",
+  "Ventas GDL", "Jurídico GDL",
+  "Ventas Mazatlán", "Jurídico Mazatlán", "Atención al Cliente Mazatlán",
+  "Ventas La Paz", "Jurídico La Paz",
+] as const;
+export type Sucursal = (typeof SUCURSALES)[number];
+
+export interface ResponsableSucursal {
+  sucursal: Sucursal;
+  ciudad: string; // para relacionar con detectarUbicacion()
+  nombre: string | null; // null = todavía pendiente de asignar
+  correo: string | null;
+}
+
+// "Jurídico GDL" es el archivo general principal — todos los ORIGINALES viven
+// ahí sin importar en qué plaza esté el caso. Las demás sucursales de Jurídico
+// pueden resguardar copias certificadas; copias simples, en cualquier sucursal.
+export const ARCHIVO_PRINCIPAL: Sucursal = "Jurídico GDL";
+
+export const RESPONSABLES_SUCURSAL: ResponsableSucursal[] = [
+  { sucursal: "Ventas Culiacán", ciudad: "Culiacán", nombre: "Karla Bustamante", correo: "karlagerenteculiacan@diipadesarrollos.com" },
+  { sucursal: "Jurídico Culiacán", ciudad: "Culiacán", nombre: "Primitivo Sagaste", correo: "juridico1@diipadesarrollos.com" },
+  { sucursal: "Ventas GDL", ciudad: "Guadalajara", nombre: "Elizabeth Rivera", correo: "gerentegdl@diipadesarrollos.com" },
+  { sucursal: "Jurídico GDL", ciudad: "Guadalajara", nombre: "Milton Castro", correo: "lic_milcas@diipadesarrollos.com" },
+  { sucursal: "Ventas Mazatlán", ciudad: "Mazatlán", nombre: "Elizabeth Rivera", correo: "gerentegdl@diipadesarrollos.com" }, // temporal, hasta que se contrate gerente propio
+  { sucursal: "Jurídico Mazatlán", ciudad: "Mazatlán", nombre: "Francisca Valle", correo: "vallefr_mzt@diipadesarrollos.com" },
+  { sucursal: "Atención al Cliente Mazatlán", ciudad: "Mazatlán", nombre: null, correo: null }, // pendiente: RAC
+  { sucursal: "Ventas La Paz", ciudad: "La Paz", nombre: "Pedro Flores Mercado", correo: "gerentelapaz@diipadesarrollos.com" },
+  { sucursal: "Jurídico La Paz", ciudad: "La Paz", nombre: "Milton Castro", correo: "lic_milcas@diipadesarrollos.com" }, // cubierto por GDL, revisan UCM+DGE
+];
+
+export function responsableDe(sucursal: Sucursal | null): ResponsableSucursal | null {
+  if (!sucursal) return null;
+  return RESPONSABLES_SUCURSAL.find((r) => r.sucursal === sucursal) ?? null;
+}
+
+/** Sucursal de Jurídico que corresponde a una ciudad detectada (para sugerir/auto-asignar). */
+export function sucursalJuridicoDe(ciudad: string | null): Sucursal | null {
+  if (!ciudad) return null;
+  const match = RESPONSABLES_SUCURSAL.find((r) => r.ciudad === ciudad && r.sucursal.startsWith("Jurídico"));
+  return match?.sucursal ?? null;
+}
+
 export interface DocumentoArchivo {
   id: string;
   fuente: FuenteDocumento;
@@ -54,6 +101,7 @@ export interface DocumentoArchivo {
   digitalizado: boolean;
   ubicacion: UbicacionJudicial | null;
   tipo_copia: TipoCopia | null;
+  sucursal: Sucursal | null;
   copiaPendiente: boolean; // viene de drive_copia sin fila propia todavía en documento_garantia — se formaliza al usarla
 
   // estado del ciclo de vida (baja documental)
@@ -258,7 +306,7 @@ export async function documentosDeAsunto(asunto: {
         subido_por: d.subido_por, registrado_por: null, tipo_asunto: null, carpeta_fisica: d.carpeta_fisica ?? null,
         resguardo_de: d.resguardo_de ?? d.asignado_a ?? null, es_fisico: !!d.es_fisico, digitalizado: true,
         ubicacion: (d.es_fisico && d.sede ? detectarUbicacion({ distrito_judicial: d.sede }) : null) || ubicacionCaso,
-        tipo_copia: (d.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
+        tipo_copia: (d.tipo_copia as TipoCopia) ?? null, sucursal: (d.sucursal as Sucursal) ?? null, copiaPendiente: false,
         estado_baja: (d.estado_baja as EstadoBaja) || "activo", baja_motivo: d.baja_motivo ?? null,
         baja_solicitado_por: d.baja_solicitado_por ?? null, baja_resuelto_por: d.baja_resuelto_por ?? null,
         caso_juridico_id: asunto.casoJuridicoId, created_at: d.created_at ?? null,
@@ -276,7 +324,7 @@ export async function documentosDeAsunto(asunto: {
         no_credito: caso?.no_credito ?? null, unidad: caso?.unidad ?? asunto.unidad, link: urls[cp.storage_path] || null,
         drive_id: cp.drive_id, subido_por: null, registrado_por: null, tipo_asunto: null, carpeta_fisica: null,
         resguardo_de: null, es_fisico: false, digitalizado: true, ubicacion: ubicacionCaso,
-        tipo_copia: null, copiaPendiente: true,
+        tipo_copia: null, sucursal: null, copiaPendiente: true,
         estado_baja: "activo", baja_motivo: null, baja_solicitado_por: null, baja_resuelto_por: null,
         caso_juridico_id: asunto.casoJuridicoId, created_at: null,
       });
@@ -297,7 +345,7 @@ export async function documentosDeAsunto(asunto: {
         registrado_por: f.registrado_por, tipo_asunto: f.tipo_asunto, carpeta_fisica: f.carpeta_fisica,
         resguardo_de: f.resguardo_de, es_fisico: true, digitalizado: !!f.digitalizado,
         ubicacion: (f.ubicacion ? detectarUbicacion({ distrito_judicial: f.ubicacion }) : null) || ubicacionCaso,
-        tipo_copia: (f.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
+        tipo_copia: (f.tipo_copia as TipoCopia) ?? null, sucursal: (f.sucursal as Sucursal) ?? null, copiaPendiente: false,
         estado_baja: (f.estado_baja as EstadoBaja) || "activo", baja_motivo: f.baja_motivo ?? null,
         baja_solicitado_por: f.baja_solicitado_por ?? null, baja_resuelto_por: f.baja_resuelto_por ?? null,
         caso_juridico_id: f.caso_juridico_id ?? null, created_at: f.fecha_registro ?? null,
@@ -367,7 +415,7 @@ export async function listarBajasPendientes(): Promise<DocumentoArchivo[]> {
       no_credito: caso?.no_credito ?? null, unidad: caso?.unidad ?? null, link: d.link, drive_id: d.drive_id,
       subido_por: d.subido_por, registrado_por: null, tipo_asunto: null, carpeta_fisica: d.carpeta_fisica ?? null,
       resguardo_de: d.resguardo_de ?? d.asignado_a ?? null, es_fisico: !!d.es_fisico, digitalizado: true, ubicacion: null,
-      tipo_copia: (d.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
+      tipo_copia: (d.tipo_copia as TipoCopia) ?? null, sucursal: (d.sucursal as Sucursal) ?? null, copiaPendiente: false,
       estado_baja: d.estado_baja, baja_motivo: d.baja_motivo, baja_solicitado_por: d.baja_solicitado_por,
       baja_resuelto_por: d.baja_resuelto_por, caso_juridico_id: d.caso_id, created_at: d.baja_solicitado_en ?? d.created_at,
     });
@@ -380,7 +428,7 @@ export async function listarBajasPendientes(): Promise<DocumentoArchivo[]> {
       no_credito: caso?.no_credito ?? null, unidad: f.unidad, link: null, drive_id: null, subido_por: null,
       registrado_por: f.registrado_por, tipo_asunto: f.tipo_asunto, carpeta_fisica: f.carpeta_fisica,
       resguardo_de: f.resguardo_de, es_fisico: true, digitalizado: !!f.digitalizado, ubicacion: null,
-      tipo_copia: (f.tipo_copia as TipoCopia) ?? null, copiaPendiente: false,
+      tipo_copia: (f.tipo_copia as TipoCopia) ?? null, sucursal: (f.sucursal as Sucursal) ?? null, copiaPendiente: false,
       estado_baja: f.estado_baja, baja_motivo: f.baja_motivo, baja_solicitado_por: f.baja_solicitado_por,
       baja_resuelto_por: f.baja_resuelto_por, caso_juridico_id: f.caso_juridico_id, created_at: f.baja_solicitado_en ?? f.fecha_registro,
     });
