@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, FileText, FolderOpen, Upload, Link2, Loader2, CheckCircle2, Plus, ChevronLeft } from "lucide-react";
+import { X, FileText, FolderOpen, Upload, Link2, Loader2, CheckCircle2, Plus, ChevronLeft, Download } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_KEY, sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { listarDocumentos, subirDocumento, type DocumentoGarantia } from "@/lib/drive";
 import { listarCopias, firmarCopias, type Copia } from "@/lib/drive-explorar";
@@ -9,6 +9,8 @@ import type { AsuntoUnificado } from "@/lib/asuntos-busqueda";
 import { detectarUbicacion } from "@/lib/ciudad-judicial";
 import { nombresSucursales, sucursalJuridicoDe } from "@/lib/archivo-general";
 import { carpetaDeAsunto, listarCarpetasDeSucursal, crearCarpeta, type CarpetaFisica } from "@/lib/carpetas-fisicas";
+import { descargarPortadaCarpeta } from "@/lib/portada-carpeta-pdf";
+import { responsableDe } from "@/lib/archivo-general";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const TEAL = "#0C5C46";
@@ -46,6 +48,7 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
   const [cargandoCarpetas, setCargandoCarpetas] = useState(true);
   const [carpeta, setCarpeta] = useState<CarpetaFisica | null>(null);
   const [creandoCarpeta, setCreandoCarpeta] = useState(false);
+  const [descargandoPortada, setDescargandoPortada] = useState(false);
 
   const [tipoAsunto, setTipoAsunto] = useState("demanda_civil");
   const [nombreDocumento, setNombreDocumento] = useState("");
@@ -158,6 +161,24 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
       }
     } finally {
       setSubiendo(false);
+    }
+  }
+
+  async function descargarPortada() {
+    if (!carpeta) return;
+    setDescargandoPortada(true);
+    try {
+      const resp = await responsableDe(carpeta.sucursal);
+      const urlFicha = `${window.location.origin}/documentos-asunto?unidad=${asunto.unidad}&id=${asunto.id}`;
+      await descargarPortadaCarpeta({
+        carpeta,
+        unidad: asunto.unidad,
+        folioSistema: (casoCompleto as any)?.folio || asunto.expediente || null,
+        resguardo: resp?.nombre || null,
+        urlFicha,
+      });
+    } finally {
+      setDescargandoPortada(false);
     }
   }
 
@@ -279,7 +300,12 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
           ) : (
             <div className="flex items-center justify-between rounded-md p-2.5 text-xs" style={{ background: `${AZUL}14` }}>
               <span className="flex items-center gap-1.5 font-medium" style={{ color: AZUL }}><FolderOpen className="h-3.5 w-3.5" /> {carpeta.folio}</span>
-              <button onClick={() => setCarpeta(null)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3 w-3" /> Cambiar carpeta</button>
+              <div className="flex items-center gap-2">
+                <button onClick={descargarPortada} disabled={descargandoPortada} className="flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
+                  {descargandoPortada ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Descargar portada
+                </button>
+                <button onClick={() => setCarpeta(null)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3 w-3" /> Cambiar carpeta</button>
+              </div>
             </div>
           )}
 
