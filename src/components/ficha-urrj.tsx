@@ -165,7 +165,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
   useEffect(() => { cargarPermisosURRJ().then((p) => setPermisos(p.acciones)); }, []);
 
   // veredictos de la línea de vida (área URRJ) + folio/decisión del último pre-dictamen
-  const recargarEstado = () => {
+  const recargarEstado = (saltarAutoVista: boolean = false) => {
     const casoRef = { id: garantia.id || "", expediente: garantia.expediente || "" } as CasoJuridico;
     obtenerRecorrido(casoRef).then((rec) => {
       const u = rec["URRJ"];
@@ -186,7 +186,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
         // que volver a pasar por "elegir posición" cada vez que regresa.
         const posicionesValidas = ["Actor", "Demandado", "Sucesorio", "Contingencia", "Tramites"];
         const posicionBase = posicionesValidas.find((p) => (pr?.posicion || "").startsWith(p));
-        if (posicionBase && !pr?.terminado) {
+        if (!saltarAutoVista && posicionBase && !pr?.terminado) {
           setVista(posicionBase as VistaPosicion);
         }
         // El registral se guarda con el NÚMERO DE CRÉDITO (no el expediente judicial),
@@ -417,7 +417,7 @@ export function FichaURRJ({ garantia, onVolver }: { garantia: RefGarantia; onVol
               vista={vista}
               onVista={setVista}
               precargar={precargaJuridico}
-              onVolver={() => { setVista("elegir"); recargarEstado(); }}
+              onVolver={() => { setVista("elegir"); recargarEstado(true); }}
               puedeElaborar={puede("elaborar")}
               puedeFirmarElabora={puede("firmar_elabora")}
               puedeValidar={puede("validar")}
