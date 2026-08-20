@@ -214,6 +214,51 @@ export async function llamadasJC(telefono: string | null, telefono2: string | nu
   }
 }
 
+// ============================================================
+// Datos de devolución (RDC/RD) — vencimiento y dictámenes, calculados y
+// capturados del lado de JurisConecta. Solo lectura, para mostrar en la
+// ficha de documentos de JusticiaFácil (encabezado + portada).
+// ============================================================
+
+export interface DevolucionJC {
+  fechaVencimientoCliente: string | null; // clientes.fecha_vencimiento
+  modalidad: string | null;               // "rdc" | "rd"
+  fechaVencimiento: string | null;        // compensacion_devolucion.fecha_vencimiento
+  tieneDictamenJuridico: boolean;
+  fechaDictamenJuridico: string | null;
+  tieneDictamenRegistral: boolean;
+  fechaDictamenRegistral: string | null;
+  tieneClg: boolean;
+  fechaClg: string | null;
+  fechaCierreReal: string | null; // fecha real del último pago de la devolución
+}
+
+export async function devolucionJC(clienteId: string): Promise<DevolucionJC | null> {
+  try {
+    const [rCliente, rComp] = await Promise.all([
+      fetch(`${JC_URL}/rest/v1/clientes?select=fecha_vencimiento&id=eq.${clienteId}&limit=1`, { headers: jcHeaders }),
+      fetch(`${JC_URL}/rest/v1/compensacion_devolucion?select=modalidad,fecha_vencimiento,tiene_dictamen_juridico,fecha_dictamen_juridico,tiene_dictamen_registral,fecha_dictamen_registral,tiene_clg,fecha_clg,fecha_cierre_real&cliente_id=eq.${clienteId}&limit=1`, { headers: jcHeaders }),
+    ]);
+    const cliente = rCliente.ok ? (await rCliente.json())?.[0] : null;
+    const comp = rComp.ok ? (await rComp.json())?.[0] : null;
+    if (!cliente && !comp) return null;
+    return {
+      fechaVencimientoCliente: cliente?.fecha_vencimiento ?? null,
+      modalidad: comp?.modalidad ?? null,
+      fechaVencimiento: comp?.fecha_vencimiento ?? null,
+      tieneDictamenJuridico: !!comp?.tiene_dictamen_juridico,
+      fechaDictamenJuridico: comp?.fecha_dictamen_juridico ?? null,
+      tieneDictamenRegistral: !!comp?.tiene_dictamen_registral,
+      fechaDictamenRegistral: comp?.fecha_dictamen_registral ?? null,
+      tieneClg: !!comp?.tiene_clg,
+      fechaClg: comp?.fecha_clg ?? null,
+      fechaCierreReal: comp?.fecha_cierre_real ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface ChequeoDobleVenta {
   garantiaOcupada: ClienteJC[];   // clientes que ya tienen esta garantía
   clienteConGarantia: ClienteJC[]; // esta persona ya tiene otra garantía
