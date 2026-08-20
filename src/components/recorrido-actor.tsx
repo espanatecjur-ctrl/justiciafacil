@@ -1553,7 +1553,7 @@ export function RecorridoActor({
               )}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa === "elabora" ? rechazoInfo : undefined} />
+              <FirmaParte titulo={TITULO_ETAPA.elabora} valor={firmaElabora} onFirmar={(f) => { const nueva = f.fecha ? f : null; setFirmaElabora(nueva); if (nueva && borradorIdLocal) guardarFirmaSinAvanzar(borradorIdLocal, "elabora", nueva); }} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora || etapaFirma !== "elabora"} rechazado={rechazoInfo?.etapa === "elabora" ? rechazoInfo : undefined} />
               <FirmaParte titulo={TITULO_ETAPA.dil} valor={firmaValida} onFirmar={(f) => firmarEtapa("dil", f)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar || etapaFirma !== "dil"} onRechazar={puedeValidar && etapaFirma === "dil" ? (m) => rechazarEtapa("dil", m) : undefined} rechazado={rechazoInfo?.etapa === "dil" ? rechazoInfo : undefined} />
               {firmaValida?.fecha && etapaFirma === "dil" && (
                 <button onClick={() => mandarASiguienteEtapa("dil")} disabled={preparandoSiguiente} className="col-span-full flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "#0C5C46" }}>
