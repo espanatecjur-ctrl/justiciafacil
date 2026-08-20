@@ -8,6 +8,7 @@ import { sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { PanelDocumentosAsunto } from "@/components/panel-documentos-asunto";
 import { RegistrarDocumentoFisico } from "@/components/registrar-documento-fisico";
 import type { AsuntoUnificado } from "@/lib/asuntos-busqueda";
+import { devolucionJC, type DevolucionJC } from "@/lib/juris-clientes";
 
 const searchSchema = z.object({
   unidad: z.enum(["UCM", "UCP", "UDP", "UFC"]),
@@ -30,11 +31,17 @@ function DocumentosAsuntoPage() {
   const [caso, setCaso] = useState<CasoJuridico | null>(null);
   const [cargando, setCargando] = useState(true);
   const [relacionarOpen, setRelacionarOpen] = useState(false);
+  const [devolucion, setDevolucion] = useState<DevolucionJC | null>(null);
 
   useEffect(() => {
     setCargando(true);
     sbSelect<CasoJuridico>("caso_juridico", `select=*&id=eq.${id}`)
-      .then((d) => setCaso(d[0] || null))
+      .then((d) => {
+        const c = d[0] || null;
+        setCaso(c);
+        const jcId = (c as any)?.cliente_jc_id;
+        if (jcId) devolucionJC(String(jcId)).then(setDevolucion);
+      })
       .finally(() => setCargando(false));
   }, [id]);
 
@@ -66,6 +73,41 @@ function DocumentosAsuntoPage() {
           </button>
         }
       />
+
+      {devolucion && (devolucion.fechaVencimiento || devolucion.fechaVencimientoCliente || devolucion.modalidad) && (
+        <Card className="legal-card p-4">
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">
+            Datos de devolución {devolucion.modalidad ? `(${devolucion.modalidad.toUpperCase()})` : ""} — JurisConecta
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-md bg-muted/50 p-2.5">
+              <p className="text-[11px] text-muted-foreground">Vencimiento</p>
+              <p className="text-sm font-medium">{devolucion.fechaVencimiento || devolucion.fechaVencimientoCliente || "—"}</p>
+            </div>
+            <div className={`rounded-md p-2.5 ${devolucion.tieneDictamenJuridico ? "bg-emerald-50" : "bg-amber-50"}`}>
+              <p className={`text-[11px] ${devolucion.tieneDictamenJuridico ? "text-emerald-700" : "text-amber-700"}`}>Dictamen jurídico</p>
+              <p className={`text-sm font-medium ${devolucion.tieneDictamenJuridico ? "text-emerald-800" : "text-amber-800"}`}>
+                {devolucion.tieneDictamenJuridico ? `Sí · ${devolucion.fechaDictamenJuridico || "—"}` : "Pendiente"}
+              </p>
+            </div>
+            <div className={`rounded-md p-2.5 ${devolucion.tieneDictamenRegistral ? "bg-emerald-50" : "bg-amber-50"}`}>
+              <p className={`text-[11px] ${devolucion.tieneDictamenRegistral ? "text-emerald-700" : "text-amber-700"}`}>Dictamen registral</p>
+              <p className={`text-sm font-medium ${devolucion.tieneDictamenRegistral ? "text-emerald-800" : "text-amber-800"}`}>
+                {devolucion.tieneDictamenRegistral ? `Sí · ${devolucion.fechaDictamenRegistral || "—"}` : "Pendiente"}
+              </p>
+            </div>
+            <div className={`rounded-md p-2.5 ${devolucion.tieneClg ? "bg-emerald-50" : "bg-amber-50"}`}>
+              <p className={`text-[11px] ${devolucion.tieneClg ? "text-emerald-700" : "text-amber-700"}`}>CLG</p>
+              <p className={`text-sm font-medium ${devolucion.tieneClg ? "text-emerald-800" : "text-amber-800"}`}>
+                {devolucion.tieneClg ? `Sí · ${devolucion.fechaClg || "—"}` : "Pendiente"}
+              </p>
+            </div>
+          </div>
+          {devolucion.fechaCierreReal && (
+            <p className="mt-2 text-xs text-muted-foreground">Cierre real (último pago de la devolución): {devolucion.fechaCierreReal}</p>
+          )}
+        </Card>
+      )}
 
       <Card className="legal-card p-4">
         <div className="mb-2 flex items-center gap-2">
