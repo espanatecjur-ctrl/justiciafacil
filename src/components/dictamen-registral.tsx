@@ -417,18 +417,20 @@ export function DictamenRegistral({
     } catch { setAvisoValidacion("⚠️ No se pudo avisar, intenta de nuevo."); }
   };
 
-  const guardar = async () => {
+  const guardar = async (overrideElabora?: DatosFirma | null, overrideValida?: DatosFirma | null) => {
     if (!d.resultado) { setGuardado("Falta elegir el RESULTADO (POSITIVO/NEGATIVO)."); return; }
     setGuardando(true); setGuardado(null);
     try {
+      const feUsar = overrideElabora !== undefined ? overrideElabora : firmaElabora;
+      const fvUsar = overrideValida !== undefined ? overrideValida : firmaValida;
       const cuerpo = {
         expediente: d.numeroCredito || null,
         acreditado: d.acreditado || null,
         resultado: d.resultado,
         hay_adicional: hayAdicional,
         datos: d,
-        firma_elabora: firmaElabora,
-        firma_valida: firmaValida,
+        firma_elabora: feUsar,
+        firma_valida: fvUsar,
         terminado: true,
       };
       const res = draftId
@@ -444,10 +446,10 @@ export function DictamenRegistral({
           });
       if (res.ok) {
         setGuardado("Dictamen registral guardado ✓");
-        registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "dictamen_registral", resultado: d.resultado, firma_elabora: firmaElabora?.nombre || null, firma_valida: firmaValida?.nombre || null, detalle: hayAdicional ? "Con gravamen adicional" : "Sin gravamen adicional" });
+        registrarEvento({ caso_id: casoId || null, expediente: d.numeroCredito || null, tipo: "dictamen_registral", resultado: d.resultado, firma_elabora: feUsar?.nombre || null, firma_valida: fvUsar?.nombre || null, detalle: hayAdicional ? "Con gravamen adicional" : "Sin gravamen adicional" });
         if (casoId) {
           try {
-            await reflejarDictamen({ id: casoId, expediente: d.numeroCredito } as any, "URRJ", "registral", d.resultado === "POSITIVO" ? "positivo" : "negativo", firmaValida?.nombre || firmaElabora?.nombre || null);
+            await reflejarDictamen({ id: casoId, expediente: d.numeroCredito } as any, "URRJ", "registral", d.resultado === "POSITIVO" ? "positivo" : "negativo", fvUsar?.nombre || feUsar?.nombre || null);
           } catch { /* la linea de vida no debe romper el guardado */ }
         }
         // Archivar el PDF registral (Camino 1): sube el PDF y guarda su URL en pdf_url.
@@ -661,12 +663,12 @@ export function DictamenRegistral({
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => setFirmaElabora(f.fecha ? f : null)} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora} />
-        <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => setFirmaValida(f.fecha ? f : null)} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
+        <FirmaParte titulo="Elabora · abogado URRJ" valor={firmaElabora} onFirmar={(f) => { const nueva = f.fecha ? f : null; setFirmaElabora(nueva); if (nueva) guardar(nueva, undefined); }} cargoSugerido="Abogado URRJ" nombreSugerido={nombreYo} bloqueado={!puedeFirmarElabora} />
+        <FirmaParte titulo="Valida · Director Legal" valor={firmaValida} onFirmar={(f) => { const nueva = f.fecha ? f : null; setFirmaValida(nueva); if (nueva) guardar(undefined, nueva); }} cargoSugerido="Director Legal (DIL)" bloqueado={!puedeValidar} />
       </div>
 
       <div className="no-print flex flex-wrap items-center gap-2">
-        <button onClick={guardar} disabled={guardando || guardado === "Dictamen registral guardado ✓"} title={guardado === "Dictamen registral guardado ✓" ? "Ya está guardado — usa \"Reabrir para editar\" si necesitas cambiar algo." : ""} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60 disabled:cursor-not-allowed">
+        <button onClick={() => guardar()} disabled={guardando || guardado === "Dictamen registral guardado ✓"} title={guardado === "Dictamen registral guardado ✓" ? "Ya está guardado — usa \"Reabrir para editar\" si necesitas cambiar algo." : ""} className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-60 disabled:cursor-not-allowed">
           {guardado?.includes("✓") ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />} {guardando ? "Guardando…" : "Guardar dictamen registral"}
         </button>
         {!firmaValida && (
