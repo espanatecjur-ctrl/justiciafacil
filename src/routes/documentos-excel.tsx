@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
-import { Upload, Check, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Upload, Check, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { listarAsuntosConDocs, type AsuntoConDocs } from "@/lib/documentos-tabla";
 import { sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { subirDocumento } from "@/lib/drive";
@@ -22,6 +23,7 @@ function DocumentosExcelPage() {
   const [cargando, setCargando] = useState(true);
   const [rol, setRol] = useState<string | null>(null);
   const [filtroUnidad, setFiltroUnidad] = useState<"todas" | "UCM" | "UCP">("todas");
+  const [q, setQ] = useState("");
   const [pagina, setPagina] = useState(0);
   const [subiendoId, setSubiendoId] = useState<string | null>(null);
   const [subidoIds, setSubidoIds] = useState<Set<string>>(new Set());
@@ -32,12 +34,15 @@ function DocumentosExcelPage() {
   }, []);
 
   const filtrados = useMemo(() => {
+    const t = q.trim().toLowerCase();
     return asuntos.filter((a) => {
       if (!permiteVerAsunto(rol, a.ubicacion)) return false; // ABG_MZT: solo Mazatlán/Culiacán
       if (filtroUnidad !== "todas" && a.unidad !== filtroUnidad) return false;
-      return true;
+      if (!t) return true;
+      const blob = `${a.cliente || ""} ${a.expediente || ""} ${a.folio || ""} ${a.gar_id || ""} ${a.no_credito || ""} ${a.direccion || ""}`.toLowerCase();
+      return blob.includes(t);
     });
-  }, [asuntos, filtroUnidad, rol]);
+  }, [asuntos, filtroUnidad, rol, q]);
 
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
@@ -67,20 +72,22 @@ function DocumentosExcelPage() {
       />
 
       <Card className="legal-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Unidad:</span>
-            {(["todas", "UCM", "UCP"] as const).map((u) => (
-              <button
-                key={u}
-                onClick={() => { setFiltroUnidad(u); setPagina(0); }}
-                className={`rounded-md border px-3 py-1.5 text-xs font-medium ${filtroUnidad === u ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}
-              >
-                {u === "todas" ? "Todas" : u}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => { setQ(e.target.value); setPagina(0); }} placeholder="Folio, GAR-id, crédito, expediente, dirección o cliente…" className="pl-8" />
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground">Unidad:</span>
+          {(["todas", "UCM", "UCP"] as const).map((u) => (
+            <button
+              key={u}
+              onClick={() => { setFiltroUnidad(u); setPagina(0); }}
+              className={`rounded-md border px-3 py-1.5 text-xs font-medium ${filtroUnidad === u ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}
+            >
+              {u === "todas" ? "Todas" : u}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-muted-foreground">
             {filtrados.length === 0 ? "0 resultados" : `${pag * PAGE + 1}–${Math.min((pag + 1) * PAGE, filtrados.length)} de ${filtrados.length}`}
           </span>
         </div>
