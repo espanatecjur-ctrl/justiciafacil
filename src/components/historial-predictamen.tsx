@@ -7,6 +7,7 @@ import { SubirDocModal, ListaDocs } from "@/components/docs-predictamen";
 import { BotonVerDoc } from "@/components/visor-documento";
 import { obtenerResumenPorClaveCaso, type ResumenDoc } from "@/lib/resumen-documentos";
 import { cargarPermisosURRJ } from "@/lib/urrj-permisos";
+import { correoActual } from "@/lib/auth";
 import { EscogerJuicioModal, type JuicioElegido } from "@/components/escoger-juicio";
 import { ReasignarModal } from "@/components/reasignar-abogado";
 
@@ -69,6 +70,65 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
   useEffect(() => { cargarPermisosURRJ().then((p) => setPuede(p.acciones)); }, []);
   const can = (a: string) => puede.length === 0 || puede.includes(a);
   const navigate = useNavigate();
+  const [enviandoUCP, setEnviandoUCP] = useState<string | null>(null);
+  const mandarAUCP = async (f: Fila) => {
+    if (!confirm(`¿Mandar este pre-dictamen (folio ${f.folio || "—"}) a UCP? La garantía empezará a viajar por la línea de vida hacia UCP.`)) return;
+    setEnviandoUCP(f.id);
+    try {
+      const correo = await correoActual();
+      let casoId = f.caso_id || null;
+
+      // Si todavía no existe un expediente jurídico (caso_juridico) para esta
+      // garantía — como los pre-dictámenes puros de URRJ sin caso vinculado —
+      // se crea aquí, ya en UCP, con lo que se tenga capturado hasta ahora.
+      if (!casoId) {
+        const añoActual = new Date().getFullYear();
+        const folioNuevo = `UCP-${añoActual}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+        const rCaso = await fetch(`${SUPABASE_URL}/rest/v1/caso_juridico`, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+          body: JSON.stringify({
+            folio: folioNuevo,
+            no_credito: f.datos?.numeroCredito || null,
+            expediente: f.expediente || null,
+            juzgado: f.juzgado || f.datos?.juzgado || null,
+            direccion_garantia: f.datos?.ubicacion || f.datos?.direccion_garantia || null,
+            cliente_nombre: f.datos?.deudor || null,
+            entidad: f.estado || null,
+          }),
+        });
+        if (!rCaso.ok) throw new Error("No se pudo crear el expediente jurídico en UCP.");
+        const nuevo = await rCaso.json();
+        casoId = nuevo?.[0]?.id;
+        if (!casoId) throw new Error("El expediente se creó pero no se pudo leer su id.");
+        // Liga el pre-dictamen a este expediente recién creado.
+        await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, {
+          method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ caso_id: casoId }),
+        });
+      }
+
+      // Marca el pre-dictamen como enviado a UCP.
+      await fetch(`${SUPABASE_URL}/rest/v1/predictamen?id=eq.${f.id}`, {
+        method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ pasa_a_ucp: true }),
+      });
+
+      // Registra el viaje por la línea de vida: URRJ → UCP.
+      await fetch(`${SUPABASE_URL}/rest/v1/unidad_historial`, {
+        method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ garantia_id: casoId, unidad_anterior: "URRJ", unidad_nueva: "UCP", cambiado_por: correo }),
+      });
+
+      setFilas((prev) => prev.map((x) => x.id === f.id ? { ...x, caso_id: casoId } : x));
+      alert("Enviado a UCP correctamente.");
+      navigate({ to: "/expediente", search: { id: casoId, origen: "urrj" } as any });
+    } catch (e: any) {
+      alert(e?.message || "No se pudo mandar a UCP. Intenta de nuevo.");
+    } finally {
+      setEnviandoUCP(null);
+    }
+  };
   const abrirFicha = async (f: Fila) => {
     if (!f.expediente) { alert("Este pre-dictamen no tiene número de expediente ligado."); return; }
     try {
@@ -210,6 +270,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
             <Item icon={Search} onClick={() => { setMenu(null); setEscogerJuicio(f); }}>Escoger juicio del boletín</Item>
+            {can("mandar_ucp") && <Item icon={ArrowUpDown} onClick={() => { setMenu(null); mandarAUCP(f); }}>{enviandoUCP === f.id ? "Enviando a UCP…" : "→ Mandar a UCP"}</Item>}
             {!f.terminado && can("reelaborar") && <Item icon={Scale} onClick={() => { setMenu(null); if (confirm("¿Ir al proceso a re-pre-dictaminar el JURÍDICO? Se creará una versión nueva; la actual quedará como antecedente.")) onReDictaminar?.(f); }}>Ir a re-pre-dictaminar jurídico</Item>}
             {!f.terminado && can("reelaborar") && onReDictaminarRegistral && <Item icon={Landmark} onClick={() => { setMenu(null); onReDictaminarRegistral(f); }}>Ir a re-pre-dictaminar registral</Item>}
             {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
