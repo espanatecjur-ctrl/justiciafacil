@@ -23,6 +23,14 @@ const COPIA_UI: Record<TipoCopia, { label: string; cls: string }> = {
   digital_nativo: { label: "Digital nativo", cls: "bg-violet-50 text-violet-700 border-violet-200" },
 };
 
+// Azul = identidad visual del sistema de carpetas físicas (mismo tono que las
+// carpetas/portada). Verde = solo digital, nunca tuvo ni va a tener papel.
+function badgeFuente(d: DocumentoArchivo): { label: string; cls: string } {
+  if (d.digitalizado && d.es_fisico) return { label: "Digital y físico", cls: "bg-blue-50 text-blue-700 border-blue-200" };
+  if (d.digitalizado) return { label: "Digital", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  return { label: "Físico", cls: "bg-blue-50 text-blue-700 border-blue-200" };
+}
+
 const ESTADO_BAJA_UI: Record<string, { label: string; cls: string }> = {
   activo: { label: "Activo", cls: "bg-muted text-muted-foreground border-border" },
   baja_solicitada: { label: "Baja solicitada", cls: "bg-amber-50 text-amber-800 border-amber-200" },
@@ -141,6 +149,7 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
                     <span className="min-w-0 truncate font-medium">{d.nombre || "(sin nombre)"}</span>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1">
+                    {(() => { const bf = badgeFuente(d); return <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${bf.cls}`}>{bf.label}</span>; })()}
                     {cp && <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${cp.cls}`}>{cp.label}</span>}
                     {d.copiaPendiente && <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">copiado del Drive · sin formalizar</span>}
                     {d.estado_baja !== "activo" && <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${eb.cls}`}>{eb.label}</span>}
