@@ -44,7 +44,7 @@ async function sb<T = any>(tabla: string, query: string): Promise<T[]> {
 
 // Detecta si un registro de caso_juridico es "de UCM" o "de UCP" (misma lógica que usan
 // las pantallas ucm.tsx / ucp.tsx), y descarta amparos/recursos/exhortos (tienen su propia pantalla).
-function unidadDeCasoJuridico(c: { unidad?: string | null; tipo_registro?: string | null; pasa_a_ucm?: boolean | null }): UnidadAsunto | null {
+export function unidadDeCasoJuridico(c: { unidad?: string | null; tipo_registro?: string | null; pasa_a_ucm?: boolean | null }): UnidadAsunto | null {
   if (["amparo", "recurso", "exhorto"].includes(c.tipo_registro || "juicio")) return null;
   const u = (c.unidad || "").toUpperCase();
   if (u.includes("UCP") && !c.pasa_a_ucm) return "UCP";
