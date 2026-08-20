@@ -81,7 +81,8 @@ function Firmar() {
   }, [token]);
 
   const firmar = async (f: DatosFirma) => {
-    if (!f.fecha || !sol || !dict || !token) return;
+    if (!f.fecha || !sol || !token) return;
+    if (!dict) { setErr("No se pudo cargar el dictamen a firmar — recarga la página. Si el problema sigue, avisa a soporte."); return; }
     setGuardando(true); setErr(null);
     try {
       if (sol.dictamen_id) {
@@ -228,8 +229,8 @@ function Firmar() {
     <Wrap>
       <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${AZUL})` }}>
         <p className="text-xs uppercase tracking-wide text-white/60">Firma / validación de dictamen · {esURRJ ? "URRJ" : esRegistral ? "URRJ · Registral" : sol?.area === "UCM" ? "UCM" : "UCP"}</p>
-        <p className="text-xl font-bold">{caso?.expediente || "Sin expediente"}</p>
-        <p className="text-sm text-white/80">{caso?.direccion_garantia || caso?.cliente_nombre || "—"}</p>
+        <p className="text-xl font-bold">{caso?.expediente || dict?.expediente || "Sin expediente"}</p>
+        <p className="text-sm text-white/80">{caso?.direccion_garantia || caso?.cliente_nombre || dict?.acreditado || "—"}</p>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 text-sm">
@@ -239,6 +240,8 @@ function Firmar() {
         <Dato k="Juzgado" v={caso?.juzgado || "—"} />
         {esURRJ ? (
           <Dato k="Decisión (Sí/No pasa)" v={dict?.dictamen_final || "—"} />
+        ) : esRegistral ? (
+          <Dato k="Resultado registral" v={dict?.resultado || "—"} />
         ) : (
           <>
             <Dato k="Veredicto jurídico" v={dict?.juridico?.veredicto || "—"} />
