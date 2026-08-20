@@ -9,6 +9,7 @@ import { sbSelect, type CasoJuridico } from "@/lib/supabase";
 import { subirDocumento } from "@/lib/drive";
 import { rolActual } from "@/lib/archivo-general";
 import { permiteVerAsunto } from "@/lib/permisos-regional";
+import { estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 export const Route = createFileRoute("/documentos-excel")({
   head: () => ({ meta: [{ title: "Documentos por asunto — JusticiaFácil" }] }),
@@ -24,6 +25,9 @@ function DocumentosExcelPage() {
   const [rol, setRol] = useState<string | null>(null);
   const [filtroUnidad, setFiltroUnidad] = useState<"todas" | "UCM" | "UCP">("todas");
   const [q, setQ] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
   const [pagina, setPagina] = useState(0);
   const [subiendoId, setSubiendoId] = useState<string | null>(null);
   const [subidoIds, setSubidoIds] = useState<Set<string>>(new Set());
@@ -38,11 +42,15 @@ function DocumentosExcelPage() {
     return asuntos.filter((a) => {
       if (!permiteVerAsunto(rol, a.ubicacion)) return false; // ABG_MZT: solo Mazatlán/Culiacán
       if (filtroUnidad !== "todas" && a.unidad !== filtroUnidad) return false;
+      if (filtroEstado !== "todas") {
+        if (!a.ubicacion || a.ubicacion.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && a.ubicacion.ciudad !== filtroCiudad) return false;
+      }
       if (!t) return true;
       const blob = `${a.cliente || ""} ${a.expediente || ""} ${a.folio || ""} ${a.gar_id || ""} ${a.no_credito || ""} ${a.direccion || ""}`.toLowerCase();
       return blob.includes(t);
     });
-  }, [asuntos, filtroUnidad, rol, q]);
+  }, [asuntos, filtroUnidad, rol, q, filtroEstado, filtroCiudad]);
 
   const totalPag = Math.max(1, Math.ceil(filtrados.length / PAGE));
   const pag = Math.min(pagina, totalPag - 1);
@@ -77,6 +85,11 @@ function DocumentosExcelPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => { setQ(e.target.value); setPagina(0); }} placeholder="Folio, GAR-id, crédito, expediente, dirección o cliente…" className="pl-8" />
           </div>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {filtrados.length === 0 ? "0 resultados" : `${pag * PAGE + 1}–${Math.min((pag + 1) * PAGE, filtrados.length)} de ${filtrados.length}`}
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-muted-foreground">Unidad:</span>
           {(["todas", "UCM", "UCP"] as const).map((u) => (
             <button
@@ -87,9 +100,14 @@ function DocumentosExcelPage() {
               {u === "todas" ? "Todas" : u}
             </button>
           ))}
-          <span className="ml-auto text-xs text-muted-foreground">
-            {filtrados.length === 0 ? "0 resultados" : `${pag * PAGE + 1}–${Math.min((pag + 1) * PAGE, filtrados.length)} de ${filtrados.length}`}
-          </span>
+          <select value={filtroEstado} onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); setPagina(0); }} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs">
+            <option value="todas">Todos los estados</option>
+            {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select value={filtroCiudad} onChange={(e) => { setFiltroCiudad(e.target.value); setPagina(0); }} disabled={filtroEstado === "todas"} className="rounded-md border border-input bg-background px-3 py-1.5 text-xs disabled:opacity-50">
+            <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+            {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
       </Card>
 
@@ -102,11 +120,13 @@ function DocumentosExcelPage() {
           <table className="w-full table-fixed border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="w-[32%] px-3 py-2 font-medium">Cliente</th>
-                <th className="w-[10%] px-3 py-2 font-medium">Unidad</th>
-                <th className="w-[20%] px-3 py-2 font-medium">Expediente</th>
-                <th className="w-[18%] px-3 py-2 font-medium">Documentos</th>
-                <th className="w-[20%] px-3 py-2 font-medium">Subir rápido</th>
+                <th className="w-[18%] px-3 py-2 font-medium">Cliente</th>
+                <th className="w-[7%] px-3 py-2 font-medium">Unidad</th>
+                <th className="w-[13%] px-3 py-2 font-medium">Expediente</th>
+                <th className="w-[13%] px-3 py-2 font-medium">Núm. garantía</th>
+                <th className="w-[19%] px-3 py-2 font-medium">Dirección</th>
+                <th className="w-[15%] px-3 py-2 font-medium">Documentos</th>
+                <th className="w-[15%] px-3 py-2 font-medium">Subir rápido</th>
               </tr>
             </thead>
             <tbody>
@@ -120,6 +140,8 @@ function DocumentosExcelPage() {
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{a.unidad}</td>
                   <td className="truncate px-3 py-2 text-xs text-muted-foreground">{a.expediente || a.folio || "—"}</td>
+                  <td className="truncate px-3 py-2 text-xs text-muted-foreground" title={a.gar_id || ""}>{a.gar_id || "—"}</td>
+                  <td className="truncate px-3 py-2 text-xs text-muted-foreground" title={a.direccion || ""}>{a.direccion || "—"}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{a.numDigitales} dig · {a.numFisicos} fís</td>
                   <td className="px-3 py-2">
                     {subidoIds.has(a.id) ? (
