@@ -2,7 +2,7 @@ import {
   Home, FolderOpen, Newspaper, Send, Shield, GitBranch, Bot,
   FileText, FileSignature, FileCheck2, Building2, Network, Scale, Gavel, ShieldHalf, Settings,
   CalendarDays, Briefcase, Users, MessageCircle,
-  Calculator, SearchCheck, Archive,
+  Calculator, SearchCheck, Archive, Table2,
   type LucideIcon,
 } from "lucide-react";
 export interface NavItem {
@@ -22,6 +22,7 @@ export const navItems: NavItem[] = [
   { label: "Expedientes", to: "/expedientes", icon: FolderOpen, group: "Núcleo" },
   { label: "Buscador de Asuntos", sub: "Busca en UCM, UCP, UDP y UFC a la vez", to: "/buscador-asuntos", icon: SearchCheck, group: "Núcleo" },
   { label: "Archivo General", sub: "Documentos digitales y físicos, con baja documental", to: "/archivo-general", icon: Archive, group: "Núcleo" },
+  { label: "Documentos por asunto", sub: "Vista rápida UCM+UCP, subida sin salir de la tabla", to: "/documentos-excel", icon: Table2, group: "Núcleo" },
   { label: "UCM · Seguimiento", to: "/ucm", icon: Gavel, group: "Procesal" },
   { label: "UDP · Defensa y Protección", to: "/udp", icon: ShieldHalf, group: "Procesal" },
   { label: "UFC · Formalizaciones", to: "/ufc", icon: FileSignature, group: "Procesal" },
