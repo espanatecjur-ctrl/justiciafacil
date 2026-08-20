@@ -12,6 +12,7 @@ import {
   TIPOS_COPIA, type DocumentoArchivo, type TipoCopia,
 } from "@/lib/archivo-general";
 import { infoUsuarioEstado, puedeAbrirContenido, type InfoUsuarioEstado } from "@/lib/permisos-estado";
+import { estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const TEAL = "#0C5C46";
@@ -48,6 +49,28 @@ interface Props {
 // aquí directo desde el Archivo General o el Buscador de Asuntos.
 export function PanelDocumentosAsunto({ asunto }: Props) {
   const [documentos, setDocumentos] = useState<DocumentoArchivo[]>([]);
+  const [filtroFuente, setFiltroFuente] = useState<"todos" | "digital" | "fisico" | "en_carpeta">("todos");
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [filtroCiudad, setFiltroCiudad] = useState("todas");
+  const [filtroResponsable, setFiltroResponsable] = useState("todos");
+  const ciudadesDelEstado = useMemo(() => (filtroEstado === "todas" ? [] : ciudadesDeEstado(filtroEstado)), [filtroEstado]);
+  const responsablesDisponibles = useMemo(
+    () => Array.from(new Set(documentos.map((d) => d.resguardo_de).filter((r): r is string => !!r))).sort(),
+    [documentos]
+  );
+  const documentosFiltrados = useMemo(() => {
+    return documentos.filter((d) => {
+      if (filtroFuente === "digital" && !d.digitalizado) return false;
+      if (filtroFuente === "fisico" && !d.es_fisico) return false;
+      if (filtroFuente === "en_carpeta" && !(d as any).carpeta_fisica) return false;
+      if (filtroEstado !== "todas") {
+        if (!d.ubicacion || d.ubicacion.estado !== filtroEstado) return false;
+        if (filtroCiudad !== "todas" && d.ubicacion.ciudad !== filtroCiudad) return false;
+      }
+      if (filtroResponsable !== "todos" && d.resguardo_de !== filtroResponsable) return false;
+      return true;
+    });
+  }, [documentos, filtroFuente, filtroEstado, filtroCiudad, filtroResponsable]);
   const [cargando, setCargando] = useState(true);
   const [rol, setRol] = useState<string | null>(null);
   const puedeAprobar = puedeAprobarBajas(rol);
@@ -130,13 +153,38 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
         </div>
       )}
 
+      {documentos.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <select value={filtroFuente} onChange={(e) => setFiltroFuente(e.target.value as any)} className="rounded-md border border-input bg-background px-2 py-1.5 text-xs">
+            <option value="todos">Todos</option>
+            <option value="digital">Digital</option>
+            <option value="fisico">Físico</option>
+            <option value="en_carpeta">En carpeta</option>
+          </select>
+          <select value={filtroEstado} onChange={(e) => { setFiltroEstado(e.target.value); setFiltroCiudad("todas"); }} className="rounded-md border border-input bg-background px-2 py-1.5 text-xs">
+            <option value="todas">Todos los estados</option>
+            {estadosDisponibles().map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select value={filtroCiudad} onChange={(e) => setFiltroCiudad(e.target.value)} disabled={filtroEstado === "todas"} className="rounded-md border border-input bg-background px-2 py-1.5 text-xs disabled:opacity-50">
+            <option value="todas">{filtroEstado === "todas" ? "Elige un estado primero" : "Todas las ciudades"}</option>
+            {ciudadesDelEstado.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)} className="rounded-md border border-input bg-background px-2 py-1.5 text-xs">
+            <option value="todos">Todos los responsables</option>
+            {responsablesDisponibles.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+      )}
+
       {cargando ? (
         <p className="flex items-center gap-1.5 py-4 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando inventario…</p>
       ) : documentos.length === 0 ? (
         <p className="py-4 text-center text-xs text-muted-foreground">Sin documentos registrados todavía para este asunto.</p>
+      ) : documentosFiltrados.length === 0 ? (
+        <p className="py-4 text-center text-xs text-muted-foreground">Ningún documento coincide con los filtros.</p>
       ) : (
         <div className="space-y-2">
-          {documentos.map((d) => {
+          {documentosFiltrados.map((d) => {
             const clave = `${d.fuente}-${d.id}`;
             const eb = ESTADO_BAJA_UI[d.estado_baja] || ESTADO_BAJA_UI.activo;
             const cp = d.tipo_copia ? COPIA_UI[d.tipo_copia] : null;
