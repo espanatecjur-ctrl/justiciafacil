@@ -72,6 +72,14 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
   const navigate = useNavigate();
   const [enviandoUCP, setEnviandoUCP] = useState<string | null>(null);
   const mandarAUCP = async (f: Fila) => {
+    // La firma de DGE solo se llena cuando el dictamen salió POSITIVO — si UCM
+    // lo dictaminó Negativo, la cadena se cierra ahí mismo y firma_dge nunca
+    // se llena. Por eso checar firma_dge (y no "terminado", que es un botón
+    // manual aparte) es la señal correcta: sin las 4 firmas, nunca pasa a UCP.
+    if (!f.firma_dge) {
+      alert("Este dictamen jurídico todavía no tiene las 4 firmas completas (Elabora → DIL → UCM → DGE), o el dictamen salió Negativo (en ese caso la cadena se cierra en UCM y nunca llega a DGE — no puede pasar a UCP). El dictamen registral no es requisito para este paso.");
+      return;
+    }
     if (!confirm(`¿Mandar este pre-dictamen (folio ${f.folio || "—"}) a UCP? La garantía empezará a viajar por la línea de vida hacia UCP.`)) return;
     setEnviandoUCP(f.id);
     try {
@@ -270,7 +278,7 @@ export function HistorialPredictamen({ onReDictaminar, onReDictaminarRegistral, 
             {!f.terminado && can("reasignar") && <Item icon={UserCheck} onClick={() => { setMenu(null); setReasignar(f); }}>Reasignar abogado</Item>}
             {can("editar") && <Item icon={Upload} onClick={() => { setMenu(null); setSubirDoc(f); }}>Subir documento / actuación</Item>}
             <Item icon={Search} onClick={() => { setMenu(null); setEscogerJuicio(f); }}>Escoger juicio del boletín</Item>
-            {can("mandar_ucp") && <Item icon={ArrowUpDown} onClick={() => { setMenu(null); mandarAUCP(f); }}>{enviandoUCP === f.id ? "Enviando a UCP…" : "→ Mandar a UCP"}</Item>}
+            {can("mandar_ucp") && !!f.firma_dge && <Item icon={ArrowUpDown} onClick={() => { setMenu(null); mandarAUCP(f); }}>{enviandoUCP === f.id ? "Enviando a UCP…" : "→ Mandar a UCP"}</Item>}
             {!f.terminado && can("reelaborar") && <Item icon={Scale} onClick={() => { setMenu(null); if (confirm("¿Ir al proceso a re-pre-dictaminar el JURÍDICO? Se creará una versión nueva; la actual quedará como antecedente.")) onReDictaminar?.(f); }}>Ir a re-pre-dictaminar jurídico</Item>}
             {!f.terminado && can("reelaborar") && onReDictaminarRegistral && <Item icon={Landmark} onClick={() => { setMenu(null); onReDictaminarRegistral(f); }}>Ir a re-pre-dictaminar registral</Item>}
             {!f.terminado && can("terminar") && <Item icon={CheckCircle2} onClick={async () => {
