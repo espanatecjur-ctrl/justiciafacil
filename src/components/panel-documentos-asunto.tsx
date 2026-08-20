@@ -12,7 +12,9 @@ import {
   TIPOS_COPIA, type DocumentoArchivo, type TipoCopia,
 } from "@/lib/archivo-general";
 import { infoUsuarioEstado, puedeAbrirContenido, type InfoUsuarioEstado } from "@/lib/permisos-estado";
-import { estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
+import { estadosDisponibles, ciudadesDeEstado, detectarUbicacion } from "@/lib/ciudad-judicial";
+import { nombresSucursales, sucursalJuridicoDe } from "@/lib/archivo-general";
+import { carpetaDeAsunto, listarCarpetasDeSucursal, crearCarpeta, type CarpetaFisica } from "@/lib/carpetas-fisicas";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const TEAL = "#0C5C46";
@@ -93,15 +95,75 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
   const [tipoCopiaSubida, setTipoCopiaSubida] = useState<TipoCopia>("digital_nativo");
   const [error, setError] = useState<string | null>(null);
 
+  // ===== Carpeta física (misma lógica que RegistrarDocumentoFisico) — para que el
+  // mini-uploader también conecte con el estante de carpetas, no solo el modal grande. =====
+  const [sucursales, setSucursales] = useState<string[]>([]);
+  const [sucursalElegida, setSucursalElegida] = useState<string>("");
+  const [carpetas, setCarpetas] = useState<CarpetaFisica[]>([]);
+  const [cargandoCarpetas, setCargandoCarpetas] = useState(false);
+  const [carpeta, setCarpeta] = useState<CarpetaFisica | null>(null);
+  const [creandoCarpeta, setCreandoCarpeta] = useState(false);
+
+  useEffect(() => {
+    if (!puedeSubirDigital) return;
+    let activo = true;
+    (async () => {
+      setCargandoCarpetas(true);
+      const nombres = await nombresSucursales();
+      if (!activo) return;
+      setSucursales(nombres);
+
+      let sucursalDetectada = (casoCompleto as any)?.sucursal || null;
+      if (!sucursalDetectada) {
+        const ubic = detectarUbicacion({ distrito_judicial: asunto.direccion, juzgado: null, entidad: null });
+        if (ubic?.ciudad) sucursalDetectada = await sucursalJuridicoDe(ubic.ciudad);
+      }
+      const sucursalFinal = sucursalDetectada || nombres[0] || "";
+      setSucursalElegida(sucursalFinal);
+
+      const [carpetaYaAsignada, carpetasDelEstante] = await Promise.all([
+        carpetaDeAsunto(asunto),
+        sucursalFinal ? listarCarpetasDeSucursal(sucursalFinal) : Promise.resolve([]),
+      ]);
+      if (!activo) return;
+      setCarpetas(carpetasDelEstante);
+      if (carpetaYaAsignada) setCarpeta(carpetaYaAsignada);
+      setCargandoCarpetas(false);
+    })();
+    return () => { activo = false; };
+  }, [asunto.id, puedeSubirDigital, casoCompleto]);
+
+  async function cambiarSucursal(nueva: string) {
+    setSucursalElegida(nueva);
+    setCargandoCarpetas(true);
+    const lista = await listarCarpetasDeSucursal(nueva);
+    setCarpetas(lista);
+    setCargandoCarpetas(false);
+  }
+
+  async function crearCarpetaNueva() {
+    setCreandoCarpeta(true);
+    setError(null);
+    try {
+      const folioSistema = (casoCompleto as any)?.folio || asunto.expediente || asunto.no_credito || null;
+      const nueva = await crearCarpeta(asunto, sucursalElegida, folioSistema);
+      if (!nueva) { setError("No se pudo crear la carpeta."); return; }
+      setCarpetas((p) => [nueva, ...p]);
+      setCarpeta(nueva);
+    } finally {
+      setCreandoCarpeta(false);
+    }
+  }
+
   async function subir(file: File) {
-    if (!casoCompleto) return;
+    if (!casoCompleto || !carpeta) return;
     setSubiendo(true);
     setError(null);
     try {
       const r = await subirDocumento(asunto.unidad, casoCompleto, file, "evidencia");
       if (!r.ok || !r.doc) { setError(r.error || "No se pudo subir."); return; }
       await fetch(`${SUPABASE_URL}/rest/v1/documento_garantia?id=eq.${r.doc.id}`, {
-        method: "PATCH", headers, body: JSON.stringify({ tipo_copia: tipoCopiaSubida }),
+        method: "PATCH", headers, body: JSON.stringify({ tipo_copia: tipoCopiaSubida, carpeta_id: carpeta.id }),
       });
       cargar();
     } finally {
@@ -142,13 +204,47 @@ export function PanelDocumentosAsunto({ asunto }: Props) {
       {puedeSubirDigital && (
         <div className="rounded-md border border-[color:var(--teal,#0C5C46)]/30 bg-[color:var(--teal,#0C5C46)]/5 p-3">
           <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold" style={{ color: TEAL }}><Upload className="h-3.5 w-3.5" /> Subir nuevo documento</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={tipoCopiaSubida} onChange={(e) => setTipoCopiaSubida(e.target.value as TipoCopia)} className={inp}>
-              {TIPOS_COPIA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <input type="file" disabled={subiendo || !casoCompleto} onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(f); }} className="text-xs" />
-            {subiendo && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          </div>
+
+          {!carpeta ? (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground">Elige la carpeta primero</span>
+                <select value={sucursalElegida} onChange={(e) => cambiarSucursal(e.target.value)} className="rounded-md border border-input bg-background px-2 py-0.5 text-[11px]">
+                  {sucursales.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              {cargandoCarpetas ? (
+                <p className="flex items-center gap-1.5 py-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Cargando estante…</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                  {carpetas.map((c) => (
+                    <button key={c.id} onClick={() => setCarpeta(c)} className="overflow-hidden rounded-md border border-input text-left">
+                      <div className="flex h-10 items-center justify-center bg-blue-300"><FileText className="h-3.5 w-3.5 text-blue-900" /></div>
+                      <p className="truncate bg-muted/50 p-1 text-[9px] font-medium">{c.folio}</p>
+                    </button>
+                  ))}
+                  <button onClick={crearCarpetaNueva} disabled={creandoCarpeta || !sucursalElegida} className="flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground disabled:opacity-50">
+                    {creandoCarpeta ? <Loader2 className="h-3 w-3 animate-spin" /> : <span className="text-xs">+</span>}
+                    <span className="text-[9px]">Nueva</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 flex items-center justify-between rounded-md bg-blue-50 px-2 py-1 text-[11px]">
+                <span className="font-medium text-blue-700">{carpeta.folio}</span>
+                <button onClick={() => setCarpeta(null)} className="text-muted-foreground hover:text-foreground">Cambiar</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={tipoCopiaSubida} onChange={(e) => setTipoCopiaSubida(e.target.value as TipoCopia)} className={inp}>
+                  {TIPOS_COPIA.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <input type="file" disabled={subiendo || !casoCompleto} onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(f); }} className="text-xs" />
+                {subiendo && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              </div>
+            </>
+          )}
           {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
       )}
