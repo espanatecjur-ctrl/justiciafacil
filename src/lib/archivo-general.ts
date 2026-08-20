@@ -27,52 +27,65 @@ export const TIPOS_COPIA: { value: TipoCopia; label: string }[] = [
   { value: "digital_nativo", label: "Digital (nunca tuvo papel)" },
 ];
 
-// Las 9 sucursales/áreas reales de DIIPA. Cada una tiene un responsable —
-// quien puede abrir carpeta física ahí, y a quien se le envían los originales
-// si un documento de su plaza termina físicamente en otro lado.
-export const SUCURSALES = [
-  "Ventas Culiacán", "Jurídico Culiacán",
-  "Ventas GDL", "Jurídico GDL",
-  "Ventas Mazatlán", "Jurídico Mazatlán", "Atención al Cliente Mazatlán",
-  "Ventas La Paz", "Jurídico La Paz",
-] as const;
-export type Sucursal = (typeof SUCURSALES)[number];
+// Las sucursales/áreas de DIIPA — viven en la tabla `sucursales` de Supabase (Configuración
+// > Sucursales), no fijas en código, para que se puedan editar sin subir un archivo nuevo.
+export type Sucursal = string;
 
 export interface ResponsableSucursal {
   sucursal: Sucursal;
   ciudad: string; // para relacionar con detectarUbicacion()
+  area: string;
   nombre: string | null; // null = todavía pendiente de asignar
   correo: string | null;
+  esArchivoPrincipal: boolean;
 }
 
-// "Jurídico GDL" es el archivo general principal — todos los ORIGINALES viven
-// ahí sin importar en qué plaza esté el caso. Las demás sucursales de Jurídico
-// pueden resguardar copias certificadas; copias simples, en cualquier sucursal.
-export const ARCHIVO_PRINCIPAL: Sucursal = "Jurídico GDL";
+let cacheSucursales: ResponsableSucursal[] | null = null;
+let cacheSucursalesEn = 0;
+const CACHE_MS = 60_000; // 1 minuto — suficiente para no golpear la tabla en cada render, corto para reflejar cambios rápido
 
-export const RESPONSABLES_SUCURSAL: ResponsableSucursal[] = [
-  { sucursal: "Ventas Culiacán", ciudad: "Culiacán", nombre: "Karla Bustamante", correo: "karlagerenteculiacan@diipadesarrollos.com" },
-  { sucursal: "Jurídico Culiacán", ciudad: "Culiacán", nombre: "Primitivo Sagaste", correo: "juridico1@diipadesarrollos.com" },
-  { sucursal: "Ventas GDL", ciudad: "Guadalajara", nombre: "Elizabeth Rivera", correo: "gerentegdl@diipadesarrollos.com" },
-  { sucursal: "Jurídico GDL", ciudad: "Guadalajara", nombre: "Milton Castro", correo: "lic_milcas@diipadesarrollos.com" },
-  { sucursal: "Ventas Mazatlán", ciudad: "Mazatlán", nombre: "Elizabeth Rivera", correo: "gerentegdl@diipadesarrollos.com" }, // temporal, hasta que se contrate gerente propio
-  { sucursal: "Jurídico Mazatlán", ciudad: "Mazatlán", nombre: "Francisca Valle", correo: "vallefr_mzt@diipadesarrollos.com" },
-  { sucursal: "Atención al Cliente Mazatlán", ciudad: "Mazatlán", nombre: null, correo: null }, // pendiente: RAC
-  { sucursal: "Ventas La Paz", ciudad: "La Paz", nombre: "Pedro Flores Mercado", correo: "gerentelapaz@diipadesarrollos.com" },
-  { sucursal: "Jurídico La Paz", ciudad: "La Paz", nombre: "Milton Castro", correo: "lic_milcas@diipadesarrollos.com" }, // cubierto por GDL, revisan UCM+DGE
-];
+/** Trae las sucursales reales desde Supabase (tabla `sucursales`), con caché breve en memoria. */
+export async function listarSucursales(forzar = false): Promise<ResponsableSucursal[]> {
+  if (!forzar && cacheSucursales && Date.now() - cacheSucursalesEn < CACHE_MS) return cacheSucursales;
+  const filas = await sb<any>("sucursales", `select=nombre,ciudad,area,responsable_nombre,responsable_correo,es_archivo_principal&order=ciudad,area`);
+  const resultado = filas.map((f) => ({
+    sucursal: f.nombre as Sucursal,
+    ciudad: f.ciudad,
+    area: f.area,
+    nombre: f.responsable_nombre,
+    correo: f.responsable_correo,
+    esArchivoPrincipal: !!f.es_archivo_principal,
+  }));
+  cacheSucursales = resultado;
+  cacheSucursalesEn = Date.now();
+  return resultado;
+}
 
-export function responsableDe(sucursal: Sucursal | null): ResponsableSucursal | null {
+/** Solo los nombres, para llenar un <select>. */
+export async function nombresSucursales(): Promise<string[]> {
+  return (await listarSucursales()).map((s) => s.sucursal);
+}
+
+export async function responsableDe(sucursal: Sucursal | null): Promise<ResponsableSucursal | null> {
   if (!sucursal) return null;
-  return RESPONSABLES_SUCURSAL.find((r) => r.sucursal === sucursal) ?? null;
+  const todas = await listarSucursales();
+  return todas.find((r) => r.sucursal === sucursal) ?? null;
 }
 
 /** Sucursal de Jurídico que corresponde a una ciudad detectada (para sugerir/auto-asignar). */
-export function sucursalJuridicoDe(ciudad: string | null): Sucursal | null {
+export async function sucursalJuridicoDe(ciudad: string | null): Promise<Sucursal | null> {
   if (!ciudad) return null;
-  const match = RESPONSABLES_SUCURSAL.find((r) => r.ciudad === ciudad && r.sucursal.startsWith("Jurídico"));
+  const todas = await listarSucursales();
+  const match = todas.find((r) => r.ciudad === ciudad && r.area === "Jurídico");
   return match?.sucursal ?? null;
 }
+
+/** La sucursal marcada como archivo general principal (donde deben vivir los originales). */
+export async function archivoPrincipal(): Promise<Sucursal | null> {
+  const todas = await listarSucursales();
+  return todas.find((r) => r.esArchivoPrincipal)?.sucursal ?? null;
+}
+
 
 export interface DocumentoArchivo {
   id: string;
@@ -187,6 +200,7 @@ export async function buscarArchivoGeneral(termino: string): Promise<DocumentoAr
       digitalizado: true,
       ubicacion: ubicacionPropia || ubicacionCaso || null,
       tipo_copia: (d.tipo_copia as TipoCopia) ?? null,
+      sucursal: (d.sucursal as Sucursal) ?? null,
       copiaPendiente: false,
       estado_baja: (d.estado_baja as EstadoBaja) || "activo",
       baja_motivo: d.baja_motivo ?? null,
@@ -223,6 +237,7 @@ export async function buscarArchivoGeneral(termino: string): Promise<DocumentoAr
       digitalizado: !!f.digitalizado,
       ubicacion: ubicacionPropia || ubicacionCaso || null,
       tipo_copia: (f.tipo_copia as TipoCopia) ?? null,
+      sucursal: (f.sucursal as Sucursal) ?? null,
       copiaPendiente: false,
       estado_baja: (f.estado_baja as EstadoBaja) || "activo",
       baja_motivo: f.baja_motivo ?? null,
