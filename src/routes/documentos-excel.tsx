@@ -11,7 +11,7 @@ import { rolActual } from "@/lib/archivo-general";
 import { permiteVerAsunto } from "@/lib/permisos-regional";
 import { estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 import { EstanteCarpetas } from "@/components/estante-carpetas";
-import { cargarCarpetasUcmUcp, agruparPorEstado, agruparPorCategoria, type CarpetaConDistintivo } from "@/lib/estante-datos";
+import { cargarCarpetasUcmUcp, cargarCarpetasUdp, agruparPorEstado, agruparPorCategoria, agruparPorTipoUdp, type CarpetaConDistintivo } from "@/lib/estante-datos";
 
 export const Route = createFileRoute("/documentos-excel")({
   head: () => ({ meta: [{ title: "Documentos por asunto — JusticiaFácil" }] }),
@@ -38,27 +38,37 @@ function DocumentosExcelPage() {
   const [vista, setVista] = useState<"tabla" | "estante">("tabla");
   const [tabEstante, setTabEstante] = useState<"estado" | "UCM" | "UCP" | "UDP" | "devoluciones" | "personal" | "institucional">("estado");
   const [carpetas, setCarpetas] = useState<CarpetaConDistintivo[]>([]);
+  const [carpetasUdp, setCarpetasUdp] = useState<CarpetaConDistintivo[]>([]);
   const [cargandoEstante, setCargandoEstante] = useState(false);
 
   useEffect(() => {
-    if (vista !== "estante" || carpetas.length > 0) return;
+    if (vista !== "estante") return;
+    if (tabEstante === "UDP") {
+      if (carpetasUdp.length > 0) return;
+      setCargandoEstante(true);
+      cargarCarpetasUdp().then(setCarpetasUdp).finally(() => setCargandoEstante(false));
+      return;
+    }
+    if (carpetas.length > 0) return;
     setCargandoEstante(true);
     cargarCarpetasUcmUcp().then(setCarpetas).finally(() => setCargandoEstante(false));
-  }, [vista]);
+  }, [vista, tabEstante]);
 
   const carpetasVisibles = useMemo(() => carpetas.filter((c) => permiteVerAsunto(rol, c.ubicacion)), [carpetas, rol]);
+  const carpetasUdpVisibles = useMemo(() => carpetasUdp.filter((c) => permiteVerAsunto(rol, c.ubicacion)), [carpetasUdp, rol]);
   const grupoEstante = useMemo(() => {
     if (tabEstante === "estado") return agruparPorEstado(carpetasVisibles);
     if (tabEstante === "UCM") return agruparPorCategoria(carpetasVisibles, "UCM");
     if (tabEstante === "UCP") return agruparPorCategoria(carpetasVisibles, "UCP");
+    if (tabEstante === "UDP") return agruparPorTipoUdp(carpetasUdpVisibles);
     return {};
-  }, [carpetasVisibles, tabEstante]);
+  }, [carpetasVisibles, carpetasUdpVisibles, tabEstante]);
 
   const TABS_ESTANTE: { id: typeof tabEstante; label: string; listo: boolean }[] = [
     { id: "estado", label: "Por Estado", listo: true },
     { id: "UCM", label: "UCM", listo: true },
     { id: "UCP", label: "UCP", listo: true },
-    { id: "UDP", label: "UDP", listo: false },
+    { id: "UDP", label: "UDP", listo: true },
     { id: "devoluciones", label: "Devoluciones", listo: false },
     { id: "personal", label: "Personal", listo: false },
     { id: "institucional", label: "Documentos institucionales", listo: false },
