@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
-import { Upload, Check, Loader2, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Upload, Check, Loader2, ChevronLeft, ChevronRight, Search, LayoutGrid, Table2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { listarAsuntosConDocs, type AsuntoConDocs } from "@/lib/documentos-tabla";
 import { sbSelect, type CasoJuridico } from "@/lib/supabase";
@@ -10,6 +10,8 @@ import { subirDocumento } from "@/lib/drive";
 import { rolActual } from "@/lib/archivo-general";
 import { permiteVerAsunto } from "@/lib/permisos-regional";
 import { estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
+import { EstanteCarpetas } from "@/components/estante-carpetas";
+import { cargarCarpetasUcmUcp, agruparPorEstado, agruparPorCategoria, type CarpetaConDistintivo } from "@/lib/estante-datos";
 
 export const Route = createFileRoute("/documentos-excel")({
   head: () => ({ meta: [{ title: "Documentos por asunto — JusticiaFácil" }] }),
@@ -31,6 +33,36 @@ function DocumentosExcelPage() {
   const [pagina, setPagina] = useState(0);
   const [subiendoId, setSubiendoId] = useState<string | null>(null);
   const [subidoIds, setSubidoIds] = useState<Set<string>>(new Set());
+
+  // ===== Vista tipo estante =====
+  const [vista, setVista] = useState<"tabla" | "estante">("tabla");
+  const [tabEstante, setTabEstante] = useState<"estado" | "UCM" | "UCP" | "UDP" | "devoluciones" | "personal" | "institucional">("estado");
+  const [carpetas, setCarpetas] = useState<CarpetaConDistintivo[]>([]);
+  const [cargandoEstante, setCargandoEstante] = useState(false);
+
+  useEffect(() => {
+    if (vista !== "estante" || carpetas.length > 0) return;
+    setCargandoEstante(true);
+    cargarCarpetasUcmUcp().then(setCarpetas).finally(() => setCargandoEstante(false));
+  }, [vista]);
+
+  const carpetasVisibles = useMemo(() => carpetas.filter((c) => permiteVerAsunto(rol, c.ubicacion)), [carpetas, rol]);
+  const grupoEstante = useMemo(() => {
+    if (tabEstante === "estado") return agruparPorEstado(carpetasVisibles);
+    if (tabEstante === "UCM") return agruparPorCategoria(carpetasVisibles, "UCM");
+    if (tabEstante === "UCP") return agruparPorCategoria(carpetasVisibles, "UCP");
+    return {};
+  }, [carpetasVisibles, tabEstante]);
+
+  const TABS_ESTANTE: { id: typeof tabEstante; label: string; listo: boolean }[] = [
+    { id: "estado", label: "Por Estado", listo: true },
+    { id: "UCM", label: "UCM", listo: true },
+    { id: "UCP", label: "UCP", listo: true },
+    { id: "UDP", label: "UDP", listo: false },
+    { id: "devoluciones", label: "Devoluciones", listo: false },
+    { id: "personal", label: "Personal", listo: false },
+    { id: "institucional", label: "Documentos institucionales", listo: false },
+  ];
 
   useEffect(() => {
     rolActual().then(setRol);
@@ -77,8 +109,48 @@ function DocumentosExcelPage() {
         eyebrow="Núcleo procesal"
         title="Documentos por asunto"
         description="Vista rápida tipo hoja de cálculo — todos los asuntos de UCM y UCP, con cuántos documentos tienen y subida rápida sin salir de aquí."
+        actions={
+          <div className="flex gap-1 rounded-md border border-input p-0.5">
+            <button onClick={() => setVista("tabla")} className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium ${vista === "tabla" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}>
+              <Table2 className="h-3.5 w-3.5" /> Tabla
+            </button>
+            <button onClick={() => setVista("estante")} className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium ${vista === "estante" ? "bg-[color:var(--teal)] text-white" : "text-muted-foreground"}`}>
+              <LayoutGrid className="h-3.5 w-3.5" /> Estante de carpetas
+            </button>
+          </div>
+        }
       />
 
+      {vista === "estante" ? (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {TABS_ESTANTE.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTabEstante(t.id)}
+                className={`rounded-md border px-3 py-1.5 text-xs font-medium ${tabEstante === t.id ? "border-[color:var(--teal)] bg-[color:var(--teal)]/10 text-[color:var(--teal)]" : "border-input text-muted-foreground"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {TABS_ESTANTE.find((t) => t.id === tabEstante)?.listo ? (
+            <EstanteCarpetas
+              grupos={grupoEstante}
+              cargando={cargandoEstante}
+              onClickCarpeta={(item) =>
+                navigate({ to: "/documentos-asunto", search: { unidad: item.unidad, id: item.asuntoId } as any })
+              }
+            />
+          ) : (
+            <Card className="legal-card p-8 text-center text-sm text-muted-foreground">
+              Esta pestaña todavía no está conectada — la construimos en la siguiente parte.
+            </Card>
+          )}
+        </>
+      ) : (
+      <>
       <Card className="legal-card p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[220px] flex-1">
@@ -168,6 +240,8 @@ function DocumentosExcelPage() {
           <span className="text-xs text-muted-foreground">Página {pag + 1} de {totalPag}</span>
           <button onClick={() => setPagina((p) => Math.min(totalPag - 1, p + 1))} disabled={pag >= totalPag - 1} className="rounded-md border border-input p-1.5 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
         </div>
+      )}
+      </>
       )}
     </div>
   );
