@@ -1,6 +1,6 @@
 import {
   QrCode, HelpCircle, Check, Clock, Gavel, FileText, ShieldCheck, Landmark,
-  Briefcase, Users, AlertTriangle, FileCheck, FileX, Cloud, Plus, Loader2,
+  Briefcase, Users, AlertTriangle, FileCheck, FileX, Cloud, Plus, Loader2, Home,
 } from "lucide-react";
 import type { CarpetaConDistintivo } from "@/lib/estante-datos";
 
@@ -8,7 +8,7 @@ const ICONOS: Record<string, any> = {
   qrcode: QrCode, help: HelpCircle, check: Check, "clock-hour-4": Clock,
   gavel: Gavel, "file-text": FileText, "shield-check": ShieldCheck, "building-bank": Landmark,
   briefcase: Briefcase, users: Users, "alert-triangle": AlertTriangle,
-  "file-check": FileCheck, "file-x": FileX,
+  "file-check": FileCheck, "file-x": FileX, home: Home,
 };
 
 const MADERA = "#B8967A";
