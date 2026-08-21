@@ -118,7 +118,77 @@ export async function cargarCarpetasUcmUcp(): Promise<CarpetaConDistintivo[]> {
   }
 }
 
-/** Agrupa una lista de carpetas por Estado, para la pestaña "Por Estado". */
+/**
+ * Trae los asuntos de UDP directo de caso_udp — a diferencia de UCM/UCP, aquí NO se
+ * asume que existe una carpeta física (esas se abren manualmente por el encargado de
+ * resguardo). Si ya existe una carpeta real vinculada, se usa; si no, se muestra un
+ * marcador "sin carpeta física" con el mismo distintivo de color/tipo.
+ */
+export async function cargarCarpetasUdp(): Promise<CarpetaConDistintivo[]> {
+  try {
+    const casos = await sb<any>("caso_udp", `select=id,tipo,cliente,contraparte,posicion,domicilio,sede,abogado,estatus,created_at&order=created_at.desc&limit=1000`);
+    if (casos.length === 0) return [];
+
+    const casoIds = casos.map((c: any) => c.id);
+    const carpetasReales = await sbEnLotes<any>("sistema", "carpetas_fisicas", "select=id,folio,sucursal,caso_udp_id,abierta_fisicamente,portada_impresa,portada_impresa_en,creado_por,created_at", "caso_udp_id", casoIds);
+    const carpetaPorCasoUdp = new Map(carpetasReales.map((c: any) => [c.caso_udp_id, c]));
+
+    const resultado: CarpetaConDistintivo[] = [];
+    for (const caso of casos) {
+      const distintivo = calcularDistintivo({
+        unidad: "UDP",
+        tipoUdp: caso.tipo,
+        tieneCliente: !!caso.cliente,
+        posicionUdp: caso.posicion,
+        abiertaFisicamente: carpetaPorCasoUdp.get(caso.id)?.abierta_fisicamente ?? false,
+      });
+
+      const carpetaReal = carpetaPorCasoUdp.get(caso.id);
+      const ubicacion = detectarUbicacion({ distrito_judicial: caso.domicilio || caso.sede, juzgado: null, entidad: caso.sede });
+
+      resultado.push({
+        carpeta: carpetaReal ? {
+          id: carpetaReal.id, folio: carpetaReal.folio, sucursal: carpetaReal.sucursal, unidad: "UDP",
+          clienteNombre: caso.cliente, direccion: caso.domicilio, creadoPor: carpetaReal.creado_por,
+          createdAt: carpetaReal.created_at, portadaImpresa: !!carpetaReal.portada_impresa, portadaImpresaEn: carpetaReal.portada_impresa_en,
+          casoJuridicoId: null, casoUdpId: caso.id, formalizacionId: null,
+        } : {
+          // sin carpeta física real todavía — objeto "virtual" solo para que se pueda mostrar y hacer clic
+          id: caso.id, folio: "Sin carpeta física", sucursal: caso.sede || "Sin sucursal", unidad: "UDP",
+          clienteNombre: caso.cliente, direccion: caso.domicilio, creadoPor: null,
+          createdAt: caso.created_at, portadaImpresa: false, portadaImpresaEn: null,
+          casoJuridicoId: null, casoUdpId: caso.id, formalizacionId: null,
+        },
+        distintivo,
+        cliente: caso.cliente,
+        direccion: caso.domicilio,
+        garId: null,
+        noCredito: null,
+        expediente: null,
+        ubicacion,
+        unidad: "UDP",
+        asuntoId: caso.id,
+      });
+    }
+    return resultado;
+  } catch (e) {
+    console.error("cargarCarpetasUdp falló:", e);
+    return [];
+  }
+}
+
+/** Agrupa los asuntos de UDP por tipo (Penal, Civil, PROFECO…) para su pestaña. */
+export function agruparPorTipoUdp(lista: CarpetaConDistintivo[]): Record<string, CarpetaConDistintivo[]> {
+  const grupos: Record<string, CarpetaConDistintivo[]> = {};
+  for (const item of lista) {
+    const etiqueta = item.distintivo.etiqueta || "Sin tipo";
+    if (!grupos[etiqueta]) grupos[etiqueta] = [];
+    grupos[etiqueta].push(item);
+  }
+  return grupos;
+}
+
+
 export function agruparPorEstado(lista: CarpetaConDistintivo[]): Record<string, CarpetaConDistintivo[]> {
   const grupos: Record<string, CarpetaConDistintivo[]> = {};
   for (const item of lista) {
