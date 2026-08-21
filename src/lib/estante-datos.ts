@@ -105,6 +105,18 @@ export function agruparPorEstado(lista: CarpetaConDistintivo[]): Record<string, 
   return grupos;
 }
 
+/** Agrupa por categoría/código (R2, R2C, R3, sin cliente…) — para las pestañas UCM y UCP. */
+export function agruparPorCategoria(lista: CarpetaConDistintivo[], unidad: "UCM" | "UCP"): Record<string, CarpetaConDistintivo[]> {
+  const grupos: Record<string, CarpetaConDistintivo[]> = {};
+  for (const item of lista) {
+    if (item.unidad !== unidad) continue;
+    const etiqueta = item.distintivo.etiqueta;
+    if (!grupos[etiqueta]) grupos[etiqueta] = [];
+    grupos[etiqueta].push(item);
+  }
+  return grupos;
+}
+
 /** Confirma que la carpeta ya se abrió físicamente de verdad (no solo en el sistema). */
 export async function confirmarAperturaFisica(carpetaId: string, correo: string | null): Promise<boolean> {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/carpetas_fisicas?id=eq.${carpetaId}`, {
