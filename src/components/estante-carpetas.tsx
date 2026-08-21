@@ -22,33 +22,41 @@ interface PropsLomo {
 function Lomo({ item, onClick }: PropsLomo) {
   const d = item.distintivo;
   const Icono = ICONOS[d.icono] || QrCode;
-  const nombreCorto = (item.cliente || "Sin nombre").split(" ").slice(0, 2).join(" ");
+  const nombreCorto = (item.cliente || "Sin nombre").split(" ").slice(0, 3).join(" ");
 
   return (
     <button
       onClick={onClick}
-      className="relative flex h-[170px] w-14 shrink-0 flex-col items-center rounded-t-sm pt-4"
-      style={{ background: d.colorFondo, opacity: d.soloDigital ? 0.75 : 1, outline: d.soloDigital ? "1.5px dashed rgba(255,255,255,0.5)" : "none" }}
+      className="group relative flex h-[150px] w-[130px] shrink-0 flex-col overflow-hidden rounded-lg text-left shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md"
+      style={{ background: d.colorFondo, opacity: d.soloDigital ? 0.8 : 1, outline: d.soloDigital ? "2px dashed rgba(255,255,255,0.55)" : "none" }}
       title={`${d.etiqueta} · ${item.cliente || "sin cliente"}${d.soloDigital ? " · Solo digital, sin abrir físicamente" : ""}`}
     >
-      {d.franjaRoja && <div className="absolute left-0 top-0 h-full w-1.5 rounded-tl-sm" style={{ background: "#D85A30" }} />}
-      {d.posicion && (
-        <span
-          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold"
-          style={{ background: d.posicion === "actor" ? "#639922" : "#D85A30", color: d.posicion === "actor" ? "#173404" : "#4A1B0C" }}
-        >
-          {d.posicion === "actor" ? "A" : "D"}
-        </span>
-      )}
+      {/* pestaña de carpeta, arriba a la izquierda */}
+      <div className="flex items-center justify-between rounded-t-md px-2.5 py-1.5" style={{ background: "rgba(0,0,0,0.18)" }}>
+        <span className="truncate text-[11px] font-semibold" style={{ color: d.colorTexto }}>{d.etiqueta}</span>
+        {d.posicion && (
+          <span
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
+            style={{ background: d.posicion === "actor" ? "#639922" : "#D85A30", color: d.posicion === "actor" ? "#173404" : "#4A1B0C" }}
+          >
+            {d.posicion === "actor" ? "A" : "D"}
+          </span>
+        )}
+      </div>
+
+      {d.franjaRoja && <div className="absolute left-0 top-0 h-full w-2" style={{ background: "#D85A30" }} />}
       {d.soloDigital && (
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-white/90 p-1">
+        <span className="absolute right-1.5 top-9 rounded-full bg-white/90 p-1">
           <Cloud className="h-3.5 w-3.5 text-slate-500" />
         </span>
       )}
-      <Icono className="h-5 w-5 shrink-0" style={{ color: d.colorTexto }} />
-      <p className="mt-2 max-w-[130px] truncate text-[10px] leading-tight" style={{ color: d.colorTexto, writingMode: "vertical-rl" }}>
-        {d.etiqueta} · {nombreCorto}
-      </p>
+
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-2 pb-3">
+        <Icono className="h-8 w-8 shrink-0" style={{ color: d.colorTexto }} />
+        <p className="line-clamp-2 text-center text-[12px] font-medium leading-tight" style={{ color: d.colorTexto }}>
+          {nombreCorto}
+        </p>
+      </div>
     </button>
   );
 }
@@ -75,7 +83,7 @@ export function EstanteCarpetas({ grupos, onClickCarpeta, cargando }: Props) {
         <div key={nombre}>
           <p className="mb-2 text-xs font-medium text-muted-foreground">{nombre} · {grupos[nombre].length} carpetas</p>
           <div className="rounded-lg pb-1.5 pl-3 pr-3 pt-4" style={{ background: MADERA }}>
-            <div className="flex items-end gap-1.5 overflow-x-auto pb-0.5">
+            <div className="flex flex-wrap items-end gap-3">
               {grupos[nombre].map((item) => (
                 <Lomo key={item.carpeta.id} item={item} onClick={() => onClickCarpeta(item)} />
               ))}
