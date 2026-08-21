@@ -37,6 +37,7 @@ const CODIGO_A_UNIDAD: Record<string, UnidadAsuntoColor> = {
   R2: "UCM", R2C: "UCM", R3: "UCM",
   R1: "UCP", R1V: "UCP", RV: "UCP",
   RDC: "UFC",
+  RD: "UFC",
 };
 
 // Tipo de asunto en UDP → ícono (todas rojas, el ícono distingue el tipo).
@@ -106,12 +107,14 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
     return { colorFondo: PALETA.UDP.fondo, colorTexto: PALETA.UDP.texto, franjaRoja: false, icono, grisEstado: null, posicion, etiqueta: (d.tipoUdp && etiquetaTipo[d.tipoUdp]) || "UDP", soloDigital };
   }
 
-  // 5) RDC (devolución, vive en UFC) — separado por si tiene convenio o no.
-  if (d.codigo === "RDC" || d.unidad === "UFC") {
+  // 5) RDC/RD (devolución, vive en UFC) — RD = solicitud formal sin convenio firmado
+  // todavía; RDC = ya firmó el convenio de compensación. Mismo color, distinta etiqueta.
+  if (d.codigo === "RDC" || d.codigo === "RD" || d.unidad === "UFC") {
+    const esRD = d.codigo === "RD";
     return {
       colorFondo: PALETA.UFC.fondo, colorTexto: PALETA.UFC.texto, franjaRoja: false,
-      icono: d.tieneConvenio ? "file-check" : "file-x", grisEstado: null, posicion,
-      etiqueta: d.tieneConvenio ? "RDC · con convenio" : "RDC · sin convenio", soloDigital,
+      icono: esRD ? "file-x" : (d.tieneConvenio ? "file-check" : "file-x"), grisEstado: null, posicion,
+      etiqueta: esRD ? "RD · sin convenio" : (d.tieneConvenio ? "RDC · con convenio" : "RDC · sin convenio"), soloDigital,
     };
   }
 
