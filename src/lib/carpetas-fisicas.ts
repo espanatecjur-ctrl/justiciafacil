@@ -14,12 +14,20 @@ import type { AsuntoUnificado } from "@/lib/asuntos-busqueda";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-// Código corto por ciudad, para que el folio no quede kilométrico.
+// Código corto por sucursal REAL (coincide exacto con el nombre en la tabla `sucursales`).
+// Antes esto solo tenía nombres de ciudad ("Culiacán"), que nunca coincidían con el
+// nombre real de la sucursal ("Jurídico Culiacán") — las 4 sucursales de Jurídico
+// (Culiacán/GDL/Mazatlán/La Paz) caían todas al mismo prefijo genérico "JUR".
 const CODIGO_SUCURSAL: Record<string, string> = {
-  "Culiacán": "CUL",
-  "Guadalajara": "GDL",
-  "Mazatlán": "MAZ",
-  "La Paz": "LAP",
+  "Ventas Culiacán": "VCUL",
+  "Jurídico Culiacán": "JCUL",
+  "Ventas GDL": "VGDL",
+  "Jurídico GDL": "JGDL",
+  "Ventas Mazatlán": "VMAZ",
+  "Jurídico Mazatlán": "JMAZ",
+  "Atención al Cliente Mazatlán": "ATC",
+  "Ventas La Paz": "VLAP",
+  "Jurídico La Paz": "JLAP",
 };
 
 export interface CarpetaFisica {
