@@ -27,26 +27,26 @@ function Lomo({ item, onClick }: PropsLomo) {
   return (
     <button
       onClick={onClick}
-      className="relative flex h-[110px] w-9 shrink-0 flex-col items-center rounded-t-sm pt-3"
-      style={{ background: d.colorFondo, opacity: d.soloDigital ? 0.75 : 1, outline: d.soloDigital ? "1px dashed rgba(255,255,255,0.5)" : "none" }}
+      className="relative flex h-[170px] w-14 shrink-0 flex-col items-center rounded-t-sm pt-4"
+      style={{ background: d.colorFondo, opacity: d.soloDigital ? 0.75 : 1, outline: d.soloDigital ? "1.5px dashed rgba(255,255,255,0.5)" : "none" }}
       title={`${d.etiqueta} · ${item.cliente || "sin cliente"}${d.soloDigital ? " · Solo digital, sin abrir físicamente" : ""}`}
     >
-      {d.franjaRoja && <div className="absolute left-0 top-0 h-full w-1 rounded-tl-sm" style={{ background: "#D85A30" }} />}
+      {d.franjaRoja && <div className="absolute left-0 top-0 h-full w-1.5 rounded-tl-sm" style={{ background: "#D85A30" }} />}
       {d.posicion && (
         <span
-          className="absolute right-0.5 top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-semibold"
+          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold"
           style={{ background: d.posicion === "actor" ? "#639922" : "#D85A30", color: d.posicion === "actor" ? "#173404" : "#4A1B0C" }}
         >
           {d.posicion === "actor" ? "A" : "D"}
         </span>
       )}
       {d.soloDigital && (
-        <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-white/90 p-0.5">
-          <Cloud className="h-2.5 w-2.5 text-slate-500" />
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-white/90 p-1">
+          <Cloud className="h-3.5 w-3.5 text-slate-500" />
         </span>
       )}
-      <Icono className="h-3.5 w-3.5 shrink-0" style={{ color: d.colorTexto }} />
-      <p className="mt-1.5 max-w-[80px] truncate text-[7px] leading-tight" style={{ color: d.colorTexto, writingMode: "vertical-rl" }}>
+      <Icono className="h-5 w-5 shrink-0" style={{ color: d.colorTexto }} />
+      <p className="mt-2 max-w-[130px] truncate text-[10px] leading-tight" style={{ color: d.colorTexto, writingMode: "vertical-rl" }}>
         {d.etiqueta} · {nombreCorto}
       </p>
     </button>
