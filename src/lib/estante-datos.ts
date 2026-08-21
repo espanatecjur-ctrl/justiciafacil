@@ -196,9 +196,10 @@ export function agruparPorTipoUdp(lista: CarpetaConDistintivo[]): Record<string,
  */
 export async function cargarCarpetasDevoluciones(): Promise<CarpetaConDistintivo[]> {
   try {
-    const clientesRdc = await sbJC<any>("clientes", `select=id,nombre&codigo=eq.RDC&limit=1000`);
+    const clientesRdc = await sbJC<any>("clientes", `select=id,nombre,codigo&codigo=in.(RDC,RD)&limit=1000`);
     if (clientesRdc.length === 0) return [];
     const idsRdc = clientesRdc.map((c: any) => c.id);
+    const codigoPorCliente = new Map(clientesRdc.map((c: any) => [String(c.id), c.codigo]));
 
     const devoluciones = await sbEnLotes<any>("jc", "compensacion_devolucion", "select=cliente_id,doc_convenio,fecha_cierre_real,capital,estado", "cliente_id", idsRdc);
     const devPorCliente = new Map(devoluciones.map((d: any) => [String(d.cliente_id), d]));
@@ -208,8 +209,9 @@ export async function cargarCarpetasDevoluciones(): Promise<CarpetaConDistintivo
     const resultado: CarpetaConDistintivo[] = [];
     for (const caso of casos) {
       const dev = devPorCliente.get(String(caso.cliente_jc_id));
+      const codigo = codigoPorCliente.get(String(caso.cliente_jc_id)) || "RDC";
       const distintivo = calcularDistintivo({
-        unidad: "UFC", codigo: "RDC", tieneCliente: true,
+        unidad: "UFC", codigo, tieneCliente: true,
         terminado: caso.terminado, fechaCierreReal: dev?.fecha_cierre_real ?? null,
         actor: caso.actor, demandado: caso.demandado,
         tieneConvenio: dev ? !!dev.doc_convenio : false,
