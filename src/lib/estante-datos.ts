@@ -21,6 +21,23 @@ async function sbJC<T = any>(tabla: string, query: string): Promise<T[]> {
   return (await r.json()) as T[];
 }
 
+// Con 505 carpetas, un solo "id=in.(uuid1,uuid2,...)" arma una URL de ~18,000
+// caracteres — muchos servidores la rechazan (o se cuelga sin avisar). Se
+// parte en lotes de 80 ids por consulta y se juntan los resultados.
+const TAMANO_LOTE = 80;
+
+async function sbEnLotes<T = any>(fuente: "sistema" | "jc", tabla: string, selectYFiltros: string, campoId: string, ids: (string | number)[]): Promise<T[]> {
+  if (ids.length === 0) return [];
+  const fn = fuente === "sistema" ? sb : sbJC;
+  const lotes: (string | number)[][] = [];
+  for (let i = 0; i < ids.length; i += TAMANO_LOTE) lotes.push(ids.slice(i, i + TAMANO_LOTE));
+
+  const resultados = await Promise.all(
+    lotes.map((lote) => fn<T>(tabla, `${selectYFiltros}&${campoId}=in.(${lote.join(",")})`))
+  );
+  return resultados.flat();
+}
+
 export interface CarpetaConDistintivo {
   carpeta: CarpetaFisica;
   distintivo: DistintivoVisual;
@@ -36,23 +53,26 @@ export interface CarpetaConDistintivo {
 
 /** Trae TODAS las carpetas ligadas a caso_juridico (UCM/UCP), con su distintivo ya calculado. */
 export async function cargarCarpetasUcmUcp(): Promise<CarpetaConDistintivo[]> {
-  const carpetas = await sb<any>("carpetas_fisicas", `select=*&caso_juridico_id=not.is.null&order=created_at.desc&limit=1000`);
-  if (carpetas.length === 0) return [];
+  try {
+    const carpetas = await sb<any>("carpetas_fisicas", `select=*&caso_juridico_id=not.is.null&order=created_at.desc&limit=1000`);
+    if (carpetas.length === 0) return [];
 
   const casoIds = [...new Set(carpetas.map((c) => c.caso_juridico_id))];
-  const casos = await sb<any>("caso_juridico", `select=id,unidad,tipo_registro,pasa_a_ucm,cliente_nombre,cliente_jc_id,direccion_garantia,gar_id,no_credito,expediente,entidad,juzgado,distrito_judicial,terminado,actor,demandado&id=in.(${casoIds.join(",")})`);
+  const casos = await sbEnLotes<any>(
+    "sistema", "caso_juridico",
+    "select=id,unidad,tipo_registro,pasa_a_ucm,cliente_nombre,cliente_jc_id,direccion_garantia,gar_id,no_credito,expediente,entidad,juzgado,distrito_judicial,terminado,actor,demandado",
+    "id", casoIds
+  );
   const casoPorId = new Map(casos.map((c: any) => [c.id, c]));
 
   // Códigos reales — vienen de JurisConecta, vía cliente_jc_id.
   const clienteIds = [...new Set(casos.map((c: any) => c.cliente_jc_id).filter(Boolean))];
-  const clientes = clienteIds.length > 0 ? await sbJC<any>("clientes", `select=id,codigo&id=in.(${clienteIds.join(",")})`) : [];
+  const clientes = await sbEnLotes<any>("jc", "clientes", "select=id,codigo", "id", clienteIds);
   const codigoPorCliente = new Map(clientes.map((c: any) => [c.id, c.codigo]));
 
   // Datos de devolución (RDC) — fecha de cierre real y convenio, también de JurisConecta.
   const clienteIdsRdc = casos.filter((c: any) => codigoPorCliente.get(c.cliente_jc_id) === "RDC").map((c: any) => c.cliente_jc_id);
-  const devoluciones = clienteIdsRdc.length > 0
-    ? await sbJC<any>("compensacion_devolucion", `select=cliente_id,fecha_cierre_real,doc_convenio&cliente_id=in.(${clienteIdsRdc.join(",")})`)
-    : [];
+  const devoluciones = await sbEnLotes<any>("jc", "compensacion_devolucion", "select=cliente_id,fecha_cierre_real,doc_convenio", "cliente_id", clienteIdsRdc);
   const devolucionPorCliente = new Map(devoluciones.map((d: any) => [d.cliente_id, d]));
 
   const resultado: CarpetaConDistintivo[] = [];
@@ -92,6 +112,10 @@ export async function cargarCarpetasUcmUcp(): Promise<CarpetaConDistintivo[]> {
     });
   }
   return resultado;
+  } catch (e) {
+    console.error("cargarCarpetasUcmUcp falló:", e);
+    return [];
+  }
 }
 
 /** Agrupa una lista de carpetas por Estado, para la pestaña "Por Estado". */
