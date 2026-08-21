@@ -77,7 +77,8 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
     return { colorFondo: PALETA.GRIS_SIN_CLIENTE.fondo, colorTexto: PALETA.GRIS_SIN_CLIENTE.texto, franjaRoja: false, icono: "help", grisEstado: "sin_cliente", posicion: null, etiqueta: "Sin cliente", soloDigital: false };
   }
 
-  // 2) Concluido — revisa si ya toca destrucción física (5 años desde el cierre real).
+  // 2) Concluido — revisa si ya toca destrucción física (5 años desde el cierre real),
+  // y distingue el motivo: por devolución (RD/RDC) vs por casa entregada/venta exitosa.
   if (d.terminado) {
     let esDestruccion = false;
     if (d.fechaCierreReal) {
@@ -85,9 +86,11 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
       limite.setFullYear(limite.getFullYear() + ANIOS_PARA_DESTRUCCION);
       esDestruccion = new Date() >= limite;
     }
+    const porDevolucion = d.codigo === "RD" || d.codigo === "RDC";
+    const motivo = porDevolucion ? "Devolución" : "Casa entregada";
     return esDestruccion
-      ? { colorFondo: PALETA.GRIS_DESTRUCCION.fondo, colorTexto: PALETA.GRIS_DESTRUCCION.texto, franjaRoja: false, icono: "clock-hour-4", grisEstado: "por_destruir", posicion: null, etiqueta: "Destruir · 5 años", soloDigital: false }
-      : { colorFondo: PALETA.GRIS_CONCLUIDO.fondo, colorTexto: PALETA.GRIS_CONCLUIDO.texto, franjaRoja: false, icono: "check", grisEstado: "concluido", posicion: null, etiqueta: "Concluido", soloDigital: false };
+      ? { colorFondo: PALETA.GRIS_DESTRUCCION.fondo, colorTexto: PALETA.GRIS_DESTRUCCION.texto, franjaRoja: false, icono: "clock-hour-4", grisEstado: "por_destruir", posicion: null, etiqueta: `Destruir · 5 años (${motivo})`, soloDigital: false }
+      : { colorFondo: PALETA.GRIS_CONCLUIDO.fondo, colorTexto: PALETA.GRIS_CONCLUIDO.texto, franjaRoja: false, icono: porDevolucion ? "check" : "home", grisEstado: "concluido", posicion: null, etiqueta: `Concluido · ${motivo}`, soloDigital: false };
   }
 
   // 3) Posición (actor/demandado) — UDP ya trae su propio campo; el resto se infiere de nombres.
