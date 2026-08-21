@@ -11,7 +11,7 @@ import { rolActual } from "@/lib/archivo-general";
 import { permiteVerAsunto } from "@/lib/permisos-regional";
 import { estadosDisponibles, ciudadesDeEstado } from "@/lib/ciudad-judicial";
 import { EstanteCarpetas } from "@/components/estante-carpetas";
-import { cargarCarpetasUcmUcp, cargarCarpetasUdp, agruparPorEstado, agruparPorCategoria, agruparPorTipoUdp, type CarpetaConDistintivo } from "@/lib/estante-datos";
+import { cargarCarpetasUcmUcp, cargarCarpetasUdp, cargarCarpetasDevoluciones, agruparPorEstado, agruparPorCategoria, agruparPorTipoUdp, agruparPorConvenio, type CarpetaConDistintivo } from "@/lib/estante-datos";
 
 export const Route = createFileRoute("/documentos-excel")({
   head: () => ({ meta: [{ title: "Documentos por asunto — JusticiaFácil" }] }),
@@ -39,6 +39,7 @@ function DocumentosExcelPage() {
   const [tabEstante, setTabEstante] = useState<"estado" | "UCM" | "UCP" | "UDP" | "devoluciones" | "personal" | "institucional">("estado");
   const [carpetas, setCarpetas] = useState<CarpetaConDistintivo[]>([]);
   const [carpetasUdp, setCarpetasUdp] = useState<CarpetaConDistintivo[]>([]);
+  const [carpetasDevoluciones, setCarpetasDevoluciones] = useState<CarpetaConDistintivo[]>([]);
   const [cargandoEstante, setCargandoEstante] = useState(false);
 
   useEffect(() => {
@@ -49,6 +50,12 @@ function DocumentosExcelPage() {
       cargarCarpetasUdp().then(setCarpetasUdp).finally(() => setCargandoEstante(false));
       return;
     }
+    if (tabEstante === "devoluciones") {
+      if (carpetasDevoluciones.length > 0) return;
+      setCargandoEstante(true);
+      cargarCarpetasDevoluciones().then(setCarpetasDevoluciones).finally(() => setCargandoEstante(false));
+      return;
+    }
     if (carpetas.length > 0) return;
     setCargandoEstante(true);
     cargarCarpetasUcmUcp().then(setCarpetas).finally(() => setCargandoEstante(false));
@@ -56,20 +63,22 @@ function DocumentosExcelPage() {
 
   const carpetasVisibles = useMemo(() => carpetas.filter((c) => permiteVerAsunto(rol, c.ubicacion)), [carpetas, rol]);
   const carpetasUdpVisibles = useMemo(() => carpetasUdp.filter((c) => permiteVerAsunto(rol, c.ubicacion)), [carpetasUdp, rol]);
+  const carpetasDevolucionesVisibles = useMemo(() => carpetasDevoluciones.filter((c) => permiteVerAsunto(rol, c.ubicacion)), [carpetasDevoluciones, rol]);
   const grupoEstante = useMemo(() => {
     if (tabEstante === "estado") return agruparPorEstado(carpetasVisibles);
     if (tabEstante === "UCM") return agruparPorCategoria(carpetasVisibles, "UCM");
     if (tabEstante === "UCP") return agruparPorCategoria(carpetasVisibles, "UCP");
     if (tabEstante === "UDP") return agruparPorTipoUdp(carpetasUdpVisibles);
+    if (tabEstante === "devoluciones") return agruparPorConvenio(carpetasDevolucionesVisibles);
     return {};
-  }, [carpetasVisibles, carpetasUdpVisibles, tabEstante]);
+  }, [carpetasVisibles, carpetasUdpVisibles, carpetasDevolucionesVisibles, tabEstante]);
 
   const TABS_ESTANTE: { id: typeof tabEstante; label: string; listo: boolean }[] = [
     { id: "estado", label: "Por Estado", listo: true },
     { id: "UCM", label: "UCM", listo: true },
     { id: "UCP", label: "UCP", listo: true },
     { id: "UDP", label: "UDP", listo: true },
-    { id: "devoluciones", label: "Devoluciones", listo: false },
+    { id: "devoluciones", label: "Devoluciones", listo: true },
     { id: "personal", label: "Personal", listo: false },
     { id: "institucional", label: "Documentos institucionales", listo: false },
   ];
