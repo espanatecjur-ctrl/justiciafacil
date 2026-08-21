@@ -119,35 +119,44 @@ export async function catalogoDelLibro(): Promise<EspacioLibro[]> {
  * reconocen todas.
  */
 const REGLAS: Array<{ clave: string; palabras: string[] }> = [
-  // Apartado 3 · cesiones — van primero porque "cesion" también aparece
-  // en textos de escrituras y si no, se las tragaría otra regla.
+  // Apartado 3 · cesiones — van primero porque la palabra "cesion" también
+  // aparece en escrituras; si esta regla fuera más abajo, se la tragarían.
   { clave: "cesion_cliente", palabras: ["cesion a favor del cliente", "cesion cliente", "cesion a nombre del cliente"] },
-  { clave: "cesion_diipa", palabras: ["cesion", "cadena_cesion", "escritura_cesion", "broker"] },
+  { clave: "cesion_diipa", palabras: ["cesion", "broker"] },
+  { clave: "escritura_originacion", palabras: ["originacion", "testimonio", "escritura", "documento base", "sustitucion de deudor", "apertura de credito"] },
 
-  // Apartado 5 · entrega
-  { clave: "acta_desalojo", palabras: ["desalojo", "lanzamiento", "desocupacion"] },
-  { clave: "acta_recepcion", palabras: ["entrega-recepcion", "entrega recepcion", "recepcion de propiedad", "finiquito"] },
-  { clave: "foto_entrega", palabras: ["foto", "fotografia", "imagen de la casa", "evidencia fotografica"] },
+  // Apartado 5 · entrega de la propiedad
+  { clave: "acta_desalojo", palabras: ["desalojo", "lanzamiento", "desocupacion", "toma de posesion"] },
+  { clave: "acta_recepcion", palabras: ["entrega recepcion", "recepcion de propiedad", "finiquito", "dacion"] },
+  { clave: "foto_entrega", palabras: ["foto", "imagen de la casa"] },
 
   // Apartado 2 · dictámenes
-  { clave: "dictamen_registral", palabras: ["dictamen_registral", "dictamen registral", "antecedente registral", "registral"] },
-  { clave: "dictamen_juridico", palabras: ["dictamen_juridico", "dictamen juridico", "dictamen", "predictamen"] },
-  { clave: "clg", palabras: ["clg", "libertad de gravamen", "gravamen"] },
+  { clave: "avaluo", palabras: ["avaluo"] },
+  { clave: "dictamen_registral", palabras: ["registral", "rppc", "rppyc", "catastral", "rpp "] },
+  { clave: "dictamen_juridico", palabras: ["dictamen", "predictamen", "informe juridico"] },
+  { clave: "clg", palabras: ["clg", "gravamen"] },
 
-  // Apartado 1 · cliente
-  { clave: "contrato_ps", palabras: ["contrato_prestacion", "prestacion de servicios", "compraventa", "contrato"] },
-  { clave: "ine", palabras: ["ine", "identificacion oficial", "credencial"] },
-  { clave: "rfc", palabras: ["rfc", "constancia de situacion fiscal", "situacion fiscal"] },
-  { clave: "comprobante_domicilio", palabras: ["comprobante de domicilio", "recibo de luz", "recibo de agua", "predial"] },
+  // Apartado 1 · documentos del cliente
+  { clave: "carta_propuesta", palabras: ["propuesta", "apartado", "aceptacion", "carta de intencion"] },
+  { clave: "contrato_ps", palabras: ["contrato", "compraventa", "convenio"] },
+  // OJO: "ine" va entre espacios a propósito. Como pedazo suelto se metía
+  // dentro de "inexistencia", "linea", "define" y clasificaba mal.
+  { clave: "ine", palabras: [" ine ", "identificacion", "credencial", "generales de cliente"] },
+  { clave: "rfc", palabras: ["rfc", "situacion fiscal"] },
+  // "predial" se quitó de aquí: los documentos que decían predial eran
+  // "estado de adeudo predial", que es financiero. Se movió a pagos.
+  { clave: "comprobante_domicilio", palabras: ["comprobante de domicilio", "recibo de luz", "recibo de agua"] },
   { clave: "acta_curp", palabras: ["acta de nacimiento", "curp"] },
-  { clave: "aml", palabras: ["aml", "lavado", "prevencion de lavado"] },
-  { clave: "kyc", palabras: ["kyc", "conoce a tu cliente"] },
-  { clave: "comprobantes_pago", palabras: ["comprobante de pago", "pago", "abono", "deposito", "transferencia", "estado de cuenta"] },
+  { clave: "aml", palabras: ["pld", "lavado"] },
+  { clave: "kyc", palabras: ["kyc"] },
+  { clave: "comprobantes_pago", palabras: ["pago", "abono", "deposito", "transferencia", "estado de cuenta", "adeudo", "certificacion contable"] },
 
-  // Apartado 4 · juicio
-  { clave: "demanda", palabras: ["demanda", "anexos_expediente", "anexo"] },
-  { clave: "acuerdos", palabras: ["acuerdo", "actuacion", "boletin", "auto", "sentencia"] },
-  { clave: "escritos", palabras: ["escrito", "promocion", "instruccion notarial"] },
+  // Apartado 4 · documentos del juicio
+  { clave: "demanda", palabras: ["demanda", "anexo", "escrito inicial"] },
+  // OJO: aquí va "auto admisorio" completo, NO "auto" solo. Como pedazo
+  // suelto se metía dentro de "autorizacion" y "autorizados".
+  { clave: "acuerdos", palabras: ["acuerdo", "actuacion", "boletin", "sentencia", "auto admisorio", "auto de admision", "resolucion", "emplazamiento", "apelacion", "amparo", "edicto", "exhorto", "audiencia", "remate", "adjudicacion", "ejecucion", "diligencia"] },
+  { clave: "escritos", palabras: ["escrito", "promocion", "instruccion notarial", "oficio", "apersonamiento", "estrategia", "jurisdiccion voluntaria", " jv ", "medio preparatorio", "copia certificada"] },
 ];
 
 /** Quita acentos y pasa a minúsculas, para que "Dictamen Jurídico" y "dictamen juridico" sean lo mismo. */
@@ -157,6 +166,7 @@ function normalizar(texto: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[_\-]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -165,11 +175,17 @@ function normalizar(texto: string): string {
  * Si no reconoce nada, lo manda a "otro" (apartado 6) — nunca se pierde.
  */
 export function clasificarDocumento(tipo: string | null, nombre: string | null): string {
-  const texto = normalizar(`${tipo ?? ""} ${nombre ?? ""}`);
-  if (!texto) return "otro";
+  // Se envuelve en espacios para que las reglas que piden palabra completa
+  // (" ine ", " jv ") también encuentren la palabra al inicio o al final.
+  const texto = ` ${normalizar(`${tipo ?? ""} ${nombre ?? ""}`)} `;
+  if (!texto.trim()) return "otro";
 
   for (const regla of REGLAS) {
-    if (regla.palabras.some((p) => texto.includes(normalizar(p)))) {
+    // Se compara contra la palabra tal cual está escrita en REGLAS, SIN pasarla
+    // por normalizar(): esa función recorta los espacios de las orillas y las
+    // reglas que piden palabra completa (" ine ", " jv ") perderían el efecto.
+    // Por eso las palabras de REGLAS ya se escriben en minúscula y sin acentos.
+    if (regla.palabras.some((p) => texto.includes(p))) {
       return regla.clave;
     }
   }
