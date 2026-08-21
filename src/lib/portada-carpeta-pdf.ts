@@ -1,15 +1,27 @@
-// JusticiaFácil · Portada de carpeta física — genera un PDF tamaño carta con
-// el logo, los datos de la carpeta y un código QR que abre directo la ficha
-// de documentos del asunto en el sistema.
+// ============================================================
+// JusticiaFácil · Portada de la carpeta física
+// ------------------------------------------------------------
+// Genera el PDF tamaño carta que se imprime y se pega en el lomo de
+// la carpeta de papel.
 //
-// jsPDF se carga desde CDN al momento (mismo patrón que predictamen-pdf.ts),
-// y el QR se genera con la librería `qrcode` (npm, ya instalada).
+// QUÉ CAMBIÓ
+// 1. El folio grande ahora es el CF (CF-JCMX-26-0042), no el viejo CARP-.
+// 2. Se imprimen los tres identificadores del negocio: número de crédito,
+//    garantía y folio del contrato. Si falta alguno, sale "PENDIENTE" en
+//    rojo — para que se vea desde la carpeta cerrada qué está incompleto.
+// 3. El QR ya NO abre la ficha genérica de documentos: abre el LIBRO de
+//    esta carpeta en específico, y de paso pregunta qué vas a hacer con
+//    ella (consultarla, llevártela, devolverla).
+//
+// jsPDF se carga desde CDN al momento (mismo patrón que predictamen-pdf.ts).
+// El QR se genera con la librería `qrcode` (npm, ya instalada).
+// ============================================================
 
 import QRCode from "qrcode";
 import type { CarpetaFisica } from "@/lib/carpetas-fisicas";
 
-const NAVY: [number, number, number] = [4, 44, 83]; // #042C53
-const AZUL_CLARO = [230, 241, 251]; // #E6F1FB
+const NAVY: [number, number, number] = [4, 44, 83];   // #042C53
+const ROJO: [number, number, number] = [163, 45, 45]; // #A32D2D — para lo que falta
 
 async function urlABase64(url: string): Promise<string | null> {
   try {
@@ -27,15 +39,27 @@ async function urlABase64(url: string): Promise<string | null> {
   }
 }
 
+/**
+ * Arma la liga que va dentro del QR.
+ *
+ * Apunta a la ruta /libro con el folio CF. Se usa el FOLIO y no el id
+ * interno de la base a propósito: si alguien teclea la liga a mano desde
+ * el papel, el folio se lee y se escribe fácil; un uuid no.
+ */
+export function ligaDelLibro(folioCf: string): string {
+  return `${window.location.origin}/libro?cf=${encodeURIComponent(folioCf)}`;
+}
+
 export interface DatosPortada {
   carpeta: CarpetaFisica;
   unidad: string;
-  folioSistema: string | null;
-  resguardo: string | null; // nombre del responsable de la sucursal
-  urlFicha: string; // a dónde apunta el QR
+  /** Nombre del responsable de la sucursal — quien tiene el resguardo del estante. */
+  resguardo: string | null;
 }
 
 export async function descargarPortadaCarpeta(d: DatosPortada): Promise<void> {
+  const folioCf = d.carpeta.folioCf || d.carpeta.folio;
+
   const mod: any = await import(/* @vite-ignore */ "https://esm.sh/jspdf@2.5.1");
   const jsPDF = mod.jsPDF || mod.default;
   const doc = new jsPDF({ unit: "mm", format: "letter" }); // carta: 215.9 x 279.4 mm
@@ -43,10 +67,14 @@ export async function descargarPortadaCarpeta(d: DatosPortada): Promise<void> {
 
   const [logoBase64, qrBase64] = await Promise.all([
     urlABase64("/justiciafacil-logo.png"),
-    QRCode.toDataURL(d.urlFicha, { margin: 1, width: 300, color: { dark: "#042C53", light: "#E6F1FB" } }),
+    QRCode.toDataURL(ligaDelLibro(folioCf), {
+      margin: 1,
+      width: 300,
+      color: { dark: "#042C53", light: "#FFFFFF" },
+    }),
   ]);
 
-  // ---- Encabezado: logo + nombre ----
+  // ---- Encabezado ----
   let y = M;
   if (logoBase64) {
     try { doc.addImage(logoBase64, "PNG", M, y - 4, 12, 12); } catch {}
@@ -62,29 +90,37 @@ export async function descargarPortadaCarpeta(d: DatosPortada): Promise<void> {
   doc.setDrawColor(...NAVY); doc.setLineWidth(0.8);
   doc.line(M, y, W - M, y);
 
-  // ---- Folio de la carpeta, grande ----
+  // ---- Folio grande ----
   y += 16;
   doc.setTextColor(150, 150, 150);
   doc.setFont("helvetica", "normal"); doc.setFontSize(9);
   doc.text("CARPETA FÍSICA", M, y);
-  y += 10;
+  y += 11;
   doc.setTextColor(...NAVY);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(24);
-  doc.text(d.carpeta.folio, M, y);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(26);
+  doc.text(folioCf, M, y);
   y += 7;
   doc.setFont("helvetica", "normal"); doc.setFontSize(11);
   doc.setTextColor(90, 90, 90);
-  doc.text(d.carpeta.sucursal, M, y);
+  doc.text(`${d.carpeta.sucursal} · ${d.unidad}`, M, y);
 
   // ---- Tabla de datos ----
+  // Los tres identificadores van primero porque son los que se usan para
+  // buscar la carpeta en el estante sin abrir el sistema.
   y += 14;
+  const PENDIENTE = "PENDIENTE";
   const filas: [string, string][] = [
-    ["Cliente", d.carpeta.clienteNombre || "—"],
+    ["No. de crédito", d.carpeta.noCredito || PENDIENTE],
+    ["No. de garantía", d.carpeta.garId || PENDIENTE],
+    ["Folio de contrato", d.carpeta.folioContrato || PENDIENTE],
+    ["Cliente", d.carpeta.clienteNombre || PENDIENTE],
     ["Dirección", d.carpeta.direccion || "—"],
-    ["Unidad", `${d.unidad}${d.folioSistema ? ` · Folio ${d.folioSistema}` : ""}`],
     ["Resguardo", d.resguardo || "—"],
-    ["Creada", new Date(d.carpeta.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })],
+    ["Aperturada", d.carpeta.abiertaEn
+      ? new Date(d.carpeta.abiertaEn).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+      : "—"],
   ];
+
   doc.setFontSize(10.5);
   for (const [label, valor] of filas) {
     doc.setDrawColor(225, 225, 225); doc.setLineWidth(0.2);
@@ -92,23 +128,35 @@ export async function descargarPortadaCarpeta(d: DatosPortada): Promise<void> {
     y += 7;
     doc.setFont("helvetica", "normal"); doc.setTextColor(140, 140, 140);
     doc.text(label, M, y);
-    doc.setFont("helvetica", "bold"); doc.setTextColor(30, 30, 30);
+
+    // Lo que falta se imprime en rojo, para que se note de lejos.
+    const falta = valor === PENDIENTE;
+    doc.setFont("helvetica", "bold");
+    if (falta) doc.setTextColor(...ROJO);
+    else doc.setTextColor(30, 30, 30);
+
     const valorPartido = doc.splitTextToSize(valor, W - M - M - 55);
     doc.text(valorPartido, M + 45, y);
     y += (valorPartido.length - 1) * 5.5;
     y += 3;
   }
+  doc.setDrawColor(225, 225, 225); doc.setLineWidth(0.2);
+  doc.line(M, y, W - M, y);
 
-  // ---- QR centrado, abajo ----
+  // ---- QR abajo ----
   const qrTam = 42;
   const qrX = (W - qrTam) / 2;
-  const qrY = H - M - qrTam - 14;
+  const qrY = H - M - qrTam - 18;
   doc.setFillColor(...NAVY);
   doc.rect(qrX - 4, qrY - 4, qrTam + 8, qrTam + 8, "F");
   doc.addImage(qrBase64, "PNG", qrX, qrY, qrTam, qrTam);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-  doc.setTextColor(120, 120, 120);
-  doc.text("Escanea para entrar directo a esta ficha", W / 2, qrY + qrTam + 12, { align: "center" });
 
-  doc.save(`Portada ${d.carpeta.folio}.pdf`);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+  doc.setTextColor(...NAVY);
+  doc.text("Escanea para abrir el libro de esta carpeta", W / 2, qrY + qrTam + 12, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  doc.setTextColor(130, 130, 130);
+  doc.text("Al escanear se registra quién la consultó o se la llevó", W / 2, qrY + qrTam + 17, { align: "center" });
+
+  doc.save(`Portada ${folioCf}.pdf`);
 }
