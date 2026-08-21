@@ -7,10 +7,8 @@ import { BotonVerDoc } from "@/components/visor-documento";
 import { getAuth } from "@/lib/auth";
 import type { AsuntoUnificado } from "@/lib/asuntos-busqueda";
 import { detectarUbicacion } from "@/lib/ciudad-judicial";
-import { nombresSucursales, sucursalJuridicoDe } from "@/lib/archivo-general";
-import { carpetaDeAsunto, listarCarpetasDeSucursal, crearCarpeta, type CarpetaFisica } from "@/lib/carpetas-fisicas";
-import { descargarPortadaCarpeta } from "@/lib/portada-carpeta-pdf";
-import { responsableDe } from "@/lib/archivo-general";
+import { type CarpetaFisica } from "@/lib/carpetas-fisicas";
+import { CarpetaFisicaBloque } from "@/components/carpeta-fisica";
 
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 const TEAL = "#0C5C46";
@@ -42,13 +40,7 @@ interface FilaDigitalizado {
 
 export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props) {
   const [casoCompleto, setCasoCompleto] = useState<CasoJuridico | null>(null);
-  const [sucursales, setSucursales] = useState<string[]>([]);
-  const [sucursalElegida, setSucursalElegida] = useState<string>("");
-  const [carpetas, setCarpetas] = useState<CarpetaFisica[]>([]);
-  const [cargandoCarpetas, setCargandoCarpetas] = useState(true);
   const [carpeta, setCarpeta] = useState<CarpetaFisica | null>(null);
-  const [creandoCarpeta, setCreandoCarpeta] = useState(false);
-  const [descargandoPortada, setDescargandoPortada] = useState(false);
 
   const [tipoAsunto, setTipoAsunto] = useState("demanda_civil");
   const [nombreDocumento, setNombreDocumento] = useState("");
@@ -68,59 +60,15 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
 
   useEffect(() => {
     let activo = true;
-    async function preparar() {
-      setCargandoCarpetas(true);
-      const [nombres, casoExistente] = await Promise.all([
-        nombresSucursales(),
-        asunto.casoJuridicoId ? sbSelect<CasoJuridico>("caso_juridico", `select=*&id=eq.${asunto.casoJuridicoId}`) : Promise.resolve([]),
-      ]);
+    (async () => {
+      const casoExistente = asunto.casoJuridicoId
+        ? await sbSelect<CasoJuridico>("caso_juridico", `select=*&id=eq.${asunto.casoJuridicoId}`)
+        : [];
       if (!activo) return;
-      const caso = casoExistente[0] || null;
-      setCasoCompleto(caso);
-      setSucursales(nombres);
-
-      let sucursalDetectada = (caso as any)?.sucursal || null;
-      if (!sucursalDetectada) {
-        const ubic = detectarUbicacion({ distrito_judicial: asunto.direccion, juzgado: null, entidad: null });
-        if (ubic?.ciudad) sucursalDetectada = await sucursalJuridicoDe(ubic.ciudad);
-      }
-      const sucursalFinal = sucursalDetectada || nombres[0] || "";
-      setSucursalElegida(sucursalFinal);
-
-      const [carpetaYaAsignada, carpetasDelEstante] = await Promise.all([
-        carpetaDeAsunto(asunto),
-        sucursalFinal ? listarCarpetasDeSucursal(sucursalFinal) : Promise.resolve([]),
-      ]);
-      if (!activo) return;
-      setCarpetas(carpetasDelEstante);
-      if (carpetaYaAsignada) setCarpeta(carpetaYaAsignada);
-      setCargandoCarpetas(false);
-    }
-    preparar();
+      setCasoCompleto(casoExistente[0] || null);
+    })();
     return () => { activo = false; };
   }, [asunto.id]);
-
-  async function cambiarSucursal(nueva: string) {
-    setSucursalElegida(nueva);
-    setCargandoCarpetas(true);
-    const lista = await listarCarpetasDeSucursal(nueva);
-    setCarpetas(lista);
-    setCargandoCarpetas(false);
-  }
-
-  async function crearCarpetaNueva() {
-    setCreandoCarpeta(true);
-    setError(null);
-    try {
-      const folioSistema = (casoCompleto as any)?.folio || asunto.expediente || asunto.no_credito || null;
-      const nueva = await crearCarpeta(asunto, sucursalElegida, folioSistema);
-      if (!nueva) { setError("No se pudo crear la carpeta."); return; }
-      setCarpetas((p) => [nueva, ...p]);
-      setCarpeta(nueva);
-    } finally {
-      setCreandoCarpeta(false);
-    }
-  }
 
   useEffect(() => {
     if (!puedeDigitalizar || !casoCompleto) return;
@@ -161,24 +109,6 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
       }
     } finally {
       setSubiendo(false);
-    }
-  }
-
-  async function descargarPortada() {
-    if (!carpeta) return;
-    setDescargandoPortada(true);
-    try {
-      const resp = await responsableDe(carpeta.sucursal);
-      const urlFicha = `${window.location.origin}/documentos-asunto?unidad=${asunto.unidad}&id=${asunto.id}`;
-      await descargarPortadaCarpeta({
-        carpeta,
-        unidad: asunto.unidad,
-        folioSistema: (casoCompleto as any)?.folio || asunto.expediente || null,
-        resguardo: resp?.nombre || null,
-        urlFicha,
-      });
-    } finally {
-      setDescargandoPortada(false);
     }
   }
 
@@ -227,10 +157,10 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
         tipo_asunto: tipoAsunto,
         nombre_documento: nombreDocumento.trim(),
         descripcion: descripcion.trim() || null,
-        ubicacion: ubicacionTexto.trim() || sucursalElegida,
+        ubicacion: ubicacionTexto.trim() || carpeta?.sucursal || "",
         carpeta_fisica: carpeta.folio,
         carpeta_id: carpeta.id,
-        sucursal: sucursalElegida,
+        sucursal: carpeta?.sucursal || "",
         documento_garantia_id: garantiaId,
         digitalizado: !!garantiaId,
         registrado_por: solicita,
@@ -268,46 +198,7 @@ export function RegistrarDocumentoFisico({ asunto, onClose, onGuardado }: Props)
         </div>
 
         <div className="space-y-4 overflow-y-auto p-4">
-          {!carpeta ? (
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold" style={{ color: AZUL }}>Paso 1 · Elige la carpeta</p>
-                <select value={sucursalElegida} onChange={(e) => cambiarSucursal(e.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-xs">
-                  {sucursales.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-
-              {cargandoCarpetas ? (
-                <p className="flex items-center gap-1.5 py-4 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando estante…</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {carpetas.map((c) => (
-                    <button key={c.id} onClick={() => setCarpeta(c)} className="overflow-hidden rounded-lg border border-input text-left">
-                      <div className="flex h-16 items-center justify-center" style={{ background: AZUL_CLARO }}>
-                        <FolderOpen className="h-6 w-6" style={{ color: NAVY }} />
-                      </div>
-                      <p className="truncate bg-muted/50 p-1.5 text-[10px] font-medium">{c.folio}</p>
-                    </button>
-                  ))}
-                  <button onClick={crearCarpetaNueva} disabled={creandoCarpeta || !sucursalElegida} className="flex min-h-[88px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 text-muted-foreground disabled:opacity-50">
-                    {creandoCarpeta ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    <span className="text-[10px]">Nueva carpeta</span>
-                  </button>
-                </div>
-              )}
-              <p className="mt-2 text-[11px] text-muted-foreground">El folio se genera solo — no se escribe a mano.</p>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between rounded-md p-2.5 text-xs" style={{ background: `${AZUL}14` }}>
-              <span className="flex items-center gap-1.5 font-medium" style={{ color: AZUL }}><FolderOpen className="h-3.5 w-3.5" /> {carpeta.folio}</span>
-              <div className="flex items-center gap-2">
-                <button onClick={descargarPortada} disabled={descargandoPortada} className="flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50">
-                  {descargandoPortada ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Descargar portada
-                </button>
-                <button onClick={() => setCarpeta(null)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3 w-3" /> Cambiar carpeta</button>
-              </div>
-            </div>
-          )}
+          <CarpetaFisicaBloque asunto={asunto} compacto onCarpeta={setCarpeta} />
 
           {carpeta && (
             <>
