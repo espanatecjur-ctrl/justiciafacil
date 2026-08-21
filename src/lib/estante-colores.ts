@@ -15,6 +15,7 @@ export interface DistintivoVisual {
   grisEstado: GrisEstado;
   posicion: Posicion;
   etiqueta: string;      // texto corto para la carpeta: "R2", "Penal", "Concluido"…
+  soloDigital: boolean;  // true = existe en el sistema pero nadie ha confirmado que se abrió la carpeta física de verdad
 }
 
 // ===== Paleta — coincide con los colores que ya usan las unidades en el resto del sistema =====
@@ -62,6 +63,7 @@ export interface DatosParaDistintivo {
   demandado?: string | null;
   posicionUdp?: string | null;    // caso_udp.posicion ya viene directo como actor/demandado
   tieneConvenio?: boolean | null; // solo aplica a RDC
+  abiertaFisicamente?: boolean;   // ¿ya se confirmó que la carpeta se abrió de verdad en papel?
 }
 
 function esDiipa(nombre: string | null | undefined): boolean {
@@ -71,7 +73,7 @@ function esDiipa(nombre: string | null | undefined): boolean {
 export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
   // 1) Sin cliente — garantía disponible, sin dueño asignado todavía.
   if (!d.tieneCliente) {
-    return { colorFondo: PALETA.GRIS_SIN_CLIENTE.fondo, colorTexto: PALETA.GRIS_SIN_CLIENTE.texto, franjaRoja: false, icono: "help", grisEstado: "sin_cliente", posicion: null, etiqueta: "Sin cliente" };
+    return { colorFondo: PALETA.GRIS_SIN_CLIENTE.fondo, colorTexto: PALETA.GRIS_SIN_CLIENTE.texto, franjaRoja: false, icono: "help", grisEstado: "sin_cliente", posicion: null, etiqueta: "Sin cliente", soloDigital: false };
   }
 
   // 2) Concluido — revisa si ya toca destrucción física (5 años desde el cierre real).
@@ -83,14 +85,16 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
       esDestruccion = new Date() >= limite;
     }
     return esDestruccion
-      ? { colorFondo: PALETA.GRIS_DESTRUCCION.fondo, colorTexto: PALETA.GRIS_DESTRUCCION.texto, franjaRoja: false, icono: "clock-hour-4", grisEstado: "por_destruir", posicion: null, etiqueta: "Destruir · 5 años" }
-      : { colorFondo: PALETA.GRIS_CONCLUIDO.fondo, colorTexto: PALETA.GRIS_CONCLUIDO.texto, franjaRoja: false, icono: "check", grisEstado: "concluido", posicion: null, etiqueta: "Concluido" };
+      ? { colorFondo: PALETA.GRIS_DESTRUCCION.fondo, colorTexto: PALETA.GRIS_DESTRUCCION.texto, franjaRoja: false, icono: "clock-hour-4", grisEstado: "por_destruir", posicion: null, etiqueta: "Destruir · 5 años", soloDigital: false }
+      : { colorFondo: PALETA.GRIS_CONCLUIDO.fondo, colorTexto: PALETA.GRIS_CONCLUIDO.texto, franjaRoja: false, icono: "check", grisEstado: "concluido", posicion: null, etiqueta: "Concluido", soloDigital: false };
   }
 
   // 3) Posición (actor/demandado) — UDP ya trae su propio campo; el resto se infiere de nombres.
   const posicion: Posicion = d.posicionUdp === "actor" || d.posicionUdp === "demandado"
     ? (d.posicionUdp as Posicion)
     : esDiipa(d.actor) ? "actor" : esDiipa(d.demandado) ? "demandado" : null;
+
+  const soloDigital = !d.abiertaFisicamente;
 
   // 4) UDP — todas rojas, ícono según el tipo.
   if (d.unidad === "UDP") {
@@ -99,7 +103,7 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
       DENUNCIA_PENAL: "Penal", CONVENIO_PENAL: "Penal (convenio)", civil: "Civil",
       QUEJA_PROFECO: "PROFECO", CONDUSEF: "CONDUSEF", mercantil: "Mercantil", laboral: "Laboral",
     };
-    return { colorFondo: PALETA.UDP.fondo, colorTexto: PALETA.UDP.texto, franjaRoja: false, icono, grisEstado: null, posicion, etiqueta: (d.tipoUdp && etiquetaTipo[d.tipoUdp]) || "UDP" };
+    return { colorFondo: PALETA.UDP.fondo, colorTexto: PALETA.UDP.texto, franjaRoja: false, icono, grisEstado: null, posicion, etiqueta: (d.tipoUdp && etiquetaTipo[d.tipoUdp]) || "UDP", soloDigital };
   }
 
   // 5) RDC (devolución, vive en UFC) — separado por si tiene convenio o no.
@@ -107,7 +111,7 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
     return {
       colorFondo: PALETA.UFC.fondo, colorTexto: PALETA.UFC.texto, franjaRoja: false,
       icono: d.tieneConvenio ? "file-check" : "file-x", grisEstado: null, posicion,
-      etiqueta: d.tieneConvenio ? "RDC · con convenio" : "RDC · sin convenio",
+      etiqueta: d.tieneConvenio ? "RDC · con convenio" : "RDC · sin convenio", soloDigital,
     };
   }
 
@@ -118,6 +122,6 @@ export function calcularDistintivo(d: DatosParaDistintivo): DistintivoVisual {
 
   return {
     colorFondo: paletaUnidad.fondo, colorTexto: paletaUnidad.texto, franjaRoja,
-    icono: "qrcode", grisEstado: null, posicion, etiqueta: d.codigo || unidadDeCodigo,
+    icono: "qrcode", grisEstado: null, posicion, etiqueta: d.codigo || unidadDeCodigo, soloDigital,
   };
 }
