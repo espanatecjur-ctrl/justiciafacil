@@ -188,6 +188,66 @@ export function agruparPorTipoUdp(lista: CarpetaConDistintivo[]): Record<string,
   return grupos;
 }
 
+/**
+ * Trae los clientes con código RDC de JurisConecta, cruzados con su caso_juridico
+ * en JusticiaFácil (si ya existe) — para poder navegar a su ficha. Solo aparecen
+ * aquí los que ya tienen ese vínculo; los que aún no se investigaron no tienen
+ * a dónde navegar todavía.
+ */
+export async function cargarCarpetasDevoluciones(): Promise<CarpetaConDistintivo[]> {
+  try {
+    const clientesRdc = await sbJC<any>("clientes", `select=id,nombre&codigo=eq.RDC&limit=1000`);
+    if (clientesRdc.length === 0) return [];
+    const idsRdc = clientesRdc.map((c: any) => c.id);
+
+    const devoluciones = await sbEnLotes<any>("jc", "compensacion_devolucion", "select=cliente_id,doc_convenio,fecha_cierre_real,capital,estado", "cliente_id", idsRdc);
+    const devPorCliente = new Map(devoluciones.map((d: any) => [String(d.cliente_id), d]));
+
+    const casos = await sbEnLotes<any>("sistema", "caso_juridico", "select=id,cliente_jc_id,cliente_nombre,direccion_garantia,terminado,actor,demandado,entidad,juzgado,distrito_judicial,sucursal", "cliente_jc_id", idsRdc);
+
+    const resultado: CarpetaConDistintivo[] = [];
+    for (const caso of casos) {
+      const dev = devPorCliente.get(String(caso.cliente_jc_id));
+      const distintivo = calcularDistintivo({
+        unidad: "UFC", codigo: "RDC", tieneCliente: true,
+        terminado: caso.terminado, fechaCierreReal: dev?.fecha_cierre_real ?? null,
+        actor: caso.actor, demandado: caso.demandado,
+        tieneConvenio: dev ? !!dev.doc_convenio : false,
+      });
+      resultado.push({
+        carpeta: {
+          id: caso.id, folio: "Sin carpeta física", sucursal: caso.sucursal || "Sin sucursal", unidad: "UFC",
+          clienteNombre: caso.cliente_nombre, direccion: caso.direccion_garantia, creadoPor: null,
+          createdAt: new Date().toISOString(), portadaImpresa: false, portadaImpresaEn: null,
+          casoJuridicoId: caso.id, casoUdpId: null, formalizacionId: null,
+        },
+        distintivo,
+        cliente: caso.cliente_nombre,
+        direccion: caso.direccion_garantia,
+        garId: null, noCredito: null, expediente: null,
+        ubicacion: detectarUbicacion(caso),
+        unidad: "UFC",
+        asuntoId: caso.id,
+      });
+    }
+    return resultado;
+  } catch (e) {
+    console.error("cargarCarpetasDevoluciones falló:", e);
+    return [];
+  }
+}
+
+/** Agrupa las devoluciones por si ya tienen convenio firmado o no (o su estado gris si aplica). */
+export function agruparPorConvenio(lista: CarpetaConDistintivo[]): Record<string, CarpetaConDistintivo[]> {
+  const grupos: Record<string, CarpetaConDistintivo[]> = {};
+  for (const item of lista) {
+    const etiqueta = item.distintivo.etiqueta;
+    if (!grupos[etiqueta]) grupos[etiqueta] = [];
+    grupos[etiqueta].push(item);
+  }
+  return grupos;
+}
+
 
 export function agruparPorEstado(lista: CarpetaConDistintivo[]): Record<string, CarpetaConDistintivo[]> {
   const grupos: Record<string, CarpetaConDistintivo[]> = {};
